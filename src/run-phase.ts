@@ -14,8 +14,6 @@ const prompt = args["prompt"]!;
 const githubToken = Deno.env.get("GITHUB_TOKEN") ?? "";
 const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
-const mounts: Record<string, ReturnType<typeof RealFSProvider["prototype"]["constructor"]>> = {};
-
 const vfsMounts: Record<string, InstanceType<typeof RealFSProvider>> = {
   "/ticket": new RealFSProvider(ticketDir),
 };

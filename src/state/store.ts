@@ -50,8 +50,12 @@ export async function readPhaseOutput(stateDir: string, id: string, filename: st
 
 export async function listTickets(stateDir: string): Promise<string[]> {
   const ids: string[] = [];
-  for await (const entry of Deno.readDir(stateDir)) {
-    if (entry.isDirectory) ids.push(entry.name);
+  try {
+    for await (const entry of Deno.readDir(stateDir)) {
+      if (entry.isDirectory && !entry.name.startsWith(".")) ids.push(entry.name);
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
   return ids;
 }

@@ -128,7 +128,7 @@ export async function tick(): Promise<void> {
     for (const ticket of tickets) {
       if (["needs-attention", "done", "waiting-merge"].includes(ticket.phase)) continue;
       const willSpawn = ticket.phase === "new" ||
-        (ticket.phase.startsWith("waiting-") && ticket.approved);
+        (ticket.phase.startsWith("waiting-") && ticket.phase !== "waiting-diff" && ticket.approved);
       if (willSpawn && running >= maxRunning) continue;
       if (willSpawn) running++;
 

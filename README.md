@@ -127,6 +127,32 @@ Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 3–6, assig
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
+#### Model selection
+
+Different phases have different reasoning requirements and cost profiles. The plan phase should output a model recommendation for the implementation phase alongside the implementation plan itself — the agent that writes the plan is best placed to judge complexity.
+
+Each phase has a sensible default, tunable in config:
+
+| Phase | Default | Reasoning |
+|---|---|---|
+| intake | small (haiku) | Reads ticket text only, no judgement needed |
+| enrichment | medium (sonnet) | Code reading and summarisation |
+| spec | large + thinking budget | Requirements need careful reasoning |
+| plan | large + thinking budget | TDD plans require anticipating failure modes |
+| implementation | large + thinking budget | Tool use + iteration under constraints |
+| automated review | medium | Checking diff against known spec |
+
+"Thinking budget" refers to Anthropic's **extended thinking** (or equivalent reasoning effort settings on other providers) — a token allocation the model uses for internal chain-of-thought before responding. Higher budgets improve accuracy on complex tasks at additional cost.
+
+Model and thinking budget are stored in `meta.md` per ticket, set by the plan phase, and overridable in config:
+
+```toml
+[phases.defaults]
+intake = { model = "claude-haiku-4-5", thinking_budget = 0 }
+spec   = { model = "claude-sonnet-4-6", thinking_budget = 8000 }
+plan   = { model = "claude-sonnet-4-6", thinking_budget = 8000 }
+```
+
 #### Superpowers Parity
 
 The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude Code plugin encodes strong autonomous coding discipline. Two capabilities from that system are worth porting as distinct phases:
@@ -145,3 +171,5 @@ Add Jira as a work provider so tickets from `smarterdx` Jira boards can flow thr
 Ideas worth exploring but not yet scheduled:
 
 - **LLM-determined plugins:** rather than a global plugin list, the intake phase proposes which plugins a specific ticket needs (e.g. `agent-browser` for UI work, nothing for a pure backend change). This becomes part of the scope approval gate — the human confirms both directory access and tool access before any codebase-touching phase runs.
+
+- **Self-hosted models for low-reasoning phases:** intake and enrichment don't require frontier models — they read text and follow instructions. A locally-run model (Ollama, llama.cpp) could handle these phases at near-zero marginal cost, reserving paid API calls for spec, plan, and implementation. The model selection config above makes this a per-phase swap rather than a system-wide change.

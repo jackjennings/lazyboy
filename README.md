@@ -93,6 +93,11 @@ Ceremony prompts receive the state store and recent git history as context.
 
 Deno, TypeScript, gondolin (micro-VM sandboxing), pi (AI agent), GitHub REST API.
 
+### Prior art
+
+- [Devin](https://devin.ai) — commercial autonomous coding agent; assigns via Linear/Slack/API and ships a PR. One human gate (PR review). lazyboy differs in having five deliberate phase gates and owned infrastructure.
+- [OpenHands](https://openhands.dev) — open source autonomous coding SDK and platform with GitHub/Jira/Linear integrations. Similar execution model to Devin; self-hostable.
+
 ### Pi vs Claude Code
 
 Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `write`, `bash`) and a richer hooks system (`tool_call`, `tool_result`, `before_agent_start`, etc.). The one meaningful gap is MCP — Claude Code supports it natively, Pi does not. For lazyboy's use case this doesn't matter: external services are handled at the host level by gondolin, not inside the agent. Pi is the primary and only planned agent.

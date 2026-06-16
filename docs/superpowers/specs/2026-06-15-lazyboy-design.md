@@ -72,8 +72,8 @@ url: https://github.com/jackjennings/lazyboy/issues/42
 phase: waiting-intake
 approved: false
 scope:
-  - ~/code/smarterdx/notes-frontend
-  - ~/code/smarterdx/design-tokens
+  - ~/code/myorg/frontend
+  - ~/code/myorg/design-tokens
 created: 2026-06-15T10:00:00Z
 updated: 2026-06-15T10:05:00Z
 ---

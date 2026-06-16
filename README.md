@@ -167,7 +167,7 @@ The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude 
 
 ### Sub-project 6 — Jira provider
 
-Add Jira as a work provider so tickets from `smarterdx` Jira boards can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
+Add Jira as a work provider so tickets from a Jira board can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
 
 ---
 

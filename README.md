@@ -76,14 +76,20 @@ This project is built in four sub-projects. The goal is to use lazyboy to build 
 
 Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, gondolin + pi execution.
 
-### Sub-project 2 — Workflow refinement
+### Sub-project 2 — Feedback and memory
+
+- **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback.md` in the ticket directory. The next phase reads it as additional context rather than trying to infer intent from a diff.
+- **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. The human approves or rejects it at the next gate; approved entries are appended to `principles.md` and committed; rejected entries are hashed to prevent re-proposing.
+- **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
+
+### Sub-project 3 — Workflow refinement
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack or similar) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
-### Sub-project 3 — Jira provider
+### Sub-project 4 — Jira provider
 
 Add Jira as a work provider so tickets from `smarterdx` Jira boards can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
 
-### Sub-project 4 — Bootstrap
+### Sub-project 5 — Bootstrap
 
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 2 and 3, assign them, and let the pipeline execute them. This is the first real end-to-end test of the system against non-trivial work.
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 2–4, assign them, and let the pipeline execute them. This is the first real end-to-end test of the system against non-trivial work.

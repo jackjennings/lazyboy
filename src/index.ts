@@ -1,6 +1,9 @@
 import { tick } from "./tick.ts";
 import { readTicket, writeTicket, listTickets, commitState } from "./state/store.ts";
 import { loadConfig, expandHome } from "./config.ts";
+import { enableCron, disableCron } from "./cron.ts";
+
+const LAZYBOY_DIR = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
 const command = Deno.args[0];
 
@@ -30,7 +33,13 @@ if (command === "tick") {
     console.log(`${t.id.padEnd(20)} ${t.phase.padEnd(25)} ${waiting.padEnd(8)} ${t.title}`);
   }
 
+} else if (command === "enable") {
+  await enableCron(LAZYBOY_DIR);
+
+} else if (command === "disable") {
+  await disableCron();
+
 } else {
-  console.error("Usage: lazyboy <tick|approve|status>");
+  console.error("Usage: lazyboy <tick|approve|status|enable|disable>");
   Deno.exit(1);
 }

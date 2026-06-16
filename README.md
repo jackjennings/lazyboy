@@ -64,7 +64,12 @@ concurrency = 2
 
 [plugins]
 enabled = ["agent-browser"]
+
+[codebase]
+roots = ["~/code/myorg"]
 ```
+
+`codebase.roots` is a list of directories the intake phase can look through when proposing scope. A top-level directory listing of each root is passed to the intake agent so it can propose paths that actually exist rather than plausible-sounding guesses. Without this, intake proposes scope from ticket text alone — still useful, but the human approval gate will more often need to correct wrong directory names.
 
 ## Artifacts
 

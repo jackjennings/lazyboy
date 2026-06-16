@@ -127,6 +127,13 @@ Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 3–6, assig
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
+#### Superpowers Parity
+
+The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude Code plugin encodes strong autonomous coding discipline. Two capabilities from that system are worth porting as distinct phases:
+
+- **Automated review phase:** between `implementation` and `waiting-diff`, a second pi instance reviews the diff against the spec and plan — checking TDD compliance, spec coverage, and obvious bugs — and writes a structured report to `review.md`. The human sees a diff that has already been machine-reviewed. This mirrors the `requesting-code-review` skill adapted for non-interactive execution.
+- **Feedback handling rules:** when the human writes a `<phase>-feedback.md` correction, the agent re-running that phase must: verify the feedback against the codebase before acting, push back with technical reasoning if the feedback appears incorrect, and clarify all unclear items before starting. These rules go into the feedback prompt template verbatim from the `receiving-code-review` skill.
+
 ### Sub-project 6 — Jira provider
 
 Add Jira as a work provider so tickets from `smarterdx` Jira boards can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.

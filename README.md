@@ -71,6 +71,17 @@ roots = ["~/code/myorg"]
 
 `codebase.roots` is a list of directories the intake phase can look through when proposing scope. A top-level directory listing of each root is passed to the intake agent so it can propose paths that actually exist rather than plausible-sounding guesses. Without this, intake proposes scope from ticket text alone — still useful, but the human approval gate will more often need to correct wrong directory names.
 
+Intake also proposes which **external sources** a ticket needs — Notion pages, Slack channels, GitHub repos not cloned locally, external documentation URLs. These appear as a third section in `intake.md` alongside the filesystem scope, and are approved at the same human gate. Available external sources are declared in config:
+
+```toml
+[sources]
+notion = true
+slack = true
+github_orgs = ["myorg"]
+```
+
+External source access depends on the agent having MCP or equivalent tool support, which is a future concern (Pi does not currently support MCP natively).
+
 ## Artifacts
 
 Not all tickets produce pull requests. The `artifact` field in `meta.md` controls what the implementation phase produces and what "merge" means:

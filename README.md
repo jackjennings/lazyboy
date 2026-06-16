@@ -80,7 +80,11 @@ slack = true
 github_orgs = ["myorg"]
 ```
 
-External source access depends on the agent having MCP or equivalent tool support, which is a future concern (Pi does not currently support MCP natively).
+External source access does not require MCP. Three approaches, in order of preference for the near term:
+
+1. **Host-side pre-fetch (recommended now):** before spawning the enrichment VM, the tick fetches approved external sources on the host — where credentials already live — and writes the results into the ticket directory as static files. The VM reads them like any other context file. No credentials inside the VM, no new tooling required.
+2. **CLI tools inside the VM:** install Slack CLI, `curl` against Notion's API, `gh` for GitHub directly in the gondolin VM. The enrichment prompt tells the agent which tools are available. Works today but puts credential handling inside the VM.
+3. **MCP (future):** the cleanest long-term answer but blocked on Pi gaining MCP client support.
 
 ## Artifacts
 

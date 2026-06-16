@@ -101,35 +101,35 @@ Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `wr
 
 ## Roadmap
 
-This project is built in five sub-projects. The goal is to use lazyboy to build itself starting from sub-project 5.
+This project is built in six sub-projects. Bootstrap is sub-project 2 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
 
 ### Sub-project 1 — Core loop ✅
 
 Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, gondolin + pi execution.
 
-### Sub-project 2 — Feedback and memory
+### Sub-project 2 — Bootstrap
+
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 3–6, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+
+### Sub-project 3 — Feedback and memory
 
 - **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback.md` in the ticket directory. The next phase reads it as additional context.
 - **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
 - **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
 
-### Sub-project 3 — Ceremonies, artifacts, and plugins
+### Sub-project 4 — Ceremonies, artifacts, and plugins
 
 - **Ceremonies:** implement the ceremony runner — schedule-based automations (standup, digest) that read from the state store without a ticket lifecycle.
 - **Artifact types:** add the `artifact` field to `meta.md`; branch the implementation and merge phases based on its value so non-PR work (RFCs, proposals) flows through the same pipeline.
 - **Plugins:** global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
 
-### Sub-project 4 — Workflow refinement
+### Sub-project 5 — Workflow refinement
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
-### Sub-project 5 — Jira provider
+### Sub-project 6 — Jira provider
 
 Add Jira as a work provider so tickets from `smarterdx` Jira boards can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
-
-### Sub-project 6 — Bootstrap
-
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 2–5, assign them, and let the pipeline execute them. This is the first real end-to-end test of the system against non-trivial work.
 
 ---
 

@@ -113,6 +113,15 @@ Agent phases are **asynchronous**: the tick spawns a gondolin process, records i
 
 Concurrency limit (`tick_concurrency` in config) caps how many tickets can be in a `running-*` state simultaneously.
 
+### PID tracking
+
+Two levels, intentionally split:
+
+- `~/.lazyboy/tick.pid` — guards the orchestrator. Prevents concurrent tick invocations from cron.
+- `meta.md` → `pid` field — one per active ticket. Tracks the detached agent subprocess for that ticket's current phase.
+
+The tick is short-lived; agent subprocesses outlive it. To enumerate all running agent processes, scan all `meta.md` files for `phase: running-*` and read their `pid` fields.
+
 ---
 
 ## Phase Pipeline

@@ -27,15 +27,6 @@ lazyboy is a cron-driven autonomous pipeline. `bin/lazyboy` → `src/index.ts` d
 
 **Phase prompts** (`src/phases/prompts/*.md`): one prompt template per phase, loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the `ActivePhase` values in `src/phases/types.ts` (`intake`, `enrichment`, `spec`, `plan`, `implementation`).
 
-## PID tracking
-
-Two levels, intentionally split:
-
-- `~/.lazyboy/tick.pid` — guards the orchestrator. Prevents concurrent tick invocations from cron.
-- `meta.md` → `pid` field — one per active ticket. Tracks the detached `run-phase.ts` subprocess for that ticket's current phase. The tick is short-lived; agent subprocesses outlive it and are detected as complete on the next tick by checking PID liveness.
-
-To see all running agent processes: scan all `meta.md` files for `phase: running-*` and read their `pid` fields.
-
 ## Key constraints
 
 - `advancePhase` is pure except for the injected `TickDeps` — keep it that way for testability.

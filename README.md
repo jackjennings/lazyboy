@@ -138,14 +138,7 @@ Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human 
 
 For parallel ticket processing to work safely, each ticket's implementation phase must operate in isolation. The implementation phase creates a dedicated git branch (`lazyboy/<ticket-id>`) and a linked working tree (`git worktree add`) before spawning the VM, mounts that worktree read/write, and removes it after merge. Without this, concurrent implementation agents write to the same working directory and conflict.
 
-The branch name and worktree path are stored in `meta.md`. The worktree base directory is configurable:
-
-```toml
-[worktrees]
-dir = "~/code/jackjennings/worktrees"
-```
-
-In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
+The branch name and worktree path are stored in `meta.md`. Worktrees are always created under `~/.lazyboy/worktrees/`. In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
 
 ### Sub-project 3 — Conflict resolution
 

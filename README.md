@@ -109,6 +109,8 @@ prompt = "ceremonies/standup.md"
 
 Ceremony prompts receive the state store and recent git history as context.
 
+A particularly valuable ceremony type is **meta-review**: a recurring analysis of recently completed tickets that extracts learnings and writes them to `principles.md` in the state repo. Each completed ticket already produces a `log.md` recording what happened at each phase — what feedback was given, what corrections were made, what needed human intervention. The meta-review ceremony reads these logs across a batch of tickets, identifies patterns, and proposes additions to `principles.md` as improved LLM instructions for future runs. This closes the learning loop automatically rather than requiring per-ticket curation.
+
 ## Tech stack
 
 Deno, TypeScript, gondolin (micro-VM sandboxing), pi (AI agent), GitHub REST API.

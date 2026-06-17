@@ -13,7 +13,7 @@ Each ticket moves through six phases:
 | **spec** | Writes a precise specification | Validate spec |
 | **plan** | Writes a TDD implementation plan | Approve plan |
 | **implementation** | Writes the code | Review diff |
-| **merge** | — | Authorize merge |
+| **merge** | Calls GitHub API to merge PR, removes worktree, deletes branch | Authorize merge |
 
 Each phase runs [pi](https://pi.dev) inside a [gondolin](https://github.com/earendil-works/gondolin) micro-VM. The VM gets only the filesystem paths and network hosts it needs for that phase — nothing else.
 
@@ -128,7 +128,7 @@ Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `wr
 
 ## Roadmap
 
-This project is built in seven sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
+This project is built in eight sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
 
 ### Sub-project 1 — Core loop ✅
 
@@ -147,23 +147,29 @@ dir = "~/code/jackjennings/worktrees"
 
 In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
 
-### Sub-project 3 — Bootstrap
+### Sub-project 3 — Conflict resolution
 
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 4–7, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+When another PR merges to main after a ticket's branch was created, the branch may conflict. The tick detects this on each run by checking the git status of every open worktree against main. If a conflict is found, lazyboy attempts an automatic rebase. Conflicts that resolve cleanly advance without human intervention; conflicts that don't fall to `needs-attention` with a diagnostic describing which files conflicted and why the rebase failed.
 
-### Sub-project 4 — Feedback and memory
+This sub-project also implements the merge step properly: on `waiting-merge + approved`, lazyboy calls the GitHub API to merge the PR, removes the worktree, deletes the branch, and sets the ticket to `done`.
+
+### Sub-project 4 — Bootstrap
+
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–8, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+
+### Sub-project 5 — Feedback and memory
 
 - **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback.md` in the ticket directory. The next phase reads it as additional context.
 - **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
 - **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
 
-### Sub-project 5 — Ceremonies, artifacts, and plugins
+### Sub-project 6 — Ceremonies, artifacts, and plugins
 
 - **Ceremonies:** implement the ceremony runner — schedule-based automations (standup, digest) that read from the state store without a ticket lifecycle.
 - **Artifact types:** add the `artifact` field to `meta.md`; branch the implementation and merge phases based on its value so non-PR work (RFCs, proposals) flows through the same pipeline.
 - **Plugins:** global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
 
-### Sub-project 6 — Workflow refinement
+### Sub-project 7 — Workflow refinement
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
@@ -200,7 +206,7 @@ The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude 
 - **Automated review phase:** between `implementation` and `waiting-diff`, a second pi instance reviews the diff against the spec and plan — checking TDD compliance, spec coverage, and obvious bugs — and writes a structured report to `review.md`. The human sees a diff that has already been machine-reviewed. This mirrors the `requesting-code-review` skill adapted for non-interactive execution.
 - **Feedback handling rules:** when the human writes a `<phase>-feedback.md` correction, the agent re-running that phase must: verify the feedback against the codebase before acting, push back with technical reasoning if the feedback appears incorrect, and clarify all unclear items before starting. These rules go into the feedback prompt template verbatim from the `receiving-code-review` skill.
 
-### Sub-project 7 — Jira provider
+### Sub-project 8 — Jira provider
 
 Add Jira as a work provider so tickets from a Jira board can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
 

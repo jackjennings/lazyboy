@@ -128,7 +128,7 @@ Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `wr
 
 ## Roadmap
 
-This project is built in eight sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
+This project is built in nine sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
 
 ### Sub-project 1 — Core loop ✅
 
@@ -140,15 +140,13 @@ For parallel ticket processing to work safely, each ticket's implementation phas
 
 The branch name and worktree path are stored in `meta.md`. Worktrees are always created under `~/.lazyboy/worktrees/`. In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
 
-### Sub-project 3 — Conflict resolution
+### Sub-project 3 — PR monitoring and cleanup
 
-When another PR merges to main after a ticket's branch was created, the branch may conflict. The tick detects this on each run by checking the git status of every open worktree against main. If a conflict is found, lazyboy attempts an automatic rebase. Conflicts that resolve cleanly advance without human intervention; conflicts that don't fall to `needs-attention` with a diagnostic describing which files conflicted and why the rebase failed.
-
-This sub-project also implements the merge step properly: on `waiting-merge + approved`, lazyboy calls the GitHub API to merge the PR, removes the worktree, deletes the branch, and sets the ticket to `done`.
+The tick polls the GitHub API for any `waiting-merge` ticket whose PR has been merged — either by the human on GitHub or by lazyboy itself. On detection, it removes the worktree, deletes the branch, and sets the ticket to `done`. This closes the lifecycle without requiring lazyboy to be the one who pressed merge.
 
 ### Sub-project 4 — Bootstrap
 
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–8, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–9, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
 
 ### Sub-project 5 — Feedback and memory
 
@@ -202,6 +200,10 @@ The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude 
 ### Sub-project 8 — Jira provider
 
 Add Jira as a work provider so tickets from a Jira board can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
+
+### Sub-project 9 — Conflict resolution
+
+When another PR merges to main after a ticket's branch was created, the branch may conflict. The tick detects this on each run by checking the git status of every open worktree against main. If a conflict is found, lazyboy attempts an automatic rebase. Conflicts that resolve cleanly advance without human intervention; conflicts that don't fall to `needs-attention` with a diagnostic describing which files conflicted and why the rebase failed.
 
 ---
 

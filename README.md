@@ -152,7 +152,7 @@ Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–8, assig
 
 ### Sub-project 5 — Feedback and memory
 
-- **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback.md` in the ticket directory. The next phase reads it as additional context.
+- **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback-<timestamp>.md` in the ticket directory. Timestamped filenames preserve all feedback iterations for future review and meta-analysis rather than overwriting. The next phase reads all matching files as additional context.
 - **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
 - **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
 

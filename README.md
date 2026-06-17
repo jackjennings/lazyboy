@@ -223,6 +223,8 @@ Ideas worth exploring but not yet scheduled:
 
 - **Work item creation:** any phase that identifies deferred work — a bug found during enrichment, a prerequisite surfaced during spec, a refactor noted during implementation — should be able to create a new ticket in the originating system rather than expanding scope or losing the finding. This requires a `createWorkItem()` method on the `Provider` interface alongside `fetchNew()`. The new ticket enters the queue like any other and is processed on a future tick. This is the primary mechanism for keeping individual tickets focused and avoiding scope creep.
 
+- **Pi session storage:** pi sessions auto-save to `~/.pi/agent/sessions/` by default. Setting `PI_CODING_AGENT_SESSION_DIR=~/.lazyboy/agent/sessions` in the agent subprocess environment would centralise all lazyboy-spawned sessions in one place, separate from interactive pi sessions, and make the full agent trace available for review and meta-analysis alongside other ticket artifacts.
+
 - **`lazyboy ps` and real-time monitoring:** `ps` would scan all `meta.md` files for `phase: running-*` tickets and print the active agent processes with their PID, phase, and ticket title. A `top`-style TUI would extend this with live refresh, showing ticket progression, phase durations, and concurrency utilisation in real-time.
 
 - **OS-native notifications:** when a ticket enters `waiting-*` or `needs-attention`, trigger a system notification so work surfaces without polling `lazyboy status`. On macOS this is `osascript -e 'display notification ...'` or the `terminal-notifier` CLI; on Linux, `notify-send`. Could be extended to support Slack or other channels as alternate delivery targets.

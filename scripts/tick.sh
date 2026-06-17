@@ -4,9 +4,9 @@ set -e
 LAZYBOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Load secrets from env file if present
-if [ -f "$HOME/.config/lazyboy/env" ]; then
+if [ -f "$HOME/.lazyboy/env" ]; then
   # shellcheck source=/dev/null
-  source "$HOME/.config/lazyboy/env"
+  source "$HOME/.lazyboy/env"
 fi
 
 export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null)}"

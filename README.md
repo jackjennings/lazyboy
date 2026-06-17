@@ -29,7 +29,7 @@ lazyboy enable         # add cron job (runs tick every 15 minutes)
 lazyboy disable        # remove cron job
 ```
 
-Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To override env vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
+Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To override env vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.lazyboy/env`.
 
 ## State
 

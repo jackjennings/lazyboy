@@ -17,7 +17,7 @@ Runtime env vars required for `tick`: `GITHUB_TOKEN`, `GITHUB_LOGIN`, `ANTHROPIC
 
 lazyboy is a cron-driven autonomous pipeline. `bin/lazyboy` → `src/index.ts` dispatches to three subcommands: `tick`, `approve`, `status` (plus `enable`/`disable` for cron management via `src/cron.ts`).
 
-**Tick loop** (`src/tick.ts`): acquires a PID lock at `~/.config/lazyboy/tick.pid`, fetches new GitHub Issues via `src/providers/github.ts`, then calls `advancePhase()` for each active ticket. `advancePhase` is dependency-injected (`TickDeps`) to keep it unit-testable without real filesystem or process access.
+**Tick loop** (`src/tick.ts`): acquires a PID lock at `~/.lazyboy/tick.pid`, fetches new GitHub Issues via `src/providers/github.ts`, then calls `advancePhase()` for each active ticket. `advancePhase` is dependency-injected (`TickDeps`) to keep it unit-testable without real filesystem or process access.
 
 **Phase state machine**: tickets move through `new → running-intake → waiting-intake → running-enrichment → … → waiting-diff → waiting-merge → done`. Any phase can transition to `needs-attention` on non-zero subprocess exit. The implementation phase is special: `running-implementation` transitions to `waiting-diff` (not `waiting-implementation`).
 

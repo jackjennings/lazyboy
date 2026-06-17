@@ -82,7 +82,7 @@ export async function advancePhase(ticket: TicketState, stateDir: string, deps: 
 export async function tick(): Promise<void> {
   const config = await loadConfig();
   const stateDir = expandHome(config.state.dir);
-  const pidFile = join(Deno.env.get("HOME")!, ".config", "lazyboy", "tick.pid");
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
 
   // Acquire lock
   try {
@@ -94,7 +94,7 @@ export async function tick(): Promise<void> {
         return;
       }
     }
-    await Deno.mkdir(join(Deno.env.get("HOME")!, ".config", "lazyboy"), { recursive: true });
+    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), { recursive: true });
     await Deno.writeTextFile(pidFile, String(Deno.pid));
   } catch (e) {
     console.error("Failed to acquire lock:", e);

@@ -128,29 +128,42 @@ Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `wr
 
 ## Roadmap
 
-This project is built in six sub-projects. Bootstrap is sub-project 2 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
+This project is built in seven sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
 
 ### Sub-project 1 — Core loop ✅
 
 Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, gondolin + pi execution.
 
-### Sub-project 2 — Bootstrap
+### Sub-project 2 — Worktree isolation
 
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 3–6, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+For parallel ticket processing to work safely, each ticket's implementation phase must operate in isolation. The implementation phase creates a dedicated git branch (`lazyboy/<ticket-id>`) and a linked working tree (`git worktree add`) before spawning the VM, mounts that worktree read/write, and removes it after merge. Without this, concurrent implementation agents write to the same working directory and conflict.
 
-### Sub-project 3 — Feedback and memory
+The branch name and worktree path are stored in `meta.md`. The worktree base directory is configurable:
+
+```toml
+[worktrees]
+dir = "~/code/jackjennings/worktrees"
+```
+
+In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
+
+### Sub-project 3 — Bootstrap
+
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 4–7, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+
+### Sub-project 4 — Feedback and memory
 
 - **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback.md` in the ticket directory. The next phase reads it as additional context.
 - **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
 - **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
 
-### Sub-project 4 — Ceremonies, artifacts, and plugins
+### Sub-project 5 — Ceremonies, artifacts, and plugins
 
 - **Ceremonies:** implement the ceremony runner — schedule-based automations (standup, digest) that read from the state store without a ticket lifecycle.
 - **Artifact types:** add the `artifact` field to `meta.md`; branch the implementation and merge phases based on its value so non-PR work (RFCs, proposals) flows through the same pipeline.
 - **Plugins:** global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
 
-### Sub-project 5 — Workflow refinement
+### Sub-project 6 — Workflow refinement
 
 Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
@@ -187,7 +200,7 @@ The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude 
 - **Automated review phase:** between `implementation` and `waiting-diff`, a second pi instance reviews the diff against the spec and plan — checking TDD compliance, spec coverage, and obvious bugs — and writes a structured report to `review.md`. The human sees a diff that has already been machine-reviewed. This mirrors the `requesting-code-review` skill adapted for non-interactive execution.
 - **Feedback handling rules:** when the human writes a `<phase>-feedback.md` correction, the agent re-running that phase must: verify the feedback against the codebase before acting, push back with technical reasoning if the feedback appears incorrect, and clarify all unclear items before starting. These rules go into the feedback prompt template verbatim from the `receiving-code-review` skill.
 
-### Sub-project 6 — Jira provider
+### Sub-project 7 — Jira provider
 
 Add Jira as a work provider so tickets from a Jira board can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
 

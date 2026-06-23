@@ -1,11 +1,20 @@
 import matter from "gray-matter";
 import { join } from "@std/path";
-import type { TicketState, Phase } from "./types.ts";
+import type { TicketState, Phase, WorktreeInfo } from "./types.ts";
 
 export async function readTicket(stateDir: string, id: string): Promise<TicketState> {
   const metaPath = join(stateDir, id, "meta.md");
   const raw = await Deno.readTextFile(metaPath);
   const { data, content } = matter(raw);
+
+  const worktreesRaw = data.worktrees as Record<string, { path: string; branch: string }> | undefined;
+  const worktrees: Record<string, WorktreeInfo> = {};
+  if (worktreesRaw) {
+    for (const [slug, info] of Object.entries(worktreesRaw)) {
+      worktrees[slug] = { path: info.path, branch: info.branch };
+    }
+  }
+
   return {
     id: data.id,
     provider: data.provider,
@@ -15,6 +24,7 @@ export async function readTicket(stateDir: string, id: string): Promise<TicketSt
     approved: data.approved ?? false,
     scope: data.scope ?? [],
     pid: data.pid,
+    worktrees,
     created: data.created,
     updated: data.updated,
     body: content.trim(),
@@ -32,6 +42,7 @@ export async function writeTicket(stateDir: string, ticket: TicketState): Promis
     phase: ticket.phase,
     approved: ticket.approved,
     scope: ticket.scope,
+    worktrees: ticket.worktrees,
     created: ticket.created,
     updated: ticket.updated,
   };

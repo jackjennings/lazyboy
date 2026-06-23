@@ -112,7 +112,7 @@ export async function tick(): Promise<void> {
     for (const item of newItems) {
       await writeTicket(stateDir, {
         id: item.id, provider: item.provider, title: item.title, url: item.url,
-        phase: "new", approved: false, scope: [],
+        phase: "new", approved: false, scope: [], worktrees: {},
         created: new Date().toISOString(), updated: new Date().toISOString(),
         body: item.description,
       });

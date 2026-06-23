@@ -9,6 +9,11 @@ export type Phase =
   | "done"
   | "needs-attention";
 
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+}
+
 export interface TicketState {
   id: string;
   provider: string;
@@ -18,6 +23,7 @@ export interface TicketState {
   approved: boolean;
   scope: string[];
   pid?: number;
+  worktrees: Record<string, WorktreeInfo>;
   created: string;
   updated: string;
   body: string;
@@ -27,4 +33,5 @@ export interface Config {
   github: { repos: string[] };
   state: { dir: string };
   tick: { concurrency: number };
+  codebase: { roots: string[] };
 }

@@ -10,6 +10,7 @@ Deno.test("TicketState has required fields", () => {
     phase: "new",
     approved: false,
     scope: [],
+    worktrees: {},
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
     body: "",

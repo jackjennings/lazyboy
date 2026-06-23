@@ -5,7 +5,7 @@ import type { TicketState } from "./state/types.ts";
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
     id: "gh-1", provider: "github", title: "T", url: "u",
-    phase: "new", approved: false, scope: [],
+    phase: "new", approved: false, scope: [], worktrees: {},
     created: "2026-06-15T00:00:00Z", updated: "2026-06-15T00:00:00Z", body: "",
     ...overrides,
   };

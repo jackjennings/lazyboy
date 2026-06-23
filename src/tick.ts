@@ -6,6 +6,7 @@ import { spawnPhase, isPidAlive as defaultIsPidAlive } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
 import { findLocalRepo, createWorktree } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
+import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import type { TickAction } from "./tick-actions/types.ts";
 import type { TicketState, Phase, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
@@ -136,6 +137,42 @@ export async function tick(): Promise<void> {
         roots: config.codebase.roots.map(expandHome),
         findLocalRepo,
         createWorktree,
+        writeTicket,
+      }),
+      checkMergedPRAction({
+        isPRMerged: async (prUrl: string) => {
+          const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+          if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+          const [, slug, number] = match;
+          const res = await fetch(
+            `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+              },
+            },
+          );
+          if (res.status === 204) return true;
+          if (res.status === 404) return false;
+          throw new Error(`Unexpected GitHub API status: ${res.status} for ${prUrl}`);
+        },
+        cleanupWorktree: async (wt) => {
+          const result = await new Deno.Command("git", {
+            args: ["rev-parse", "--git-common-dir"],
+            cwd: wt.path,
+          }).output();
+          const gitDir = new TextDecoder().decode(result.stdout).trim();
+          const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
+          await new Deno.Command("git", {
+            args: ["worktree", "remove", wt.path],
+            cwd: mainRepoPath,
+          }).output();
+          await new Deno.Command("git", {
+            args: ["branch", "-d", wt.branch],
+            cwd: mainRepoPath,
+          }).output();
+        },
         writeTicket,
       }),
     ];

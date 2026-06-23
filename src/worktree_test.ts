@@ -100,5 +100,9 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
     args: ["worktree", "remove", "--force", info.path],
     cwd: repoDir,
   }).output();
+  await Deno.remove(
+    join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", "gh-42"),
+    { recursive: true },
+  );
   await Deno.remove(repoDir, { recursive: true });
 });

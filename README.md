@@ -128,7 +128,7 @@ Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `wr
 
 ## Roadmap
 
-This project is built in nine sub-projects. Bootstrap is sub-project 3 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
+This project is built in sixteen sub-projects. Bootstrap is sub-project 4 — the pipeline works end-to-end and the fastest way to discover what needs improving is to use it on real work.
 
 ### Sub-project 1 — Core loop ✅
 
@@ -144,27 +144,51 @@ The branch name and worktree path are stored in `meta.md`. Worktrees are always 
 
 The tick polls the GitHub API for any `waiting-merge` ticket whose PR has been merged — either by the human on GitHub or by lazyboy itself. On detection, it removes the worktree, deletes the branch, and sets the ticket to `done`. This closes the lifecycle without requiring lazyboy to be the one who pressed merge.
 
+_Requires: SP2_
+
 ### Sub-project 4 — Bootstrap
 
-Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–9, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
+Use lazyboy to build lazyboy. Create GitHub Issues for sub-projects 5–16, assign them, and let the pipeline execute them. Failures and friction here drive the priority of everything that follows.
 
-### Sub-project 5 — Feedback and memory
+_Requires: SP2, SP3_
 
-- **Comment-driven feedback:** editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback-<timestamp>.md` in the ticket directory. Timestamped filenames preserve all feedback iterations for future review and meta-analysis rather than overwriting. The next phase reads all matching files as additional context.
-- **Principles file:** `~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
-- **Per-ticket log:** each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
+### Sub-project 5 — Per-ticket log
 
-### Sub-project 6 — Ceremonies, artifacts, and plugins
+Each phase appends a timestamped entry to `<ticket>/log.md` so the full lifecycle of a ticket is traceable in one place and failures can be pattern-matched across tickets.
 
-- **Ceremonies:** implement the ceremony runner — schedule-based automations (standup, digest) that read from the state store without a ticket lifecycle.
-- **Artifact types:** add the `artifact` field to `meta.md`; branch the implementation and merge phases based on its value so non-PR work (RFCs, proposals) flows through the same pipeline.
-- **Plugins:** global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
+### Sub-project 6 — Comment-driven feedback
 
-### Sub-project 7 — Workflow refinement
+Editing a phase output and asking the agent to diff your changes is worse than stating your intent directly. After reviewing a phase output, write feedback to `<phase>-feedback-<timestamp>.md` in the ticket directory. Timestamped filenames preserve all feedback iterations for future review and meta-analysis rather than overwriting. The next phase reads all matching files as additional context.
 
-Tune the phase prompt templates against real tickets. Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
+When the agent re-runs a phase with a feedback file present, it must: verify the feedback against the codebase before acting, push back with technical reasoning if the feedback appears incorrect, and clarify all unclear items before starting. These rules go into the feedback prompt template verbatim from the `receiving-code-review` skill.
 
-#### Model selection
+_Requires: SP5_
+
+### Sub-project 7 — Principles file
+
+`~/code/jackjennings/projects/principles.md`, committed to the state repo and passed to every phase as context. When a phase produces a learning worth keeping, it proposes an addition as part of its output. Approved entries are appended and committed; rejected entries are hashed to prevent re-proposing.
+
+_Requires: SP5, SP6_
+
+### Sub-project 8 — Plugins
+
+Global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
+
+### Sub-project 9 — Artifact types
+
+Add the `artifact` field to `meta.md`; branch the implementation and merge phases based on its value so non-PR work (RFCs, proposals) flows through the same pipeline.
+
+### Sub-project 10 — Ceremonies
+
+Implement the ceremony runner — schedule-based automations (standup, digest) that read from the state store without a ticket lifecycle.
+
+_Requires: SP5, SP7_
+
+### Sub-project 11 — Needs-attention notifications
+
+Add `needs-attention` notification (Slack) so failures surface without polling `lazyboy status`.
+
+### Sub-project 12 — Model selection
 
 Different phases have different reasoning requirements and cost profiles. The plan phase should output a model recommendation for the implementation phase alongside the implementation plan itself — the agent that writes the plan is best placed to judge complexity.
 
@@ -190,20 +214,27 @@ spec   = { model = "claude-sonnet-4-6", thinking_budget = 8000 }
 plan   = { model = "claude-sonnet-4-6", thinking_budget = 8000 }
 ```
 
-#### Superpowers Parity
+### Sub-project 13 — Workflow refinement
 
-The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude Code plugin encodes strong autonomous coding discipline. Two capabilities from that system are worth porting as distinct phases:
+Tune the phase prompt templates against real tickets. Add confidence scoring to phase outputs so low-confidence results get flagged before the human gate.
 
-- **Automated review phase:** between `implementation` and `waiting-diff`, a second pi instance reviews the diff against the spec and plan — checking TDD compliance, spec coverage, and obvious bugs — and writes a structured report to `review.md`. The human sees a diff that has already been machine-reviewed. This mirrors the `requesting-code-review` skill adapted for non-interactive execution.
-- **Feedback handling rules:** when the human writes a `<phase>-feedback.md` correction, the agent re-running that phase must: verify the feedback against the codebase before acting, push back with technical reasoning if the feedback appears incorrect, and clarify all unclear items before starting. These rules go into the feedback prompt template verbatim from the `receiving-code-review` skill.
+_Requires: SP4, SP6, SP7_
 
-### Sub-project 8 — Jira provider
+### Sub-project 14 — Automated review phase
+
+The [Superpowers](https://github.com/anthropics/claude-code-superpowers) Claude Code plugin encodes strong autonomous coding discipline. Between `implementation` and `waiting-diff`, a second pi instance reviews the diff against the spec and plan — checking TDD compliance, spec coverage, and obvious bugs — and writes a structured report to `review.md`. The human sees a diff that has already been machine-reviewed. This mirrors the `requesting-code-review` skill adapted for non-interactive execution.
+
+_Requires: SP2, SP7, SP12_
+
+### Sub-project 15 — Jira provider
 
 Add Jira as a work provider so tickets from a Jira board can flow through the same pipeline. The provider interface is already abstracted — this is a new `src/providers/jira.ts` implementing `Provider`. Jira work is tracked "on the books" (in Jira); lazyboy state mirrors it locally.
 
-### Sub-project 9 — Conflict resolution
+### Sub-project 16 — Conflict resolution
 
 When another PR merges to main after a ticket's branch was created, the branch may conflict. The tick detects this on each run by checking the git status of every open worktree against main. If a conflict is found, lazyboy attempts an automatic rebase. Conflicts that resolve cleanly advance without human intervention; conflicts that don't fall to `needs-attention` with a diagnostic describing which files conflicted and why the rebase failed.
+
+_Requires: SP2, SP3_
 
 ---
 

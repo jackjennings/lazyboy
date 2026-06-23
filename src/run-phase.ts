@@ -3,13 +3,16 @@ import { parseArgs } from "@std/cli/parse-args";
 import { join } from "@std/path";
 
 const args = parseArgs(Deno.args, {
-  string: ["ticket-dir", "output-file", "scope", "prompt"],
+  string: ["ticket-dir", "output-file", "scope", "prompt", "worktrees"],
 });
 
 const ticketDir = args["ticket-dir"]!;
 const outputFile = args["output-file"]!;
 const scopeDirs = args["scope"] ? args["scope"].split(",").filter(Boolean) : [];
 const prompt = args["prompt"]!;
+const worktrees = args["worktrees"]
+  ? JSON.parse(args["worktrees"]) as Record<string, { path: string; branch: string }>
+  : {};
 
 const githubToken = Deno.env.get("GITHUB_TOKEN") ?? "";
 const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
@@ -20,6 +23,9 @@ const vfsMounts: Record<string, InstanceType<typeof RealFSProvider>> = {
 for (const dir of scopeDirs) {
   const guestPath = `/scope/${dir.split("/").pop()}`;
   vfsMounts[guestPath] = new RealFSProvider(dir);
+}
+for (const [slug, info] of Object.entries(worktrees)) {
+  vfsMounts[`/workspace/${slug}`] = new RealFSProvider(info.path);
 }
 
 const { httpHooks, env } = createHttpHooks({

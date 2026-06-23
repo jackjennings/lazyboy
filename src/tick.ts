@@ -4,11 +4,11 @@ import { loadConfig, expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { spawnPhase, isPidAlive as defaultIsPidAlive } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
-import type { TicketState, Phase } from "./state/types.ts";
+import type { TicketState, Phase, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 
 export interface TickDeps {
-  spawn: (opts: { phase: ActivePhase; ticketDir: string; prompt: string; scope: string[] }) => Promise<number>;
+  spawn: (opts: { phase: ActivePhase; ticketDir: string; prompt: string; scope: string[]; worktrees: Record<string, WorktreeInfo> }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   writePhaseOutput: (stateDir: string, id: string, file: string, content: string) => Promise<void>;
@@ -40,7 +40,7 @@ export async function advancePhase(ticket: TicketState, stateDir: string, deps: 
 
   if (ticket.phase === "new") {
     const prompt = await loadPrompt("intake");
-    const pid = await deps.spawn({ phase: "intake", ticketDir: join(stateDir, ticket.id), prompt, scope: [] });
+    const pid = await deps.spawn({ phase: "intake", ticketDir: join(stateDir, ticket.id), prompt, scope: [], worktrees: {} });
     await deps.writeTicket(stateDir, { ...ticket, phase: "running-intake", pid, updated: now });
     return;
   }
@@ -73,6 +73,7 @@ export async function advancePhase(ticket: TicketState, stateDir: string, deps: 
       ticketDir: join(stateDir, ticket.id),
       prompt,
       scope: ticket.scope,
+      worktrees: next === "implementation" ? ticket.worktrees : {},
     });
     await deps.writeTicket(stateDir, { ...ticket, phase: `running-${next}` as Phase, approved: false, pid, updated: now });
     return;

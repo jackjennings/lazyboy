@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import { advancePhase } from "./tick.ts";
-import type { TicketState } from "./state/types.ts";
+import type { TicketState, WorktreeInfo } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -81,4 +81,59 @@ Deno.test("advancePhase: waiting-diff approved advances to waiting-merge", async
     writePhaseOutput: async () => {},
   });
   assertEquals(written, ["waiting-merge"]);
+});
+
+Deno.test("advancePhase: implementation phase receives ticket worktrees", async () => {
+  const spawnedWorktrees: Record<string, unknown>[] = [];
+  const ticket = makeTicket({
+    phase: "waiting-plan",
+    approved: true,
+    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: async (opts) => {
+      spawnedWorktrees.push(opts.worktrees);
+      return 1;
+    },
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+  });
+  assertEquals(spawnedWorktrees, [
+    { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+  ]);
+});
+
+Deno.test("advancePhase: non-implementation phases receive empty worktrees", async () => {
+  const spawnedWorktrees: Record<string, unknown>[] = [];
+  const ticket = makeTicket({
+    phase: "waiting-intake",
+    approved: true,
+    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: async (opts) => {
+      spawnedWorktrees.push(opts.worktrees);
+      return 1;
+    },
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+  });
+  assertEquals(spawnedWorktrees, [{}]);
+});
+
+Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () => {
+  const spawnedWorktrees: Record<string, unknown>[] = [];
+  const ticket = makeTicket({ phase: "new" });
+  await advancePhase(ticket, "/state", {
+    spawn: async (opts) => {
+      spawnedWorktrees.push(opts.worktrees);
+      return 123;
+    },
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+  });
+  assertEquals(spawnedWorktrees, [{}]);
 });

@@ -119,6 +119,7 @@ Deno, TypeScript, gondolin (micro-VM sandboxing), pi (AI agent), GitHub REST API
 
 - [Devin](https://devin.ai) — commercial autonomous coding agent; assigns via Linear/Slack/API and ships a PR. One human gate (PR review). lazyboy differs in having five deliberate phase gates and owned infrastructure.
 - [OpenHands](https://openhands.dev) — open source autonomous coding SDK and platform with GitHub/Jira/Linear integrations. Similar execution model to Devin; self-hostable.
+- [Goose](https://goose-docs.ai) — open source multi-provider AI agent with MCP-based extensibility and semantic codebase understanding. Runs interactively or headlessly; no built-in phase gates or pipeline model.
 
 ### Pi vs Claude Code
 

@@ -135,11 +135,13 @@ This project is built in sixteen sub-projects. Bootstrap is sub-project 4 — th
 
 Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, gondolin + pi execution.
 
-### Sub-project 2 — Worktree isolation
+### Sub-project 2 — Worktree isolation ✅
 
-For parallel ticket processing to work safely, each ticket's implementation phase must operate in isolation. The implementation phase creates a dedicated git branch (`lazyboy/<ticket-id>`) and a linked working tree (`git worktree add`) before spawning the VM, mounts that worktree read/write, and removes it after merge. Without this, concurrent implementation agents write to the same working directory and conflict.
+Before intake runs, `tick()` creates a dedicated git branch (`<ticket-id>`, e.g. `gh-42`) and a linked working tree (`git worktree add`) in `~/.lazyboy/worktrees/<ticket-id>/<org>/<repo>`. The branch and worktree path are stored in `meta.md` under `worktrees.<org>/<repo>`. The implementation phase VM mounts the worktree read/write at `/workspace/<org>/<repo>`. If no local clone of the repo is found by scanning `codebase.roots`, the ticket moves to `needs-attention` before intake.
 
-The branch name and worktree path are stored in `meta.md`. Worktrees are always created under `~/.lazyboy/worktrees/`. In a future sub-project, worktree isolation will extend to enrichment and later phases — ensuring that even read-heavy analysis phases don't inadvertently mutate the main working tree.
+Worktree removal (on merge or cleanup) is handled in SP3.
+
+_Worktrees: `~/.lazyboy/worktrees/` · Branch: ticket ID · Base: `main`_
 
 ### Sub-project 3 — PR monitoring and cleanup
 
@@ -268,3 +270,7 @@ Ideas worth exploring but not yet scheduled:
 - **Work dependencies:** some tickets can't start until others are complete. A `depends_on` field in `meta.md` would let the tick loop skip tickets whose dependencies aren't yet in `done` state. The intake phase is a natural place to propose dependencies — it already reads the ticket and has enough context to identify blocking relationships. Dependencies could also be sourced directly from the provider (GitHub Issues and Jira both support linked/blocked-by relationships).
 
 - **Related repository cloning:** some tickets require context from external codebases — a plugin ticket for ESLint benefits from having the ESLint source available in the VM, a Vim extension from having Neovim's runtime, a database driver from having the upstream client library. The intake or enrichment phase could detect these relationships and propose a list of repositories to clone into the VM alongside the working directory. These would be read-only mounts (or shallow clones with no write scope), approved at the same gate as filesystem and network access.
+
+- **Auto-clone missing repos:** when `tick()` cannot find a local clone of a ticket's repo by scanning `codebase.roots`, it currently moves the ticket to `needs-attention`. A future extension could attempt `git clone` into the first configured root, making the pipeline fully hands-off for first-time repos.
+
+- **Hooks system for pre-advance lifecycle:** worktree creation is currently an inline conditional in `tick()`. As more pre-advance concerns accumulate (ceremonies, conflict checks, cleanup), a `runPreAdvance(ticket, config)` runner in `tick.ts` with registered hook functions would let each concern declare itself independently rather than growing the loop body. Pi's own hooks system (`tool_call`, `tool_result`, `before_agent_start`) is a reference point for this design.

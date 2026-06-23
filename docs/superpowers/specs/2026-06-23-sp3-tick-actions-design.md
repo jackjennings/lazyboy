@@ -71,11 +71,12 @@ Identical outcome to the current inline logic; this is a pure refactor.
 ```ts
 interface CheckMergedPRDeps {
   isPRMerged: (prUrl: string) => Promise<boolean>;
-  removeWorktree: (worktreePath: string, repoPath: string) => Promise<void>;
-  deleteBranch: (repoPath: string, branch: string) => Promise<void>;
+  cleanupWorktree: (wt: WorktreeInfo) => Promise<void>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
 }
 ```
+
+`cleanupWorktree` handles both `git worktree remove` and `git branch -D` in one dep. Combining them avoids an ordering problem: after `git worktree remove`, the worktree path no longer exists and `git rev-parse --git-common-dir` (used to locate the main repo) cannot run. The implementation resolves the main repo path via `--git-common-dir` before removal, then runs both git commands from the main repo.
 
 **Behavior:**
 - `isPRMerged` returns `true` → remove each worktree, delete each branch, return ticket with `phase: "done"`

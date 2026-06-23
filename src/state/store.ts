@@ -25,6 +25,7 @@ export async function readTicket(stateDir: string, id: string): Promise<TicketSt
     scope: data.scope ?? [],
     pid: data.pid,
     worktrees,
+    prUrl: data.prUrl,
     created: data.created,
     updated: data.updated,
     body: content.trim(),
@@ -47,6 +48,7 @@ export async function writeTicket(stateDir: string, ticket: TicketState): Promis
     updated: ticket.updated,
   };
   if (ticket.pid !== undefined) frontmatter.pid = ticket.pid;
+  if (ticket.prUrl !== undefined) frontmatter.prUrl = ticket.prUrl;
   const raw = matter.stringify(ticket.body, frontmatter);
   await Deno.writeTextFile(join(dir, "meta.md"), raw);
 }

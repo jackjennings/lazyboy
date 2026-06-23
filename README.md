@@ -143,7 +143,7 @@ Worktree removal (on merge or cleanup) is handled in SP3.
 
 _Worktrees: `~/.lazyboy/worktrees/` · Branch: ticket ID · Base: `main`_
 
-### Sub-project 3 — PR monitoring and cleanup
+### Sub-project 3 — PR monitoring and cleanup ✅
 
 The tick polls the GitHub API for any `waiting-merge` ticket whose PR has been merged — either by the human on GitHub or by lazyboy itself. On detection, it removes the worktree, deletes the branch, and sets the ticket to `done`. This closes the lifecycle without requiring lazyboy to be the one who pressed merge.
 

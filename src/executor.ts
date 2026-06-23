@@ -1,3 +1,5 @@
+import type { WorktreeInfo } from "./state/types.ts";
+
 export interface ExecutorOptions {
   ticketDir: string;
   prompt: string;
@@ -5,7 +7,7 @@ export interface ExecutorOptions {
   outputFile: string;
   githubToken: string;
   anthropicApiKey: string;
-  worktrees?: Record<string, import("./state/types.ts").WorktreeInfo>;
+  worktrees: Record<string, WorktreeInfo>;
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -26,6 +28,7 @@ export function spawnPhase(opts: ExecutorOptions): number {
       "--output-file", opts.outputFile,
       "--scope", opts.scopeDirs.join(","),
       "--prompt", opts.prompt,
+      "--worktrees", JSON.stringify(opts.worktrees),
     ],
     env: {
       GITHUB_TOKEN: opts.githubToken,

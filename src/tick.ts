@@ -4,6 +4,7 @@ import { loadConfig, expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { spawnPhase, isPidAlive as defaultIsPidAlive } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
+import { extractGitHubSlug, findLocalRepo, createWorktree } from "./worktree.ts";
 import type { TicketState, Phase, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 
@@ -126,8 +127,28 @@ export async function tick(): Promise<void> {
 
     let running = tickets.filter((t) => t.phase.startsWith("running-")).length;
 
-    for (const ticket of tickets) {
+    for (let ticket of tickets) {
       if (["needs-attention", "done", "waiting-merge"].includes(ticket.phase)) continue;
+
+      if (ticket.phase === "new") {
+        const slug = extractGitHubSlug(ticket.url);
+        const repoPath = await findLocalRepo(
+          config.codebase.roots.map(expandHome),
+          slug,
+        );
+        if (!repoPath) {
+          await writeTicket(stateDir, {
+            ...ticket,
+            phase: "needs-attention",
+            updated: new Date().toISOString(),
+          });
+          continue;
+        }
+        const wt = await createWorktree(repoPath, ticket.id, slug);
+        ticket = { ...ticket, worktrees: { [slug]: wt } };
+        await writeTicket(stateDir, ticket);
+      }
+
       const willSpawn = ticket.phase === "new" ||
         (ticket.phase.startsWith("waiting-") && ticket.phase !== "waiting-diff" && ticket.approved);
       if (willSpawn && running >= maxRunning) continue;
@@ -142,6 +163,7 @@ export async function tick(): Promise<void> {
             outputFile: outputFileForPhase(opts.phase),
             githubToken: token,
             anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+            worktrees: opts.worktrees,
           }),
         isPidAlive: defaultIsPidAlive,
         writeTicket,

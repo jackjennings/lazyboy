@@ -5,6 +5,7 @@ export interface ExecutorOptions {
   outputFile: string;
   githubToken: string;
   anthropicApiKey: string;
+  worktrees?: Record<string, import("./state/types.ts").WorktreeInfo>;
 }
 
 export function isPidAlive(pid: number): boolean {

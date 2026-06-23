@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import { join } from "@std/path";
-import { readTicket, writeTicket } from "./store.ts";
+import { readTicket, writeTicket, listTickets } from "./store.ts";
 import type { TicketState } from "./types.ts";
 
 Deno.test("readTicket: parses worktrees from frontmatter", async () => {
@@ -82,5 +82,16 @@ Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
   const read = await readTicket(dir, "gh-42");
   assertEquals(read.worktrees["jackjennings/lazyboy"].branch, "gh-42");
   assertEquals(read.worktrees["jackjennings/lazyboy"].path, "/tmp/.lazyboy/worktrees/gh-42/jackjennings/lazyboy");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("listTickets: returns all ticket IDs", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.mkdir(join(dir, "gh-1"));
+  await Deno.mkdir(join(dir, "gh-2"));
+  await Deno.writeTextFile(join(dir, "gh-1", "meta.md"), "---\nid: gh-1\n---\n");
+  await Deno.writeTextFile(join(dir, "gh-2", "meta.md"), "---\nid: gh-2\n---\n");
+  const ids = await listTickets(dir);
+  assertEquals(ids.sort(), ["gh-1", "gh-2"]);
   await Deno.remove(dir, { recursive: true });
 });

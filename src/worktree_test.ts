@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 import { join } from "@std/path";
+import type { WorktreeInfo } from "./state/types.ts";
 import { extractGitHubSlug, findLocalRepo, createWorktree } from "./worktree.ts";
 
 // ── extractGitHubSlug ────────────────────────────────────────────────────────
@@ -68,41 +69,52 @@ Deno.test("findLocalRepo: returns null for nonexistent root", async () => {
 
 Deno.test("createWorktree: creates branch and worktree directory", async () => {
   const repoDir = await Deno.makeTempDir();
-  await new Deno.Command("git", { args: ["init"], cwd: repoDir }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.email", "test@test.com"],
-    cwd: repoDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.name", "Test"],
-    cwd: repoDir,
-  }).output();
-  await Deno.writeTextFile(join(repoDir, "README.md"), "test");
-  await new Deno.Command("git", { args: ["add", "."], cwd: repoDir }).output();
-  await new Deno.Command("git", {
-    args: ["commit", "-m", "init"],
-    cwd: repoDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["branch", "-m", "main"],
-    cwd: repoDir,
-  }).output();
+  const ticketId = `gh-test-${Date.now()}`;
+  let info: WorktreeInfo | undefined;
 
-  const info = await createWorktree(repoDir, "gh-42", "jackjennings/lazyboy");
+  try {
+    await new Deno.Command("git", { args: ["init"], cwd: repoDir }).output();
+    await new Deno.Command("git", {
+      args: ["config", "user.email", "test@test.com"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["config", "user.name", "Test"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["config", "commit.gpgsign", "false"],
+      cwd: repoDir,
+    }).output();
+    await Deno.writeTextFile(join(repoDir, "README.md"), "test");
+    await new Deno.Command("git", { args: ["add", "."], cwd: repoDir }).output();
+    await new Deno.Command("git", {
+      args: ["commit", "-m", "init"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["branch", "-m", "main"],
+      cwd: repoDir,
+    }).output();
 
-  const stat = await Deno.stat(info.path);
-  assertEquals(stat.isDirectory, true);
-  assertEquals(info.branch, "gh-42");
-  assertEquals(info.path.endsWith("jackjennings/lazyboy"), true);
+    info = await createWorktree(repoDir, ticketId, "jackjennings/lazyboy");
 
-  // cleanup
-  await new Deno.Command("git", {
-    args: ["worktree", "remove", "--force", info.path],
-    cwd: repoDir,
-  }).output();
-  await Deno.remove(
-    join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", "gh-42"),
-    { recursive: true },
-  );
-  await Deno.remove(repoDir, { recursive: true });
+    const stat = await Deno.stat(info.path);
+    assertEquals(stat.isDirectory, true);
+    assertEquals(info.branch, ticketId);
+    assertEquals(info.path.endsWith("jackjennings/lazyboy"), true);
+  } finally {
+    // cleanup
+    if (info) {
+      await new Deno.Command("git", {
+        args: ["worktree", "remove", "--force", info.path],
+        cwd: repoDir,
+      }).output();
+    }
+    await Deno.remove(
+      join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", ticketId),
+      { recursive: true },
+    );
+    await Deno.remove(repoDir, { recursive: true });
+  }
 });

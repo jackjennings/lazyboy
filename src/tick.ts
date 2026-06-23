@@ -169,7 +169,7 @@ export async function tick(): Promise<void> {
             cwd: mainRepoPath,
           }).output();
           await new Deno.Command("git", {
-            args: ["branch", "-d", wt.branch],
+            args: ["branch", "-D", wt.branch],
             cwd: mainRepoPath,
           }).output();
         },

@@ -68,6 +68,10 @@ export async function advancePhase(ticket: TicketState, stateDir: string, deps: 
       await deps.writeTicket(stateDir, { ...ticket, phase: "waiting-merge", approved: false, updated: now });
       return;
     }
+    if (next === "implementation" && Object.keys(ticket.worktrees).length === 0) {
+      await deps.writeTicket(stateDir, { ...ticket, phase: "needs-attention", approved: false, updated: now });
+      return;
+    }
     const prompt = await loadPrompt(next);
     const pid = await deps.spawn({
       phase: next,
@@ -130,7 +134,7 @@ export async function tick(): Promise<void> {
     for (let ticket of tickets) {
       if (["needs-attention", "done", "waiting-merge"].includes(ticket.phase)) continue;
 
-      if (ticket.phase === "new") {
+      if (ticket.phase === "new" && Object.keys(ticket.worktrees).length === 0) {
         const slug = extractGitHubSlug(ticket.url);
         const repoPath = await findLocalRepo(
           config.codebase.roots.map(expandHome),
@@ -144,9 +148,18 @@ export async function tick(): Promise<void> {
           });
           continue;
         }
-        const wt = await createWorktree(repoPath, ticket.id, slug);
-        ticket = { ...ticket, worktrees: { [slug]: wt } };
-        await writeTicket(stateDir, ticket);
+        try {
+          const wt = await createWorktree(repoPath, ticket.id, slug);
+          ticket = { ...ticket, worktrees: { [slug]: wt } };
+          await writeTicket(stateDir, ticket);
+        } catch {
+          await writeTicket(stateDir, {
+            ...ticket,
+            phase: "needs-attention",
+            updated: new Date().toISOString(),
+          });
+          continue;
+        }
       }
 
       const willSpawn = ticket.phase === "new" ||

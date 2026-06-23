@@ -137,3 +137,15 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
   });
   assertEquals(spawnedWorktrees, [{}]);
 });
+
+Deno.test("advancePhase: implementation phase with empty worktrees transitions to needs-attention", async () => {
+  const written: string[] = [];
+  const ticket = makeTicket({ phase: "waiting-plan", approved: true, worktrees: {} });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 1,
+    isPidAlive: () => false,
+    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    writePhaseOutput: async () => {},
+  });
+  assertEquals(written, ["needs-attention"]);
+});

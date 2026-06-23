@@ -4,7 +4,9 @@ import { loadConfig, expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { spawnPhase, isPidAlive as defaultIsPidAlive } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
-import { extractGitHubSlug, findLocalRepo, createWorktree } from "./worktree.ts";
+import { findLocalRepo, createWorktree } from "./worktree.ts";
+import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
+import type { TickAction } from "./tick-actions/types.ts";
 import type { TicketState, Phase, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 
@@ -129,38 +131,31 @@ export async function tick(): Promise<void> {
     const ids = await listTickets(stateDir);
     const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));
 
-    let running = tickets.filter((t) => t.phase.startsWith("running-")).length;
+    const tickActions: TickAction[] = [
+      createWorktreeAction({
+        roots: config.codebase.roots.map(expandHome),
+        findLocalRepo,
+        createWorktree,
+        writeTicket,
+      }),
+    ];
 
-    for (let ticket of tickets) {
-      if (["needs-attention", "done", "waiting-merge"].includes(ticket.phase)) continue;
-
-      if (ticket.phase === "new" && Object.keys(ticket.worktrees).length === 0) {
-        const slug = extractGitHubSlug(ticket.url);
-        const repoPath = await findLocalRepo(
-          config.codebase.roots.map(expandHome),
-          slug,
-        );
-        if (!repoPath) {
-          await writeTicket(stateDir, {
-            ...ticket,
-            phase: "needs-attention",
-            updated: new Date().toISOString(),
-          });
-          continue;
-        }
-        try {
-          const wt = await createWorktree(repoPath, ticket.id, slug);
-          ticket = { ...ticket, worktrees: { [slug]: wt } };
-          await writeTicket(stateDir, ticket);
-        } catch {
-          await writeTicket(stateDir, {
-            ...ticket,
-            phase: "needs-attention",
-            updated: new Date().toISOString(),
-          });
-          continue;
+    // Action pass
+    const processedTickets = [...tickets];
+    for (let i = 0; i < processedTickets.length; i++) {
+      for (const action of tickActions) {
+        if (action.applies(processedTickets[i])) {
+          const updated = await action.run(processedTickets[i], stateDir);
+          if (updated !== null) processedTickets[i] = updated;
         }
       }
+    }
+
+    // Advance pass
+    let running = processedTickets.filter((t) => t.phase.startsWith("running-")).length;
+
+    for (const ticket of processedTickets) {
+      if (["needs-attention", "done", "waiting-merge"].includes(ticket.phase)) continue;
 
       const willSpawn = ticket.phase === "new" ||
         (ticket.phase.startsWith("waiting-") && ticket.phase !== "waiting-diff" && ticket.approved);

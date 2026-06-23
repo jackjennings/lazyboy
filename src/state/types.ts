@@ -24,6 +24,7 @@ export interface TicketState {
   scope: string[];
   pid?: number;
   worktrees: Record<string, WorktreeInfo>;
+  prUrl?: string;
   created: string;
   updated: string;
   body: string;

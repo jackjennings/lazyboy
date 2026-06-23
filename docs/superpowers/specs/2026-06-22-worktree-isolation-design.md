@@ -17,6 +17,10 @@ Enable parallel ticket processing without implementation agents conflicting on t
 
 Two exported functions:
 
+**`extractGitHubSlug(url: string): string`**
+
+Extracts `"org/repo"` from a GitHub issue URL (e.g. `https://github.com/jackjennings/lazyboy/issues/42` → `"jackjennings/lazyboy"`).
+
 **`findLocalRepo(roots: string[], slug: string): Promise<string | null>`**
 
 Scans immediate subdirectories of each expanded root for a git repo whose `origin` remote URL contains the given `org/repo` slug. Returns the first matching path or `null`.

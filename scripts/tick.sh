@@ -6,10 +6,10 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 LAZYBOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Load secrets from env file if present
-if [ -f "$HOME/.lazyboy/env" ]; then
+if [ -f "$HOME/.config/lazyboy/env" ]; then
   set -a
   # shellcheck source=/dev/null
-  source "$HOME/.lazyboy/env"
+  source "$HOME/.config/lazyboy/env"
   set +a
 fi
 

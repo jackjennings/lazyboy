@@ -29,7 +29,7 @@ lazyboy enable         # add cron job
 lazyboy disable        # remove cron job
 ```
 
-Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To override env vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.lazyboy/env`.
+Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To override env vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
 
 ## State
 
@@ -263,7 +263,7 @@ Ideas worth exploring but not yet scheduled:
 
 - **OS-native notifications:** when a ticket enters `waiting-*` or `needs-attention`, trigger a system notification so work surfaces without polling `lazyboy status`. On macOS this is `osascript -e 'display notification ...'` or the `terminal-notifier` CLI; on Linux, `notify-send`. Could be extended to support Slack or other channels as alternate delivery targets.
 
-- **Dynamic credentials:** `~/.lazyboy/env` is a static file, but some credentials have short lifespans and need refreshing on a cadence (e.g. AWS CodeArtifact tokens, short-lived OAuth tokens). A future extension could allow env entries to specify a refresh command alongside the value — lazyboy would re-run the command before each tick and inject the fresh value. Format could follow the pattern of shell credential helpers (similar to `credential.helper` in git config).
+- **Dynamic credentials:** `~/.config/lazyboy/env` is a static file, but some credentials have short lifespans and need refreshing on a cadence (e.g. AWS CodeArtifact tokens, short-lived OAuth tokens). A future extension could allow env entries to specify a refresh command alongside the value — lazyboy would re-run the command before each tick and inject the fresh value. Format could follow the pattern of shell credential helpers (similar to `credential.helper` in git config).
 
 - **MCP support:** once Pi gains MCP client support, the host-side pre-fetch approach for external sources (Slack, Notion, GitHub) can be replaced with MCP servers running on the host and exposed to the enrichment VM. This gives the agent interactive query capability — follow links, ask follow-up questions, paginate results — rather than working from a static snapshot. The same mechanism would enable MCP-based tool use in other phases (e.g. posting to Slack from a ceremony, updating a Jira ticket on merge).
 

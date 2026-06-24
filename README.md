@@ -17,7 +17,7 @@ Each ticket moves through six phases:
 
 Each phase runs [pi](https://pi.dev) inside a [gondolin](https://github.com/earendil-works/gondolin) micro-VM. The VM gets only the filesystem paths and network hosts it needs for that phase — nothing else.
 
-A cron job runs `lazyboy tick` every 15 minutes. Tickets advance automatically until they hit a gate, then wait for `lazyboy approve <id>`.
+A cron job runs `lazyboy tick` every 5 minutes. Tickets advance automatically until they hit a gate, then wait for `lazyboy approve <id>`.
 
 ## Usage
 
@@ -25,7 +25,7 @@ A cron job runs `lazyboy tick` every 15 minutes. Tickets advance automatically u
 lazyboy tick           # advance all active tickets (run by cron)
 lazyboy approve <id>   # approve the current phase gate
 lazyboy status         # show all active tickets
-lazyboy enable         # add cron job (runs tick every 15 minutes)
+lazyboy enable         # add cron job
 lazyboy disable        # remove cron job
 ```
 

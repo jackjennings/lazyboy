@@ -1,7 +1,7 @@
 const MARKER = "# lazyboy";
 
 function cronLine(lazboyDir: string): string {
-  return `*/15 * * * * ${lazboyDir}/scripts/tick.sh >> $HOME/.lazyboy/tick.log 2>&1 ${MARKER}`;
+  return `*/5 * * * * ${lazboyDir}/scripts/tick.sh >> $HOME/.lazyboy/tick.log 2>&1 ${MARKER}`;
 }
 
 async function readCrontab(): Promise<string> {
@@ -34,7 +34,7 @@ export async function enableCron(lazboyDir: string): Promise<void> {
   }
 
   await writeCrontab(lines.join("\n") + "\n");
-  console.log("Enabled: tick runs every 15 minutes.");
+  console.log("Enabled: tick runs every 5 minutes.");
 }
 
 export async function disableCron(): Promise<void> {

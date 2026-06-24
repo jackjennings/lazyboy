@@ -4,6 +4,7 @@ Read the ticket in meta.md and explore the scope directories to
 gather context relevant to implementing this ticket.
 
 Do not write any files. Print your response directly.
+Begin your response directly with the first section heading. No preamble.
 
 Your response must cover:
 

@@ -4,8 +4,10 @@ Read meta.md (ticket) and enrichment.md (enrichment context).
 Write a precise specification for implementing this ticket.
 
 Make a concrete decision for each ambiguous requirement. Do not present alternatives or options.
+Do not include implementation guidance, code examples, or algorithm options — those belong in the plan phase.
 
 Do not write any files. Print your response directly.
+Begin your response directly with the first section heading. No preamble.
 
 Your response must cover:
 

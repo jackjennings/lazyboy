@@ -2,8 +2,14 @@ import { tick } from "./tick.ts";
 import { readTicket, writeTicket, listTickets, commitState } from "./state/store.ts";
 import { loadConfig, expandHome } from "./config.ts";
 import { enableCron, disableCron } from "./cron.ts";
+import { selectStartupMessage, formatStartupMessage } from "./ui/message.ts";
 
 const LAZYBOY_DIR = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+
+// Display startup message before command execution
+const startupMsg = selectStartupMessage();
+console.log(formatStartupMessage(startupMsg));
+console.log(); // Blank line to separate from command output
 
 const command = Deno.args[0];
 

@@ -31,6 +31,7 @@ export function spawnPhase(opts: ExecutorOptions): number {
       "--worktrees", JSON.stringify(opts.worktrees),
     ],
     env: {
+      ...Deno.env.toObject(),
       GITHUB_TOKEN: opts.githubToken,
       ANTHROPIC_API_KEY: opts.anthropicApiKey,
     },

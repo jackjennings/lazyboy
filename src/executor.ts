@@ -40,5 +40,6 @@ export function spawnPhase(opts: ExecutorOptions): number {
     stderr: "null",
   });
   const child = cmd.spawn();
+  child.unref();
   return child.pid;
 }

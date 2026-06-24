@@ -1,4 +1,3 @@
-import { VM, RealFSProvider, createHttpHooks } from "gondolin";
 import { parseArgs } from "@std/cli/parse-args";
 import { join } from "@std/path";
 
@@ -11,44 +10,49 @@ const outputFile = args["output-file"]!;
 const scopeDirs = args["scope"] ? args["scope"].split(",").filter(Boolean) : [];
 const prompt = args["prompt"]!;
 const worktrees = args["worktrees"]
-  ? JSON.parse(args["worktrees"]) as Record<string, { path: string; branch: string }>
+  ? (JSON.parse(args["worktrees"]) as Record<
+      string,
+      { path: string; branch: string }
+    >)
   : {};
 
-const githubToken = Deno.env.get("GITHUB_TOKEN") ?? "";
-const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-
-const vfsMounts: Record<string, InstanceType<typeof RealFSProvider>> = {
-  "/ticket": new RealFSProvider(ticketDir),
-};
-for (const dir of scopeDirs) {
-  const guestPath = `/scope/${dir.split("/").pop()}`;
-  vfsMounts[guestPath] = new RealFSProvider(dir);
-}
-for (const [slug, info] of Object.entries(worktrees)) {
-  vfsMounts[`/workspace/${slug}`] = new RealFSProvider(info.path);
+const contextFiles = [`@${ticketDir}/meta.md`];
+for (const file of ["intake.md", "enrichment.md", "spec.md", "plan.md"]) {
+  try {
+    await Deno.stat(`${ticketDir}/${file}`);
+    contextFiles.push(`@${ticketDir}/${file}`);
+  } catch { /* not yet written */ }
 }
 
-const { httpHooks, env } = createHttpHooks({
-  allowedHosts: ["api.anthropic.com", "api.github.com"],
-  secrets: {
-    GITHUB_TOKEN: { hosts: ["api.github.com"], value: githubToken },
-    ANTHROPIC_API_KEY: { hosts: ["api.anthropic.com"], value: anthropicApiKey },
+const allPaths = [...scopeDirs, ...Object.values(worktrees).map((w) => w.path)];
+const pathContext = `\n\nTicket directory: ${ticketDir}` +
+  (allPaths.length > 0 ? `\n\nAvailable directories:\n${allPaths.map((p) => `- ${p}`).join("\n")}` : "");
+
+const worktreePaths = Object.values(worktrees).map((w) => w.path);
+const cwd = worktreePaths[0] ?? ticketDir;
+
+const result = await new Deno.Command("pi", {
+  args: [
+    "-p",
+    "--provider",
+    "anthropic",
+    "--model",
+    "claude-haiku-4-5-20251001",
+    "--system-prompt",
+    prompt + pathContext,
+    ...contextFiles,
+  ],
+  cwd,
+  env: {
+    ...Deno.env.toObject(),
+    ANTHROPIC_API_KEY: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
   },
-});
+  stdout: "piped",
+  stderr: "inherit",
+}).output();
 
-const vm = await VM.create({
-  httpHooks,
-  env,
-  vfs: { mounts: vfsMounts },
-});
-
-const contextFiles = ["@/ticket/meta.md"];
-if (scopeDirs.length > 0) contextFiles.push("@/scope");
-
-const result = await vm.exec(
-  `pi -p "${prompt}" ${contextFiles.join(" ")}`
+await Deno.writeTextFile(
+  join(ticketDir, outputFile),
+  new TextDecoder().decode(result.stdout),
 );
-
-await Deno.writeTextFile(join(ticketDir, outputFile), result.stdout);
-await vm.close();
-Deno.exit(result.exitCode);
+Deno.exit(result.code);

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 LAZYBOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Load secrets from env file if present

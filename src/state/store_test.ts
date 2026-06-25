@@ -1,13 +1,23 @@
 import { assertEquals } from "jsr:@std/assert";
 import { join } from "@std/path";
-import { readTicket, writeTicket, listTickets } from "./store.ts";
+import { commitTicket, listTickets, readTicket, writeTicket } from "./store.ts";
 import type { TicketState } from "./types.ts";
+
+async function initGitRepo(dir: string): Promise<void> {
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+  await run(["git", "init"]);
+  await run(["git", "config", "user.email", "test@example.com"]);
+  await run(["git", "config", "user.name", "Test User"]);
+}
 
 Deno.test("readTicket: parses worktrees from frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   const ticketDir = join(dir, "gh-42");
   await Deno.mkdir(ticketDir);
-  await Deno.writeTextFile(join(ticketDir, "meta.md"), `---
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
 id: gh-42
 provider: github
 title: Test
@@ -24,7 +34,8 @@ worktrees:
 ---
 
 body
-`);
+`,
+  );
   const ticket = await readTicket(dir, "gh-42");
   assertEquals(ticket.worktrees, {
     "jackjennings/lazyboy": {
@@ -39,7 +50,9 @@ Deno.test("readTicket: defaults worktrees to {} when field absent", async () => 
   const dir = await Deno.makeTempDir();
   const ticketDir = join(dir, "gh-1");
   await Deno.mkdir(ticketDir);
-  await Deno.writeTextFile(join(ticketDir, "meta.md"), `---
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
 id: gh-1
 provider: github
 title: Test
@@ -52,7 +65,8 @@ updated: "2026-06-22T00:00:00Z"
 ---
 
 body
-`);
+`,
+  );
   const ticket = await readTicket(dir, "gh-1");
   assertEquals(ticket.worktrees, {});
   await Deno.remove(dir, { recursive: true });
@@ -81,7 +95,10 @@ Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
   await writeTicket(dir, ticket);
   const read = await readTicket(dir, "gh-42");
   assertEquals(read.worktrees["jackjennings/lazyboy"].branch, "gh-42");
-  assertEquals(read.worktrees["jackjennings/lazyboy"].path, "/tmp/.lazyboy/worktrees/gh-42/jackjennings/lazyboy");
+  assertEquals(
+    read.worktrees["jackjennings/lazyboy"].path,
+    "/tmp/.lazyboy/worktrees/gh-42/jackjennings/lazyboy",
+  );
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -89,9 +106,86 @@ Deno.test("listTickets: returns all ticket IDs", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await Deno.mkdir(join(dir, "gh-2"));
-  await Deno.writeTextFile(join(dir, "gh-1", "meta.md"), "---\nid: gh-1\n---\n");
-  await Deno.writeTextFile(join(dir, "gh-2", "meta.md"), "---\nid: gh-2\n---\n");
+  await Deno.writeTextFile(
+    join(dir, "gh-1", "meta.md"),
+    "---\nid: gh-1\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(dir, "gh-2", "meta.md"),
+    "---\nid: gh-2\n---\n",
+  );
   const ids = await listTickets(dir);
   assertEquals(ids.sort(), ["gh-1", "gh-2"]);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("commitTicket: stages only files in the ticket's directory", async () => {
+  const dir = await Deno.makeTempDir();
+  await initGitRepo(dir);
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+
+  await Deno.mkdir(join(dir, "gh-30"));
+  await Deno.mkdir(join(dir, "gh-99"));
+  await Deno.writeTextFile(
+    join(dir, "gh-30", "meta.md"),
+    "---\nid: gh-30\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(dir, "gh-99", "meta.md"),
+    "---\nid: gh-99\n---\n",
+  );
+  await run(["git", "add", "-A"]);
+  await run(["git", "commit", "-m", "initial"]);
+
+  await Deno.writeTextFile(
+    join(dir, "gh-30", "meta.md"),
+    "---\nid: gh-30\napproved: true\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(dir, "gh-99", "meta.md"),
+    "---\nid: gh-99\nstale: true\n---\n",
+  );
+
+  await commitTicket(dir, "gh-30", "approve: gh-30");
+
+  const diffOutput = await run([
+    "git",
+    "diff",
+    "HEAD~1",
+    "HEAD",
+    "--name-only",
+  ]);
+  const changedFiles = new TextDecoder().decode(diffOutput.stdout).trim().split(
+    "\n",
+  ).filter((f) => f);
+  assertEquals(changedFiles, ["gh-30/meta.md"]);
+
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("commitTicket: silently succeeds when nothing to commit", async () => {
+  const dir = await Deno.makeTempDir();
+  await initGitRepo(dir);
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+
+  await Deno.mkdir(join(dir, "gh-30"));
+  await Deno.writeTextFile(
+    join(dir, "gh-30", "meta.md"),
+    "---\nid: gh-30\n---\n",
+  );
+  await run(["git", "add", "-A"]);
+  await run(["git", "commit", "-m", "initial"]);
+
+  const headBefore = await run(["git", "rev-parse", "HEAD"]);
+  const hashBefore = new TextDecoder().decode(headBefore.stdout).trim();
+
+  await commitTicket(dir, "gh-30", "approve: gh-30");
+
+  const headAfter = await run(["git", "rev-parse", "HEAD"]);
+  const hashAfter = new TextDecoder().decode(headAfter.stdout).trim();
+  assertEquals(hashBefore, hashAfter);
+
   await Deno.remove(dir, { recursive: true });
 });

@@ -8,6 +8,11 @@ export async function loadConfig(path?: string): Promise<Config> {
   const raw = await Deno.readTextFile(configPath);
   const parsed = parse(raw) as Record<string, unknown>;
   const codebaseRaw = parsed.codebase as Record<string, unknown> | undefined;
+  const packagesRaw = parsed.packages as Record<string, unknown> | undefined;
+  const enabledRaw = packagesRaw?.enabled;
+  if (enabledRaw !== undefined && !Array.isArray(enabledRaw)) {
+    throw new Error("config.toml: [packages].enabled must be an array");
+  }
   return {
     github: {
       repos: (parsed.github as Record<string, unknown>).repos as string[],
@@ -20,6 +25,7 @@ export async function loadConfig(path?: string): Promise<Config> {
         ((parsed.tick as Record<string, unknown>).concurrency as number) ?? 1,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
+    packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
   };
 }
 

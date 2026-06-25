@@ -13,9 +13,25 @@ import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
 import { createWorktree, findLocalRepo } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
+import {
+  installPackages as installPackagesImpl,
+  runPiInstall,
+} from "./packages.ts";
 import type { TickAction } from "./tick-actions/types.ts";
-import type { Phase, TicketState, WorktreeInfo } from "./state/types.ts";
+import type {
+  Config,
+  Phase,
+  TicketState,
+  WorktreeInfo,
+} from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
+import type { InstallResult } from "./packages.ts";
+
+export interface TickOrchestrationDeps {
+  loadConfig: () => Promise<Config>;
+  installPackages: (sources: string[]) => Promise<InstallResult[]>;
+  advanceTickets: (config: Config) => Promise<void>;
+}
 
 export interface TickDeps {
   spawn: (
@@ -156,9 +172,150 @@ export async function advancePhase(
   }
 }
 
-export async function tick(): Promise<void> {
-  const config = await loadConfig();
+async function advanceTicketsImpl(config: Config): Promise<void> {
   const stateDir = expandHome(config.state.dir);
+
+  // Fetch new work
+  const token = Deno.env.get("GITHUB_TOKEN") ?? "";
+  const login = Deno.env.get("GITHUB_LOGIN") ?? "";
+  const provider = new GitHubProvider({
+    repos: config.github.repos,
+    token,
+    login,
+  });
+  const existingIds = new Set(await listTickets(stateDir));
+  const newItems = await provider.fetchNew(existingIds);
+
+  for (const item of newItems) {
+    await writeTicket(stateDir, {
+      id: item.id,
+      provider: item.provider,
+      title: item.title,
+      url: item.url,
+      phase: "new",
+      approved: false,
+      scope: [],
+      worktrees: {},
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      body: item.description,
+    });
+  }
+
+  // Advance tickets
+  const maxRunning = config.tick.concurrency;
+  const ids = await listTickets(stateDir);
+  const tickets = await Promise.all(
+    ids.map((id) => readTicket(stateDir, id)),
+  );
+
+  const tickActions: TickAction[] = [
+    createWorktreeAction({
+      roots: config.codebase.roots.map(expandHome),
+      findLocalRepo,
+      createWorktree,
+      writeTicket,
+    }),
+    checkMergedPRAction({
+      isPRMerged: async (prUrl: string) => {
+        const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+        if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+        const [, slug, number] = match;
+        const res = await fetch(
+          `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        );
+        if (res.status === 204) return true;
+        if (res.status === 404) return false;
+        throw new Error(
+          `Unexpected GitHub API status: ${res.status} for ${prUrl}`,
+        );
+      },
+      cleanupWorktree: async (wt) => {
+        const result = await new Deno.Command("git", {
+          args: ["rev-parse", "--git-common-dir"],
+          cwd: wt.path,
+        }).output();
+        const gitDir = new TextDecoder().decode(result.stdout).trim();
+        const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
+        await new Deno.Command("git", {
+          args: ["worktree", "remove", wt.path],
+          cwd: mainRepoPath,
+        }).output();
+        await new Deno.Command("git", {
+          args: ["branch", "-D", wt.branch],
+          cwd: mainRepoPath,
+        }).output();
+      },
+      writeTicket,
+    }),
+  ];
+
+  // Action pass
+  const processedTickets = [...tickets];
+  for (let i = 0; i < processedTickets.length; i++) {
+    for (const action of tickActions) {
+      if (action.applies(processedTickets[i])) {
+        const updated = await action.run(processedTickets[i], stateDir);
+        if (updated !== null) processedTickets[i] = updated;
+      }
+    }
+  }
+
+  // Advance pass
+  let running =
+    processedTickets.filter((t) => t.phase.startsWith("running-")).length;
+
+  for (const ticket of processedTickets) {
+    if (
+      ["needs-attention", "done", "waiting-merge"].includes(ticket.phase)
+    ) continue;
+
+    const willSpawn = ticket.phase === "new" ||
+      (ticket.phase.startsWith("waiting-") &&
+        ticket.phase !== "waiting-diff" && ticket.approved);
+    if (willSpawn && running >= maxRunning) continue;
+    if (willSpawn) running++;
+
+    await advancePhase(ticket, stateDir, {
+      spawn: async (opts) =>
+        spawnPhase({
+          ticketDir: opts.ticketDir,
+          prompt: opts.prompt,
+          scopeDirs: opts.scope.map(expandHome),
+          outputFile: outputFileForPhase(opts.phase),
+          githubToken: token,
+          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+          worktrees: opts.worktrees,
+        }),
+      isPidAlive: defaultIsPidAlive,
+      writeTicket,
+      writePhaseOutput,
+    });
+  }
+
+  await commitState(stateDir, `tick: ${new Date().toISOString()}`);
+}
+
+function defaultTickDeps(): TickOrchestrationDeps {
+  return {
+    loadConfig,
+    installPackages: (sources) =>
+      installPackagesImpl(sources, { run: runPiInstall }),
+    advanceTickets: advanceTicketsImpl,
+  };
+}
+
+export async function tick(
+  deps?: TickOrchestrationDeps,
+): Promise<void> {
+  const d = deps ?? defaultTickDeps();
+  const config = await d.loadConfig();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
 
   // Acquire lock
@@ -181,132 +338,8 @@ export async function tick(): Promise<void> {
   }
 
   try {
-    // Fetch new work
-    const token = Deno.env.get("GITHUB_TOKEN") ?? "";
-    const login = Deno.env.get("GITHUB_LOGIN") ?? "";
-    const provider = new GitHubProvider({
-      repos: config.github.repos,
-      token,
-      login,
-    });
-    const existingIds = new Set(await listTickets(stateDir));
-    const newItems = await provider.fetchNew(existingIds);
-
-    for (const item of newItems) {
-      await writeTicket(stateDir, {
-        id: item.id,
-        provider: item.provider,
-        title: item.title,
-        url: item.url,
-        phase: "new",
-        approved: false,
-        scope: [],
-        worktrees: {},
-        created: new Date().toISOString(),
-        updated: new Date().toISOString(),
-        body: item.description,
-      });
-    }
-
-    // Advance tickets
-    const maxRunning = config.tick.concurrency;
-    const ids = await listTickets(stateDir);
-    const tickets = await Promise.all(
-      ids.map((id) => readTicket(stateDir, id)),
-    );
-
-    const tickActions: TickAction[] = [
-      createWorktreeAction({
-        roots: config.codebase.roots.map(expandHome),
-        findLocalRepo,
-        createWorktree,
-        writeTicket,
-      }),
-      checkMergedPRAction({
-        isPRMerged: async (prUrl: string) => {
-          const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-          if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-          const [, slug, number] = match;
-          const res = await fetch(
-            `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/vnd.github+json",
-              },
-            },
-          );
-          if (res.status === 204) return true;
-          if (res.status === 404) return false;
-          throw new Error(
-            `Unexpected GitHub API status: ${res.status} for ${prUrl}`,
-          );
-        },
-        cleanupWorktree: async (wt) => {
-          const result = await new Deno.Command("git", {
-            args: ["rev-parse", "--git-common-dir"],
-            cwd: wt.path,
-          }).output();
-          const gitDir = new TextDecoder().decode(result.stdout).trim();
-          const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
-          await new Deno.Command("git", {
-            args: ["worktree", "remove", wt.path],
-            cwd: mainRepoPath,
-          }).output();
-          await new Deno.Command("git", {
-            args: ["branch", "-D", wt.branch],
-            cwd: mainRepoPath,
-          }).output();
-        },
-        writeTicket,
-      }),
-    ];
-
-    // Action pass
-    const processedTickets = [...tickets];
-    for (let i = 0; i < processedTickets.length; i++) {
-      for (const action of tickActions) {
-        if (action.applies(processedTickets[i])) {
-          const updated = await action.run(processedTickets[i], stateDir);
-          if (updated !== null) processedTickets[i] = updated;
-        }
-      }
-    }
-
-    // Advance pass
-    let running = processedTickets.filter((t) =>
-      t.phase.startsWith("running-")
-    ).length;
-
-    for (const ticket of processedTickets) {
-      if (
-        ["needs-attention", "done", "waiting-merge"].includes(ticket.phase)
-      ) continue;
-
-      const willSpawn = ticket.phase === "new" ||
-        (ticket.phase.startsWith("waiting-") &&
-          ticket.phase !== "waiting-diff" && ticket.approved);
-      if (willSpawn && running >= maxRunning) continue;
-      if (willSpawn) running++;
-
-      await advancePhase(ticket, stateDir, {
-        spawn: async (opts) =>
-          spawnPhase({
-            ticketDir: opts.ticketDir,
-            prompt: opts.prompt,
-            scopeDirs: opts.scope.map(expandHome),
-            outputFile: outputFileForPhase(opts.phase),
-            githubToken: token,
-            anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-            worktrees: opts.worktrees,
-          }),
-        isPidAlive: defaultIsPidAlive,
-        writeTicket,
-        writePhaseOutput,
-      });
-    }
-
-    await commitState(stateDir, `tick: ${new Date().toISOString()}`);
+    await d.installPackages(config.packages.enabled);
+    await d.advanceTickets(config);
   } finally {
     await Deno.remove(pidFile).catch(() => {});
   }

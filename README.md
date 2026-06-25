@@ -1,6 +1,6 @@
 # lazyboy
 
-Automates software development so human time is spent only on tasks requiring judgement. Polls for assigned work, runs each ticket through a phase pipeline via an AI agent in a sandboxed VM, and pauses at each phase boundary for human approval.
+Automates software development so human time is spent only on tasks requiring judgement. Polls for assigned work, runs each ticket through a phase pipeline via an AI agent, and pauses at each phase boundary for human approval.
 
 ## How it works
 
@@ -15,7 +15,7 @@ Each ticket moves through six phases:
 | **implementation** | Writes the code | Review diff |
 | **merge** | Calls GitHub API to merge PR, removes worktree, deletes branch | Authorize merge |
 
-Each phase runs [pi](https://pi.dev) inside a [gondolin](https://github.com/earendil-works/gondolin) micro-VM. The VM gets only the filesystem paths and network hosts it needs for that phase — nothing else.
+Each phase runs [pi](https://pi.dev) as a host subprocess with `cwd` set to the ticket directory or approved worktree, and the relevant context files passed in as `@/path` arguments.
 
 A cron job runs `lazyboy tick` every 5 minutes. Tickets advance automatically until they hit a gate, then wait for `lazyboy approve <id>`.
 
@@ -62,7 +62,7 @@ dir = "~/code/jackjennings/projects"
 [tick]
 concurrency = 2
 
-[plugins]
+[packages]
 enabled = ["agent-browser"]
 
 [codebase]
@@ -82,8 +82,8 @@ github_orgs = ["myorg"]
 
 External source access does not require MCP. Three approaches, in order of preference for the near term:
 
-1. **Host-side pre-fetch (recommended now):** before spawning the enrichment VM, the tick fetches approved external sources on the host — where credentials already live — and writes the results into the ticket directory as static files. The VM reads them like any other context file. No credentials inside the VM, no new tooling required.
-2. **CLI tools inside the VM:** install Slack CLI, `curl` against Notion's API, `gh` for GitHub directly in the gondolin VM. The enrichment prompt tells the agent which tools are available. Works today but puts credential handling inside the VM.
+1. **Host-side pre-fetch (recommended now):** before spawning the enrichment phase, the tick fetches approved external sources on the host — where credentials already live — and writes the results into the ticket directory as static files. Pi reads them like any other context file. No credentials passed to the agent, no new tooling required.
+2. **CLI tools at agent runtime:** the agent invokes Slack CLI, `curl` against Notion's API, `gh` for GitHub directly via its bash tool. The enrichment prompt tells the agent which tools are available. Works today but exposes host credentials to the agent.
 3. **MCP (future):** the cleanest long-term answer but blocked on Pi gaining MCP client support.
 
 ## Artifacts
@@ -113,7 +113,7 @@ A particularly valuable ceremony type is **meta-review**: a recurring analysis o
 
 ## Tech stack
 
-Deno, TypeScript, gondolin (micro-VM sandboxing), pi (AI agent), GitHub REST API.
+Deno, TypeScript, pi (AI agent), GitHub REST API.
 
 ### Prior art
 
@@ -123,7 +123,7 @@ Deno, TypeScript, gondolin (micro-VM sandboxing), pi (AI agent), GitHub REST API
 
 ### Pi vs Claude Code
 
-Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `write`, `bash`) and a richer hooks system (`tool_call`, `tool_result`, `before_agent_start`, etc.). The one meaningful gap is MCP — Claude Code supports it natively, Pi does not. For lazyboy's use case this doesn't matter: external services are handled at the host level by gondolin, not inside the agent. Pi is the primary and only planned agent.
+Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`, `write`, `bash`) and a richer hooks system (`tool_call`, `tool_result`, `before_agent_start`, etc.). The one meaningful gap is MCP — Claude Code supports it natively, Pi does not. For lazyboy's use case this doesn't matter: external services are pre-fetched on the host and passed to the agent as static context files. Pi is the primary and only planned agent.
 
 ---
 
@@ -133,11 +133,11 @@ This project is built in sixteen sub-projects. Bootstrap is sub-project 4 — th
 
 ### Sub-project 1 — Core loop ✅
 
-Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, gondolin + pi execution.
+Minimal end-to-end pipeline. GitHub Issues as the work provider, all five human gates, cron-based tick, pi execution.
 
 ### Sub-project 2 — Worktree isolation ✅
 
-Before intake runs, `tick()` creates a dedicated git branch (`<ticket-id>`, e.g. `gh-42`) and a linked working tree (`git worktree add`) in `~/.lazyboy/worktrees/<ticket-id>/<org>/<repo>`. The branch and worktree path are stored in `meta.md` under `worktrees.<org>/<repo>`. The implementation phase VM mounts the worktree read/write at `/workspace/<org>/<repo>`. If no local clone of the repo is found by scanning `codebase.roots`, the ticket moves to `needs-attention` before intake.
+Before intake runs, `tick()` creates a dedicated git branch (`<ticket-id>`, e.g. `gh-42`) and a linked working tree (`git worktree add`) in `~/.lazyboy/worktrees/<ticket-id>/<org>/<repo>`. The branch and worktree path are stored in `meta.md` under `worktrees.<org>/<repo>`. The implementation phase runs pi with the worktree path as `cwd`. If no local clone of the repo is found by scanning `codebase.roots`, the ticket moves to `needs-attention` before intake.
 
 Worktree removal (on merge or cleanup) is handled in SP3.
 
@@ -173,9 +173,9 @@ _Requires: SP5_
 
 _Requires: SP5, SP6_
 
-### Sub-project 8 — Plugins
+### Sub-project 8 — Packages
 
-Global plugin configuration in `config.toml` (`[plugins] enabled = [...]`). Plugins are installed into the gondolin VM before each phase that needs them.
+Global package configuration in `config.toml` (`[packages] enabled = [...]`). Packages are installed into pi before each phase that needs them.
 
 ### Sub-project 9 — Artifact types
 
@@ -245,7 +245,7 @@ _Requires: SP2, SP3_
 
 Ideas worth exploring but not yet scheduled:
 
-- **LLM-determined plugins:** rather than a global plugin list, the intake phase proposes which plugins a specific ticket needs (e.g. `agent-browser` for UI work, nothing for a pure backend change). This becomes part of the scope approval gate — the human confirms both directory access and tool access before any codebase-touching phase runs.
+- **LLM-determined packages:** rather than a global package list, the intake phase proposes which packages a specific ticket needs (e.g. `agent-browser` for UI work, nothing for a pure backend change). This becomes part of the scope approval gate — the human confirms both directory access and tool access before any codebase-touching phase runs.
 
 - **Network access per phase:** the enrichment phase needs open network access to read documentation and external resources; all other phases are locked to `api.anthropic.com` and `api.github.com`. Currently all phases use the same tight allowlist. The right design is to pass the phase name into `run-phase.ts` and skip `createHttpHooks` for enrichment, leaving network unrestricted while still injecting credentials as plain env vars. Longer term, the intake phase could propose a network allowlist alongside the filesystem scope, with human approval at the same gate.
 
@@ -269,7 +269,7 @@ Ideas worth exploring but not yet scheduled:
 
 - **Work dependencies:** some tickets can't start until others are complete. A `depends_on` field in `meta.md` would let the tick loop skip tickets whose dependencies aren't yet in `done` state. The intake phase is a natural place to propose dependencies — it already reads the ticket and has enough context to identify blocking relationships. Dependencies could also be sourced directly from the provider (GitHub Issues and Jira both support linked/blocked-by relationships).
 
-- **Related repository cloning:** some tickets require context from external codebases — a plugin ticket for ESLint benefits from having the ESLint source available in the VM, a Vim extension from having Neovim's runtime, a database driver from having the upstream client library. The intake or enrichment phase could detect these relationships and propose a list of repositories to clone into the VM alongside the working directory. These would be read-only mounts (or shallow clones with no write scope), approved at the same gate as filesystem and network access.
+- **Related repository cloning:** some tickets require context from external codebases — a plugin ticket for ESLint benefits from having the ESLint source available locally, a Vim extension from having Neovim's runtime, a database driver from having the upstream client library. The intake or enrichment phase could detect these relationships and propose a list of repositories to clone alongside the working directory. These would be approved at the same gate as filesystem and network access.
 
 - **Auto-clone missing repos:** when `tick()` cannot find a local clone of a ticket's repo by scanning `codebase.roots`, it currently moves the ticket to `needs-attention`. A future extension could attempt `git clone` into the first configured root, making the pipeline fully hands-off for first-time repos.
 

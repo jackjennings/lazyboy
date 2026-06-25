@@ -21,7 +21,7 @@ lazyboy is a cron-driven autonomous pipeline. `bin/lazyboy` → `src/index.ts` d
 
 **Phase state machine**: tickets move through `new → running-intake → waiting-intake → running-enrichment → … → waiting-diff → waiting-merge → done`. Any phase can transition to `needs-attention` on non-zero subprocess exit. The implementation phase is special: `running-implementation` transitions to `waiting-diff` (not `waiting-implementation`).
 
-**Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as a detached Deno subprocess. The subprocess creates a gondolin micro-VM, mounts the ticket directory and approved scope dirs, runs `pi -p "<prompt>" @/ticket/meta.md`, writes stdout to the phase output file, then exits. The tick detects completion by checking PID liveness on the next run.
+**Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as a detached Deno subprocess. The subprocess runs `pi -p "<prompt>" @/ticket/meta.md` with the ticket directory (or worktree path during implementation) as `cwd`, writes stdout to the phase output file, then exits. The tick detects completion by checking PID liveness on the next run.
 
 **State store** (`src/state/store.ts`): each ticket is a directory in the configured `state.dir` git repo. `meta.md` uses YAML frontmatter (parsed via `gray-matter`) for structured fields; the body is free text. Phase output files (`intake.md`, `enrichment.md`, etc.) live alongside `meta.md`.
 

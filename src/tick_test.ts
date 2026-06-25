@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { advancePhase } from "./tick.ts";
+import { advancePhase, tick } from "./tick.ts";
 import type { TicketState, WorktreeInfo } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -177,4 +177,33 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
     writePhaseOutput: async () => {},
   });
   assertEquals(written, ["needs-attention"]);
+});
+
+Deno.test("tick: calls installPackages with config.packages.enabled before advancing", async () => {
+  const sequence: string[] = [];
+  const installed: string[][] = [];
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await tick({
+      loadConfig: async () => ({
+        github: { repos: [] },
+        state: { dir: tempDir },
+        tick: { concurrency: 1 },
+        codebase: { roots: [] },
+        packages: { enabled: ["npm:pi-lens", "agent-browser"] },
+      }),
+      installPackages: async (sources) => {
+        sequence.push("install");
+        installed.push(sources);
+        return [];
+      },
+      advanceTickets: async () => {
+        sequence.push("advance");
+      },
+    });
+    assertEquals(installed, [["npm:pi-lens", "agent-browser"]]);
+    assertEquals(sequence, ["install", "advance"]);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
 });

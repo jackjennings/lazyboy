@@ -40,4 +40,5 @@ export interface Config {
   state: { dir: string };
   tick: { concurrency: number };
   codebase: { roots: string[] };
+  packages: { enabled: string[] };
 }

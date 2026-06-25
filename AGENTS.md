@@ -62,6 +62,17 @@ loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the
   default). `commitState` runs `git add -A && git commit` inside it after each
   tick.
 
+## Dependency injection
+
+Several modules expose a `*Deps` interface for testing (`TickDeps`,
+`InstallDeps`, `TickOrchestrationDeps`). Keep the surface minimal — only inject
+what tests actually need to substitute.
+
+Production helpers that satisfy a `*Deps` interface live in the same module as
+the interface and are named tool-agnostically. `isPackageInstalled` belongs next
+to `InstallDeps` in `src/packages.ts`; the fact that it shells out to `pi` is an
+implementation detail, not part of the name.
+
 ## Imports
 
 Use the project's import conventions from `deno.json`. For test assertions, use

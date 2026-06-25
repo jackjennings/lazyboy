@@ -6,9 +6,7 @@ export interface InstallResult {
 
 export interface InstallDeps {
   run: (source: string) => Promise<{ success: boolean; stderr: string }>;
-  isInstalled?: (source: string) => Promise<boolean>;
-  log?: (msg: string) => void;
-  warn?: (msg: string) => void;
+  isInstalled: (source: string) => Promise<boolean>;
 }
 
 export async function installPackages(
@@ -16,22 +14,15 @@ export async function installPackages(
   deps: InstallDeps,
 ): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
-  const log = deps.log ?? console.log;
-  const warn = deps.warn ?? console.warn;
   for (const source of sources) {
-    if (
-      deps.isInstalled && (await deps.isInstalled(source))
-    ) {
-      log(`package already installed: ${source}`);
+    if (await deps.isInstalled(source)) {
       results.push({ source, success: true });
       continue;
     }
     const { success, stderr } = await deps.run(source);
     if (success) {
-      log(`installed package: ${source}`);
       results.push({ source, success: true });
     } else {
-      warn(`failed to install package ${source}: ${stderr}`);
       results.push({ source, success: false, error: stderr });
     }
   }
@@ -47,4 +38,17 @@ export async function runPiInstall(
     stderr: "piped",
   }).output();
   return { success: out.success, stderr: new TextDecoder().decode(out.stderr) };
+}
+
+export async function isPackageInstalled(source: string): Promise<boolean> {
+  const out = await new Deno.Command("pi", {
+    args: ["list"],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  if (!out.success) return false;
+  const lines = new TextDecoder().decode(out.stdout).split("\n").map((l) =>
+    l.trim()
+  );
+  return lines.includes(source);
 }

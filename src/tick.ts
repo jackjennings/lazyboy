@@ -14,7 +14,8 @@ import { createWorktree, findLocalRepo } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import {
-  installPackages as installPackagesImpl,
+  installPackages,
+  isPackageInstalled,
   runPiInstall,
 } from "./packages.ts";
 import type { TickAction } from "./tick-actions/types.ts";
@@ -306,7 +307,10 @@ function defaultTickDeps(): TickOrchestrationDeps {
   return {
     loadConfig,
     installPackages: (sources) =>
-      installPackagesImpl(sources, { run: runPiInstall }),
+      installPackages(sources, {
+        run: runPiInstall,
+        isInstalled: isPackageInstalled,
+      }),
     advanceTickets: advanceTicketsImpl,
   };
 }

@@ -8,6 +8,7 @@ Deno.test("installPackages: empty list returns []", async () => {
       calls.push(s);
       return { success: true, stderr: "" };
     },
+    isInstalled: async () => false,
   });
   assertEquals(out, []);
   assertEquals(calls, []);
@@ -20,6 +21,7 @@ Deno.test("installPackages: installs each source sequentially", async () => {
       calls.push(s);
       return { success: true, stderr: "" };
     },
+    isInstalled: async () => false,
   });
   assertEquals(calls, ["a", "b", "c"]);
   assertEquals(out.map((r) => r.success), [true, true, true]);
@@ -53,7 +55,7 @@ Deno.test(
           ? { success: false, stderr: "boom" }
           : { success: true, stderr: "" };
       },
-      warn: (m) => warned.push(m),
+      isInstalled: async () => false,
     });
     assertEquals(calls, ["a", "b", "c"]);
     assertEquals(out.map((r) => r.success), [true, false, true]);

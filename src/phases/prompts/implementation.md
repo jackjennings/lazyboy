@@ -10,6 +10,12 @@ Implement the plan exactly as specified using TDD:
 3. Refactor if needed
 4. Confirm all tests pass
 
+Scope discipline: implement exactly what the plan specifies. Do not add
+parameters, helpers, log/warn callbacks, or fallback paths the plan does not
+call for, even when they seem like obvious improvements. If something genuinely
+feels missing, note the gap in the "Changes Made" section of your response
+rather than silently expanding scope.
+
 When done, commit all changes to the current branch with a descriptive commit
 message. Then push the branch and open a draft pull request using the `gh` CLI:
 

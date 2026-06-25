@@ -1,7 +1,11 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
-import { extractGitHubSlug, findLocalRepo, createWorktree } from "./worktree.ts";
+import {
+  createWorktree,
+  extractGitHubSlug,
+  findLocalRepo,
+} from "./worktree.ts";
 
 // ── extractGitHubSlug ────────────────────────────────────────────────────────
 
@@ -35,7 +39,12 @@ Deno.test("findLocalRepo: finds repo by matching origin remote", async () => {
   await Deno.mkdir(repoDir);
   await new Deno.Command("git", { args: ["init"], cwd: repoDir }).output();
   await new Deno.Command("git", {
-    args: ["remote", "add", "origin", "https://github.com/jackjennings/lazyboy.git"],
+    args: [
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/jackjennings/lazyboy.git",
+    ],
     cwd: repoDir,
   }).output();
 
@@ -61,7 +70,10 @@ Deno.test("findLocalRepo: skips non-git directories", async () => {
 });
 
 Deno.test("findLocalRepo: returns null for nonexistent root", async () => {
-  const result = await findLocalRepo(["/nonexistent/path"], "jackjennings/lazyboy");
+  const result = await findLocalRepo(
+    ["/nonexistent/path"],
+    "jackjennings/lazyboy",
+  );
   assertEquals(result, null);
 });
 
@@ -87,7 +99,8 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
       cwd: repoDir,
     }).output();
     await Deno.writeTextFile(join(repoDir, "README.md"), "test");
-    await new Deno.Command("git", { args: ["add", "."], cwd: repoDir }).output();
+    await new Deno.Command("git", { args: ["add", "."], cwd: repoDir })
+      .output();
     await new Deno.Command("git", {
       args: ["commit", "-m", "init"],
       cwd: repoDir,

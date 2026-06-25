@@ -4,22 +4,23 @@ Your context includes meta.md (ticket), spec.md, and plan.md. You are running
 inside the repository worktree — your working directory is the repo root.
 
 Implement the plan exactly as specified using TDD:
+
 1. Write failing tests first
 2. Implement the minimal code to make them pass
 3. Refactor if needed
 4. Confirm all tests pass
 
-When done, commit all changes to the current branch with a descriptive commit message.
-Then push the branch and open a draft pull request using the `gh` CLI:
+When done, commit all changes to the current branch with a descriptive commit
+message. Then push the branch and open a draft pull request using the `gh` CLI:
 
-  gh pr create --draft --title "<title>" --body "<body>"
+gh pr create --draft --title "<title>" --body "<body>"
 
 After creating the PR, write the PR URL to the `prUrl` field in meta.md (in the
 ticket directory shown in your context). Use the write tool to update that field
 in the YAML frontmatter.
 
-Do not write any files outside the repository worktree and meta.md.
-Print your response directly. Do not create any other files.
+Do not write any files outside the repository worktree and meta.md. Print your
+response directly. Do not create any other files.
 
 Your response must contain:
 

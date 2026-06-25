@@ -12,6 +12,7 @@ Your response must contain exactly two sections:
 ## Proposed Scope
 
 A YAML list of absolute paths the subsequent phases will need, for example:
+
 ```yaml
 scope:
   - ~/code/myorg/api

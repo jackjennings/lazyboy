@@ -4,9 +4,17 @@ import type { TicketState, WorktreeInfo } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
-    id: "gh-1", provider: "github", title: "T", url: "u",
-    phase: "new", approved: false, scope: [], worktrees: {},
-    created: "2026-06-15T00:00:00Z", updated: "2026-06-15T00:00:00Z", body: "",
+    id: "gh-1",
+    provider: "github",
+    title: "T",
+    url: "u",
+    phase: "new",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-06-15T00:00:00Z",
+    updated: "2026-06-15T00:00:00Z",
+    body: "",
     ...overrides,
   };
 }
@@ -15,7 +23,10 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
   const spawned: string[] = [];
   const ticket = makeTicket({ phase: "new" });
   await advancePhase(ticket, "/state", {
-    spawn: async (_opts) => { spawned.push("intake"); return 123; },
+    spawn: async (_opts) => {
+      spawned.push("intake");
+      return 123;
+    },
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
@@ -29,7 +40,9 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
   await advancePhase(ticket, "/state", {
     spawn: async () => 0,
     isPidAlive: () => false,
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
     writePhaseOutput: async () => {},
   });
   assertEquals(written, ["waiting-intake"]);
@@ -41,7 +54,9 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
   await advancePhase(ticket, "/state", {
     spawn: async () => 0,
     isPidAlive: () => true,
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
     writePhaseOutput: async () => {},
   });
   assertEquals(written, []);
@@ -51,7 +66,10 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
   const spawned: string[] = [];
   const ticket = makeTicket({ phase: "waiting-intake", approved: true });
   await advancePhase(ticket, "/state", {
-    spawn: async (opts) => { spawned.push(opts.phase); return 1; },
+    spawn: async (opts) => {
+      spawned.push(opts.phase);
+      return 1;
+    },
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
@@ -63,7 +81,10 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
   const spawned: string[] = [];
   const ticket = makeTicket({ phase: "waiting-intake", approved: false });
   await advancePhase(ticket, "/state", {
-    spawn: async (opts) => { spawned.push(opts.phase); return 1; },
+    spawn: async (opts) => {
+      spawned.push(opts.phase);
+      return 1;
+    },
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
@@ -77,7 +98,9 @@ Deno.test("advancePhase: waiting-diff approved advances to waiting-merge", async
   await advancePhase(ticket, "/state", {
     spawn: async () => 0,
     isPidAlive: () => false,
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
     writePhaseOutput: async () => {},
   });
   assertEquals(written, ["waiting-merge"]);
@@ -140,11 +163,17 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
 
 Deno.test("advancePhase: implementation phase with empty worktrees transitions to needs-attention", async () => {
   const written: string[] = [];
-  const ticket = makeTicket({ phase: "waiting-plan", approved: true, worktrees: {} });
+  const ticket = makeTicket({
+    phase: "waiting-plan",
+    approved: true,
+    worktrees: {},
+  });
   await advancePhase(ticket, "/state", {
     spawn: async () => 1,
     isPidAlive: () => false,
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
     writePhaseOutput: async () => {},
   });
   assertEquals(written, ["needs-attention"]);

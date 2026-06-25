@@ -15,7 +15,9 @@ export class GitHubProvider implements Provider {
   private login: string;
   private _fetch: FetchFn;
 
-  constructor(opts: { repos: string[]; token: string; login: string; _fetch?: FetchFn }) {
+  constructor(
+    opts: { repos: string[]; token: string; login: string; _fetch?: FetchFn },
+  ) {
     this.repos = opts.repos;
     this.token = opts.token;
     this.login = opts.login;
@@ -36,7 +38,8 @@ export class GitHubProvider implements Provider {
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const items: WorkItem[] = [];
     for (const repo of this.repos) {
-      const url = `https://api.github.com/repos/${repo}/issues?assignee=${this.login}&state=open&per_page=50`;
+      const url =
+        `https://api.github.com/repos/${repo}/issues?assignee=${this.login}&state=open&per_page=50`;
       const issues = await this._fetch(url) as GitHubIssue[];
       for (const issue of issues) {
         const id = `gh-${issue.number}`;

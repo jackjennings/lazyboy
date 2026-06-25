@@ -48,14 +48,18 @@ export async function createWorktree(
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
   const worktreePath = join(home, ".lazyboy", "worktrees", ticketId, org, repo);
-  await Deno.mkdir(join(home, ".lazyboy", "worktrees", ticketId, org), { recursive: true });
+  await Deno.mkdir(join(home, ".lazyboy", "worktrees", ticketId, org), {
+    recursive: true,
+  });
 
   const { code } = await runGit(
     ["worktree", "add", "-b", ticketId, worktreePath, "main"],
     repoPath,
   );
   if (code !== 0) {
-    throw new Error(`git worktree add failed for ticket ${ticketId} in ${repoPath}`);
+    throw new Error(
+      `git worktree add failed for ticket ${ticketId} in ${repoPath}`,
+    );
   }
 
   return { path: worktreePath, branch: ticketId };

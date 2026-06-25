@@ -11,7 +11,9 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     phase: "waiting-merge",
     approved: false,
     scope: [],
-    worktrees: { "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" } },
+    worktrees: {
+      "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },
+    },
     prUrl: "https://github.com/myorg/myrepo/pull/99",
     created: "2026-06-23T00:00:00Z",
     updated: "2026-06-23T00:00:00Z",
@@ -20,7 +22,9 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   };
 }
 
-function makeAction(overrides: Partial<Parameters<typeof checkMergedPRAction>[0]> = {}) {
+function makeAction(
+  overrides: Partial<Parameters<typeof checkMergedPRAction>[0]> = {},
+) {
   return checkMergedPRAction({
     isPRMerged: async () => false,
     cleanupWorktree: async () => {},
@@ -38,14 +42,19 @@ Deno.test("checkMergedPRAction: does not apply when prUrl absent", () => {
 });
 
 Deno.test("checkMergedPRAction: does not apply when not waiting-merge", () => {
-  assertEquals(makeAction().applies(makeTicket({ phase: "waiting-diff" })), false);
+  assertEquals(
+    makeAction().applies(makeTicket({ phase: "waiting-diff" })),
+    false,
+  );
 });
 
 Deno.test("checkMergedPRAction: PR not merged → null, no cleanup", async () => {
   const cleanups: string[] = [];
   const result = await makeAction({
     isPRMerged: async () => false,
-    cleanupWorktree: async (wt) => { cleanups.push(wt.path); },
+    cleanupWorktree: async (wt) => {
+      cleanups.push(wt.path);
+    },
   }).run(makeTicket(), "/state");
   assertEquals(result, null);
   assertEquals(cleanups, []);
@@ -54,8 +63,12 @@ Deno.test("checkMergedPRAction: PR not merged → null, no cleanup", async () =>
 Deno.test("checkMergedPRAction: isPRMerged throws → null, no cleanup", async () => {
   const cleanups: string[] = [];
   const result = await makeAction({
-    isPRMerged: async () => { throw new Error("network error"); },
-    cleanupWorktree: async (wt) => { cleanups.push(wt.path); },
+    isPRMerged: async () => {
+      throw new Error("network error");
+    },
+    cleanupWorktree: async (wt) => {
+      cleanups.push(wt.path);
+    },
   }).run(makeTicket(), "/state");
   assertEquals(result, null);
   assertEquals(cleanups, []);
@@ -66,8 +79,12 @@ Deno.test("checkMergedPRAction: PR merged → done, cleanup called per worktree"
   const written: string[] = [];
   const result = await makeAction({
     isPRMerged: async () => true,
-    cleanupWorktree: async (wt) => { cleanups.push(wt.path); },
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    cleanupWorktree: async (wt) => {
+      cleanups.push(wt.path);
+    },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "done");
   assertEquals(cleanups, ["/wt/myorg/myrepo"]);
@@ -78,8 +95,12 @@ Deno.test("checkMergedPRAction: cleanupWorktree throws → still done", async ()
   const written: string[] = [];
   const result = await makeAction({
     isPRMerged: async () => true,
-    cleanupWorktree: async () => { throw new Error("git failed"); },
-    writeTicket: async (_dir, t) => { written.push(t.phase); },
+    cleanupWorktree: async () => {
+      throw new Error("git failed");
+    },
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "done");
   assertEquals(written, ["done"]);

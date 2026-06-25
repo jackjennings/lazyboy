@@ -5,7 +5,10 @@ function cronLine(lazboyDir: string): string {
 }
 
 async function readCrontab(): Promise<string> {
-  const result = await new Deno.Command("crontab", { args: ["-l"], stderr: "null" }).output();
+  const result = await new Deno.Command("crontab", {
+    args: ["-l"],
+    stderr: "null",
+  }).output();
   return result.code === 0 ? new TextDecoder().decode(result.stdout) : "";
 }
 

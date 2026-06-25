@@ -12,7 +12,10 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return ticket.phase === "waiting-merge" && ticket.prUrl !== undefined;
     },
-    async run(ticket: TicketState, stateDir: string): Promise<TicketState | null> {
+    async run(
+      ticket: TicketState,
+      stateDir: string,
+    ): Promise<TicketState | null> {
       let merged: boolean;
       try {
         merged = await deps.isPRMerged(ticket.prUrl!);

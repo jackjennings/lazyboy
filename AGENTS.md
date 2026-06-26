@@ -26,11 +26,15 @@ fetches new GitHub Issues via `src/providers/github.ts`, then calls
 `advancePhase()` for each active ticket. `advancePhase` is dependency-injected
 (`TickDeps`) to keep it unit-testable without real filesystem or process access.
 
-**Phase state machine**: tickets move through
-`new → running-intake → waiting-intake → running-enrichment → … → waiting-diff → waiting-merge → done`.
-Any phase can transition to `needs-attention` on non-zero subprocess exit. The
-implementation phase is special: `running-implementation` transitions to
-`waiting-diff` (not `waiting-implementation`).
+**Phase state machine**: tickets carry two fields — `phase: TicketPhase` and
+`status: TicketStatus`. Status transitions are `new → running → waiting →
+(approved) → running` cycling through phases in `PHASE_SEQUENCE`, with
+`implementation` writing `{ phase: "diff", status: "waiting" }` on completion
+instead of staying in the same phase. `PHASE_SEQUENCE` covers only the five
+runner phases (`intake` through `implementation`); `diff` and `merge` are
+handled explicitly in `advancePhase`. Any phase can transition to
+`needs-attention` on subprocess failure. `{ phase: "merge", status: "done" }`
+is the terminal state.
 
 **Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as
 a detached Deno subprocess. The subprocess runs
@@ -52,12 +56,6 @@ loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the
 
 - `advancePhase` is pure except for the injected `TickDeps` — keep it that way
   for testability.
-- Phase names are the single source of truth in `PHASE_SEQUENCE`
-  (`src/phases/types.ts`). The Phase union type in `src/state/types.ts` must
-  stay in sync with it manually.
-- `waiting-diff` is not derived from `running-implementation` by the normal
-  `running-X → waiting-X` pattern — it's a hardcoded special case in
-  `runningPhaseToWaiting`.
 - The state dir is a separate git repo (`~/code/jackjennings/projects` by
   default). `commitState` runs `git add -A && git commit` inside it after each
   tick.

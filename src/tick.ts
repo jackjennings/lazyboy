@@ -20,12 +20,7 @@ import {
   runPiInstall,
 } from "./packages.ts";
 import type { TickAction } from "./tick-actions/types.ts";
-import type {
-  Config,
-  Phase,
-  TicketState,
-  WorktreeInfo,
-} from "./state/types.ts";
+import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 import type { InstallResult } from "./packages.ts";
 
@@ -56,33 +51,6 @@ export interface TickDeps {
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
 
-const ACTIVE_PHASES: ActivePhase[] = [
-  "intake",
-  "enrichment",
-  "spec",
-  "plan",
-  "implementation",
-];
-
-function runningPhaseToWaiting(phase: Phase): Phase | null {
-  // Special case: running-implementation → waiting-diff (not waiting-implementation)
-  if (phase === "running-implementation") return "waiting-diff";
-  const m = phase.match(/^running-(.+)$/);
-  if (!m) return null;
-  const candidate = m[1];
-  if (ACTIVE_PHASES.includes(candidate as ActivePhase)) {
-    return `waiting-${candidate}` as Phase;
-  }
-  return null;
-}
-
-function waitingPhaseToActive(phase: Phase): ActivePhase | null {
-  const m = phase.match(/^waiting-(.+)$/);
-  if (!m) return null;
-  const candidate = m[1] as ActivePhase;
-  return ACTIVE_PHASES.includes(candidate) ? candidate : null;
-}
-
 export async function advancePhase(
   ticket: TicketState,
   stateDir: string,
@@ -90,7 +58,7 @@ export async function advancePhase(
 ): Promise<void> {
   const now = new Date().toISOString();
 
-  if (ticket.phase === "new") {
+  if (ticket.status === "new") {
     const prompt = await loadPrompt("intake");
     const pid = await deps.spawn({
       phase: "intake",
@@ -101,76 +69,75 @@ export async function advancePhase(
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
-      phase: "running-intake",
+      phase: "intake",
+      status: "running",
       pid,
+      approved: false,
       updated: now,
-    });
-    await deps.appendLog(stateDir, ticket.id, {
-      event: "phase-transition",
-      from: ticket.phase,
-      to: "running-intake",
     });
     return;
   }
 
-  const waitingPhase = runningPhaseToWaiting(ticket.phase);
-  if (waitingPhase !== null) {
+  if (ticket.status === "running") {
     if (ticket.pid !== undefined && !deps.isPidAlive(ticket.pid)) {
-      await deps.writeTicket(stateDir, {
-        ...ticket,
-        phase: waitingPhase,
-        pid: undefined,
-        updated: now,
-      });
-      await deps.appendLog(stateDir, ticket.id, {
-        event: "phase-transition",
-        from: ticket.phase,
-        to: waitingPhase,
-      });
+      if (ticket.phase === "implementation") {
+        await deps.writeTicket(stateDir, {
+          ...ticket,
+          phase: "diff",
+          status: "waiting",
+          pid: undefined,
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-transition",
+          from: ticket.phase,
+          to: "diff",
+        });
+      } else {
+        await deps.writeTicket(stateDir, {
+          ...ticket,
+          status: "waiting",
+          pid: undefined,
+          updated: now,
+        });
+      }
     }
     return;
   }
 
-  // waiting-diff + approved → waiting-merge
-  if (ticket.phase === "waiting-diff" && ticket.approved) {
+  if (
+    ticket.phase === "diff" && ticket.status === "waiting" && ticket.approved
+  ) {
     await deps.writeTicket(stateDir, {
       ...ticket,
-      phase: "waiting-merge",
+      phase: "merge",
+      status: "waiting",
       approved: false,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
       event: "phase-transition",
       from: ticket.phase,
-      to: "waiting-merge",
+      to: "merge",
     });
     return;
   }
 
-  const activePhase = waitingPhaseToActive(ticket.phase);
-  if (activePhase !== null && ticket.approved) {
+  const activePhases: ActivePhase[] = ["intake", "enrichment", "spec", "plan"];
+  if (
+    ticket.status === "waiting" &&
+    ticket.approved &&
+    (activePhases as string[]).includes(ticket.phase)
+  ) {
+    const activePhase = ticket.phase as ActivePhase;
     const next = nextPhase(activePhase);
-    if (next === "done") {
-      // Should not happen for known phases before implementation, but handle gracefully
-      await deps.writeTicket(stateDir, {
-        ...ticket,
-        phase: "waiting-merge",
-        approved: false,
-        updated: now,
-      });
-      await deps.appendLog(stateDir, ticket.id, {
-        event: "phase-transition",
-        from: ticket.phase,
-        to: "waiting-merge",
-      });
-      return;
-    }
     if (
       next === "implementation" && Object.keys(ticket.worktrees).length === 0
     ) {
       await deps.writeTicket(stateDir, {
         ...ticket,
-        phase: "needs-attention",
+        phase: "implementation",
+        status: "needs-attention",
         approved: false,
         updated: now,
       });
@@ -189,10 +156,10 @@ export async function advancePhase(
       scope: ticket.scope,
       worktrees: next === "implementation" ? ticket.worktrees : {},
     });
-    const toPhase = `running-${next}` as Phase;
     await deps.writeTicket(stateDir, {
       ...ticket,
-      phase: toPhase,
+      phase: next,
+      status: "running",
       approved: false,
       pid,
       updated: now,
@@ -200,7 +167,7 @@ export async function advancePhase(
     await deps.appendLog(stateDir, ticket.id, {
       event: "phase-transition",
       from: ticket.phase,
-      to: toPhase,
+      to: next,
     });
     return;
   }
@@ -209,7 +176,6 @@ export async function advancePhase(
 async function advanceTicketsImpl(config: Config): Promise<void> {
   const stateDir = expandHome(config.state.dir);
 
-  // Fetch new work
   const token = Deno.env.get("GITHUB_TOKEN") ?? "";
   const login = Deno.env.get("GITHUB_LOGIN") ?? "";
   const provider = new GitHubProvider({
@@ -226,7 +192,8 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
       provider: item.provider,
       title: item.title,
       url: item.url,
-      phase: "new",
+      phase: "intake",
+      status: "new",
       approved: false,
       scope: [],
       worktrees: {},
@@ -236,7 +203,6 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     });
   }
 
-  // Advance tickets
   const maxRunning = config.tick.concurrency;
   const ids = await listTickets(stateDir);
   const tickets = await Promise.all(
@@ -291,7 +257,6 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     }),
   ];
 
-  // Action pass
   const processedTickets = [...tickets];
   for (let i = 0; i < processedTickets.length; i++) {
     for (const action of tickActions) {
@@ -302,18 +267,18 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     }
   }
 
-  // Advance pass
-  let running =
-    processedTickets.filter((t) => t.phase.startsWith("running-")).length;
+  let running = processedTickets.filter((t) => t.status === "running").length;
 
   for (const ticket of processedTickets) {
     if (
-      ["needs-attention", "done", "waiting-merge"].includes(ticket.phase)
+      ticket.status === "done" ||
+      ticket.status === "needs-attention" ||
+      (ticket.phase === "merge" && ticket.status === "waiting")
     ) continue;
 
-    const willSpawn = ticket.phase === "new" ||
-      (ticket.phase.startsWith("waiting-") &&
-        ticket.phase !== "waiting-diff" && ticket.approved);
+    const willSpawn = ticket.status === "new" ||
+      (ticket.status === "waiting" && ticket.phase !== "diff" &&
+        ticket.approved);
     if (willSpawn && running >= maxRunning) continue;
     if (willSpawn) running++;
 
@@ -357,7 +322,6 @@ export async function tick(
   const config = await d.loadConfig();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
 
-  // Acquire lock
   try {
     const existing = await Deno.readTextFile(pidFile).catch(() => null);
     if (existing) {

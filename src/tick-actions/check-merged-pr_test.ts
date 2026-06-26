@@ -8,7 +8,8 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     provider: "github",
     title: "T",
     url: "https://github.com/myorg/myrepo/issues/42",
-    phase: "waiting-merge",
+    phase: "merge",
+    status: "waiting",
     approved: false,
     scope: [],
     worktrees: {
@@ -34,7 +35,7 @@ function makeAction(
   });
 }
 
-Deno.test("checkMergedPRAction: applies when waiting-merge with prUrl", () => {
+Deno.test("checkMergedPRAction: applies when merge/waiting with prUrl", () => {
   assertEquals(makeAction().applies(makeTicket()), true);
 });
 
@@ -42,9 +43,9 @@ Deno.test("checkMergedPRAction: does not apply when prUrl absent", () => {
   assertEquals(makeAction().applies(makeTicket({ prUrl: undefined })), false);
 });
 
-Deno.test("checkMergedPRAction: does not apply when not waiting-merge", () => {
+Deno.test("checkMergedPRAction: does not apply when not merge/waiting", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ phase: "waiting-diff" })),
+    makeAction().applies(makeTicket({ phase: "diff", status: "waiting" })),
     false,
   );
 });
@@ -87,11 +88,11 @@ Deno.test("checkMergedPRAction: PR merged → done, cleanup called per worktree"
       return Promise.resolve();
     },
     writeTicket: (_dir, t) => {
-      written.push(t.phase);
+      written.push(t.status);
       return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
-  assertEquals(result?.phase, "done");
+  assertEquals(result?.status, "done");
   assertEquals(cleanups, ["/wt/myorg/myrepo"]);
   assertEquals(written, ["done"]);
 });
@@ -104,11 +105,11 @@ Deno.test("checkMergedPRAction: cleanupWorktree throws → still done", async ()
       throw new Error("git failed");
     },
     writeTicket: (_dir, t) => {
-      written.push(t.phase);
+      written.push(t.status);
       return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
-  assertEquals(result?.phase, "done");
+  assertEquals(result?.status, "done");
   assertEquals(written, ["done"]);
 });
 

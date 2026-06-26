@@ -29,7 +29,7 @@ if (command === "tick") {
     updated: new Date().toISOString(),
   });
   await commitTicket(stateDir, id, `approve: ${id}`);
-  console.log(`Approved ${id} (phase: ${ticket.phase})`);
+  console.log(`Approved ${id} (phase: ${ticket.phase}/${ticket.status})`);
 } else if (command === "status") {
   const config = await loadConfig();
   const stateDir = expandHome(config.state.dir);
@@ -44,9 +44,10 @@ if (command === "tick") {
   console.log("-".repeat(80));
   for (const id of ids.sort()) {
     const t = await readTicket(stateDir, id);
-    const waiting = t.phase.startsWith("waiting-") && !t.approved ? "YES" : "";
+    const waiting = t.status === "waiting" && !t.approved ? "YES" : "";
+    const phaseStatus = `${t.phase}/${t.status}`;
     console.log(
-      `${t.id.padEnd(20)} ${t.phase.padEnd(25)} ${
+      `${t.id.padEnd(20)} ${phaseStatus.padEnd(25)} ${
         waiting.padEnd(8)
       } ${t.title}`,
     );

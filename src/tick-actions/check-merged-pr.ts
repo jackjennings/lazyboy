@@ -11,7 +11,9 @@ export interface CheckMergedPRDeps {
 export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
   return {
     applies(ticket: TicketState): boolean {
-      return ticket.phase === "waiting-merge" && ticket.prUrl !== undefined;
+      return ticket.phase === "merge" &&
+        ticket.status === "waiting" &&
+        ticket.prUrl !== undefined;
     },
     async run(
       ticket: TicketState,
@@ -44,7 +46,12 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
         }
       }
 
-      const updated = { ...ticket, phase: "done" as const, updated: now };
+      const updated = {
+        ...ticket,
+        phase: "merge" as const,
+        status: "done" as const,
+        updated: now,
+      };
       await deps.writeTicket(stateDir, updated);
       await deps.appendLog(stateDir, ticket.id, {
         event: "phase-transition",

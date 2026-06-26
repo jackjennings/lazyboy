@@ -16,7 +16,7 @@ export interface CreateWorktreeDeps {
 export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
   return {
     applies(ticket: TicketState): boolean {
-      return ticket.phase === "new" &&
+      return ticket.status === "new" &&
         Object.keys(ticket.worktrees).length === 0;
     },
     async run(
@@ -29,7 +29,8 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       if (!repoPath) {
         const updated = {
           ...ticket,
-          phase: "needs-attention" as const,
+          phase: "intake" as const,
+          status: "needs-attention" as const,
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);
@@ -43,7 +44,8 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       } catch {
         const updated = {
           ...ticket,
-          phase: "needs-attention" as const,
+          phase: "intake" as const,
+          status: "needs-attention" as const,
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);

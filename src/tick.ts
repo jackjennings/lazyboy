@@ -106,7 +106,6 @@ export async function advancePhase(
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
-      ts: now,
       event: "phase-transition",
       from: ticket.phase,
       to: "running-intake",
@@ -124,7 +123,6 @@ export async function advancePhase(
         updated: now,
       });
       await deps.appendLog(stateDir, ticket.id, {
-        ts: now,
         event: "phase-transition",
         from: ticket.phase,
         to: waitingPhase,
@@ -142,7 +140,6 @@ export async function advancePhase(
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
-      ts: now,
       event: "phase-transition",
       from: ticket.phase,
       to: "waiting-merge",
@@ -162,7 +159,6 @@ export async function advancePhase(
         updated: now,
       });
       await deps.appendLog(stateDir, ticket.id, {
-        ts: now,
         event: "phase-transition",
         from: ticket.phase,
         to: "waiting-merge",
@@ -179,7 +175,6 @@ export async function advancePhase(
         updated: now,
       });
       await deps.appendLog(stateDir, ticket.id, {
-        ts: now,
         event: "phase-transition",
         from: ticket.phase,
         to: "needs-attention",
@@ -203,7 +198,6 @@ export async function advancePhase(
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
-      ts: now,
       event: "phase-transition",
       from: ticket.phase,
       to: toPhase,

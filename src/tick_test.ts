@@ -347,7 +347,7 @@ Deno.test("advancePhase: next=done fallthrough logs current → waiting-merge", 
   assertEquals((logged[0] as Record<string, string>).to, "waiting-merge");
 });
 
-Deno.test("advancePhase: log entry ts matches now format", async () => {
+Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
   const logged: object[] = [];
   const ticket = makeTicket({ phase: "new" });
   await advancePhase(ticket, "/state", {
@@ -359,7 +359,5 @@ Deno.test("advancePhase: log entry ts matches now format", async () => {
       logged.push(entry);
     },
   });
-  const ts = (logged[0] as Record<string, string>).ts;
-  assertEquals(typeof ts, "string");
-  assertEquals(isNaN(Date.parse(ts)), false);
+  assertEquals("ts" in (logged[0] as Record<string, unknown>), false);
 });

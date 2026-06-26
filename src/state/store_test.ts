@@ -200,7 +200,6 @@ Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async 
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await appendTicketLog(dir, "gh-1", {
-    ts: "2026-01-01T00:00:00Z",
     event: "phase-transition",
     from: "new",
     to: "running-intake",
@@ -210,6 +209,8 @@ Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async 
   assertEquals(parsed.event, "phase-transition");
   assertEquals(parsed.from, "new");
   assertEquals(parsed.to, "running-intake");
+  assertEquals(typeof parsed.ts, "string");
+  assertEquals(isNaN(Date.parse(parsed.ts)), false);
   await Deno.remove(dir, { recursive: true });
 });
 

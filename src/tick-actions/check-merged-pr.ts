@@ -22,7 +22,6 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
         merged = await deps.isPRMerged(ticket.prUrl!);
       } catch (e) {
         await deps.appendLog(stateDir, ticket.id, {
-          ts: new Date().toISOString(),
           event: "error",
           context: "checkMergedPR",
           message: String(e),
@@ -38,7 +37,6 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
           await deps.cleanupWorktree(wt);
         } catch (e) {
           await deps.appendLog(stateDir, ticket.id, {
-            ts: new Date().toISOString(),
             event: "error",
             context: "checkMergedPR",
             message: String(e),
@@ -49,7 +47,6 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
       const updated = { ...ticket, phase: "done" as const, updated: now };
       await deps.writeTicket(stateDir, updated);
       await deps.appendLog(stateDir, ticket.id, {
-        ts: now,
         event: "phase-transition",
         from: "waiting-merge",
         to: "done",

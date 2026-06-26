@@ -29,6 +29,7 @@ function makeAction(
     isPRMerged: async () => false,
     cleanupWorktree: async () => {},
     writeTicket: async () => {},
+    appendLog: async () => {},
     ...overrides,
   });
 }
@@ -104,4 +105,59 @@ Deno.test("checkMergedPRAction: cleanupWorktree throws → still done", async ()
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "done");
   assertEquals(written, ["done"]);
+});
+
+Deno.test("checkMergedPRAction: GitHub API error logs error entry", async () => {
+  const logged: object[] = [];
+  const result = await makeAction({
+    isPRMerged: async () => {
+      throw new Error("network error");
+    },
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(result, null);
+  assertEquals(logged.length, 1);
+  assertEquals((logged[0] as Record<string, string>).event, "error");
+  assertEquals((logged[0] as Record<string, string>).context, "checkMergedPR");
+  assertEquals(
+    (logged[0] as Record<string, string>).message,
+    "Error: network error",
+  );
+});
+
+Deno.test("checkMergedPRAction: cleanup failure logs error entry", async () => {
+  const logged: object[] = [];
+  await makeAction({
+    isPRMerged: async () => true,
+    cleanupWorktree: async () => {
+      throw new Error("git failed");
+    },
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  }).run(makeTicket(), "/state");
+  const errorEntries = (logged as Record<string, string>[]).filter((e) =>
+    e.event === "error"
+  );
+  assertEquals(errorEntries.length, 1);
+  assertEquals(errorEntries[0].context, "checkMergedPR");
+  assertEquals(errorEntries[0].message, "Error: git failed");
+});
+
+Deno.test("checkMergedPRAction: PR merged logs waiting-merge → done transition", async () => {
+  const logged: object[] = [];
+  await makeAction({
+    isPRMerged: async () => true,
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  }).run(makeTicket(), "/state");
+  const transitions = (logged as Record<string, string>[]).filter((e) =>
+    e.event === "phase-transition"
+  );
+  assertEquals(transitions.length, 1);
+  assertEquals(transitions[0].from, "waiting-merge");
+  assertEquals(transitions[0].to, "done");
 });

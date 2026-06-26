@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import { advancePhase, tick } from "./tick.ts";
-import type { TicketState, WorktreeInfo } from "./state/types.ts";
+import type { Phase, TicketState, WorktreeInfo } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -30,6 +30,7 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawned, ["intake"]);
 });
@@ -44,6 +45,7 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
       written.push(t.phase);
     },
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(written, ["waiting-intake"]);
 });
@@ -58,6 +60,7 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
       written.push(t.phase);
     },
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(written, []);
 });
@@ -73,6 +76,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawned, ["enrichment"]);
 });
@@ -88,6 +92,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawned, []);
 });
@@ -102,6 +107,7 @@ Deno.test("advancePhase: waiting-diff approved advances to waiting-merge", async
       written.push(t.phase);
     },
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(written, ["waiting-merge"]);
 });
@@ -121,6 +127,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawnedWorktrees, [
     { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
@@ -142,6 +149,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawnedWorktrees, [{}]);
 });
@@ -157,6 +165,7 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(spawnedWorktrees, [{}]);
 });
@@ -175,6 +184,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
       written.push(t.phase);
     },
     writePhaseOutput: async () => {},
+    appendLog: async () => {},
   });
   assertEquals(written, ["needs-attention"]);
 });
@@ -206,4 +216,148 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+Deno.test("advancePhase: new ticket logs new → running-intake transition", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "new" });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 123,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals(logged.length, 1);
+  assertEquals((logged[0] as Record<string, string>).event, "phase-transition");
+  assertEquals((logged[0] as Record<string, string>).from, "new");
+  assertEquals((logged[0] as Record<string, string>).to, "running-intake");
+});
+
+Deno.test("advancePhase: dead PID logs running → waiting transition", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "running-intake", pid: 999 });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 0,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals((logged[0] as Record<string, string>).event, "phase-transition");
+  assertEquals((logged[0] as Record<string, string>).from, "running-intake");
+  assertEquals((logged[0] as Record<string, string>).to, "waiting-intake");
+});
+
+Deno.test("advancePhase: live PID does not log", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "running-intake", pid: 999 });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 0,
+    isPidAlive: () => true,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals(logged, []);
+});
+
+Deno.test("advancePhase: waiting-diff approved logs waiting-diff → waiting-merge", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "waiting-diff", approved: true });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 0,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals((logged[0] as Record<string, string>).from, "waiting-diff");
+  assertEquals((logged[0] as Record<string, string>).to, "waiting-merge");
+});
+
+Deno.test("advancePhase: approved waiting phase logs transition to running-next", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "waiting-intake", approved: true });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 1,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals((logged[0] as Record<string, string>).from, "waiting-intake");
+  assertEquals((logged[0] as Record<string, string>).to, "running-enrichment");
+});
+
+Deno.test("advancePhase: no worktrees logs waiting-plan → needs-attention", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({
+    phase: "waiting-plan",
+    approved: true,
+    worktrees: {},
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 1,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals((logged[0] as Record<string, string>).from, "waiting-plan");
+  assertEquals((logged[0] as Record<string, string>).to, "needs-attention");
+});
+
+Deno.test("advancePhase: next=done fallthrough logs current → waiting-merge", async () => {
+  const logged: object[] = [];
+  const written: string[] = [];
+  const ticket = makeTicket({
+    phase: "waiting-implementation" as Phase,
+    approved: true,
+    worktrees: { "x": { path: "/p", branch: "b" } },
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 1,
+    isPidAlive: () => false,
+    writeTicket: async (_dir, t) => {
+      written.push(t.phase);
+    },
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals(written, ["waiting-merge"]);
+  assertEquals(
+    (logged[0] as Record<string, string>).from,
+    "waiting-implementation",
+  );
+  assertEquals((logged[0] as Record<string, string>).to, "waiting-merge");
+});
+
+Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "new" });
+  await advancePhase(ticket, "/state", {
+    spawn: async () => 123,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async (_dir, _id, entry) => {
+      logged.push(entry);
+    },
+  });
+  assertEquals("ts" in (logged[0] as Record<string, unknown>), false);
 });

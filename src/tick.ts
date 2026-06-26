@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import {
+  appendTicketLog,
   commitState,
   listTickets,
   readTicket,
@@ -52,6 +53,7 @@ export interface TickDeps {
     file: string,
     content: string,
   ) => Promise<void>;
+  appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
 
 const ACTIVE_PHASES: ActivePhase[] = [
@@ -103,6 +105,11 @@ export async function advancePhase(
       pid,
       updated: now,
     });
+    await deps.appendLog(stateDir, ticket.id, {
+      event: "phase-transition",
+      from: ticket.phase,
+      to: "running-intake",
+    });
     return;
   }
 
@@ -115,6 +122,11 @@ export async function advancePhase(
         pid: undefined,
         updated: now,
       });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "phase-transition",
+        from: ticket.phase,
+        to: waitingPhase,
+      });
     }
     return;
   }
@@ -126,6 +138,11 @@ export async function advancePhase(
       phase: "waiting-merge",
       approved: false,
       updated: now,
+    });
+    await deps.appendLog(stateDir, ticket.id, {
+      event: "phase-transition",
+      from: ticket.phase,
+      to: "waiting-merge",
     });
     return;
   }
@@ -141,6 +158,11 @@ export async function advancePhase(
         approved: false,
         updated: now,
       });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "phase-transition",
+        from: ticket.phase,
+        to: "waiting-merge",
+      });
       return;
     }
     if (
@@ -152,6 +174,11 @@ export async function advancePhase(
         approved: false,
         updated: now,
       });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "phase-transition",
+        from: ticket.phase,
+        to: "needs-attention",
+      });
       return;
     }
     const prompt = await loadPrompt(next);
@@ -162,12 +189,18 @@ export async function advancePhase(
       scope: ticket.scope,
       worktrees: next === "implementation" ? ticket.worktrees : {},
     });
+    const toPhase = `running-${next}` as Phase;
     await deps.writeTicket(stateDir, {
       ...ticket,
-      phase: `running-${next}` as Phase,
+      phase: toPhase,
       approved: false,
       pid,
       updated: now,
+    });
+    await deps.appendLog(stateDir, ticket.id, {
+      event: "phase-transition",
+      from: ticket.phase,
+      to: toPhase,
     });
     return;
   }
@@ -254,6 +287,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
         }).output();
       },
       writeTicket,
+      appendLog: appendTicketLog,
     }),
   ];
 
@@ -297,6 +331,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
       isPidAlive: defaultIsPidAlive,
       writeTicket,
       writePhaseOutput,
+      appendLog: appendTicketLog,
     });
   }
 

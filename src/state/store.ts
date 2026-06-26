@@ -92,6 +92,18 @@ export async function listTickets(stateDir: string): Promise<string[]> {
   return ids;
 }
 
+export async function appendTicketLog(
+  stateDir: string,
+  id: string,
+  entry: object,
+): Promise<void> {
+  await Deno.writeTextFile(
+    join(stateDir, id, "log.ndjson"),
+    JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n",
+    { append: true },
+  );
+}
+
 export async function commitState(
   stateDir: string,
   message: string,

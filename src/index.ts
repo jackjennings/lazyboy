@@ -56,7 +56,28 @@ if (command === "tick") {
   await enableCron(LAZYBOY_DIR);
 } else if (command === "disable") {
   await disableCron();
+} else if (command === "_ids") {
+  const config = await loadConfig();
+  const stateDir = expandHome(config.state.dir);
+  const ids = await listTickets(stateDir);
+  for (const id of ids) {
+    console.log(id);
+  }
+} else if (command === "completion") {
+  const shell = Deno.args[1];
+  if (!shell) {
+    console.error("Usage: lazyboy completion <zsh>");
+    Deno.exit(1);
+  }
+  if (shell !== "zsh") {
+    console.error(`Unsupported shell: ${shell}`);
+    Deno.exit(1);
+  }
+  const scriptPath = new URL(`completion.${shell}`, import.meta.url).pathname;
+  console.log(await Deno.readTextFile(scriptPath));
 } else {
-  console.error("Usage: lazyboy <tick|approve|status|enable|disable>");
+  console.error(
+    "Usage: lazyboy <tick|approve|status|enable|disable|completion>",
+  );
   Deno.exit(1);
 }

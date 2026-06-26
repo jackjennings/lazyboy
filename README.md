@@ -32,6 +32,22 @@ lazyboy approve <id>   # approve the current phase gate
 lazyboy status         # show all active tickets
 lazyboy enable         # add cron job
 lazyboy disable        # remove cron job
+lazyboy completion zsh # print zsh completion script
+```
+
+### Shell completions
+
+**Inline (`.zshrc`):**
+
+```zsh
+source <(lazyboy completion zsh)
+```
+
+**fpath drop-in:**
+
+```zsh
+lazyboy completion zsh > "${fpath[1]}/_lazyboy"
+autoload -U compinit && compinit
 ```
 
 Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To

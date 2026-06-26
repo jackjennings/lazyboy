@@ -56,7 +56,58 @@ if (command === "tick") {
   await enableCron(LAZYBOY_DIR);
 } else if (command === "disable") {
   await disableCron();
+} else if (command === "_ids") {
+  const config = await loadConfig();
+  const stateDir = expandHome(config.state.dir);
+  const ids = await listTickets(stateDir);
+  for (const id of ids) {
+    console.log(id);
+  }
+} else if (command === "completion") {
+  const shell = Deno.args[1];
+  if (!shell) {
+    console.error("Usage: lazyboy completion <zsh>");
+    Deno.exit(1);
+  }
+  if (shell !== "zsh") {
+    console.error(`Unsupported shell: ${shell}`);
+    Deno.exit(1);
+  }
+  console.log(`#compdef lazyboy
+
+_lazyboy() {
+  local state
+  _arguments '1: :->cmd' '*: :->args'
+  case $state in
+    cmd)
+      local commands
+      commands=(
+        'tick:advance all active tickets'
+        'approve:approve the current phase gate'
+        'status:show all active tickets'
+        'enable:add cron job'
+        'disable:remove cron job'
+        'completion:print shell completion script'
+      )
+      _describe 'command' commands
+      ;;
+    args)
+      case $words[2] in
+        approve)
+          compadd -- \${(f)"\$(lazyboy _ids 2>/dev/null)"}
+          ;;
+        completion)
+          compadd -- zsh
+          ;;
+      esac
+      ;;
+  esac
+}
+
+compdef _lazyboy lazyboy`);
 } else {
-  console.error("Usage: lazyboy <tick|approve|status|enable|disable>");
+  console.error(
+    "Usage: lazyboy <tick|approve|status|enable|disable|completion>",
+  );
   Deno.exit(1);
 }

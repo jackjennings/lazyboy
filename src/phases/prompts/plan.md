@@ -13,6 +13,14 @@ verify the actual behavior (run the command, read the file, inspect the
 response) before writing tasks against assumptions. Either include the
 verification as a prerequisite step or bake the result into the task.
 
+Reject any task whose file scope contradicts the spec's "What NOT to Build"
+section. If the spec excludes a file or subsystem, the plan must not touch it,
+even to "thread a value through" or "make it consistent".
+
+Combine tasks that touch the same file unless each one introduces
+independently-verifiable behavior. A task that adds a five-line helper next to
+another five-line helper in the same file is one task, not two.
+
 Write a step-by-step implementation plan following TDD principles.
 
 Do not write any files. Print your response directly.

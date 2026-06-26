@@ -16,7 +16,10 @@ Include file paths and brief descriptions. Quote specific code where useful.
 ## Dependencies and Constraints
 
 Libraries, services, or architectural constraints that affect the
-implementation.
+implementation. If the implementation will wrap an external CLI or API, document
+what that tool already provides (retry behavior, error formats, output modes,
+configuration surface) before proposing reimplementation — inspect the tool's
+actual output or help text rather than assuming.
 
 ## Open Questions
 

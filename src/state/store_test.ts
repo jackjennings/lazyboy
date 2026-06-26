@@ -1,6 +1,12 @@
 import { assertEquals } from "jsr:@std/assert";
 import { join } from "@std/path";
-import { commitTicket, listTickets, readTicket, writeTicket } from "./store.ts";
+import {
+  appendTicketLog,
+  commitTicket,
+  listTickets,
+  readTicket,
+  writeTicket,
+} from "./store.ts";
 import type { TicketState } from "./types.ts";
 
 async function initGitRepo(dir: string): Promise<void> {
@@ -187,5 +193,35 @@ Deno.test("commitTicket: silently succeeds when nothing to commit", async () => 
   const hashAfter = new TextDecoder().decode(headAfter.stdout).trim();
   assertEquals(hashBefore, hashAfter);
 
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.mkdir(join(dir, "gh-1"));
+  await appendTicketLog(dir, "gh-1", {
+    ts: "2026-01-01T00:00:00Z",
+    event: "phase-transition",
+    from: "new",
+    to: "running-intake",
+  });
+  const content = await Deno.readTextFile(join(dir, "gh-1", "log.ndjson"));
+  const parsed = JSON.parse(content.trim());
+  assertEquals(parsed.event, "phase-transition");
+  assertEquals(parsed.from, "new");
+  assertEquals(parsed.to, "running-intake");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("appendTicketLog: appends successive entries on separate lines", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.mkdir(join(dir, "gh-1"));
+  await appendTicketLog(dir, "gh-1", { event: "a" });
+  await appendTicketLog(dir, "gh-1", { event: "b" });
+  const content = await Deno.readTextFile(join(dir, "gh-1", "log.ndjson"));
+  const lines = content.trim().split("\n");
+  assertEquals(lines.length, 2);
+  assertEquals(JSON.parse(lines[0]).event, "a");
+  assertEquals(JSON.parse(lines[1]).event, "b");
   await Deno.remove(dir, { recursive: true });
 });

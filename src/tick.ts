@@ -293,6 +293,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
         }).output();
       },
       writeTicket,
+      appendLog: appendTicketLog,
     }),
   ];
 

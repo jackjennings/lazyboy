@@ -5,6 +5,7 @@ export interface CheckMergedPRDeps {
   isPRMerged: (prUrl: string) => Promise<boolean>;
   cleanupWorktree: (wt: WorktreeInfo) => Promise<void>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
+  appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
 
 export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
@@ -20,7 +21,12 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
       try {
         merged = await deps.isPRMerged(ticket.prUrl!);
       } catch (e) {
-        console.error(`checkMergedPR: GitHub API error for ${ticket.id}:`, e);
+        await deps.appendLog(stateDir, ticket.id, {
+          ts: new Date().toISOString(),
+          event: "error",
+          context: "checkMergedPR",
+          message: String(e),
+        });
         return null;
       }
 
@@ -31,12 +37,23 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
         try {
           await deps.cleanupWorktree(wt);
         } catch (e) {
-          console.error(`checkMergedPR: cleanup failed for ${ticket.id}:`, e);
+          await deps.appendLog(stateDir, ticket.id, {
+            ts: new Date().toISOString(),
+            event: "error",
+            context: "checkMergedPR",
+            message: String(e),
+          });
         }
       }
 
       const updated = { ...ticket, phase: "done" as const, updated: now };
       await deps.writeTicket(stateDir, updated);
+      await deps.appendLog(stateDir, ticket.id, {
+        ts: now,
+        event: "phase-transition",
+        from: "waiting-merge",
+        to: "done",
+      });
       return updated;
     },
   };

@@ -11,7 +11,9 @@ Your response must contain exactly two sections:
 
 ## Proposed Scope
 
-A YAML list of absolute paths the subsequent phases will need, for example:
+A YAML list of repository root paths the subsequent phases will need. Each entry
+must be the root of a git repository — not a subdirectory or specific file
+within one. For example:
 
 ```yaml
 scope:

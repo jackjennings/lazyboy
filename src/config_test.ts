@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { expandHome, loadConfig } from "./config.ts";
 import { join } from "@std/path";
 

@@ -1,6 +1,5 @@
 import { tick } from "./tick.ts";
 import {
-  commitState,
   commitTicket,
   listTickets,
   readTicket,

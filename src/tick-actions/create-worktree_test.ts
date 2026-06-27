@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { createWorktreeAction } from "./create-worktree.ts";
 import type { TicketState } from "../state/types.ts";
 
@@ -24,9 +24,10 @@ function makeAction(
 ) {
   return createWorktreeAction({
     roots: ["/code"],
-    findLocalRepo: async () => null,
-    createWorktree: async () => ({ path: "/wt/myorg/myrepo", branch: "gh-1" }),
-    writeTicket: async () => {},
+    findLocalRepo: () => Promise.resolve(null),
+    createWorktree: () =>
+      Promise.resolve({ path: "/wt/myorg/myrepo", branch: "gh-1" }),
+    writeTicket: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -60,9 +61,10 @@ Deno.test("createWorktreeAction: does not apply to non-new phase", () => {
 Deno.test("createWorktreeAction: no local repo → needs-attention", async () => {
   const written: string[] = [];
   const result = await makeAction({
-    findLocalRepo: async () => null,
-    writeTicket: async (_dir: string, t: TicketState) => {
+    findLocalRepo: () => Promise.resolve(null),
+    writeTicket: (_dir: string, t: TicketState) => {
       written.push(t.phase);
+      return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "needs-attention");
@@ -72,12 +74,13 @@ Deno.test("createWorktreeAction: no local repo → needs-attention", async () =>
 Deno.test("createWorktreeAction: createWorktree throws → needs-attention", async () => {
   const written: string[] = [];
   const result = await makeAction({
-    findLocalRepo: async () => "/code/myrepo",
-    createWorktree: async () => {
+    findLocalRepo: () => Promise.resolve("/code/myrepo"),
+    createWorktree: () => {
       throw new Error("git failed");
     },
-    writeTicket: async (_dir: string, t: TicketState) => {
+    writeTicket: (_dir: string, t: TicketState) => {
       written.push(t.phase);
+      return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "needs-attention");
@@ -87,10 +90,12 @@ Deno.test("createWorktreeAction: createWorktree throws → needs-attention", asy
 Deno.test("createWorktreeAction: success → worktrees populated, phase stays new", async () => {
   const written: TicketState[] = [];
   const result = await makeAction({
-    findLocalRepo: async () => "/code/myrepo",
-    createWorktree: async () => ({ path: "/wt/myorg/myrepo", branch: "gh-1" }),
-    writeTicket: async (_dir: string, t: TicketState) => {
+    findLocalRepo: () => Promise.resolve("/code/myrepo"),
+    createWorktree: () =>
+      Promise.resolve({ path: "/wt/myorg/myrepo", branch: "gh-1" }),
+    writeTicket: (_dir: string, t: TicketState) => {
       written.push(t);
+      return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
   assertEquals(result?.phase, "new");

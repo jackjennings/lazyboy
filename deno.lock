@@ -95,6 +95,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/assert@1",
       "jsr:@std/cli@1",
       "jsr:@std/path@1",
       "jsr:@std/toml@1",

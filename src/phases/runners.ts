@@ -4,7 +4,7 @@ import { PHASE_OUTPUT_FILE, PHASE_SEQUENCE } from "./types.ts";
 
 const PROMPT_DIR = new URL("./prompts/", import.meta.url).pathname;
 
-export async function loadPrompt(phase: ActivePhase): Promise<string> {
+export function loadPrompt(phase: ActivePhase): Promise<string> {
   return Deno.readTextFile(join(PROMPT_DIR, `${phase}.md`));
 }
 

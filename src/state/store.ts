@@ -70,7 +70,7 @@ export async function writePhaseOutput(
   await Deno.writeTextFile(join(stateDir, id, filename), content);
 }
 
-export async function readPhaseOutput(
+export function readPhaseOutput(
   stateDir: string,
   id: string,
   filename: string,

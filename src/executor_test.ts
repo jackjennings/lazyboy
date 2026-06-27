@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { isPidAlive } from "./executor.ts";
 
 Deno.test("isPidAlive returns true for current process", () => {

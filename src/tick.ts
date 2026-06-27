@@ -318,7 +318,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     if (willSpawn) running++;
 
     await advancePhase(ticket, stateDir, {
-      spawn: async (opts) =>
+      spawn: (opts) =>
         spawnPhase({
           ticketDir: opts.ticketDir,
           prompt: opts.prompt,

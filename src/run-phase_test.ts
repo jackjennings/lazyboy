@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { getPiEnvironmentVariables, setupPiDirectories } from "./run-phase.ts";
 

@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import type { TicketState } from "./types.ts";
 
 Deno.test("TicketState has required fields", () => {

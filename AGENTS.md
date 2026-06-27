@@ -76,7 +76,7 @@ implementation detail, not part of the name.
 ## Imports
 
 Use the project's import conventions from `deno.json`. For test assertions, use
-`jsr:@std/assert` — not `https://deno.land/std@...` URLs.
+`@std/assert` (bare specifier) — not `jsr:@std/assert` or `https://deno.land/std@...` URLs.
 
 ## Code style
 
@@ -86,8 +86,8 @@ workaround.
 
 ## Formatting
 
-Run `deno fmt` after writing all files and before committing. Do not manually
-adjust indentation or spacing — let the formatter handle it.
+Run `deno fmt` and `deno lint` after writing all files and before committing. Do
+not manually adjust indentation or spacing — let the formatter handle it.
 
 ## Planning
 

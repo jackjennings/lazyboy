@@ -1,14 +1,14 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { installPackages } from "./packages.ts";
 
 Deno.test("installPackages: empty list returns []", async () => {
   const calls: string[] = [];
   const out = await installPackages([], {
-    run: async (s) => {
+    run: (s) => {
       calls.push(s);
-      return { success: true, stderr: "" };
+      return Promise.resolve({ success: true, stderr: "" });
     },
-    isInstalled: async () => false,
+    isInstalled: () => Promise.resolve(false),
   });
   assertEquals(out, []);
   assertEquals(calls, []);
@@ -17,11 +17,11 @@ Deno.test("installPackages: empty list returns []", async () => {
 Deno.test("installPackages: installs each source sequentially", async () => {
   const calls: string[] = [];
   const out = await installPackages(["a", "b", "c"], {
-    run: async (s) => {
+    run: (s) => {
       calls.push(s);
-      return { success: true, stderr: "" };
+      return Promise.resolve({ success: true, stderr: "" });
     },
-    isInstalled: async () => false,
+    isInstalled: () => Promise.resolve(false),
   });
   assertEquals(calls, ["a", "b", "c"]);
   assertEquals(out.map((r) => r.success), [true, true, true]);
@@ -30,11 +30,11 @@ Deno.test("installPackages: installs each source sequentially", async () => {
 Deno.test("installPackages: skips already-installed sources", async () => {
   const calls: string[] = [];
   const out = await installPackages(["a", "b"], {
-    run: async (s) => {
+    run: (s) => {
       calls.push(s);
-      return { success: true, stderr: "" };
+      return Promise.resolve({ success: true, stderr: "" });
     },
-    isInstalled: async (s) => s === "a",
+    isInstalled: (s) => Promise.resolve(s === "a"),
   });
   assertEquals(calls, ["b"]);
   assertEquals(out, [
@@ -49,13 +49,15 @@ Deno.test(
     const warned: string[] = [];
     const calls: string[] = [];
     const out = await installPackages(["a", "b", "c"], {
-      run: async (s) => {
+      run: (s) => {
         calls.push(s);
-        return s === "b"
-          ? { success: false, stderr: "boom" }
-          : { success: true, stderr: "" };
+        return Promise.resolve(
+          s === "b"
+            ? { success: false, stderr: "boom" }
+            : { success: true, stderr: "" },
+        );
       },
-      isInstalled: async () => false,
+      isInstalled: () => Promise.resolve(false),
     });
     assertEquals(calls, ["a", "b", "c"]);
     assertEquals(out.map((r) => r.success), [true, false, true]);

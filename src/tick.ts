@@ -38,6 +38,7 @@ export interface TickDeps {
       prompt: string;
       scope: string[];
       worktrees: Record<string, WorktreeInfo>;
+      outputFile?: string;
     },
   ) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
@@ -57,6 +58,38 @@ export async function advancePhase(
   deps: TickDeps,
 ): Promise<void> {
   const now = new Date().toISOString();
+
+  if (ticket.status === "revising") {
+    const activePhase = ticket.phase as ActivePhase;
+    const isoNow = new Date().toISOString();
+    const timestamp = isoNow.slice(0, 4) + isoNow.slice(5, 7) +
+      isoNow.slice(8, 10) +
+      "T" + isoNow.slice(11, 13) + isoNow.slice(14, 16) + isoNow.slice(17, 19);
+    const outputFile = `${activePhase}-${timestamp}.md`;
+    const prompt = await loadPrompt(activePhase);
+    const pid = await deps.spawn({
+      phase: activePhase,
+      ticketDir: join(stateDir, ticket.id),
+      prompt,
+      scope: ticket.scope,
+      worktrees: {},
+      outputFile,
+    });
+    await deps.writeTicket(stateDir, {
+      ...ticket,
+      status: "running",
+      approved: false,
+      pid,
+      updated: now,
+    });
+    await deps.appendLog(stateDir, ticket.id, {
+      event: "status-transition",
+      phase: ticket.phase,
+      from: "revising",
+      to: "running",
+    });
+    return;
+  }
 
   if (ticket.status === "new") {
     const prompt = await loadPrompt("intake");
@@ -290,6 +323,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     ) continue;
 
     const willSpawn = ticket.status === "new" ||
+      ticket.status === "revising" ||
       (ticket.status === "waiting" && ticket.phase !== "diff" &&
         ticket.approved);
     if (willSpawn && running >= maxRunning) continue;
@@ -301,7 +335,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
           ticketDir: opts.ticketDir,
           prompt: opts.prompt,
           scopeDirs: opts.scope.map(expandHome),
-          outputFile: outputFileForPhase(opts.phase),
+          outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
           githubToken: token,
           anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
           worktrees: opts.worktrees,

@@ -488,6 +488,7 @@ export async function advanceTickets(
           cwd: mainRepoPath,
         }).output();
       },
+      closeWorkItem: (url: string) => provider.close(url),
       writeTicket,
       appendLog: appendTicketLog,
     }),

@@ -23,7 +23,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       ticket: TicketState,
       stateDir: string,
     ): Promise<TicketState | null> {
-      const now = new Date().toISOString();
+      const now = Temporal.Now.instant().toString();
       const slug = extractGitHubSlug(ticket.url);
       const repoPath = await deps.findLocalRepo(deps.roots, slug);
       if (!repoPath) {

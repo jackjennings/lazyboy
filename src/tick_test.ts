@@ -499,3 +499,21 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
   assertEquals((logged[0] as Record<string, string>).from, "revising");
   assertEquals((logged[0] as Record<string, string>).to, "running");
 });
+
+Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format", async () => {
+  const spawnedOpts: Array<{ outputFile?: string }> = [];
+  const ticket = makeTicket({ phase: "plan", status: "revising" });
+  await advancePhase(ticket, "/state", {
+    spawn: (opts) => {
+      spawnedOpts.push({ outputFile: opts.outputFile });
+      return Promise.resolve(77);
+    },
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertEquals(spawnedOpts.length, 1);
+  const file = spawnedOpts[0].outputFile ?? "";
+  assertEquals(/^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(file), true);
+});

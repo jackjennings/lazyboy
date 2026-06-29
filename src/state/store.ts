@@ -149,7 +149,7 @@ export async function appendTicketLog(
 ): Promise<void> {
   await Deno.writeTextFile(
     join(stateDir, id, "log.ndjson"),
-    JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n",
+    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
     { append: true },
   );
 }

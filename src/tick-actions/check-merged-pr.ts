@@ -33,7 +33,7 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
 
       if (!merged) return null;
 
-      const now = new Date().toISOString();
+      const now = Temporal.Now.instant().toString();
       for (const wt of Object.values(ticket.worktrees)) {
         try {
           await deps.cleanupWorktree(wt);

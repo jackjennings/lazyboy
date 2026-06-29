@@ -131,6 +131,7 @@ export async function advancePhase(
   ) {
     const activePhase = ticket.phase as ActivePhase;
     const next = nextPhase(activePhase);
+    if (next === "done") return;
     if (
       next === "implementation" && Object.keys(ticket.worktrees).length === 0
     ) {

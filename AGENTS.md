@@ -27,14 +27,15 @@ fetches new GitHub Issues via `src/providers/github.ts`, then calls
 (`TickDeps`) to keep it unit-testable without real filesystem or process access.
 
 **Phase state machine**: tickets carry two fields — `phase: TicketPhase` and
-`status: TicketStatus`. Status transitions are `new → running → waiting →
-(approved) → running` cycling through phases in `PHASE_SEQUENCE`, with
-`implementation` writing `{ phase: "diff", status: "waiting" }` on completion
-instead of staying in the same phase. `PHASE_SEQUENCE` covers only the five
-runner phases (`intake` through `implementation`); `diff` and `merge` are
-handled explicitly in `advancePhase`. Any phase can transition to
-`needs-attention` on subprocess failure. `{ phase: "merge", status: "done" }`
-is the terminal state.
+`status: TicketStatus`. Status transitions are
+`new → running → waiting →
+(approved) → running` cycling through phases in
+`PHASE_SEQUENCE`, with `implementation` writing
+`{ phase: "diff", status: "waiting" }` on completion instead of staying in the
+same phase. `PHASE_SEQUENCE` covers only the five runner phases (`intake`
+through `implementation`); `diff` and `merge` are handled explicitly in
+`advancePhase`. Any phase can transition to `needs-attention` on subprocess
+failure. `{ phase: "merge", status: "done" }` is the terminal state.
 
 **Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as
 a detached Deno subprocess. The subprocess runs

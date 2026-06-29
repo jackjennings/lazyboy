@@ -331,7 +331,11 @@ Deno.test("advancePhase: live PID does not log", async () => {
 
 Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () => {
   const logged: object[] = [];
-  const ticket = makeTicket({ phase: "diff", status: "waiting", approved: true });
+  const ticket = makeTicket({
+    phase: "diff",
+    status: "waiting",
+    approved: true,
+  });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(0),
     isPidAlive: () => false,
@@ -348,7 +352,11 @@ Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () =>
 
 Deno.test("advancePhase: approved waiting phase logs transition to next phase", async () => {
   const logged: object[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "waiting", approved: true });
+  const ticket = makeTicket({
+    phase: "intake",
+    status: "waiting",
+    approved: true,
+  });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(1),
     isPidAlive: () => false,
@@ -387,7 +395,11 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
 
 Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
   const logged: object[] = [];
-  const ticket = makeTicket({ phase: "diff", status: "waiting", approved: true });
+  const ticket = makeTicket({
+    phase: "diff",
+    status: "waiting",
+    approved: true,
+  });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(123),
     isPidAlive: () => false,

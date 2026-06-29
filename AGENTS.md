@@ -78,6 +78,12 @@ Use the project's import conventions from `deno.json`. For test assertions, use
 `@std/assert` (bare specifier) — not `jsr:@std/assert` or
 `https://deno.land/std@...` URLs.
 
+## Date and time
+
+Use the Temporal API (`Temporal.Now`, `Temporal.PlainDate`, `Temporal.Instant`,
+etc.) in preference to `Date`. Avoid `new Date()` or `Date.now()` unless
+interfacing with an API that requires a legacy `Date` object.
+
 ## Code style
 
 Do not add comments or docblocks. The code should be self-explanatory through

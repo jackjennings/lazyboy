@@ -26,7 +26,7 @@ if (command === "tick") {
   await writeTicket(stateDir, {
     ...ticket,
     approved: true,
-    updated: new Date().toISOString(),
+    updated: Temporal.Now.instant().toString(),
   });
   await commitTicket(stateDir, id, `approve: ${id}`);
   console.log(`Approved ${id} (phase: ${ticket.phase}/${ticket.status})`);

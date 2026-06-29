@@ -57,14 +57,17 @@ export async function advancePhase(
   stateDir: string,
   deps: TickDeps,
 ): Promise<void> {
-  const now = new Date().toISOString();
+  const zonedNow = Temporal.Now.zonedDateTimeISO("UTC");
+  const now = zonedNow.toInstant().toString();
 
   if (ticket.status === "revising") {
     const activePhase = ticket.phase as ActivePhase;
-    const isoNow = new Date().toISOString();
-    const timestamp = isoNow.slice(0, 4) + isoNow.slice(5, 7) +
-      isoNow.slice(8, 10) +
-      "T" + isoNow.slice(11, 13) + isoNow.slice(14, 16) + isoNow.slice(17, 19);
+    const dt = zonedNow.toPlainDateTime();
+    const timestamp = dt.toPlainDate().toString() +
+      "T" +
+      String(dt.hour).padStart(2, "0") +
+      String(dt.minute).padStart(2, "0") +
+      String(dt.second).padStart(2, "0");
     const outputFile = `${activePhase}-${timestamp}.md`;
     const prompt = await loadPrompt(activePhase);
     const pid = await deps.spawn({
@@ -243,8 +246,8 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
       approved: false,
       scope: [],
       worktrees: {},
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
+      created: Temporal.Now.instant().toString(),
+      updated: Temporal.Now.instant().toString(),
       body: item.description,
     });
   }
@@ -347,7 +350,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     });
   }
 
-  await commitState(stateDir, `tick: ${new Date().toISOString()}`);
+  await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
 }
 
 function defaultTickDeps(): TickOrchestrationDeps {

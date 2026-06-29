@@ -75,7 +75,8 @@ implementation detail, not part of the name.
 ## Imports
 
 Use the project's import conventions from `deno.json`. For test assertions, use
-`@std/assert` (bare specifier) — not `jsr:@std/assert` or `https://deno.land/std@...` URLs.
+`@std/assert` (bare specifier) — not `jsr:@std/assert` or
+`https://deno.land/std@...` URLs.
 
 ## Code style
 

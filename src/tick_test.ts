@@ -60,10 +60,11 @@ Deno.test("advancePhase: implementation running with dead PID transitions to dif
     pid: 999,
   });
   await advancePhase(ticket, "/state", {
-    spawn: async () => 0,
+    spawn: () => Promise.resolve(0),
     isPidAlive: () => false,
-    writeTicket: async (_dir, t) => {
+    writeTicket: (_dir, t) => {
       written.push(`${t.phase}/${t.status}`);
+      return Promise.resolve();
     },
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -313,12 +314,13 @@ Deno.test("advancePhase: dead PID on implementation logs implementation → diff
     pid: 999,
   });
   await advancePhase(ticket, "/state", {
-    spawn: async () => 0,
+    spawn: () => Promise.resolve(0),
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
-    appendLog: async (_dir, _id, entry) => {
+    appendLog: (_dir, _id, entry) => {
       logged.push(entry);
+      return Promise.resolve();
     },
   });
   assertEquals(logged.length, 1);

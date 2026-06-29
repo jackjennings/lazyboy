@@ -13,6 +13,7 @@ _lazyboy() {
         'enable:add cron job'
         'disable:remove cron job'
         'completion:print shell completion script'
+        'review:review the latest phase output'
       )
       _describe 'command' commands
       ;;
@@ -23,6 +24,9 @@ _lazyboy() {
           ;;
         completion)
           compadd -- zsh
+          ;;
+        review)
+          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
           ;;
       esac
       ;;

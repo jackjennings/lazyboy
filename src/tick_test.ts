@@ -428,3 +428,74 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
   });
   assertEquals("ts" in (logged[0] as Record<string, unknown>), false);
 });
+
+Deno.test("advancePhase: revising status spawns plan with timestamped outputFile", async () => {
+  const spawnedOpts: Array<{ phase: string; outputFile?: string }> = [];
+  const ticket = makeTicket({ phase: "plan", status: "revising" });
+  await advancePhase(ticket, "/state", {
+    spawn: (opts) => {
+      spawnedOpts.push({ phase: opts.phase, outputFile: opts.outputFile });
+      return Promise.resolve(77);
+    },
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertEquals(spawnedOpts.length, 1);
+  assertEquals(spawnedOpts[0].phase, "plan");
+  assertEquals(typeof spawnedOpts[0].outputFile, "string");
+  assertEquals(spawnedOpts[0].outputFile?.startsWith("plan-"), true);
+  assertEquals(spawnedOpts[0].outputFile?.endsWith(".md"), true);
+});
+
+Deno.test("advancePhase: revising status transitions to running and clears approved", async () => {
+  const written: Partial<TicketState>[] = [];
+  const ticket = makeTicket({
+    phase: "plan",
+    status: "revising",
+    approved: true,
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: () => Promise.resolve(77),
+    isPidAlive: () => false,
+    writeTicket: (_dir, t) => {
+      written.push({
+        phase: t.phase,
+        status: t.status,
+        approved: t.approved,
+        pid: t.pid,
+      });
+      return Promise.resolve();
+    },
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertEquals(written.length, 1);
+  assertEquals(written[0].phase, "plan");
+  assertEquals(written[0].status, "running");
+  assertEquals(written[0].approved, false);
+  assertEquals(written[0].pid, 77);
+});
+
+Deno.test("advancePhase: revising status logs status-transition from revising to running", async () => {
+  const logged: object[] = [];
+  const ticket = makeTicket({ phase: "enrichment", status: "revising" });
+  await advancePhase(ticket, "/state", {
+    spawn: () => Promise.resolve(5),
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: (_dir, _id, entry) => {
+      logged.push(entry);
+      return Promise.resolve();
+    },
+  });
+  assertEquals(
+    (logged[0] as Record<string, string>).event,
+    "status-transition",
+  );
+  assertEquals((logged[0] as Record<string, string>).phase, "enrichment");
+  assertEquals((logged[0] as Record<string, string>).from, "revising");
+  assertEquals((logged[0] as Record<string, string>).to, "running");
+});

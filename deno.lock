@@ -5,10 +5,12 @@
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/cli@1": "1.0.30",
     "jsr:@std/collections@^1.1.3": "1.2.0",
+    "jsr:@std/fmt@^1.0.10": "1.0.10",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.5",
     "jsr:@std/toml@1": "1.0.11",
+    "npm:@earendil-works/pi-tui@~0.80.2": "0.80.2",
     "npm:gray-matter@4.0.3": "4.0.3"
   },
   "jsr": {
@@ -19,10 +21,17 @@
       ]
     },
     "@std/cli@1.0.30": {
-      "integrity": "769446536522d0417d7127ebcabcafac1ab0ce6766d0eb3fca1d36326fe98d13"
+      "integrity": "769446536522d0417d7127ebcabcafac1ab0ce6766d0eb3fca1d36326fe98d13",
+      "dependencies": [
+        "jsr:@std/fmt",
+        "jsr:@std/internal@^1.0.14"
+      ]
     },
     "@std/collections@1.2.0": {
       "integrity": "47627a21d3a13138b77fd0e4d790ba9d2e603c3510b686cde6b132fe9aa98a88"
+    },
+    "@std/fmt@1.0.10": {
+      "integrity": "90dfba288802ac6de82fb31d0917eb9e4450b9925b954d5e51fc29ac07419db5"
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
@@ -41,6 +50,13 @@
     }
   },
   "npm": {
+    "@earendil-works/pi-tui@0.80.2": {
+      "integrity": "sha512-OvOAMIbXiC9OSse17YMiXIsI9AS5XM/ZV8N/k+UzdlRpPILDQYmLElevgGW92kkXR8qHBClIdzhCjuzlBGvphA==",
+      "dependencies": [
+        "get-east-asian-width",
+        "marked"
+      ]
+    },
     "argparse@1.0.10": {
       "integrity": "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==",
       "dependencies": [
@@ -56,6 +72,9 @@
       "dependencies": [
         "is-extendable"
       ]
+    },
+    "get-east-asian-width@1.6.0": {
+      "integrity": "sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA=="
     },
     "gray-matter@4.0.3": {
       "integrity": "sha512-5v6yZd4JK3eMI3FqqCouswVqwugaA9r4dNZB1wwcmrD02QkV5H0y7XBQW8QwQqEaZY1pM9aqORSORhJRdNK44Q==",
@@ -80,6 +99,10 @@
     "kind-of@6.0.3": {
       "integrity": "sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw=="
     },
+    "marked@18.0.5": {
+      "integrity": "sha512-S6GcvALHg6K4ohtu4E7x0a1AqhAjp6cV8KhLSyN9qVapnzJkusVBxZRcIU9AeYsbe6P1hKDusSbEOzGyyuce6w==",
+      "bin": true
+    },
     "section-matter@1.0.0": {
       "integrity": "sha512-vfD3pmTzGpufjScBh50YHKzEu2lxBWhVEHsNGoEXmCmn2hKGfeNLYMzCJpe8cD7gqX7TJluOVpBkAequ6dgMmA==",
       "dependencies": [
@@ -98,8 +121,10 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "jsr:@std/cli@1",
+      "jsr:@std/fmt@^1.0.10",
       "jsr:@std/path@1",
       "jsr:@std/toml@1",
+      "npm:@earendil-works/pi-tui@~0.80.2",
       "npm:gray-matter@4.0.3"
     ]
   }

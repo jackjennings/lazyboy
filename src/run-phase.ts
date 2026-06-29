@@ -15,6 +15,33 @@ export async function setupPiDirectories(home: string): Promise<void> {
   await Deno.mkdir(sessionsDir, { recursive: true });
 }
 
+export async function buildContextFiles(ticketDir: string): Promise<string[]> {
+  const contextFiles = [`@${ticketDir}/meta.md`];
+  for (const phase of ["intake", "enrichment", "spec", "plan"]) {
+    try {
+      await Deno.stat(`${ticketDir}/${phase}.md`);
+      contextFiles.push(`@${ticketDir}/${phase}.md`);
+    } catch { /* not yet written */ }
+    const phaseFiles: string[] = [];
+    try {
+      for await (const entry of Deno.readDir(ticketDir)) {
+        if (
+          entry.isFile &&
+          entry.name.startsWith(`${phase}-`) &&
+          entry.name.endsWith(".md")
+        ) {
+          phaseFiles.push(entry.name);
+        }
+      }
+    } catch { /* ticketDir not found */ }
+    phaseFiles.sort();
+    for (const f of phaseFiles) {
+      contextFiles.push(`@${ticketDir}/${f}`);
+    }
+  }
+  return contextFiles;
+}
+
 if (import.meta.main) {
   const args = parseArgs(Deno.args, {
     string: [
@@ -39,13 +66,7 @@ if (import.meta.main) {
     >)
     : {};
 
-  const contextFiles = [`@${ticketDir}/meta.md`];
-  for (const file of ["intake.md", "enrichment.md", "spec.md", "plan.md"]) {
-    try {
-      await Deno.stat(`${ticketDir}/${file}`);
-      contextFiles.push(`@${ticketDir}/${file}`);
-    } catch { /* not yet written */ }
-  }
+  const contextFiles = await buildContextFiles(ticketDir);
 
   const allPaths = [
     ...scopeDirs,

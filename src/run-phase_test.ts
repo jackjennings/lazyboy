@@ -1,6 +1,10 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { getPiEnvironmentVariables, setupPiDirectories } from "./run-phase.ts";
+import {
+  buildContextFiles,
+  getPiEnvironmentVariables,
+  setupPiDirectories,
+} from "./run-phase.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────
 
@@ -87,5 +91,74 @@ Deno.test("run-phase: pi invocation includes isolated config variables", async (
     assertEquals(sessionsDir.isDirectory, true);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+// ── buildContextFiles ────────────────────────────────────────────────────────
+
+Deno.test("buildContextFiles: always includes meta.md", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    const files = await buildContextFiles(tempDir);
+    assertEquals(files[0], `@${tempDir}/meta.md`);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: includes canonical phase files that exist", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(tempDir, "intake.md"), "intake");
+    await Deno.writeTextFile(join(tempDir, "spec.md"), "spec");
+    const files = await buildContextFiles(tempDir);
+    assertEquals(files.includes(`@${tempDir}/intake.md`), true);
+    assertEquals(files.includes(`@${tempDir}/spec.md`), true);
+    assertEquals(files.includes(`@${tempDir}/enrichment.md`), false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: includes phase revision and feedback files sorted alphabetically after canonical", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(tempDir, "intake.md"), "intake");
+    await Deno.writeTextFile(
+      join(tempDir, "intake-20260629T154506.md"),
+      "rev1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "intake-feedback-2026-06-29T160000.md"),
+      "feedback",
+    );
+    const files = await buildContextFiles(tempDir);
+    const canonIdx = files.indexOf(`@${tempDir}/intake.md`);
+    const revIdx = files.indexOf(`@${tempDir}/intake-20260629T154506.md`);
+    const fbIdx = files.indexOf(
+      `@${tempDir}/intake-feedback-2026-06-29T160000.md`,
+    );
+    assertEquals(canonIdx !== -1, true);
+    assertEquals(revIdx !== -1, true);
+    assertEquals(fbIdx !== -1, true);
+    assertEquals(canonIdx < revIdx, true);
+    assertEquals(revIdx < fbIdx, true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: does not include files for phases not in context list", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(tempDir, "diff.md"), "diff");
+    const files = await buildContextFiles(tempDir);
+    assertEquals(files.includes(`@${tempDir}/diff.md`), false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
   }
 });

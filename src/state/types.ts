@@ -11,14 +11,15 @@ export type TicketStatus =
   | "new"
   | "running"
   | "waiting"
+  | "revising"
   | "needs-attention"
   | "done";
 
 const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
-  intake: ["new", "running", "waiting", "needs-attention"],
-  enrichment: ["running", "waiting", "needs-attention"],
-  spec: ["running", "waiting", "needs-attention"],
-  plan: ["running", "waiting", "needs-attention"],
+  intake: ["new", "running", "waiting", "revising", "needs-attention"],
+  enrichment: ["running", "waiting", "revising", "needs-attention"],
+  spec: ["running", "waiting", "revising", "needs-attention"],
+  plan: ["running", "waiting", "revising", "needs-attention"],
   implementation: ["running", "needs-attention"],
   diff: ["waiting", "needs-attention"],
   merge: ["waiting", "done", "needs-attention"],

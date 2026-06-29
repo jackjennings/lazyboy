@@ -63,6 +63,14 @@ if (command === "tick") {
   for (const id of ids) {
     console.log(id);
   }
+} else if (command === "review") {
+  const id = Deno.args[1];
+  if (!id) {
+    console.error("Usage: lazyboy review <ticket-id>");
+    Deno.exit(1);
+  }
+  const { review } = await import("./review.ts");
+  await review(id);
 } else if (command === "completion") {
   const shell = Deno.args[1];
   if (!shell) {
@@ -77,7 +85,7 @@ if (command === "tick") {
   console.log(await Deno.readTextFile(scriptPath));
 } else {
   console.error(
-    "Usage: lazyboy <tick|approve|status|enable|disable|completion>",
+    "Usage: lazyboy <tick|approve|status|enable|disable|completion|review>",
   );
   Deno.exit(1);
 }

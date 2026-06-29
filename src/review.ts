@@ -1,14 +1,22 @@
+import {
+  bold,
+  cyan,
+  dim,
+  gray,
+  italic,
+  strikethrough,
+  underline,
+  yellow,
+} from "@std/fmt/colors";
 import { join } from "@std/path";
 import {
   type Component,
   Editor,
-  type EditorTheme,
   KeybindingsManager,
   Markdown,
   type MarkdownTheme,
   matchesKey,
   ProcessTerminal,
-  type SelectListTheme,
   setKeybindings,
   TUI,
   TUI_KEYBINDINGS,
@@ -24,33 +32,20 @@ import {
 import { PHASE_OUTPUT_FILE, PHASE_SEQUENCE } from "./phases/types.ts";
 
 const markdownTheme: MarkdownTheme = {
-  heading: (s) => s,
-  link: (s) => s,
-  linkUrl: (s) => s,
-  code: (s) => s,
+  heading: (s) => cyan(s),
+  link: (s) => cyan(s),
+  linkUrl: (s) => dim(s),
+  code: (s) => yellow(s),
   codeBlock: (s) => s,
-  codeBlockBorder: (s) => s,
-  quote: (s) => s,
-  quoteBorder: (s) => s,
-  hr: (s) => s,
-  listBullet: (s) => s,
-  bold: (s) => s,
-  italic: (s) => s,
-  strikethrough: (s) => s,
-  underline: (s) => s,
-};
-
-const selectListTheme: SelectListTheme = {
-  selectedPrefix: (s) => s,
-  selectedText: (s) => s,
-  description: (s) => s,
-  scrollInfo: (s) => s,
-  noMatch: (s) => s,
-};
-
-const editorTheme: EditorTheme = {
-  borderColor: (s) => s,
-  selectList: selectListTheme,
+  codeBlockBorder: (s) => dim(s),
+  quote: (s) => italic(s),
+  quoteBorder: (s) => dim(s),
+  hr: (s) => dim(s),
+  listBullet: (s) => dim(s),
+  bold: (s) => bold(s),
+  italic: (s) => italic(s),
+  strikethrough: (s) => strikethrough(s),
+  underline: (s) => underline(s),
 };
 
 export async function findLatestPhaseOutput(
@@ -69,7 +64,9 @@ export async function findLatestPhaseOutput(
           revisionFiles.push(entry.name);
         }
       }
-    } catch { /* dir missing */ }
+    } catch {
+      /* dir missing */
+    }
     if (revisionFiles.length > 0) {
       revisionFiles.sort();
       return {
@@ -81,19 +78,21 @@ export async function findLatestPhaseOutput(
     try {
       await Deno.stat(join(ticketDir, canonicalFile));
       return { filename: canonicalFile, phaseName: phase };
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
   return null;
 }
 
-function formatTimestamp(now: Date): string {
-  const iso = now.toISOString();
+function formatTimestamp(now: Temporal.ZonedDateTime): string {
+  const dt = now.toPlainDateTime();
   return (
-    iso.slice(0, 10) +
+    dt.toPlainDate().toString() +
     "T" +
-    iso.slice(11, 13) +
-    iso.slice(14, 16) +
-    iso.slice(17, 19)
+    String(dt.hour).padStart(2, "0") +
+    String(dt.minute).padStart(2, "0") +
+    String(dt.second).padStart(2, "0")
   );
 }
 
@@ -101,26 +100,49 @@ class ContentPane implements Component {
   private md: Markdown;
   private scrollOffset = 0;
   private tui: TUI;
+  private title: string;
+  private editor?: Editor;
 
-  constructor(content: string, tui: TUI) {
+  constructor(content: string, tui: TUI, title: string) {
     this.md = new Markdown(content, 1, 0, markdownTheme);
     this.tui = tui;
+    this.title = title;
   }
 
-  private editorHeight(): number {
+  setEditor(editor: Editor): void {
+    this.editor = editor;
+  }
+
+  private editorHeight(width: number): number {
+    if (this.editor) {
+      return this.editor.render(width).length;
+    }
     return Math.max(5, Math.floor(this.tui.terminal.rows * 0.3)) + 2;
   }
 
-  private availableHeight(): number {
-    return Math.max(1, this.tui.terminal.rows - this.editorHeight());
+  private availableHeight(width: number): number {
+    return Math.max(1, this.tui.terminal.rows - this.editorHeight(width) - 1);
+  }
+
+  private header(width: number): string {
+    const label = ` ${this.title} `;
+    const remaining = Math.max(0, width - label.length);
+    const left = Math.floor(remaining / 2);
+    const right = remaining - left;
+    return dim("─".repeat(left) + label + "─".repeat(right));
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, "space")) {
-      const height = this.availableHeight();
-      const allLines = this.md.render(this.tui.terminal.columns);
+    const width = this.tui.terminal.columns;
+    if (matchesKey(data, "space") || matchesKey(data, "f")) {
+      const height = this.availableHeight(width);
+      const allLines = this.md.render(width);
       const maxOffset = Math.max(0, allLines.length - height);
       this.scrollOffset = Math.min(this.scrollOffset + height, maxOffset);
+    }
+    if (matchesKey(data, "b")) {
+      const height = this.availableHeight(width);
+      this.scrollOffset = Math.max(0, this.scrollOffset - height);
     }
   }
 
@@ -130,8 +152,12 @@ class ContentPane implements Component {
 
   render(width: number): string[] {
     const allLines = this.md.render(width);
-    const height = this.availableHeight();
-    return allLines.slice(this.scrollOffset, this.scrollOffset + height);
+    const height = this.availableHeight(width);
+    const content = allLines.slice(
+      this.scrollOffset,
+      this.scrollOffset + height,
+    );
+    return [this.header(width), ...content];
   }
 }
 
@@ -165,30 +191,37 @@ export async function review(id: string): Promise<void> {
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
+  let focused: "content" | "editor" = "content";
 
-  const contentPane = new ContentPane(content, tui);
-  const editor = new Editor(tui, editorTheme);
+  const contentPane = new ContentPane(content, tui, found.phaseName);
+  const editor = new Editor(tui, {
+    borderColor: (s) => focused === "editor" ? s : gray(s),
+    selectList: {
+      selectedPrefix: (s) => s,
+      selectedText: (s) => s,
+      description: (s) => s,
+      scrollInfo: (s) => s,
+      noMatch: (s) => s,
+    },
+  });
+
+  contentPane.setEditor(editor);
 
   tui.addChild(contentPane);
   tui.addChild(editor);
   tui.setFocus(contentPane);
 
-  let focused: "content" | "editor" = "content";
-
   async function handleSubmit(text: string): Promise<void> {
     if (!text.trim()) return;
-    const now = new Date();
+    const now = Temporal.Now.zonedDateTimeISO("UTC");
     const timestamp = formatTimestamp(now);
     const feedbackFile = `${found!.phaseName}-feedback-${timestamp}.md`;
     await writePhaseOutput(stateDir, id, feedbackFile, text);
     const updated = await readTicket(stateDir, id);
-    const revisingPhase = `revising-${
-      found!.phaseName
-    }` as typeof updated.phase;
     await writeTicket(stateDir, {
       ...updated,
-      phase: revisingPhase,
-      updated: now.toISOString(),
+      status: "revising",
+      updated: now.toInstant().toString(),
     });
     await commitTicket(stateDir, id, `review: ${id}`);
     tui.stop();
@@ -210,9 +243,10 @@ export async function review(id: string): Promise<void> {
         focused = "content";
         tui.setFocus(contentPane);
       }
+      tui.requestRender(true);
       return { consume: true };
     }
-    if (matchesKey(data, "shift+enter") && focused === "content") {
+    if (matchesKey(data, "shift+enter")) {
       const text = editor.getText();
       if (text.trim()) {
         handleSubmit(text);

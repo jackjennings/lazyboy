@@ -25,6 +25,11 @@ After creating the PR, write the PR URL to the `prUrl` field in meta.md (in the
 ticket directory shown in your context). Use the write tool to update that field
 in the YAML frontmatter.
 
+Before committing, check whether any change introduces or formalises a
+project-wide convention not yet documented in `AGENTS.md`. If so, update
+`AGENTS.md` and include it in the same commit as the code that establishes the
+convention.
+
 Do not write any files outside the repository worktree and meta.md. Print your
 response directly. Do not create any other files.
 

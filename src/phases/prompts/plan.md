@@ -44,4 +44,13 @@ Each task must:
 Every acceptance criterion in spec.md must be covered by at least one test that
 would fail if the criterion were violated.
 
+If the changes establish, replace, or remove a project-wide convention —
+including adopting a preferred API, banning a pattern, or changing a style rule
+— include a task to update `AGENTS.md` to document it. This applies especially
+to uniform refactors that replace one API or pattern across the codebase (e.g.
+migrating from one date library to another), where the convention being
+established is as important as the individual code changes. Treat the
+`AGENTS.md` update as a named task with an exact diff and a commit, not a
+footnote.
+
 If you include a summary at the end, it must list exactly the tasks above it.

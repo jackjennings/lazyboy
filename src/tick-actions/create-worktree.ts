@@ -29,7 +29,6 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       if (!repoPath) {
         const updated = {
           ...ticket,
-          phase: "intake" as const,
           status: "needs-attention" as const,
           updated: now,
         };
@@ -44,7 +43,6 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       } catch {
         const updated = {
           ...ticket,
-          phase: "intake" as const,
           status: "needs-attention" as const,
           updated: now,
         };

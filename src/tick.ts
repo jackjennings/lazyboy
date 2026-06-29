@@ -75,6 +75,12 @@ export async function advancePhase(
       approved: false,
       updated: now,
     });
+    await deps.appendLog(stateDir, ticket.id, {
+      event: "status-transition",
+      phase: "intake",
+      from: "new",
+      to: "running",
+    });
     return;
   }
 
@@ -99,6 +105,12 @@ export async function advancePhase(
           status: "waiting",
           pid: undefined,
           updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "status-transition",
+          phase: ticket.phase,
+          from: "running",
+          to: "waiting",
         });
       }
     }
@@ -285,7 +297,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
 
     await advancePhase(ticket, stateDir, {
       spawn: (opts) =>
-        spawnPhase({
+        Promise.resolve(spawnPhase({
           ticketDir: opts.ticketDir,
           prompt: opts.prompt,
           scopeDirs: opts.scope.map(expandHome),
@@ -293,7 +305,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
           githubToken: token,
           anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
           worktrees: opts.worktrees,
-        }),
+        })),
       isPidAlive: defaultIsPidAlive,
       writeTicket,
       writePhaseOutput,

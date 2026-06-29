@@ -259,7 +259,7 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
   }
 });
 
-Deno.test("advancePhase: new ticket does not log (status-only change)", async () => {
+Deno.test("advancePhase: new ticket logs status-only transition", async () => {
   const logged: object[] = [];
   const ticket = makeTicket({ phase: "intake", status: "new" });
   await advancePhase(ticket, "/state", {
@@ -272,10 +272,17 @@ Deno.test("advancePhase: new ticket does not log (status-only change)", async ()
       return Promise.resolve();
     },
   });
-  assertEquals(logged.length, 0);
+  assertEquals(logged.length, 1);
+  assertEquals(
+    (logged[0] as Record<string, string>).event,
+    "status-transition",
+  );
+  assertEquals((logged[0] as Record<string, string>).phase, "intake");
+  assertEquals((logged[0] as Record<string, string>).from, "new");
+  assertEquals((logged[0] as Record<string, string>).to, "running");
 });
 
-Deno.test("advancePhase: dead PID on non-impl phase does not log", async () => {
+Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition", async () => {
   const logged: object[] = [];
   const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
   await advancePhase(ticket, "/state", {
@@ -288,7 +295,14 @@ Deno.test("advancePhase: dead PID on non-impl phase does not log", async () => {
       return Promise.resolve();
     },
   });
-  assertEquals(logged, []);
+  assertEquals(logged.length, 1);
+  assertEquals(
+    (logged[0] as Record<string, string>).event,
+    "status-transition",
+  );
+  assertEquals((logged[0] as Record<string, string>).phase, "intake");
+  assertEquals((logged[0] as Record<string, string>).from, "running");
+  assertEquals((logged[0] as Record<string, string>).to, "waiting");
 });
 
 Deno.test("advancePhase: dead PID on implementation logs implementation → diff", async () => {

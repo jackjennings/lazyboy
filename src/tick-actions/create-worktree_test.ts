@@ -8,7 +8,8 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     provider: "github",
     title: "T",
     url: "https://github.com/myorg/myrepo/issues/1",
-    phase: "new",
+    phase: "intake",
+    status: "new",
     approved: false,
     scope: [],
     worktrees: {},
@@ -34,7 +35,9 @@ function makeAction(
 
 Deno.test("createWorktreeAction: applies to new ticket with no worktrees", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ phase: "new", worktrees: {} })),
+    makeAction().applies(
+      makeTicket({ phase: "intake", status: "new", worktrees: {} }),
+    ),
     true,
   );
 });
@@ -43,7 +46,8 @@ Deno.test("createWorktreeAction: does not apply when worktrees already present",
   assertEquals(
     makeAction().applies(
       makeTicket({
-        phase: "new",
+        phase: "intake",
+        status: "new",
         worktrees: { "myorg/myrepo": { path: "/p", branch: "b" } },
       }),
     ),
@@ -51,9 +55,9 @@ Deno.test("createWorktreeAction: does not apply when worktrees already present",
   );
 });
 
-Deno.test("createWorktreeAction: does not apply to non-new phase", () => {
+Deno.test("createWorktreeAction: does not apply to non-new status", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ phase: "waiting-intake" })),
+    makeAction().applies(makeTicket({ phase: "intake", status: "waiting" })),
     false,
   );
 });
@@ -63,11 +67,11 @@ Deno.test("createWorktreeAction: no local repo → needs-attention", async () =>
   const result = await makeAction({
     findLocalRepo: () => Promise.resolve(null),
     writeTicket: (_dir: string, t: TicketState) => {
-      written.push(t.phase);
+      written.push(t.status);
       return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
-  assertEquals(result?.phase, "needs-attention");
+  assertEquals(result?.status, "needs-attention");
   assertEquals(written, ["needs-attention"]);
 });
 
@@ -79,15 +83,15 @@ Deno.test("createWorktreeAction: createWorktree throws → needs-attention", asy
       throw new Error("git failed");
     },
     writeTicket: (_dir: string, t: TicketState) => {
-      written.push(t.phase);
+      written.push(t.status);
       return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
-  assertEquals(result?.phase, "needs-attention");
+  assertEquals(result?.status, "needs-attention");
   assertEquals(written, ["needs-attention"]);
 });
 
-Deno.test("createWorktreeAction: success → worktrees populated, phase stays new", async () => {
+Deno.test("createWorktreeAction: success → worktrees populated, status stays new", async () => {
   const written: TicketState[] = [];
   const result = await makeAction({
     findLocalRepo: () => Promise.resolve("/code/myrepo"),
@@ -98,7 +102,8 @@ Deno.test("createWorktreeAction: success → worktrees populated, phase stays ne
       return Promise.resolve();
     },
   }).run(makeTicket(), "/state");
-  assertEquals(result?.phase, "new");
+  assertEquals(result?.phase, "intake");
+  assertEquals(result?.status, "new");
   assertEquals(result?.worktrees, {
     "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-1" },
   });

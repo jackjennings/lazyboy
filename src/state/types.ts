@@ -1,18 +1,39 @@
-export type Phase =
+export type TicketPhase =
+  | "intake"
+  | "enrichment"
+  | "spec"
+  | "plan"
+  | "implementation"
+  | "diff"
+  | "merge";
+
+export type TicketStatus =
   | "new"
-  | "running-intake"
-  | "waiting-intake"
-  | "running-enrichment"
-  | "waiting-enrichment"
-  | "running-spec"
-  | "waiting-spec"
-  | "running-plan"
-  | "waiting-plan"
-  | "running-implementation"
-  | "waiting-diff"
-  | "waiting-merge"
-  | "done"
-  | "needs-attention";
+  | "running"
+  | "waiting"
+  | "needs-attention"
+  | "done";
+
+const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
+  intake: ["new", "running", "waiting", "needs-attention"],
+  enrichment: ["running", "waiting", "needs-attention"],
+  spec: ["running", "waiting", "needs-attention"],
+  plan: ["running", "waiting", "needs-attention"],
+  implementation: ["running", "needs-attention"],
+  diff: ["waiting", "needs-attention"],
+  merge: ["waiting", "done", "needs-attention"],
+};
+
+export function assertValidPhaseStatus(
+  phase: TicketPhase,
+  status: TicketStatus,
+): void {
+  if (!(VALID_STATUSES[phase] as TicketStatus[]).includes(status)) {
+    throw new Error(
+      `Invalid (phase, status) combination: (${phase}, ${status})`,
+    );
+  }
+}
 
 export interface WorktreeInfo {
   path: string;
@@ -24,7 +45,8 @@ export interface TicketState {
   provider: string;
   title: string;
   url: string;
-  phase: Phase;
+  phase: TicketPhase;
+  status: TicketStatus;
   approved: boolean;
   scope: string[];
   pid?: number;

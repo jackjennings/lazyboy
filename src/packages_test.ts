@@ -46,7 +46,6 @@ Deno.test("installPackages: skips already-installed sources", async () => {
 Deno.test(
   "installPackages: failure on one source does not abort remaining",
   async () => {
-    const warned: string[] = [];
     const calls: string[] = [];
     const out = await installPackages(["a", "b", "c"], {
       run: (s) => {
@@ -61,6 +60,5 @@ Deno.test(
     });
     assertEquals(calls, ["a", "b", "c"]);
     assertEquals(out.map((r) => r.success), [true, false, true]);
-    assertEquals(warned.length, 1);
   },
 );

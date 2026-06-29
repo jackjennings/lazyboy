@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import matter from "gray-matter";
 import {
   appendTicketLog,
   commitTicket,
@@ -78,6 +79,135 @@ body
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("readTicket: migrates old phase format to two fields", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir);
+  const metaPath = join(ticketDir, "meta.md");
+  await Deno.writeTextFile(
+    metaPath,
+    `---
+id: gh-1
+provider: github
+title: Test
+url: https://github.com/x/y/issues/1
+phase: waiting-intake
+approved: false
+scope: []
+created: "2026-06-22T00:00:00Z"
+updated: "2026-06-22T00:00:00Z"
+---
+
+body
+`,
+  );
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.phase, "intake");
+  assertEquals(ticket.status, "waiting");
+  const { data } = matter(await Deno.readTextFile(metaPath));
+  assertEquals(data.phase, "intake");
+  assertEquals(data.status, "waiting");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("readTicket: migrates all legacy phase values", async () => {
+  const cases: Array<[string, string, string]> = [
+    ["new", "intake", "new"],
+    ["running-intake", "intake", "running"],
+    ["waiting-enrichment", "enrichment", "waiting"],
+    ["running-spec", "spec", "running"],
+    ["waiting-plan", "plan", "waiting"],
+    ["running-implementation", "implementation", "running"],
+    ["waiting-diff", "diff", "waiting"],
+    ["waiting-merge", "merge", "waiting"],
+    ["needs-attention", "intake", "needs-attention"],
+    ["done", "merge", "done"],
+  ];
+  for (const [oldPhase, expectedPhase, expectedStatus] of cases) {
+    const dir = await Deno.makeTempDir();
+    const ticketDir = join(dir, "gh-1");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-1
+provider: github
+title: Test
+url: https://github.com/x/y/issues/1
+phase: ${oldPhase}
+approved: false
+scope: []
+created: "2026-06-22T00:00:00Z"
+updated: "2026-06-22T00:00:00Z"
+---
+`,
+    );
+    const ticket = await readTicket(dir, "gh-1");
+    assertEquals(ticket.phase, expectedPhase, `phase for old="${oldPhase}"`);
+    assertEquals(
+      ticket.status,
+      expectedStatus,
+      `status for old="${oldPhase}"`,
+    );
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("readTicket: reads new-format file without rewriting", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir);
+  const metaPath = join(ticketDir, "meta.md");
+  const original = `---
+id: gh-1
+provider: github
+title: Test
+url: https://github.com/x/y/issues/1
+phase: enrichment
+status: waiting
+approved: false
+scope: []
+created: "2026-06-22T00:00:00Z"
+updated: "2026-06-22T00:00:00Z"
+---
+
+body
+`;
+  await Deno.writeTextFile(metaPath, original);
+  const mtime1 = (await Deno.stat(metaPath)).mtime;
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.phase, "enrichment");
+  assertEquals(ticket.status, "waiting");
+  const mtime2 = (await Deno.stat(metaPath)).mtime;
+  assertEquals(mtime1?.getTime(), mtime2?.getTime());
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: persists phase and status as separate YAML fields", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = {
+    id: "gh-5",
+    provider: "github",
+    title: "T",
+    url: "https://github.com/x/y/issues/5",
+    phase: "enrichment",
+    status: "running",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-06-22T00:00:00Z",
+    updated: "2026-06-22T00:00:00Z",
+    body: "",
+  };
+  await writeTicket(dir, ticket);
+  const { data } = matter(
+    await Deno.readTextFile(join(dir, "gh-5", "meta.md")),
+  );
+  assertEquals(data.phase, "enrichment");
+  assertEquals(data.status, "running");
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
   const dir = await Deno.makeTempDir();
   const ticket: TicketState = {
@@ -85,7 +215,8 @@ Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
     provider: "github",
     title: "T",
     url: "https://github.com/jackjennings/lazyboy/issues/42",
-    phase: "new",
+    phase: "intake",
+    status: "new",
     approved: false,
     scope: [],
     worktrees: {

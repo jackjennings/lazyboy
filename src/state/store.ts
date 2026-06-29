@@ -1,6 +1,34 @@
 import matter from "gray-matter";
 import { join } from "@std/path";
-import type { Phase, TicketState, WorktreeInfo } from "./types.ts";
+import {
+  assertValidPhaseStatus,
+  type TicketPhase,
+  type TicketState,
+  type TicketStatus,
+  type WorktreeInfo,
+} from "./types.ts";
+
+function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
+  const table: Record<string, [TicketPhase, TicketStatus]> = {
+    "new": ["intake", "new"],
+    "running-intake": ["intake", "running"],
+    "waiting-intake": ["intake", "waiting"],
+    "running-enrichment": ["enrichment", "running"],
+    "waiting-enrichment": ["enrichment", "waiting"],
+    "running-spec": ["spec", "running"],
+    "waiting-spec": ["spec", "waiting"],
+    "running-plan": ["plan", "running"],
+    "waiting-plan": ["plan", "waiting"],
+    "running-implementation": ["implementation", "running"],
+    "waiting-diff": ["diff", "waiting"],
+    "waiting-merge": ["merge", "waiting"],
+    "needs-attention": ["intake", "needs-attention"],
+    "done": ["merge", "done"],
+  };
+  const result = table[oldPhase];
+  if (!result) throw new Error(`Unknown legacy phase: ${oldPhase}`);
+  return result;
+}
 
 export async function readTicket(
   stateDir: string,
@@ -9,6 +37,19 @@ export async function readTicket(
   const metaPath = join(stateDir, id, "meta.md");
   const raw = await Deno.readTextFile(metaPath);
   const { data, content } = matter(raw);
+
+  let phase: TicketPhase;
+  let status: TicketStatus;
+  const needsMigration = data.status === undefined;
+
+  if (needsMigration) {
+    [phase, status] = migratePhase(data.phase as string);
+  } else {
+    phase = data.phase as TicketPhase;
+    status = data.status as TicketStatus;
+  }
+
+  assertValidPhaseStatus(phase, status);
 
   const worktreesRaw = data.worktrees as
     | Record<string, { path: string; branch: string }>
@@ -20,12 +61,13 @@ export async function readTicket(
     }
   }
 
-  return {
+  const ticket: TicketState = {
     id: data.id,
     provider: data.provider,
     title: data.title,
     url: data.url,
-    phase: data.phase as Phase,
+    phase,
+    status,
     approved: data.approved ?? false,
     scope: data.scope ?? [],
     pid: data.pid,
@@ -35,12 +77,19 @@ export async function readTicket(
     updated: data.updated,
     body: content.trim(),
   };
+
+  if (needsMigration) {
+    await writeTicket(stateDir, ticket);
+  }
+
+  return ticket;
 }
 
 export async function writeTicket(
   stateDir: string,
   ticket: TicketState,
 ): Promise<void> {
+  assertValidPhaseStatus(ticket.phase, ticket.status);
   const dir = join(stateDir, ticket.id);
   await Deno.mkdir(dir, { recursive: true });
   const frontmatter: Record<string, unknown> = {
@@ -49,6 +98,7 @@ export async function writeTicket(
     title: ticket.title,
     url: ticket.url,
     phase: ticket.phase,
+    status: ticket.status,
     approved: ticket.approved,
     scope: ticket.scope,
     worktrees: ticket.worktrees,

@@ -39,16 +39,14 @@ if (command === "tick") {
     Deno.exit(0);
   }
   console.log(
-    `${"ID".padEnd(20)} ${"PHASE".padEnd(25)} ${"WAITING".padEnd(8)} TITLE`,
+    `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} TITLE`,
   );
   console.log("-".repeat(80));
   for (const id of ids.sort()) {
     const t = await readTicket(stateDir, id);
-    const waiting = t.status === "waiting" && !t.approved ? "YES" : "";
-    const phaseStatus = `${t.phase}/${t.status}`;
     console.log(
-      `${t.id.padEnd(20)} ${phaseStatus.padEnd(25)} ${
-        waiting.padEnd(8)
+      `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${
+        t.status.padEnd(17)
       } ${t.title}`,
     );
   }

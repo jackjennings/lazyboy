@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { GitHubProvider } from "./github.ts";
+import { compareSortKeys } from "./types.ts";
 
 Deno.test("fetchNew filters out known IDs", async () => {
   const provider = new GitHubProvider({
@@ -117,5 +118,34 @@ Deno.test("GitHubProvider.close propagates _patch error", async () => {
     () => provider.close("https://github.com/myorg/myrepo/issues/42"),
     Error,
     "network failure",
+  );
+});
+
+Deno.test("toSortable: github/org/repo/3 returns [3]", () => {
+  const provider = new GitHubProvider({ repos: [], token: "", login: "" });
+  assertEquals(provider.toSortable("github/jackjennings/lazyboy/3"), [3]);
+});
+
+Deno.test("toSortable: github/org/repo/12 returns [12]", () => {
+  const provider = new GitHubProvider({ repos: [], token: "", login: "" });
+  assertEquals(provider.toSortable("github/jackjennings/lazyboy/12"), [12]);
+});
+
+Deno.test("toSortable: issue 3 sorts before issue 12 via compareSortKeys", () => {
+  const provider = new GitHubProvider({ repos: [], token: "", login: "" });
+  assertEquals(
+    compareSortKeys(
+      provider.toSortable("github/jackjennings/lazyboy/3"),
+      provider.toSortable("github/jackjennings/lazyboy/12"),
+    ) < 0,
+    true,
+  );
+});
+
+Deno.test("toSortable: non-numeric suffix falls back to [id]", () => {
+  const provider = new GitHubProvider({ repos: [], token: "", login: "" });
+  assertEquals(
+    provider.toSortable("github/jackjennings/lazyboy/abc"),
+    ["github/jackjennings/lazyboy/abc"],
   );
 });

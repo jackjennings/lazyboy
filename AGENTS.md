@@ -7,14 +7,15 @@ this repository.
 
 These must be present on the host; they are not managed by Deno.
 
-| Dependency | Purpose |
-|---|---|
-| `git` | Worktree management, rebase/push, state repo commits |
-| `pi` | Runs phase prompts; checks/installs agent packages |
-| `crontab` | Installs and removes the tick cron job |
-| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status |
+| Dependency                    | Purpose                                              |
+| ----------------------------- | ---------------------------------------------------- |
+| `git`                         | Worktree management, rebase/push, state repo commits |
+| `pi`                          | Runs phase prompts; checks/installs agent packages   |
+| `crontab`                     | Installs and removes the tick cron job               |
+| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status      |
 
-Environment variables required at runtime (tick only): `GITHUB_TOKEN`, `GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.
+Environment variables required at runtime (tick only): `GITHUB_TOKEN`,
+`GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.
 
 ## Commands
 
@@ -90,6 +91,11 @@ implementation detail, not part of the name.
 Use the project's import conventions from `deno.json`. For test assertions, use
 `@std/assert` (bare specifier) — not `jsr:@std/assert` or
 `https://deno.land/std@...` URLs.
+
+For test doubles (spies, stubs), use `spy` and `stub` from `@std/testing/mock`
+(bare specifier). Do not write hand-rolled stub functions for the same purpose.
+Access recorded calls via `spy.calls` and assert call counts with
+`assertSpyCalls`.
 
 ## Date and time
 

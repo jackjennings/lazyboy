@@ -85,6 +85,50 @@ export async function findLatestPhaseOutput(
   return null;
 }
 
+export async function classifyApproval(
+  text: string,
+  fetcher: typeof fetch,
+): Promise<boolean> {
+  if (text.trim().length > 20) return false;
+  try {
+    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 5,
+        system:
+          "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval, acceptance, or intent to continue without changes (e.g. 'approved', 'looks good', 'continue', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
+        messages: [{ role: "user", content: text }],
+      }),
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
+    return result === "APPROVE";
+  } catch {
+    return false;
+  }
+}
+
+export async function applyApproval(
+  stateDir: string,
+  id: string,
+  now: Temporal.ZonedDateTime,
+): Promise<void> {
+  const ticket = await readTicket(stateDir, id);
+  await writeTicket(stateDir, {
+    ...ticket,
+    approved: true,
+    updated: now.toInstant().toString(),
+  });
+  await commitTicket(stateDir, id, `approve: ${id}`);
+}
+
 function formatTimestamp(now: Temporal.ZonedDateTime): string {
   const dt = now.toPlainDateTime();
   return (
@@ -214,6 +258,11 @@ export async function review(id: string): Promise<void> {
   async function handleSubmit(text: string): Promise<void> {
     if (!text.trim()) return;
     const now = Temporal.Now.zonedDateTimeISO("UTC");
+    if (await classifyApproval(text, fetch)) {
+      await applyApproval(stateDir, id, now);
+      tui.stop();
+      Deno.exit(0);
+    }
     const timestamp = formatTimestamp(now);
     const feedbackFile = `${found!.phaseName}-feedback-${timestamp}.md`;
     await writePhaseOutput(stateDir, id, feedbackFile, text);

@@ -220,3 +220,188 @@ Deno.test("review: findLatestPhaseOutput excludes feedback files from revision g
     await Deno.remove(tempDir, { recursive: true });
   }
 });
+
+async function makeTicketHome(
+  stateDir: string,
+  id: string,
+  worktrees: Record<string, { path: string; branch: string }>,
+): Promise<string> {
+  const home = await makeFakeHome(stateDir);
+  const ticketDir = join(stateDir, id);
+  await Deno.mkdir(ticketDir, { recursive: true });
+  const worktreesYaml = Object.entries(worktrees)
+    .map(([slug, w]) =>
+      `  ${slug}:\n    path: ${w.path}\n    branch: ${w.branch}`
+    )
+    .join("\n");
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: ${id}
+provider: github
+title: Test Ticket
+url: https://github.com/jackjennings/lazyboy/issues/1
+phase: plan
+status: waiting
+approved: false
+scope: []
+created: "2026-06-01T00:00:00Z"
+updated: "2026-06-01T00:00:00Z"
+worktrees:
+${worktreesYaml}
+---
+
+body
+`,
+  );
+  return home;
+}
+
+Deno.test("shell: exits 1 with usage when id is missing", async () => {
+  const result = await runIndex(["shell"]);
+  assertEquals(result.code, 1);
+  assertStringIncludes(
+    new TextDecoder().decode(result.stderr),
+    "Usage: lazyboy shell <ticket-id>",
+  );
+});
+
+Deno.test("shell: exits 1 with OS error when ticket not found", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await makeFakeHome(stateDir);
+  try {
+    const result = await runIndex(["shell", "gh-99999"], { HOME: home });
+    assertEquals(result.code, 1);
+    assertStringIncludes(
+      new TextDecoder().decode(result.stderr),
+      "gh-99999",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test(
+  "shell: exits 1 with no worktrees message when ticket has no worktrees",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const ticketDir = join(stateDir, "gh-1");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-1
+provider: github
+title: Test
+url: https://github.com/jackjennings/lazyboy/issues/1
+phase: intake
+status: new
+approved: false
+scope: []
+created: "2026-06-01T00:00:00Z"
+updated: "2026-06-01T00:00:00Z"
+worktrees: {}
+---
+
+body
+`,
+    );
+    const home = await makeFakeHome(stateDir);
+    try {
+      const result = await runIndex(["shell", "gh-1"], { HOME: home });
+      assertEquals(result.code, 1);
+      assertStringIncludes(
+        new TextDecoder().decode(result.stderr),
+        "No worktrees found for gh-1",
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "shell: exits 1 with path error when worktree path does not exist",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const home = await makeTicketHome(stateDir, "gh-1", {
+      "jackjennings/lazyboy": {
+        path: "/nonexistent/path/gh-1/jackjennings/lazyboy",
+        branch: "gh-1",
+      },
+    });
+    try {
+      const result = await runIndex(["shell", "gh-1"], { HOME: home });
+      assertEquals(result.code, 1);
+      assertStringIncludes(
+        new TextDecoder().decode(result.stderr),
+        "shell: /nonexistent/path/gh-1/jackjennings/lazyboy: not a directory",
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "shell: exits 0 when worktree path exists and shell exits 0",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const worktreePath = await Deno.makeTempDir();
+    const home = await makeTicketHome(stateDir, "gh-1", {
+      "jackjennings/lazyboy": { path: worktreePath, branch: "gh-1" },
+    });
+    try {
+      const result = await runIndex(["shell", "gh-1"], {
+        HOME: home,
+        SHELL: "/usr/bin/true",
+      });
+      assertEquals(result.code, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(worktreePath, { recursive: true });
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "shell: propagates non-zero exit code from spawned shell",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const worktreePath = await Deno.makeTempDir();
+    const home = await makeTicketHome(stateDir, "gh-1", {
+      "jackjennings/lazyboy": { path: worktreePath, branch: "gh-1" },
+    });
+    try {
+      const result = await runIndex(["shell", "gh-1"], {
+        HOME: home,
+        SHELL: "/usr/bin/false",
+      });
+      assertEquals(result.code, 1);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(worktreePath, { recursive: true });
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);
+
+Deno.test("completion zsh: offers shell subcommand", async () => {
+  const result = await runIndex(["completion", "zsh"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertStringIncludes(
+    stdout,
+    "shell:open a shell in the worktree for a ticket",
+  );
+});
+
+Deno.test("completion zsh: shell completion calls lazyboy _ids", async () => {
+  const result = await runIndex(["completion", "zsh"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertStringIncludes(stdout, "shell)");
+  assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
+});

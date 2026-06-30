@@ -1,625 +1,680 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { advancePhase, advanceTicketsImpl, tick } from "./tick.ts";
+import {
+	advancePhase,
+	advanceTicketsImpl,
+	selectCandidates,
+	tick,
+} from "./tick.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import type { TicketState } from "./state/types.ts";
 import type { MigrationFn } from "./migrations/runner.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "T",
-    url: "u",
-    phase: "intake",
-    status: "new",
-    approved: false,
-    scope: [],
-    worktrees: {},
-    created: "2026-06-15T00:00:00Z",
-    updated: "2026-06-15T00:00:00Z",
-    body: "",
-    ...overrides,
-  };
+	return {
+		id: "gh-1",
+		provider: "github",
+		title: "T",
+		url: "u",
+		phase: "intake",
+		status: "new",
+		approved: false,
+		scope: [],
+		worktrees: {},
+		created: "2026-06-15T00:00:00Z",
+		updated: "2026-06-15T00:00:00Z",
+		body: "",
+		...overrides,
+	};
 }
 
 Deno.test("advancePhase: new ticket starts intake", async () => {
-  const spawned: string[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "new" });
-  await advancePhase(ticket, "/state", {
-    spawn: (_opts) => {
-      spawned.push("intake");
-      return Promise.resolve(123);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawned, ["intake"]);
+	const spawned: string[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "new" });
+	await advancePhase(ticket, "/state", {
+		spawn: (_opts) => {
+			spawned.push("intake");
+			return Promise.resolve(123);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawned, ["intake"]);
 });
 
 Deno.test("advancePhase: running phase with dead PID sets waiting", async () => {
-  const written: string[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: (_dir, t) => {
-      written.push(`${t.phase}/${t.status}`);
-      return Promise.resolve();
-    },
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(written, ["intake/waiting"]);
+	const written: string[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: (_dir, t) => {
+			written.push(`${t.phase}/${t.status}`);
+			return Promise.resolve();
+		},
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(written, ["intake/waiting"]);
 });
 
 Deno.test("advancePhase: implementation running with dead PID transitions to diff/waiting", async () => {
-  const written: string[] = [];
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "running",
-    pid: 999,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: (_dir, t) => {
-      written.push(`${t.phase}/${t.status}`);
-      return Promise.resolve();
-    },
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-  });
-  assertEquals(written, ["diff/waiting"]);
+	const written: string[] = [];
+	const ticket = makeTicket({
+		phase: "implementation",
+		status: "running",
+		pid: 999,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: (_dir, t) => {
+			written.push(`${t.phase}/${t.status}`);
+			return Promise.resolve();
+		},
+		writePhaseOutput: async () => {},
+		appendLog: async () => {},
+	});
+	assertEquals(written, ["diff/waiting"]);
 });
 
 Deno.test("advancePhase: running phase with live PID does nothing", async () => {
-  const written: string[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => true,
-    writeTicket: (_dir, t) => {
-      written.push(`${t.phase}/${t.status}`);
-      return Promise.resolve();
-    },
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(written, []);
+	const written: string[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => true,
+		writeTicket: (_dir, t) => {
+			written.push(`${t.phase}/${t.status}`);
+			return Promise.resolve();
+		},
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(written, []);
 });
 
 Deno.test("advancePhase: waiting + approved advances to next phase", async () => {
-  const spawned: string[] = [];
-  const ticket = makeTicket({
-    phase: "intake",
-    status: "waiting",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawned.push(opts.phase);
-      return Promise.resolve(1);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawned, ["enrichment"]);
+	const spawned: string[] = [];
+	const ticket = makeTicket({
+		phase: "intake",
+		status: "waiting",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawned.push(opts.phase);
+			return Promise.resolve(1);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawned, ["enrichment"]);
 });
 
 Deno.test("advancePhase: waiting + not approved does nothing", async () => {
-  const spawned: string[] = [];
-  const ticket = makeTicket({
-    phase: "intake",
-    status: "waiting",
-    approved: false,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawned.push(opts.phase);
-      return Promise.resolve(1);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawned, []);
+	const spawned: string[] = [];
+	const ticket = makeTicket({
+		phase: "intake",
+		status: "waiting",
+		approved: false,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawned.push(opts.phase);
+			return Promise.resolve(1);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawned, []);
 });
 
 Deno.test("advancePhase: diff/waiting + approved advances to merge/waiting", async () => {
-  const written: string[] = [];
-  const ticket = makeTicket({
-    phase: "diff",
-    status: "waiting",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: (_dir, t) => {
-      written.push(`${t.phase}/${t.status}`);
-      return Promise.resolve();
-    },
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(written, ["merge/waiting"]);
+	const written: string[] = [];
+	const ticket = makeTicket({
+		phase: "diff",
+		status: "waiting",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: (_dir, t) => {
+			written.push(`${t.phase}/${t.status}`);
+			return Promise.resolve();
+		},
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(written, ["merge/waiting"]);
 });
 
 Deno.test("advancePhase: implementation phase receives ticket worktrees", async () => {
-  const spawnedWorktrees: Record<string, unknown>[] = [];
-  const ticket = makeTicket({
-    phase: "plan",
-    status: "waiting",
-    approved: true,
-    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawnedWorktrees.push(opts.worktrees);
-      return Promise.resolve(1);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawnedWorktrees, [
-    { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
-  ]);
+	const spawnedWorktrees: Record<string, unknown>[] = [];
+	const ticket = makeTicket({
+		phase: "plan",
+		status: "waiting",
+		approved: true,
+		worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawnedWorktrees.push(opts.worktrees);
+			return Promise.resolve(1);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawnedWorktrees, [
+		{ "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+	]);
 });
 
 Deno.test("advancePhase: non-implementation phases receive empty worktrees", async () => {
-  const spawnedWorktrees: Record<string, unknown>[] = [];
-  const ticket = makeTicket({
-    phase: "intake",
-    status: "waiting",
-    approved: true,
-    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawnedWorktrees.push(opts.worktrees);
-      return Promise.resolve(1);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawnedWorktrees, [{}]);
+	const spawnedWorktrees: Record<string, unknown>[] = [];
+	const ticket = makeTicket({
+		phase: "intake",
+		status: "waiting",
+		approved: true,
+		worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawnedWorktrees.push(opts.worktrees);
+			return Promise.resolve(1);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawnedWorktrees, [{}]);
 });
 
 Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () => {
-  const spawnedWorktrees: Record<string, unknown>[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "new" });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawnedWorktrees.push(opts.worktrees);
-      return Promise.resolve(123);
-    },
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(spawnedWorktrees, [{}]);
+	const spawnedWorktrees: Record<string, unknown>[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "new" });
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawnedWorktrees.push(opts.worktrees);
+			return Promise.resolve(123);
+		},
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(spawnedWorktrees, [{}]);
 });
 
 Deno.test("advancePhase: implementation phase with empty worktrees transitions to needs-attention", async () => {
-  const written: string[] = [];
-  const ticket = makeTicket({
-    phase: "plan",
-    status: "waiting",
-    approved: true,
-    worktrees: {},
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
-    isPidAlive: () => false,
-    writeTicket: (_dir, t) => {
-      written.push(`${t.phase}/${t.status}`);
-      return Promise.resolve();
-    },
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(written, ["implementation/needs-attention"]);
+	const written: string[] = [];
+	const ticket = makeTicket({
+		phase: "plan",
+		status: "waiting",
+		approved: true,
+		worktrees: {},
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(1),
+		isPidAlive: () => false,
+		writeTicket: (_dir, t) => {
+			written.push(`${t.phase}/${t.status}`);
+			return Promise.resolve();
+		},
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(written, ["implementation/needs-attention"]);
 });
 
 Deno.test("tick: calls installPackages with config.packages.enabled before advancing", async () => {
-  const sequence: string[] = [];
-  const installed: string[][] = [];
-  const tempDir = await Deno.makeTempDir();
-  try {
-    await tick({
-      loadConfig: () =>
-        Promise.resolve({
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 1 },
-          codebase: { roots: [] },
-          packages: { enabled: ["npm:pi-lens", "agent-browser"] },
-        }),
-      installPackages: (sources) => {
-        sequence.push("install");
-        installed.push(sources);
-        return Promise.resolve([]);
-      },
-      advanceTickets: () => {
-        sequence.push("advance");
-        return Promise.resolve();
-      },
-      isPidAlive: () => false,
-    });
-    assertEquals(installed, [["npm:pi-lens", "agent-browser"]]);
-    assertEquals(sequence, ["install", "advance"]);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
+	const sequence: string[] = [];
+	const installed: string[][] = [];
+	const tempDir = await Deno.makeTempDir();
+	try {
+		await tick({
+			loadConfig: () =>
+				Promise.resolve({
+					github: { repos: [] },
+					state: { dir: tempDir },
+					tick: { concurrency: 1 },
+					codebase: { roots: [] },
+					packages: { enabled: ["npm:pi-lens", "agent-browser"] },
+				}),
+			installPackages: (sources) => {
+				sequence.push("install");
+				installed.push(sources);
+				return Promise.resolve([]);
+			},
+			advanceTickets: () => {
+				sequence.push("advance");
+				return Promise.resolve();
+			},
+			isPidAlive: () => false,
+		});
+		assertEquals(installed, [["npm:pi-lens", "agent-browser"]]);
+		assertEquals(sequence, ["install", "advance"]);
+	} finally {
+		await Deno.remove(tempDir, { recursive: true });
+	}
 });
 
 Deno.test("advancePhase: new ticket logs status-only transition", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "new" });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(123),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals(logged.length, 1);
-  assertEquals(
-    (logged[0] as Record<string, string>).event,
-    "status-transition",
-  );
-  assertEquals((logged[0] as Record<string, string>).phase, "intake");
-  assertEquals((logged[0] as Record<string, string>).from, "new");
-  assertEquals((logged[0] as Record<string, string>).to, "running");
+	const logged: object[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "new" });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(123),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals(logged.length, 1);
+	assertEquals(
+		(logged[0] as Record<string, string>).event,
+		"status-transition",
+	);
+	assertEquals((logged[0] as Record<string, string>).phase, "intake");
+	assertEquals((logged[0] as Record<string, string>).from, "new");
+	assertEquals((logged[0] as Record<string, string>).to, "running");
 });
 
 Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals(logged.length, 1);
-  assertEquals(
-    (logged[0] as Record<string, string>).event,
-    "status-transition",
-  );
-  assertEquals((logged[0] as Record<string, string>).phase, "intake");
-  assertEquals((logged[0] as Record<string, string>).from, "running");
-  assertEquals((logged[0] as Record<string, string>).to, "waiting");
+	const logged: object[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals(logged.length, 1);
+	assertEquals(
+		(logged[0] as Record<string, string>).event,
+		"status-transition",
+	);
+	assertEquals((logged[0] as Record<string, string>).phase, "intake");
+	assertEquals((logged[0] as Record<string, string>).from, "running");
+	assertEquals((logged[0] as Record<string, string>).to, "waiting");
 });
 
 Deno.test("advancePhase: dead PID on implementation logs implementation → diff", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "running",
-    pid: 999,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals(logged.length, 1);
-  assertEquals((logged[0] as Record<string, string>).event, "phase-transition");
-  assertEquals((logged[0] as Record<string, string>).from, "implementation");
-  assertEquals((logged[0] as Record<string, string>).to, "diff");
+	const logged: object[] = [];
+	const ticket = makeTicket({
+		phase: "implementation",
+		status: "running",
+		pid: 999,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: async () => {},
+		writePhaseOutput: async () => {},
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals(logged.length, 1);
+	assertEquals((logged[0] as Record<string, string>).event, "phase-transition");
+	assertEquals((logged[0] as Record<string, string>).from, "implementation");
+	assertEquals((logged[0] as Record<string, string>).to, "diff");
 });
 
 Deno.test("advancePhase: live PID does not log", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => true,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals(logged, []);
+	const logged: object[] = [];
+	const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => true,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals(logged, []);
 });
 
 Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({
-    phase: "diff",
-    status: "waiting",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals((logged[0] as Record<string, string>).from, "diff");
-  assertEquals((logged[0] as Record<string, string>).to, "merge");
+	const logged: object[] = [];
+	const ticket = makeTicket({
+		phase: "diff",
+		status: "waiting",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(0),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals((logged[0] as Record<string, string>).from, "diff");
+	assertEquals((logged[0] as Record<string, string>).to, "merge");
 });
 
 Deno.test("advancePhase: approved waiting phase logs transition to next phase", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({
-    phase: "intake",
-    status: "waiting",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals((logged[0] as Record<string, string>).from, "intake");
-  assertEquals((logged[0] as Record<string, string>).to, "enrichment");
+	const logged: object[] = [];
+	const ticket = makeTicket({
+		phase: "intake",
+		status: "waiting",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(1),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals((logged[0] as Record<string, string>).from, "intake");
+	assertEquals((logged[0] as Record<string, string>).to, "enrichment");
 });
 
 Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({
-    phase: "plan",
-    status: "waiting",
-    approved: true,
-    worktrees: {},
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals((logged[0] as Record<string, string>).from, "plan");
-  assertEquals((logged[0] as Record<string, string>).to, "needs-attention");
+	const logged: object[] = [];
+	const ticket = makeTicket({
+		phase: "plan",
+		status: "waiting",
+		approved: true,
+		worktrees: {},
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(1),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals((logged[0] as Record<string, string>).from, "plan");
+	assertEquals((logged[0] as Record<string, string>).to, "needs-attention");
 });
 
 Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({
-    phase: "diff",
-    status: "waiting",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(123),
-    isPidAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals("ts" in (logged[0] as Record<string, unknown>), false);
+	const logged: object[] = [];
+	const ticket = makeTicket({
+		phase: "diff",
+		status: "waiting",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(123),
+		isPidAlive: () => false,
+		writeTicket: () => Promise.resolve(),
+		writePhaseOutput: () => Promise.resolve(),
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals("ts" in (logged[0] as Record<string, unknown>), false);
 });
 
 Deno.test("advancePhase: revising status spawns plan with timestamped outputFile", async () => {
-  const spawnedOpts: Array<{ phase: string; outputFile?: string }> = [];
-  const ticket = makeTicket({ phase: "plan", status: "revising" });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawnedOpts.push({ phase: opts.phase, outputFile: opts.outputFile });
-      return Promise.resolve(77);
-    },
-    isPidAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-  });
-  assertEquals(spawnedOpts.length, 1);
-  assertEquals(spawnedOpts[0].phase, "plan");
-  assertEquals(typeof spawnedOpts[0].outputFile, "string");
-  assertEquals(spawnedOpts[0].outputFile?.startsWith("plan-"), true);
-  assertEquals(spawnedOpts[0].outputFile?.endsWith(".md"), true);
+	const spawnedOpts: Array<{ phase: string; outputFile?: string }> = [];
+	const ticket = makeTicket({ phase: "plan", status: "revising" });
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawnedOpts.push({ phase: opts.phase, outputFile: opts.outputFile });
+			return Promise.resolve(77);
+		},
+		isPidAlive: () => false,
+		writeTicket: async () => {},
+		writePhaseOutput: async () => {},
+		appendLog: async () => {},
+	});
+	assertEquals(spawnedOpts.length, 1);
+	assertEquals(spawnedOpts[0].phase, "plan");
+	assertEquals(typeof spawnedOpts[0].outputFile, "string");
+	assertEquals(spawnedOpts[0].outputFile?.startsWith("plan-"), true);
+	assertEquals(spawnedOpts[0].outputFile?.endsWith(".md"), true);
 });
 
 Deno.test("advancePhase: revising status transitions to running and clears approved", async () => {
-  const written: Partial<TicketState>[] = [];
-  const ticket = makeTicket({
-    phase: "plan",
-    status: "revising",
-    approved: true,
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(77),
-    isPidAlive: () => false,
-    writeTicket: (_dir, t) => {
-      written.push({
-        phase: t.phase,
-        status: t.status,
-        approved: t.approved,
-        pid: t.pid,
-      });
-      return Promise.resolve();
-    },
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-  });
-  assertEquals(written.length, 1);
-  assertEquals(written[0].phase, "plan");
-  assertEquals(written[0].status, "running");
-  assertEquals(written[0].approved, false);
-  assertEquals(written[0].pid, 77);
+	const written: Partial<TicketState>[] = [];
+	const ticket = makeTicket({
+		phase: "plan",
+		status: "revising",
+		approved: true,
+	});
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(77),
+		isPidAlive: () => false,
+		writeTicket: (_dir, t) => {
+			written.push({
+				phase: t.phase,
+				status: t.status,
+				approved: t.approved,
+				pid: t.pid,
+			});
+			return Promise.resolve();
+		},
+		writePhaseOutput: async () => {},
+		appendLog: async () => {},
+	});
+	assertEquals(written.length, 1);
+	assertEquals(written[0].phase, "plan");
+	assertEquals(written[0].status, "running");
+	assertEquals(written[0].approved, false);
+	assertEquals(written[0].pid, 77);
 });
 
 Deno.test("advancePhase: revising status logs status-transition from revising to running", async () => {
-  const logged: object[] = [];
-  const ticket = makeTicket({ phase: "enrichment", status: "revising" });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(5),
-    isPidAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: (_dir, _id, entry) => {
-      logged.push(entry);
-      return Promise.resolve();
-    },
-  });
-  assertEquals(
-    (logged[0] as Record<string, string>).event,
-    "status-transition",
-  );
-  assertEquals((logged[0] as Record<string, string>).phase, "enrichment");
-  assertEquals((logged[0] as Record<string, string>).from, "revising");
-  assertEquals((logged[0] as Record<string, string>).to, "running");
+	const logged: object[] = [];
+	const ticket = makeTicket({ phase: "enrichment", status: "revising" });
+	await advancePhase(ticket, "/state", {
+		spawn: () => Promise.resolve(5),
+		isPidAlive: () => false,
+		writeTicket: async () => {},
+		writePhaseOutput: async () => {},
+		appendLog: (_dir, _id, entry) => {
+			logged.push(entry);
+			return Promise.resolve();
+		},
+	});
+	assertEquals(
+		(logged[0] as Record<string, string>).event,
+		"status-transition",
+	);
+	assertEquals((logged[0] as Record<string, string>).phase, "enrichment");
+	assertEquals((logged[0] as Record<string, string>).from, "revising");
+	assertEquals((logged[0] as Record<string, string>).to, "running");
 });
 
 Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format", async () => {
-  const spawnedOpts: Array<{ outputFile?: string }> = [];
-  const ticket = makeTicket({ phase: "plan", status: "revising" });
-  await advancePhase(ticket, "/state", {
-    spawn: (opts) => {
-      spawnedOpts.push({ outputFile: opts.outputFile });
-      return Promise.resolve(77);
-    },
-    isPidAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-  });
-  assertEquals(spawnedOpts.length, 1);
-  const file = spawnedOpts[0].outputFile ?? "";
-  assertEquals(/^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(file), true);
+	const spawnedOpts: Array<{ outputFile?: string }> = [];
+	const ticket = makeTicket({ phase: "plan", status: "revising" });
+	await advancePhase(ticket, "/state", {
+		spawn: (opts) => {
+			spawnedOpts.push({ outputFile: opts.outputFile });
+			return Promise.resolve(77);
+		},
+		isPidAlive: () => false,
+		writeTicket: async () => {},
+		writePhaseOutput: async () => {},
+		appendLog: async () => {},
+	});
+	assertEquals(spawnedOpts.length, 1);
+	const file = spawnedOpts[0].outputFile ?? "";
+	assertEquals(/^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(file), true);
 });
 
 Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
-  const action = checkConflictsAction({
-    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
-    worktreeExists: () => true,
-    writeTicket: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-  });
-  assertEquals(typeof action.applies, "function");
-  assertEquals(typeof action.run, "function");
+	const action = checkConflictsAction({
+		runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+		isPidAlive: () => false,
+		worktreeExists: () => true,
+		writeTicket: () => Promise.resolve(),
+		appendLog: () => Promise.resolve(),
+	});
+	assertEquals(typeof action.applies, "function");
+	assertEquals(typeof action.run, "function");
 });
 
 async function initGitStateDir(dir: string): Promise<void> {
-  const run = (args: string[]) =>
-    new Deno.Command("git", { args, cwd: dir }).output();
-  await run(["init"]);
-  await run(["config", "user.email", "test@test.com"]);
-  await run(["config", "user.name", "Test"]);
+	const run = (args: string[]) =>
+		new Deno.Command("git", { args, cwd: dir }).output();
+	await run(["init"]);
+	await run(["config", "user.email", "test@test.com"]);
+	await run(["config", "user.name", "Test"]);
 }
 
 async function writeMinimalTicket(stateDir: string, id: string): Promise<void> {
-  await Deno.mkdir(join(stateDir, id), { recursive: true });
-  await Deno.writeTextFile(
-    join(stateDir, id, "meta.md"),
-    [
-      "---",
-      `id: ${id}`,
-      "provider: github",
-      "title: T",
-      "url: 'https://github.com/test/repo/issues/1'",
-      "phase: intake",
-      "status: new",
-      "approved: false",
-      "scope: []",
-      "worktrees: {}",
-      "created: '2026-01-01T00:00:00Z'",
-      "updated: '2026-01-01T00:00:00Z'",
-      "---",
-      "",
-    ].join("\n"),
-  );
+	await Deno.mkdir(join(stateDir, id), { recursive: true });
+	await Deno.writeTextFile(
+		join(stateDir, id, "meta.md"),
+		[
+			"---",
+			`id: ${id}`,
+			"provider: github",
+			"title: T",
+			"url: 'https://github.com/test/repo/issues/1'",
+			"phase: intake",
+			"status: new",
+			"approved: false",
+			"scope: []",
+			"worktrees: {}",
+			"created: '2026-01-01T00:00:00Z'",
+			"updated: '2026-01-01T00:00:00Z'",
+			"---",
+			"",
+		].join("\n"),
+	);
 }
 
 Deno.test("advanceTicketsImpl: runMigrations receives the ticket list before tick actions run", async () => {
-  const tempDir = await Deno.makeTempDir();
-  try {
-    await initGitStateDir(tempDir);
-    await writeMinimalTicket(tempDir, "gh-1");
-    const seen: string[][] = [];
-    const runMigrations: MigrationFn = (
-      _stateDir: string,
-      tickets: TicketState[],
-    ) => {
-      seen.push(tickets.map((t) => t.id));
-      return Promise.resolve(tickets);
-    };
-    await advanceTicketsImpl(
-      {
-        github: { repos: [] },
-        state: { dir: tempDir },
-        tick: { concurrency: 0 },
-        codebase: { roots: [] },
-        packages: { enabled: [] },
-      },
-      runMigrations,
-    );
-    assertEquals(seen.length, 1);
-    assertEquals(seen[0], ["gh-1"]);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
+	const tempDir = await Deno.makeTempDir();
+	try {
+		await initGitStateDir(tempDir);
+		await writeMinimalTicket(tempDir, "gh-1");
+		const seen: string[][] = [];
+		const runMigrations: MigrationFn = (
+			_stateDir: string,
+			tickets: TicketState[],
+		) => {
+			seen.push(tickets.map((t) => t.id));
+			return Promise.resolve(tickets);
+		};
+		await advanceTicketsImpl(
+			{
+				github: { repos: [] },
+				state: { dir: tempDir },
+				tick: { concurrency: 0 },
+				codebase: { roots: [] },
+				packages: { enabled: [] },
+			},
+			runMigrations,
+		);
+		assertEquals(seen.length, 1);
+		assertEquals(seen[0], ["gh-1"]);
+	} finally {
+		await Deno.remove(tempDir, { recursive: true });
+	}
 });
 
 Deno.test("advanceTicketsImpl: throws when runMigrations throws, halting the tick", async () => {
-  const tempDir = await Deno.makeTempDir();
-  try {
-    await initGitStateDir(tempDir);
-    await writeMinimalTicket(tempDir, "gh-1");
-    const runMigrations: MigrationFn = () =>
-      Promise.reject(
-        new Error("Migration 1000-fail.ts failed on ticket gh-1: bad data"),
-      );
-    await assertRejects(
-      () =>
-        advanceTicketsImpl(
-          {
-            github: { repos: [] },
-            state: { dir: tempDir },
-            tick: { concurrency: 0 },
-            codebase: { roots: [] },
-            packages: { enabled: [] },
-          },
-          runMigrations,
-        ),
-      Error,
-      "Migration 1000-fail.ts failed on ticket gh-1: bad data",
-    );
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
+	const tempDir = await Deno.makeTempDir();
+	try {
+		await initGitStateDir(tempDir);
+		await writeMinimalTicket(tempDir, "gh-1");
+		const runMigrations: MigrationFn = () =>
+			Promise.reject(
+				new Error("Migration 1000-fail.ts failed on ticket gh-1: bad data"),
+			);
+		await assertRejects(
+			() =>
+				advanceTicketsImpl(
+					{
+						github: { repos: [] },
+						state: { dir: tempDir },
+						tick: { concurrency: 0 },
+						codebase: { roots: [] },
+						packages: { enabled: [] },
+					},
+					runMigrations,
+				),
+			Error,
+			"Migration 1000-fail.ts failed on ticket gh-1: bad data",
+		);
+	} finally {
+		await Deno.remove(tempDir, { recursive: true });
+	}
+});
+
+Deno.test("selectCandidates: empty candidates returns empty", () => {
+	assertEquals(selectCandidates([], [], 2), []);
+});
+
+Deno.test("selectCandidates: no lastWorked starts at index 0", () => {
+	assertEquals(selectCandidates(["gh-1", "gh-2", "gh-3"], [], 2), [
+		"gh-1",
+		"gh-2",
+	]);
+});
+
+Deno.test("selectCandidates: lastWorked anchor advances start by one", () => {
+	assertEquals(
+		selectCandidates(["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"], ["gh-2"], 2),
+		["gh-3", "gh-4"],
+	);
+});
+
+Deno.test("selectCandidates: anchor at last element wraps to index 0", () => {
+	assertEquals(selectCandidates(["gh-1", "gh-2", "gh-3"], ["gh-3"], 2), [
+		"gh-1",
+		"gh-2",
+	]);
+});
+
+Deno.test("selectCandidates: wrapping selection spans end and start of list", () => {
+	assertEquals(
+		selectCandidates(["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"], ["gh-4"], 3),
+		["gh-5", "gh-1", "gh-2"],
+	);
+});
+
+Deno.test("selectCandidates: concurrency larger than candidates returns all", () => {
+	assertEquals(selectCandidates(["gh-1", "gh-2"], [], 10), ["gh-1", "gh-2"]);
+});
+
+Deno.test("selectCandidates: all lastWorked IDs absent from candidates starts at 0", () => {
+	assertEquals(
+		selectCandidates(["gh-1", "gh-3", "gh-5"], ["gh-2", "gh-4"], 2),
+		["gh-1", "gh-3"],
+	);
+});
+
+Deno.test("selectCandidates: uses last surviving ID from end of lastWorked as anchor", () => {
+	assertEquals(
+		selectCandidates(["gh-1", "gh-2", "gh-3"], ["gh-1", "gh-99", "gh-2"], 1),
+		["gh-3"],
+	);
 });

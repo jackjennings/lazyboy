@@ -63,6 +63,30 @@ export interface TickDeps {
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
 
+export function selectCandidates(
+  candidates: string[],
+  lastWorked: string[],
+  concurrency: number,
+): string[] {
+  if (candidates.length === 0) return [];
+
+  let start = 0;
+  for (let i = lastWorked.length - 1; i >= 0; i--) {
+    const idx = candidates.indexOf(lastWorked[i]);
+    if (idx !== -1) {
+      start = (idx + 1) % candidates.length;
+      break;
+    }
+  }
+
+  const count = Math.min(concurrency, candidates.length);
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(candidates[(start + i) % candidates.length]);
+  }
+  return result;
+}
+
 export async function advancePhase(
   ticket: TicketState,
   stateDir: string,

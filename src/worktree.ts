@@ -7,14 +7,15 @@ export function extractGitHubSlug(url: string): string {
   return match[1];
 }
 
-async function runGit(
+export async function runGit(
   args: string[],
   cwd: string,
-): Promise<{ code: number; stdout: string }> {
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const result = await new Deno.Command("git", { args, cwd }).output();
   return {
     code: result.code,
     stdout: new TextDecoder().decode(result.stdout).trim(),
+    stderr: new TextDecoder().decode(result.stderr).trim(),
   };
 }
 

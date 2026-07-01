@@ -5,6 +5,7 @@ import {
   createWorktree,
   extractGitHubSlug,
   findLocalRepo,
+  runGit,
 } from "./worktree.ts";
 
 // ── extractGitHubSlug ────────────────────────────────────────────────────────
@@ -130,4 +131,16 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
     );
     await Deno.remove(repoDir, { recursive: true });
   }
+});
+
+// ── runGit ───────────────────────────────────────────────────────────────────
+
+Deno.test("runGit: returns stderr alongside stdout and code", async () => {
+  const result = await runGit(
+    ["invalid-subcommand-that-does-not-exist"],
+    Deno.cwd(),
+  );
+  assertEquals(result.code !== 0, true);
+  assertEquals(typeof result.stderr, "string");
+  assertEquals(result.stderr.length > 0, true);
 });

@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { advancePhase, tick } from "./tick.ts";
+import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import type { TicketState } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -516,4 +517,15 @@ Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format"
   assertEquals(spawnedOpts.length, 1);
   const file = spawnedOpts[0].outputFile ?? "";
   assertEquals(/^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(file), true);
+});
+
+Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
+  const action = checkConflictsAction({
+    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+    isPidAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+  });
+  assertEquals(typeof action.applies, "function");
+  assertEquals(typeof action.run, "function");
 });

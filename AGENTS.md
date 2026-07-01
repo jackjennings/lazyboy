@@ -99,3 +99,23 @@ not manually adjust indentation or spacing — let the formatter handle it.
 
 Every task in a plan must produce a code change and a commit. Do not create
 tasks that only run verification commands without making changes.
+
+## Tick actions
+
+New per-tick behaviors are added as `TickAction` implementations in
+`src/tick-actions/`. Each action exports a `*Deps` interface, a factory
+function, and a corresponding `*_test.ts` file following the pattern in
+`check-merged-pr.ts`. Actions are registered in `src/tick.ts`.
+
+The applies predicate for actions that operate on worktrees must exclude tickets
+where `ticket.pid !== undefined && isPidAlive(ticket.pid)` — rebasing or pushing
+while a live agent holds the worktree corrupts the agent's git state. Actions
+that can transition a ticket to `needs-attention` must also exclude
+`status === "needs-attention"` to avoid an infinite retry loop.
+
+## `runGit` in `src/worktree.ts`
+
+`runGit` is the shared helper for shelling out to git. It is exported so
+`TickAction` implementations can inject it as a dep and test against a stub. Its
+return type is `{ code: number; stdout: string; stderr: string }`. Do not
+introduce a second git-shelling helper — use or inject `runGit`.

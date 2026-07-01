@@ -11,9 +11,10 @@ import { expandHome, loadConfig } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
-import { createWorktree, findLocalRepo } from "./worktree.ts";
+import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
+import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import {
   installPackages,
   isPackageInstalled,
@@ -301,6 +302,12 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
           cwd: mainRepoPath,
         }).output();
       },
+      writeTicket,
+      appendLog: appendTicketLog,
+    }),
+    checkConflictsAction({
+      runGit,
+      isPidAlive: defaultIsPidAlive,
       writeTicket,
       appendLog: appendTicketLog,
     }),

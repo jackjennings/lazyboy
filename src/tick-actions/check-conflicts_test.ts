@@ -28,6 +28,7 @@ function makeAction(
   return checkConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
     isPidAlive: () => false,
+    worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     ...overrides,
@@ -75,6 +76,13 @@ Deno.test("checkConflictsAction: applies when pid is undefined (treat as dead)",
 Deno.test("checkConflictsAction: does not apply with no worktrees", () => {
   assertEquals(
     makeAction().applies(makeTicket({ worktrees: {} })),
+    false,
+  );
+});
+
+Deno.test("checkConflictsAction: does not apply when worktree path does not exist on disk", () => {
+  assertEquals(
+    makeAction({ worktreeExists: () => false }).applies(makeTicket()),
     false,
   );
 });

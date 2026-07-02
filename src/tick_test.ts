@@ -523,6 +523,7 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
   const action = checkConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
     isPidAlive: () => false,
+    worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
   });

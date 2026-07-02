@@ -7,6 +7,7 @@ export interface CheckConflictsDeps {
     cwd: string,
   ) => Promise<{ code: number; stdout: string; stderr: string }>;
   isPidAlive: (pid: number) => boolean;
+  worktreeExists: (path: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
@@ -16,7 +17,9 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return (
         ticket.status !== "needs-attention" &&
-        Object.keys(ticket.worktrees).length > 0 &&
+        Object.values(ticket.worktrees).some((wt) =>
+          deps.worktreeExists(wt.path)
+        ) &&
         !(ticket.pid !== undefined && deps.isPidAlive(ticket.pid))
       );
     },
@@ -36,6 +39,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
       const conflicts: ConflictRecord[] = [];
 
       for (const wt of Object.values(ticket.worktrees)) {
+        if (!deps.worktreeExists(wt.path)) continue;
         const fetch = await deps.runGit(
           ["fetch", "origin", "main"],
           wt.path,

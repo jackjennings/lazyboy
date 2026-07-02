@@ -1,3 +1,4 @@
+import { existsSync } from "@std/fs";
 import { join } from "@std/path";
 import {
   appendTicketLog,
@@ -339,6 +340,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     checkConflictsAction({
       runGit,
       isPidAlive: defaultIsPidAlive,
+      worktreeExists: existsSync,
       writeTicket,
       appendLog: appendTicketLog,
     }),

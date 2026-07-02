@@ -3,6 +3,19 @@
 This file provides guidance to coding agents (Claude Code, Pi, etc.) working in
 this repository.
 
+## Non-Deno dependencies
+
+These must be present on the host; they are not managed by Deno.
+
+| Dependency | Purpose |
+|---|---|
+| `git` | Worktree management, rebase/push, state repo commits |
+| `pi` | Runs phase prompts; checks/installs agent packages |
+| `crontab` | Installs and removes the tick cron job |
+| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status |
+
+Environment variables required at runtime (tick only): `GITHUB_TOKEN`, `GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.
+
 ## Commands
 
 ```bash

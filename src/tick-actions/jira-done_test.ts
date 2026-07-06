@@ -1,0 +1,167 @@
+import { assertEquals } from "@std/assert";
+import { jiraDoneAction } from "./jira-done.ts";
+import type { TicketState } from "../state/types.ts";
+
+function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
+  return {
+    id: "jira-PROJ-42",
+    provider: "jira",
+    title: "T",
+    url: "https://myorg.atlassian.net/browse/PROJ-42",
+    phase: "merge",
+    status: "done",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    body: "",
+    ...overrides,
+  };
+}
+
+function makeAction(
+  overrides: Partial<Parameters<typeof jiraDoneAction>[0]> = {},
+) {
+  return jiraDoneAction({
+    baseUrl: "https://myorg.atlassian.net",
+    email: "test@example.com",
+    apiToken: "token",
+    writeTicket: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    ...overrides,
+  });
+}
+
+function makeTransitionsFetch(
+  transitions: Array<{ id: string; to: { statusCategory: { key: string } } }>,
+) {
+  return (_url: string, init: RequestInit) => {
+    if (init.method === "POST") {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify({ transitions }), { status: 200 }),
+    );
+  };
+}
+
+const successFetch = makeTransitionsFetch([
+  { id: "41", to: { statusCategory: { key: "done" } } },
+]);
+
+Deno.test("jiraDoneAction: applies when provider jira, phase merge, status done, providerDone not set", () => {
+  assertEquals(makeAction().applies(makeTicket()), true);
+});
+
+Deno.test("jiraDoneAction: does not apply when providerDone is true", () => {
+  assertEquals(
+    makeAction().applies(makeTicket({ providerDone: true })),
+    false,
+  );
+});
+
+Deno.test("jiraDoneAction: does not apply when provider is not jira", () => {
+  assertEquals(
+    makeAction().applies(makeTicket({ provider: "github" })),
+    false,
+  );
+});
+
+Deno.test("jiraDoneAction: does not apply when phase is not merge", () => {
+  assertEquals(
+    makeAction().applies(makeTicket({ phase: "implementation" as const })),
+    false,
+  );
+});
+
+Deno.test("jiraDoneAction: does not apply when status is not done", () => {
+  assertEquals(
+    makeAction().applies(makeTicket({ status: "waiting" })),
+    false,
+  );
+});
+
+Deno.test("jiraDoneAction: run returns ticket with providerDone: true on success", async () => {
+  const result = await makeAction({ _fetch: successFetch }).run(
+    makeTicket(),
+    "/state",
+  );
+  assertEquals(result?.providerDone, true);
+});
+
+Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on success", async () => {
+  const written: Partial<TicketState>[] = [];
+  await makeAction({
+    _fetch: successFetch,
+    writeTicket: (_dir, t) => {
+      written.push({ id: t.id, providerDone: t.providerDone });
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(written.length, 1);
+  assertEquals(written[0].id, "jira-PROJ-42");
+  assertEquals(written[0].providerDone, true);
+});
+
+Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for correct issue key", async () => {
+  const calls: Array<{ url: string; method: string; body?: string }> = [];
+  await makeAction({
+    _fetch: (url, init) => {
+      calls.push({
+        url,
+        method: init.method ?? "GET",
+        body: init.body as string | undefined,
+      });
+      if (init.method === "POST") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            transitions: [
+              { id: "41", to: { statusCategory: { key: "done" } } },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(calls[0].url.includes("PROJ-42/transitions"), true);
+  assertEquals(calls[0].method, "GET");
+  assertEquals(calls[1].method, "POST");
+  assertEquals(
+    JSON.parse(calls[1].body!),
+    { transition: { id: "41" } },
+  );
+});
+
+Deno.test("jiraDoneAction: run logs error and returns null when transition throws", async () => {
+  const logged: object[] = [];
+  const result = await makeAction({
+    _fetch: (_url, _init) =>
+      Promise.resolve(new Response("Error", { status: 500 })),
+    appendLog: (_stateDir, _id, entry) => {
+      logged.push(entry);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(result, null);
+  assertEquals(logged.length, 1);
+  assertEquals((logged[0] as Record<string, string>).event, "error");
+  assertEquals((logged[0] as Record<string, string>).context, "jiraDone");
+});
+
+Deno.test("jiraDoneAction: run does not call writeTicket when transition throws", async () => {
+  const written: unknown[] = [];
+  await makeAction({
+    _fetch: (_url, _init) =>
+      Promise.resolve(new Response("Error", { status: 500 })),
+    writeTicket: (_dir, t) => {
+      written.push(t);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(written.length, 0);
+});

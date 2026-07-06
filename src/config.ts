@@ -13,6 +13,17 @@ export async function loadConfig(path?: string): Promise<Config> {
   if (enabledRaw !== undefined && !Array.isArray(enabledRaw)) {
     throw new Error("config.toml: [packages].enabled must be an array");
   }
+  const jiraRaw = parsed.jira as Record<string, unknown> | undefined;
+  let jira: Config["jira"];
+  if (jiraRaw !== undefined) {
+    if (typeof jiraRaw.base_url !== "string") {
+      throw new Error("config.toml: [jira].base_url is required");
+    }
+    if (typeof jiraRaw.project !== "string") {
+      throw new Error("config.toml: [jira].project is required");
+    }
+    jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
+  }
   return {
     github: {
       repos: (parsed.github as Record<string, unknown>).repos as string[],
@@ -26,6 +37,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
+    jira,
   };
 }
 

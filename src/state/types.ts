@@ -53,6 +53,7 @@ export interface TicketState {
   pid?: number;
   worktrees: Record<string, WorktreeInfo>;
   prUrl?: string;
+  providerDone?: boolean;
   created: string;
   updated: string;
   body: string;
@@ -64,4 +65,5 @@ export interface Config {
   tick: { concurrency: number };
   codebase: { roots: string[] };
   packages: { enabled: string[] };
+  jira?: { baseUrl: string; project: string };
 }

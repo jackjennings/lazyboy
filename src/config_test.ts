@@ -138,3 +138,100 @@ enabled = "not-an-array"
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig parses [jira] section", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+project = "PROJ"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.jira?.baseUrl, "https://myorg.atlassian.net");
+  assertEquals(cfg.jira?.project, "PROJ");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig sets config.jira to undefined when [jira] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.jira, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [jira] present but base_url missing", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+project = "PROJ"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [jira].base_url is required",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [jira] present but project missing", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [jira].project is required",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

@@ -9,6 +9,9 @@ import {
 } from "./state/store.ts";
 import { expandHome, loadConfig } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
+import { JiraProvider } from "./providers/jira.ts";
+import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
+import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
 import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
 import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
@@ -253,6 +256,34 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
     });
   }
 
+  if (config.jira) {
+    const jiraEmail = Deno.env.get("JIRA_EMAIL") ?? "";
+    const jiraApiToken = Deno.env.get("JIRA_API_TOKEN") ?? "";
+    const jiraProvider = new JiraProvider({
+      baseUrl: config.jira.baseUrl,
+      email: jiraEmail,
+      apiToken: jiraApiToken,
+      project: config.jira.project,
+    });
+    const newJiraItems = await jiraProvider.fetchNew(existingIds);
+    for (const item of newJiraItems) {
+      await writeTicket(stateDir, {
+        id: item.id,
+        provider: item.provider,
+        title: item.title,
+        url: item.url,
+        phase: "intake",
+        status: "new",
+        approved: false,
+        scope: [],
+        worktrees: {},
+        created: Temporal.Now.instant().toString(),
+        updated: Temporal.Now.instant().toString(),
+        body: item.description,
+      });
+    }
+  }
+
   const maxRunning = config.tick.concurrency;
   const ids = await listTickets(stateDir);
   const tickets = await Promise.all(
@@ -311,6 +342,23 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
       writeTicket,
       appendLog: appendTicketLog,
     }),
+    ...(config.jira
+      ? [
+        jiraPickupAction({
+          baseUrl: config.jira.baseUrl,
+          email: Deno.env.get("JIRA_EMAIL") ?? "",
+          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+          appendLog: appendTicketLog,
+        }),
+        jiraDoneAction({
+          baseUrl: config.jira.baseUrl,
+          email: Deno.env.get("JIRA_EMAIL") ?? "",
+          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+          writeTicket,
+          appendLog: appendTicketLog,
+        }),
+      ]
+      : []),
   ];
 
   const processedTickets = [...tickets];

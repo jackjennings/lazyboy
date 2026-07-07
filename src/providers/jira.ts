@@ -35,20 +35,22 @@ export class JiraProvider implements Provider {
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const jql =
       `assignee = currentUser() AND project = ${this.project} AND statusCategory != Done`;
-    const url = `${this.baseUrl}/rest/api/3/search?jql=${
-      encodeURIComponent(jql)
-    }&maxResults=50`;
+    const url = `${this.baseUrl}/rest/api/3/search/jql`;
     const auth = btoa(`${this.email}:${this.apiToken}`);
     const res = await this._fetch(url, {
+      method: "POST",
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ jql, maxResults: 50 }),
     });
     if (!res.ok) throw new Error(`Jira API error: ${res.status} ${url}`);
     const data = (await res.json()) as { issues: JiraIssue[] };
     const items: WorkItem[] = [];
     for (const issue of data.issues) {
+      if (!issue.fields) continue;
       const id = `jira-${issue.key}`;
       if (!knownIds.has(id)) {
         items.push({

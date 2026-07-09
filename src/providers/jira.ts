@@ -44,7 +44,7 @@ export class JiraProvider implements Provider {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ jql, maxResults: 50 }),
+      body: JSON.stringify({ jql, maxResults: 50, fields: ["key", "summary", "description"] }),
     });
     if (!res.ok) throw new Error(`Jira API error: ${res.status} ${url}`);
     const data = (await res.json()) as { issues: JiraIssue[] };

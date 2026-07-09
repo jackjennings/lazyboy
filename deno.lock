@@ -10,6 +10,7 @@
     "jsr:@std/fs@^1.0.24": "1.0.24",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
+    "jsr:@std/path@1": "1.1.5",
     "jsr:@std/path@^1.1.5": "1.1.5",
     "jsr:@std/testing@1": "1.0.19",
     "jsr:@std/toml@1": "1.0.11",

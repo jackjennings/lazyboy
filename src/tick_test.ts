@@ -1,7 +1,9 @@
-import { assertEquals } from "@std/assert";
-import { advancePhase, tick } from "./tick.ts";
+import { assertEquals, assertRejects } from "@std/assert";
+import { join } from "@std/path";
+import { advancePhase, advanceTicketsImpl, tick } from "./tick.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import type { TicketState } from "./state/types.ts";
+import type { MigrationFn } from "./migrations/runner.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -530,4 +532,94 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
   });
   assertEquals(typeof action.applies, "function");
   assertEquals(typeof action.run, "function");
+});
+
+async function initGitStateDir(dir: string): Promise<void> {
+  const run = (args: string[]) =>
+    new Deno.Command("git", { args, cwd: dir }).output();
+  await run(["init"]);
+  await run(["config", "user.email", "test@test.com"]);
+  await run(["config", "user.name", "Test"]);
+}
+
+async function writeMinimalTicket(stateDir: string, id: string): Promise<void> {
+  await Deno.mkdir(join(stateDir, id), { recursive: true });
+  await Deno.writeTextFile(
+    join(stateDir, id, "meta.md"),
+    [
+      "---",
+      `id: ${id}`,
+      "provider: github",
+      "title: T",
+      "url: 'https://github.com/test/repo/issues/1'",
+      "phase: intake",
+      "status: new",
+      "approved: false",
+      "scope: []",
+      "worktrees: {}",
+      "created: '2026-01-01T00:00:00Z'",
+      "updated: '2026-01-01T00:00:00Z'",
+      "---",
+      "",
+    ].join("\n"),
+  );
+}
+
+Deno.test("advanceTicketsImpl: runMigrations receives the ticket list before tick actions run", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await initGitStateDir(tempDir);
+    await writeMinimalTicket(tempDir, "gh-1");
+    const seen: string[][] = [];
+    const runMigrations: MigrationFn = (
+      _stateDir: string,
+      tickets: TicketState[],
+    ) => {
+      seen.push(tickets.map((t) => t.id));
+      return Promise.resolve(tickets);
+    };
+    await advanceTicketsImpl(
+      {
+        github: { repos: [] },
+        state: { dir: tempDir },
+        tick: { concurrency: 0 },
+        codebase: { roots: [] },
+        packages: { enabled: [] },
+      },
+      runMigrations,
+    );
+    assertEquals(seen.length, 1);
+    assertEquals(seen[0], ["gh-1"]);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("advanceTicketsImpl: throws when runMigrations throws, halting the tick", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await initGitStateDir(tempDir);
+    await writeMinimalTicket(tempDir, "gh-1");
+    const runMigrations: MigrationFn = () =>
+      Promise.reject(
+        new Error("Migration 1000-fail.ts failed on ticket gh-1: bad data"),
+      );
+    await assertRejects(
+      () =>
+        advanceTicketsImpl(
+          {
+            github: { repos: [] },
+            state: { dir: tempDir },
+            tick: { concurrency: 0 },
+            codebase: { roots: [] },
+            packages: { enabled: [] },
+          },
+          runMigrations,
+        ),
+      Error,
+      "Migration 1000-fail.ts failed on ticket gh-1: bad data",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
 });

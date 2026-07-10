@@ -253,6 +253,7 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
         sequence.push("advance");
         return Promise.resolve();
       },
+      isPidAlive: () => false,
     });
     assertEquals(installed, [["npm:pi-lens", "agent-browser"]]);
     assertEquals(sequence, ["install", "advance"]);

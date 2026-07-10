@@ -24,7 +24,9 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       stateDir: string,
     ): Promise<TicketState | null> {
       const now = Temporal.Now.instant().toString();
-      const slug = extractGitHubSlug(ticket.url);
+      const slug = ticket.provider === "github"
+        ? extractGitHubSlug(ticket.url)
+        : ticket.scope[0];
       const repoPath = await deps.findLocalRepo(deps.roots, slug);
       if (!repoPath) {
         const updated = {

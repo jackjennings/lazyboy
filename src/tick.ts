@@ -33,6 +33,7 @@ export interface TickOrchestrationDeps {
   loadConfig: () => Promise<Config>;
   installPackages: (sources: string[]) => Promise<InstallResult[]>;
   advanceTickets: (config: Config) => Promise<void>;
+  isPidAlive?: (pid: number) => boolean;
 }
 
 export interface TickDeps {
@@ -433,7 +434,7 @@ export async function tick(
     const existing = await Deno.readTextFile(pidFile).catch(() => null);
     if (existing) {
       const pid = parseInt(existing.trim(), 10);
-      if (!isNaN(pid) && defaultIsPidAlive(pid)) {
+      if (!isNaN(pid) && (d.isPidAlive ?? defaultIsPidAlive)(pid)) {
         console.log(`tick already running (pid ${pid}), exiting`);
         return;
       }

@@ -238,7 +238,7 @@ export async function advanceTicketsImpl(
   runMigrations?: MigrationFn,
 ): Promise<void> {
   const stateDir = expandHome(config.state.dir);
-  const migrationsDir = new URL("./migrations", import.meta.url).pathname;
+  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
 
   const resolvedRunMigrations = runMigrations ?? createMigrationRunner({
     listMigrationFiles: async () => {

@@ -138,3 +138,16 @@ that can transition a ticket to `needs-attention` must also exclude
 `TickAction` implementations can inject it as a dep and test against a stub. Its
 return type is `{ code: number; stdout: string; stderr: string }`. Do not
 introduce a second git-shelling helper — use or inject `runGit`.
+
+## Migrations
+
+Migration files live at `migrations/<UNIX_TIMESTAMP_SECONDS>-<kebab-slug>.ts`
+(e.g. `1700000000-add-provider-done.ts`) — this is a root-level directory,
+sibling to `src/`. The runner infrastructure (`types.ts`, `runner.ts`,
+`runner_test.ts`) stays in `src/migrations/`. The numeric prefix is the ordering
+and identity key. The runner filters filenames matching `/^\d+-[a-z0-9-]+\.ts$/`
+and sorts them lexicographically. All future migration data files must use this
+kebab-case format.
+
+Applied migration IDs are recorded globally in `<stateDir>/.migrations`, one ID
+per line. There is no per-ticket migration log and no rollback mechanism.

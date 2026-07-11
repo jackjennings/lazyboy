@@ -24,6 +24,11 @@ import {
   isPackageInstalled,
   runPiInstall,
 } from "./packages.ts";
+import {
+  createMigrationRunner,
+  type MigrationFn,
+} from "./migrations/runner.ts";
+import type { Migration } from "./migrations/types.ts";
 import type { TickAction } from "./tick-actions/types.ts";
 import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
@@ -228,8 +233,44 @@ export async function advancePhase(
   }
 }
 
-async function advanceTicketsImpl(config: Config): Promise<void> {
+export async function advanceTicketsImpl(
+  config: Config,
+  runMigrations?: MigrationFn,
+): Promise<void> {
   const stateDir = expandHome(config.state.dir);
+  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
+
+  const resolvedRunMigrations = runMigrations ?? createMigrationRunner({
+    listMigrationFiles: async () => {
+      const files: string[] = [];
+      try {
+        for await (const entry of Deno.readDir(migrationsDir)) {
+          if (entry.isFile && /^\d+-[a-z0-9-]+\.ts$/.test(entry.name)) {
+            files.push(entry.name);
+          }
+        }
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e;
+      }
+      return files.sort();
+    },
+    loadMigration: async (id: string): Promise<Migration> => {
+      const module = await import(join(migrationsDir, id));
+      return module.default;
+    },
+    readApplied: async (dir: string) => {
+      try {
+        const content = await Deno.readTextFile(join(dir, ".migrations"));
+        return content.split("\n").filter((l) => l.length > 0);
+      } catch (e) {
+        if (e instanceof Deno.errors.NotFound) return [];
+        throw e;
+      }
+    },
+    writeApplied: (dir: string, ids: string[]) =>
+      Deno.writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
+    writeTicket,
+  });
 
   const token = Deno.env.get("GITHUB_TOKEN") ?? "";
   const login = Deno.env.get("GITHUB_LOGIN") ?? "";
@@ -291,6 +332,8 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
   const tickets = await Promise.all(
     ids.map((id) => readTicket(stateDir, id)),
   );
+
+  const migratedTickets = await resolvedRunMigrations(stateDir, tickets);
 
   const tickActions: TickAction[] = [
     createWorktreeAction({
@@ -364,7 +407,7 @@ async function advanceTicketsImpl(config: Config): Promise<void> {
       : []),
   ];
 
-  const processedTickets = [...tickets];
+  const processedTickets = [...migratedTickets];
   for (let i = 0; i < processedTickets.length; i++) {
     for (const action of tickActions) {
       if (action.applies(processedTickets[i])) {

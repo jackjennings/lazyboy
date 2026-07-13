@@ -137,7 +137,10 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(
+    makeTicket({ prUrl: "https://github.com/myorg/myrepo/pull/7" }),
+    "/state",
+  );
   assertEquals(result, null);
   const rebaseClean = (logged as Record<string, unknown>[]).find(
     (e) => e.event === "success",
@@ -147,6 +150,24 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
   assertEquals(rebaseClean!.worktreePath, "/wt/myorg/myrepo");
   assertEquals(rebaseClean!.branch, "gh-7");
   assertEquals(calls.some((a) => a[0] === "push"), true);
+});
+
+Deno.test("checkConflictsAction: clean rebase with no prUrl → null, no push, no log", async () => {
+  const logged: object[] = [];
+  const calls: string[][] = [];
+  const result = await makeAction({
+    runGit: (args) => {
+      calls.push(args);
+      return Promise.resolve({ code: 0, stdout: "up to date", stderr: "" });
+    },
+    appendLog: (_dir, _id, entry) => {
+      logged.push(entry);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(result, null);
+  assertEquals(calls.some((a) => a[0] === "push"), false);
+  assertEquals(logged.length, 0);
 });
 
 // ── push failure after clean rebase ──────────────────────────────────────────
@@ -164,7 +185,10 @@ Deno.test("checkConflictsAction: push failure logs error but returns null (trans
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(
+    makeTicket({ prUrl: "https://github.com/myorg/myrepo/pull/7" }),
+    "/state",
+  );
   assertEquals(result, null);
   const errorEntries = (logged as Record<string, unknown>[]).filter(
     (e) => e.event === "error",
@@ -254,6 +278,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        prUrl: "https://github.com/myorg/myrepo/pull/7",
         worktrees: {
           "a/repo": { path: "/wt/a/repo", branch: "gh-7" },
           "b/repo": { path: "/wt/b/repo", branch: "gh-7" },

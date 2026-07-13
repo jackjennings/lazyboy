@@ -34,6 +34,12 @@ import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 import type { InstallResult } from "./packages.ts";
 
+export interface AdvanceTicketsDeps {
+  readLastWorked: () => Promise<string[]>;
+  writeLastWorked: (ids: string[]) => Promise<void>;
+  runMigrations?: MigrationFn;
+}
+
 export interface TickOrchestrationDeps {
   loadConfig: () => Promise<Config>;
   installPackages: (sources: string[]) => Promise<InstallResult[]>;
@@ -61,6 +67,30 @@ export interface TickDeps {
     content: string,
   ) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+}
+
+export function selectCandidates(
+  candidates: string[],
+  lastWorked: string[],
+  concurrency: number,
+): string[] {
+  if (candidates.length === 0) return [];
+
+  let start = 0;
+  for (let i = lastWorked.length - 1; i >= 0; i--) {
+    const idx = candidates.indexOf(lastWorked[i]);
+    if (idx !== -1) {
+      start = (idx + 1) % candidates.length;
+      break;
+    }
+  }
+
+  const count = Math.min(concurrency, candidates.length);
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(candidates[(start + i) % candidates.length]);
+  }
+  return result;
 }
 
 export async function advancePhase(
@@ -233,14 +263,41 @@ export async function advancePhase(
   }
 }
 
+function defaultAdvanceTicketsDeps(): AdvanceTicketsDeps {
+  const lastWorkedPath = join(
+    Deno.env.get("HOME")!,
+    ".lazyboy",
+    "last-worked.json",
+  );
+  return {
+    readLastWorked: async () => {
+      try {
+        const raw = await Deno.readTextFile(lastWorkedPath);
+        const parsed = JSON.parse(raw);
+        if (
+          !Array.isArray(parsed) ||
+          !parsed.every((x) => typeof x === "string")
+        ) {
+          return [];
+        }
+        return parsed as string[];
+      } catch {
+        return [];
+      }
+    },
+    writeLastWorked: (ids) =>
+      Deno.writeTextFile(lastWorkedPath, JSON.stringify(ids)),
+  };
+}
+
 export async function advanceTicketsImpl(
   config: Config,
-  runMigrations?: MigrationFn,
+  deps: AdvanceTicketsDeps = defaultAdvanceTicketsDeps(),
 ): Promise<void> {
   const stateDir = expandHome(config.state.dir);
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
 
-  const resolvedRunMigrations = runMigrations ?? createMigrationRunner({
+  const resolvedRunMigrations = deps.runMigrations ?? createMigrationRunner({
     listMigrationFiles: async () => {
       const files: string[] = [];
       try {
@@ -328,7 +385,7 @@ export async function advanceTicketsImpl(
   }
 
   const maxRunning = config.tick.concurrency;
-  const ids = await listTickets(stateDir);
+  const ids = (await listTickets(stateDir)).sort();
   const tickets = await Promise.all(
     ids.map((id) => readTicket(stateDir, id)),
   );
@@ -417,14 +474,49 @@ export async function advanceTicketsImpl(
     }
   }
 
-  let running = processedTickets.filter((t) => t.status === "running").length;
+  const runningTickets = processedTickets.filter(
+    (t) => t.status === "running",
+  );
+  const candidateTickets = processedTickets.filter(
+    (t) =>
+      t.status !== "done" &&
+      t.status !== "needs-attention" &&
+      !(t.phase === "merge" && t.status === "waiting") &&
+      t.status !== "running",
+  );
 
-  for (const ticket of processedTickets) {
-    if (
-      ticket.status === "done" ||
-      ticket.status === "needs-attention" ||
-      (ticket.phase === "merge" && ticket.status === "waiting")
-    ) continue;
+  const lastWorked = await deps.readLastWorked();
+  const selectedIds = selectCandidates(
+    candidateTickets.map((t) => t.id),
+    lastWorked,
+    maxRunning,
+  );
+  const selectedSet = new Set(selectedIds);
+
+  const tickDepImpls: TickDeps = {
+    spawn: (opts) =>
+      Promise.resolve(spawnPhase({
+        ticketDir: opts.ticketDir,
+        prompt: opts.prompt,
+        scopeDirs: opts.scope.map(expandHome),
+        outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
+        githubToken: token,
+        anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        worktrees: opts.worktrees,
+      })),
+    isPidAlive: defaultIsPidAlive,
+    writeTicket,
+    writePhaseOutput,
+    appendLog: appendTicketLog,
+  };
+
+  for (const ticket of runningTickets) {
+    await advancePhase(ticket, stateDir, tickDepImpls);
+  }
+
+  let running = runningTickets.length;
+  for (const ticket of candidateTickets) {
+    if (!selectedSet.has(ticket.id)) continue;
 
     const willSpawn = ticket.status === "new" ||
       ticket.status === "revising" ||
@@ -433,24 +525,10 @@ export async function advanceTicketsImpl(
     if (willSpawn && running >= maxRunning) continue;
     if (willSpawn) running++;
 
-    await advancePhase(ticket, stateDir, {
-      spawn: (opts) =>
-        Promise.resolve(spawnPhase({
-          ticketDir: opts.ticketDir,
-          prompt: opts.prompt,
-          scopeDirs: opts.scope.map(expandHome),
-          outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
-          githubToken: token,
-          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-          worktrees: opts.worktrees,
-        })),
-      isPidAlive: defaultIsPidAlive,
-      writeTicket,
-      writePhaseOutput,
-      appendLog: appendTicketLog,
-    });
+    await advancePhase(ticket, stateDir, tickDepImpls);
   }
 
+  await deps.writeLastWorked(selectedIds);
   await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
 }
 

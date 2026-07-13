@@ -1,7 +1,13 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { advancePhase, advanceTicketsImpl, tick } from "./tick.ts";
+import {
+  advancePhase,
+  advanceTicketsImpl,
+  selectCandidates,
+  tick,
+} from "./tick.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
+import { writeTicket } from "./state/store.ts";
 import type { TicketState } from "./state/types.ts";
 import type { MigrationFn } from "./migrations/runner.ts";
 
@@ -586,7 +592,11 @@ Deno.test("advanceTicketsImpl: runMigrations receives the ticket list before tic
         codebase: { roots: [] },
         packages: { enabled: [] },
       },
-      runMigrations,
+      {
+        runMigrations,
+        readLastWorked: () => Promise.resolve([]),
+        writeLastWorked: async () => {},
+      },
     );
     assertEquals(seen.length, 1);
     assertEquals(seen[0], ["gh-1"]);
@@ -614,7 +624,11 @@ Deno.test("advanceTicketsImpl: throws when runMigrations throws, halting the tic
             codebase: { roots: [] },
             packages: { enabled: [] },
           },
-          runMigrations,
+          {
+            runMigrations,
+            readLastWorked: () => Promise.resolve([]),
+            writeLastWorked: async () => {},
+          },
         ),
       Error,
       "Migration 1000-fail.ts failed on ticket gh-1: bad data",
@@ -623,3 +637,344 @@ Deno.test("advanceTicketsImpl: throws when runMigrations throws, halting the tic
     await Deno.remove(tempDir, { recursive: true });
   }
 });
+
+Deno.test("selectCandidates: empty candidates returns empty", () => {
+  assertEquals(selectCandidates([], [], 2), []);
+});
+
+Deno.test("selectCandidates: no lastWorked starts at index 0", () => {
+  assertEquals(selectCandidates(["gh-1", "gh-2", "gh-3"], [], 2), [
+    "gh-1",
+    "gh-2",
+  ]);
+});
+
+Deno.test("selectCandidates: lastWorked anchor advances start by one", () => {
+  assertEquals(
+    selectCandidates(["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"], ["gh-2"], 2),
+    ["gh-3", "gh-4"],
+  );
+});
+
+Deno.test("selectCandidates: anchor at last element wraps to index 0", () => {
+  assertEquals(selectCandidates(["gh-1", "gh-2", "gh-3"], ["gh-3"], 2), [
+    "gh-1",
+    "gh-2",
+  ]);
+});
+
+Deno.test("selectCandidates: wrapping selection spans end and start of list", () => {
+  assertEquals(
+    selectCandidates(["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"], ["gh-4"], 3),
+    ["gh-5", "gh-1", "gh-2"],
+  );
+});
+
+Deno.test("selectCandidates: concurrency larger than candidates returns all", () => {
+  assertEquals(selectCandidates(["gh-1", "gh-2"], [], 10), ["gh-1", "gh-2"]);
+});
+
+Deno.test("selectCandidates: all lastWorked IDs absent from candidates starts at 0", () => {
+  assertEquals(
+    selectCandidates(["gh-1", "gh-3", "gh-5"], ["gh-2", "gh-4"], 2),
+    ["gh-1", "gh-3"],
+  );
+});
+
+Deno.test("selectCandidates: uses last surviving ID from end of lastWorked as anchor", () => {
+  assertEquals(
+    selectCandidates(["gh-1", "gh-2", "gh-3"], ["gh-1", "gh-99", "gh-2"], 1),
+    ["gh-3"],
+  );
+});
+
+// Task 2 integration tests
+
+Deno.test(
+  "advanceTicketsImpl: writeLastWorked called with sorted candidate IDs",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-2",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-1",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-3",
+          phase: "intake",
+          status: "running",
+          pid: Deno.pid,
+        }),
+      );
+
+      const written: string[][] = [];
+      await advanceTicketsImpl(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 1 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          readLastWorked: () => Promise.resolve([]),
+          writeLastWorked: (ids) => {
+            written.push(ids);
+            return Promise.resolve();
+          },
+        },
+      );
+
+      assertEquals(written.length, 1);
+      assertEquals(written[0], ["gh-1"]);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advanceTicketsImpl: running tickets excluded from writeLastWorked",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-1",
+          phase: "intake",
+          status: "running",
+          pid: Deno.pid,
+        }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-2",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+
+      const written: string[][] = [];
+      await advanceTicketsImpl(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 2 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          readLastWorked: () => Promise.resolve([]),
+          writeLastWorked: (ids) => {
+            written.push(ids);
+            return Promise.resolve();
+          },
+        },
+      );
+
+      assertEquals(written[0], ["gh-2"]);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advanceTicketsImpl: writeLastWorked called with empty array when no candidates",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-1",
+          phase: "intake",
+          status: "running",
+          pid: Deno.pid,
+        }),
+      );
+
+      const written: string[][] = [];
+      await advanceTicketsImpl(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 2 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          readLastWorked: () => Promise.resolve([]),
+          writeLastWorked: (ids) => {
+            written.push(ids);
+            return Promise.resolve();
+          },
+        },
+      );
+
+      assertEquals(written[0], []);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advanceTicketsImpl: readLastWorked shifts round-robin start position",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-1",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-2",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({
+          id: "gh-3",
+          phase: "intake",
+          status: "waiting",
+          approved: false,
+        }),
+      );
+
+      const written: string[][] = [];
+      await advanceTicketsImpl(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 1 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          readLastWorked: () => Promise.resolve(["gh-1"]),
+          writeLastWorked: (ids) => {
+            written.push(ids);
+            return Promise.resolve();
+          },
+        },
+      );
+
+      assertEquals(written[0], ["gh-2"]);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advanceTicketsImpl: skipped-status tickets not included in candidates or writeLastWorked",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({ id: "gh-1", phase: "merge", status: "done" }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({ id: "gh-2", phase: "intake", status: "needs-attention" }),
+      );
+      await writeTicket(
+        tempDir,
+        makeTicket({ id: "gh-3", phase: "merge", status: "waiting" }),
+      );
+
+      const written: string[][] = [];
+      await advanceTicketsImpl(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 3 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          readLastWorked: () => Promise.resolve([]),
+          writeLastWorked: (ids) => {
+            written.push(ids);
+            return Promise.resolve();
+          },
+        },
+      );
+
+      assertEquals(written[0], []);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);

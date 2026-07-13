@@ -37,7 +37,7 @@ import type { InstallResult } from "./packages.ts";
 export interface AdvanceTicketsDeps {
   readLastWorked: () => Promise<string[]>;
   writeLastWorked: (ids: string[]) => Promise<void>;
-  runMigrations?: MigrationFn;
+  runMigrations: MigrationFn;
 }
 
 export interface TickOrchestrationDeps {
@@ -48,16 +48,14 @@ export interface TickOrchestrationDeps {
 }
 
 export interface TickDeps {
-  spawn: (
-    opts: {
-      phase: ActivePhase;
-      ticketDir: string;
-      prompt: string;
-      scope: string[];
-      worktrees: Record<string, WorktreeInfo>;
-      outputFile?: string;
-    },
-  ) => Promise<number>;
+  spawn: (opts: {
+    phase: ActivePhase;
+    ticketDir: string;
+    prompt: string;
+    scope: string[];
+    worktrees: Record<string, WorktreeInfo>;
+    outputFile?: string;
+  }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   writePhaseOutput: (
@@ -104,7 +102,8 @@ export async function advancePhase(
   if (ticket.status === "revising") {
     const activePhase = ticket.phase as ActivePhase;
     const dt = zonedNow.toPlainDateTime();
-    const timestamp = dt.toPlainDate().toString() +
+    const timestamp =
+      dt.toPlainDate().toString() +
       "T" +
       String(dt.hour).padStart(2, "0") +
       String(dt.minute).padStart(2, "0") +
@@ -195,7 +194,9 @@ export async function advancePhase(
   }
 
   if (
-    ticket.phase === "diff" && ticket.status === "waiting" && ticket.approved
+    ticket.phase === "diff" &&
+    ticket.status === "waiting" &&
+    ticket.approved
   ) {
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -222,7 +223,8 @@ export async function advancePhase(
     const next = nextPhase(activePhase);
     if (next === "done") return;
     if (
-      next === "implementation" && Object.keys(ticket.worktrees).length === 0
+      next === "implementation" &&
+      Object.keys(ticket.worktrees).length === 0
     ) {
       await deps.writeTicket(stateDir, {
         ...ticket,
@@ -264,6 +266,7 @@ export async function advancePhase(
 }
 
 function defaultAdvanceTicketsDeps(): AdvanceTicketsDeps {
+  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(
     Deno.env.get("HOME")!,
     ".lazyboy",
@@ -287,47 +290,45 @@ function defaultAdvanceTicketsDeps(): AdvanceTicketsDeps {
     },
     writeLastWorked: (ids) =>
       Deno.writeTextFile(lastWorkedPath, JSON.stringify(ids)),
+    runMigrations: createMigrationRunner({
+      listMigrationFiles: async () => {
+        const files: string[] = [];
+        try {
+          for await (const entry of Deno.readDir(migrationsDir)) {
+            if (entry.isFile && /^\d+-[a-z0-9-]+\.ts$/.test(entry.name)) {
+              files.push(entry.name);
+            }
+          }
+        } catch (e) {
+          if (!(e instanceof Deno.errors.NotFound)) throw e;
+        }
+        return files.sort();
+      },
+      loadMigration: async (id: string): Promise<Migration> => {
+        const module = await import(join(migrationsDir, id));
+        return module.default;
+      },
+      readApplied: async (dir: string) => {
+        try {
+          const content = await Deno.readTextFile(join(dir, ".migrations"));
+          return content.split("\n").filter((l) => l.length > 0);
+        } catch (e) {
+          if (e instanceof Deno.errors.NotFound) return [];
+          throw e;
+        }
+      },
+      writeApplied: (dir: string, ids: string[]) =>
+        Deno.writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
+      writeTicket,
+    }),
   };
 }
 
-export async function advanceTicketsImpl(
+export async function advanceTickets(
   config: Config,
   deps: AdvanceTicketsDeps = defaultAdvanceTicketsDeps(),
 ): Promise<void> {
   const stateDir = expandHome(config.state.dir);
-  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
-
-  const resolvedRunMigrations = deps.runMigrations ?? createMigrationRunner({
-    listMigrationFiles: async () => {
-      const files: string[] = [];
-      try {
-        for await (const entry of Deno.readDir(migrationsDir)) {
-          if (entry.isFile && /^\d+-[a-z0-9-]+\.ts$/.test(entry.name)) {
-            files.push(entry.name);
-          }
-        }
-      } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e;
-      }
-      return files.sort();
-    },
-    loadMigration: async (id: string): Promise<Migration> => {
-      const module = await import(join(migrationsDir, id));
-      return module.default;
-    },
-    readApplied: async (dir: string) => {
-      try {
-        const content = await Deno.readTextFile(join(dir, ".migrations"));
-        return content.split("\n").filter((l) => l.length > 0);
-      } catch (e) {
-        if (e instanceof Deno.errors.NotFound) return [];
-        throw e;
-      }
-    },
-    writeApplied: (dir: string, ids: string[]) =>
-      Deno.writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
-    writeTicket,
-  });
 
   const token = Deno.env.get("GITHUB_TOKEN") ?? "";
   const login = Deno.env.get("GITHUB_LOGIN") ?? "";
@@ -386,11 +387,9 @@ export async function advanceTicketsImpl(
 
   const maxRunning = config.tick.concurrency;
   const ids = (await listTickets(stateDir)).sort();
-  const tickets = await Promise.all(
-    ids.map((id) => readTicket(stateDir, id)),
-  );
+  const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));
 
-  const migratedTickets = await resolvedRunMigrations(stateDir, tickets);
+  const migratedTickets = await deps.runMigrations(stateDir, tickets);
 
   const tickActions: TickAction[] = [
     createWorktreeAction({
@@ -447,20 +446,20 @@ export async function advanceTicketsImpl(
     }),
     ...(config.jira
       ? [
-        jiraPickupAction({
-          baseUrl: config.jira.baseUrl,
-          email: Deno.env.get("JIRA_EMAIL") ?? "",
-          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-          appendLog: appendTicketLog,
-        }),
-        jiraDoneAction({
-          baseUrl: config.jira.baseUrl,
-          email: Deno.env.get("JIRA_EMAIL") ?? "",
-          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-          writeTicket,
-          appendLog: appendTicketLog,
-        }),
-      ]
+          jiraPickupAction({
+            baseUrl: config.jira.baseUrl,
+            email: Deno.env.get("JIRA_EMAIL") ?? "",
+            apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+            appendLog: appendTicketLog,
+          }),
+          jiraDoneAction({
+            baseUrl: config.jira.baseUrl,
+            email: Deno.env.get("JIRA_EMAIL") ?? "",
+            apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+            writeTicket,
+            appendLog: appendTicketLog,
+          }),
+        ]
       : []),
   ];
 
@@ -474,9 +473,7 @@ export async function advanceTicketsImpl(
     }
   }
 
-  const runningTickets = processedTickets.filter(
-    (t) => t.status === "running",
-  );
+  const runningTickets = processedTickets.filter((t) => t.status === "running");
   const candidateTickets = processedTickets.filter(
     (t) =>
       t.status !== "done" &&
@@ -495,15 +492,17 @@ export async function advanceTicketsImpl(
 
   const tickDepImpls: TickDeps = {
     spawn: (opts) =>
-      Promise.resolve(spawnPhase({
-        ticketDir: opts.ticketDir,
-        prompt: opts.prompt,
-        scopeDirs: opts.scope.map(expandHome),
-        outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
-        githubToken: token,
-        anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        worktrees: opts.worktrees,
-      })),
+      Promise.resolve(
+        spawnPhase({
+          ticketDir: opts.ticketDir,
+          prompt: opts.prompt,
+          scopeDirs: opts.scope.map(expandHome),
+          outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
+          githubToken: token,
+          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+          worktrees: opts.worktrees,
+        }),
+      ),
     isPidAlive: defaultIsPidAlive,
     writeTicket,
     writePhaseOutput,
@@ -518,9 +517,11 @@ export async function advanceTicketsImpl(
   for (const ticket of candidateTickets) {
     if (!selectedSet.has(ticket.id)) continue;
 
-    const willSpawn = ticket.status === "new" ||
+    const willSpawn =
+      ticket.status === "new" ||
       ticket.status === "revising" ||
-      (ticket.status === "waiting" && ticket.phase !== "diff" &&
+      (ticket.status === "waiting" &&
+        ticket.phase !== "diff" &&
         ticket.approved);
     if (willSpawn && running >= maxRunning) continue;
     if (willSpawn) running++;
@@ -540,13 +541,11 @@ function defaultTickDeps(): TickOrchestrationDeps {
         run: runPiInstall,
         isInstalled: isPackageInstalled,
       }),
-    advanceTickets: advanceTicketsImpl,
+    advanceTickets,
   };
 }
 
-export async function tick(
-  deps?: TickOrchestrationDeps,
-): Promise<void> {
+export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
   const d = deps ?? defaultTickDeps();
   const config = await d.loadConfig();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");

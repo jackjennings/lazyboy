@@ -21,7 +21,9 @@ export async function buildContextFiles(ticketDir: string): Promise<string[]> {
     try {
       await Deno.stat(`${ticketDir}/${phase}.md`);
       contextFiles.push(`@${ticketDir}/${phase}.md`);
-    } catch { /* not yet written */ }
+    } catch {
+      /* not yet written */
+    }
     const phaseFiles: string[] = [];
     try {
       for await (const entry of Deno.readDir(ticketDir)) {
@@ -33,7 +35,9 @@ export async function buildContextFiles(ticketDir: string): Promise<string[]> {
           phaseFiles.push(entry.name);
         }
       }
-    } catch { /* ticketDir not found */ }
+    } catch {
+      /* ticketDir not found */
+    }
     phaseFiles.sort();
     for (const f of phaseFiles) {
       contextFiles.push(`@${ticketDir}/${f}`);
@@ -42,11 +46,23 @@ export async function buildContextFiles(ticketDir: string): Promise<string[]> {
   return contextFiles;
 }
 
+export async function appendPhaseLog(
+  ticketDir: string,
+  entry: object,
+): Promise<void> {
+  await Deno.writeTextFile(
+    join(ticketDir, "log.ndjson"),
+    JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n",
+    { append: true },
+  );
+}
+
 if (import.meta.main) {
   const args = parseArgs(Deno.args, {
     string: [
       "ticket-dir",
       "output-file",
+      "phase",
       "scope",
       "prompt",
       "worktrees",
@@ -55,6 +71,7 @@ if (import.meta.main) {
 
   const ticketDir = args["ticket-dir"]!;
   const outputFile = args["output-file"]!;
+  const phase = args["phase"]!;
   const scopeDirs = args["scope"]
     ? args["scope"].split(",").filter(Boolean)
     : [];
@@ -92,6 +109,8 @@ if (import.meta.main) {
   await setupPiDirectories(homeDir);
   const piEnv = getPiEnvironmentVariables(homeDir);
 
+  await appendPhaseLog(ticketDir, { event: "phase-start", phase });
+
   const result = await new Deno.Command("pi", {
     args: [
       "-p",
@@ -110,12 +129,20 @@ if (import.meta.main) {
       ...piEnv,
     },
     stdout: "piped",
-    stderr: "inherit",
+    stderr: "piped",
   }).output();
 
   await Deno.writeTextFile(
     join(ticketDir, outputFile),
     new TextDecoder().decode(result.stdout),
   );
+
+  await appendPhaseLog(ticketDir, {
+    event: "phase-end",
+    phase,
+    exitCode: result.code,
+    output: new TextDecoder().decode(result.stderr),
+  });
+
   Deno.exit(result.code);
 }

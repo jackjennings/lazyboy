@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import {
+  appendPhaseLog,
   buildContextFiles,
   getPiEnvironmentVariables,
   setupPiDirectories,
@@ -161,4 +162,55 @@ Deno.test("buildContextFiles: does not include files for phases not in context l
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+// ── appendPhaseLog ───────────────────────────────────────────────────────────
+
+Deno.test("appendPhaseLog: creates log.ndjson and writes a valid JSON line", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await appendPhaseLog(tempDir, { event: "phase-start", phase: "intake" });
+
+    const content = await Deno.readTextFile(`${tempDir}/log.ndjson`);
+    const lines = content.trim().split("\n");
+    assertEquals(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assertEquals(entry.event, "phase-start");
+    assertEquals(entry.phase, "intake");
+    assertEquals(typeof entry.ts, "string");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("appendPhaseLog: appends to existing log.ndjson", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await appendPhaseLog(tempDir, { event: "phase-start", phase: "spec" });
+    await appendPhaseLog(tempDir, {
+      event: "phase-end",
+      phase: "spec",
+      exitCode: 0,
+      output: "",
+    });
+
+    const content = await Deno.readTextFile(`${tempDir}/log.ndjson`);
+    const lines = content.trim().split("\n");
+    assertEquals(lines.length, 2);
+    assertEquals(JSON.parse(lines[0]).event, "phase-start");
+    assertEquals(JSON.parse(lines[1]).event, "phase-end");
+    assertEquals(JSON.parse(lines[1]).exitCode, 0);
+    assertEquals(JSON.parse(lines[1]).output, "");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("appendPhaseLog: propagates error when directory does not exist", async () => {
+  await assertRejects(() =>
+    appendPhaseLog("/nonexistent/ticket/dir", {
+      event: "phase-start",
+      phase: "intake",
+    })
+  );
 });

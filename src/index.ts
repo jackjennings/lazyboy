@@ -5,6 +5,7 @@ import {
   readTicket,
   writeTicket,
 } from "./state/store.ts";
+import { FULL_PHASE_SEQUENCE } from "./phases/types.ts";
 import { expandHome, loadConfig } from "./config.ts";
 import { disableCron, enableCron } from "./cron.ts";
 
@@ -38,12 +39,24 @@ if (command === "tick") {
     console.log("No active tickets.");
     Deno.exit(0);
   }
+  const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));
+  tickets.sort((a, b) => {
+    const aIdx = FULL_PHASE_SEQUENCE.indexOf(
+      a.phase as typeof FULL_PHASE_SEQUENCE[number],
+    );
+    const bIdx = FULL_PHASE_SEQUENCE.indexOf(
+      b.phase as typeof FULL_PHASE_SEQUENCE[number],
+    );
+    const ai = aIdx === -1 ? FULL_PHASE_SEQUENCE.length : aIdx;
+    const bi = bIdx === -1 ? FULL_PHASE_SEQUENCE.length : bIdx;
+    if (ai !== bi) return ai - bi;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
   console.log(
     `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} TITLE`,
   );
   console.log("-".repeat(80));
-  for (const id of ids.sort()) {
-    const t = await readTicket(stateDir, id);
+  for (const t of tickets) {
     console.log(
       `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${
         t.status.padEnd(17)

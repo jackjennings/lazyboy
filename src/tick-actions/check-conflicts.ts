@@ -60,24 +60,26 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         );
 
         if (rebase.code === 0) {
-          const push = await deps.runGit(
-            ["push", "--force-with-lease", "origin", wt.branch],
-            wt.path,
-          );
-          if (push.code !== 0) {
-            await deps.appendLog(stateDir, ticket.id, {
-              event: "error",
-              context: "checkConflicts",
-              worktreePath: wt.path,
-              pushStderr: push.stderr,
-            });
-          } else {
-            await deps.appendLog(stateDir, ticket.id, {
-              event: "success",
-              context: "checkConflicts",
-              worktreePath: wt.path,
-              branch: wt.branch,
-            });
+          if (ticket.prUrl !== undefined) {
+            const push = await deps.runGit(
+              ["push", "--force-with-lease", "origin", wt.branch],
+              wt.path,
+            );
+            if (push.code !== 0) {
+              await deps.appendLog(stateDir, ticket.id, {
+                event: "error",
+                context: "checkConflicts",
+                worktreePath: wt.path,
+                pushStderr: push.stderr,
+              });
+            } else {
+              await deps.appendLog(stateDir, ticket.id, {
+                event: "success",
+                context: "checkConflicts",
+                worktreePath: wt.path,
+                branch: wt.branch,
+              });
+            }
           }
           continue;
         }

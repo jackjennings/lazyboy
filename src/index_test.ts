@@ -390,6 +390,79 @@ Deno.test(
   },
 );
 
+Deno.test("status: shows APPROVED column header", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await makeTicketHome(stateDir, "gh-1", {
+    "jackjennings/lazyboy": { path: "/tmp/gh-1", branch: "gh-1" },
+  });
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertStringIncludes(
+      new TextDecoder().decode(result.stdout),
+      "APPROVED",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test('status: shows "no" for unapproved ticket', async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await makeTicketHome(stateDir, "gh-1", {
+    "jackjennings/lazyboy": { path: "/tmp/gh-1", branch: "gh-1" },
+  });
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertStringIncludes(
+      new TextDecoder().decode(result.stdout),
+      "no",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test('status: shows "yes" for approved ticket', async () => {
+  const stateDir = await Deno.makeTempDir();
+  const ticketDir = join(stateDir, "gh-2");
+  await Deno.mkdir(ticketDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-2
+provider: github
+title: Approved Ticket
+url: https://github.com/jackjennings/lazyboy/issues/2
+phase: plan
+status: waiting
+approved: true
+scope: []
+created: "2026-06-01T00:00:00Z"
+updated: "2026-06-01T00:00:00Z"
+worktrees:
+  jackjennings/lazyboy:
+    path: /tmp/gh-2
+    branch: gh-2
+---
+
+body
+`,
+  );
+  const home = await makeFakeHome(stateDir);
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertStringIncludes(
+      new TextDecoder().decode(result.stdout),
+      "yes",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
 Deno.test("completion zsh: offers shell subcommand", async () => {
   const result = await runIndex(["completion", "zsh"]);
   const stdout = new TextDecoder().decode(result.stdout);

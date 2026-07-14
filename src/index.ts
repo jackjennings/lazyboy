@@ -25,9 +25,12 @@ const name = Deno.args[0];
 const command = commands.find((c) => c.name === name);
 
 if (!command) {
-  console.error(
-    "Usage: lazyboy <tick|approve|status|enable|disable|completion|review|shell>",
-  );
+  const usage = commands
+    .map((c) => c.name)
+    .filter((n) => !n.startsWith("_"))
+    .sort()
+    .join("|");
+  console.error(`Usage: lazyboy <${usage}>`);
   Deno.exit(1);
 }
 

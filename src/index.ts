@@ -53,13 +53,15 @@ if (command === "tick") {
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   console.log(
-    `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} TITLE`,
+    `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
+      "APPROVED".padEnd(9)
+    } TITLE`,
   );
-  console.log("-".repeat(80));
+  console.log("-".repeat(90));
   for (const t of tickets) {
     console.log(
-      `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${
-        t.status.padEnd(17)
+      `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${t.status.padEnd(17)} ${
+        (t.approved ? "yes" : "no").padEnd(9)
       } ${t.title}`,
     );
   }

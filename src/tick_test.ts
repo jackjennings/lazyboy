@@ -264,7 +264,7 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
   const sequence: string[] = [];
   const tempDir = await Deno.makeTempDir();
   try {
-    const installPackagesSpy = spy((sources: string[]) => {
+    const installPackagesSpy = spy(() => {
       sequence.push("install");
       return Promise.resolve([]);
     });

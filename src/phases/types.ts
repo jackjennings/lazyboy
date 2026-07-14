@@ -16,4 +16,10 @@ export const PHASE_SEQUENCE = [
   "implementation",
 ] as const;
 
+export const FULL_PHASE_SEQUENCE = [
+  ...PHASE_SEQUENCE,
+  "diff",
+  "merge",
+] as const;
+
 export type ActivePhase = typeof PHASE_SEQUENCE[number];

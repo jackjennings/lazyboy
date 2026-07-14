@@ -405,3 +405,59 @@ Deno.test("completion zsh: shell completion calls lazyboy _ids", async () => {
   assertStringIncludes(stdout, "shell)");
   assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
 });
+
+Deno.test(
+  "status: rows are sorted by phase order then by ticket ID",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+
+    // gh-10 and gh-5 are both in plan; lexicographically "gh-10" < "gh-5"
+    // (because '1' < '5'), so gh-10 sorts before gh-5 within the same phase.
+    const tickets: Array<{ id: string; phase: string; title: string }> = [
+      { id: "gh-10", phase: "plan", title: "Plan Ticket A" },
+      { id: "gh-5", phase: "plan", title: "Plan Ticket B" },
+      { id: "gh-2", phase: "spec", title: "Spec Ticket" },
+    ];
+
+    for (const { id, phase, title } of tickets) {
+      const ticketDir = join(stateDir, id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        `---
+id: ${id}
+provider: github
+title: ${title}
+url: https://github.com/jackjennings/lazyboy/issues/1
+phase: ${phase}
+status: waiting
+approved: false
+scope: []
+created: "2026-06-01T00:00:00Z"
+updated: "2026-06-01T00:00:00Z"
+worktrees: {}
+---
+
+body
+`,
+      );
+    }
+
+    const home = await makeFakeHome(stateDir);
+    try {
+      const result = await runIndex(["status"], { HOME: home });
+      assertEquals(result.code, 0);
+      const lines = new TextDecoder().decode(result.stdout).trim().split("\n");
+      const dataLines = lines.slice(2);
+      assertEquals(dataLines.length, 3);
+      // spec before plan
+      assertEquals(dataLines[0].startsWith("gh-2"), true);
+      // within plan: gh-10 before gh-5 (lexicographic: "gh-10" < "gh-5")
+      assertEquals(dataLines[1].startsWith("gh-10"), true);
+      assertEquals(dataLines[2].startsWith("gh-5"), true);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);

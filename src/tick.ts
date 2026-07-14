@@ -102,8 +102,7 @@ export async function advancePhase(
   if (ticket.status === "revising") {
     const activePhase = ticket.phase as ActivePhase;
     const dt = zonedNow.toPlainDateTime();
-    const timestamp =
-      dt.toPlainDate().toString() +
+    const timestamp = dt.toPlainDate().toString() +
       "T" +
       String(dt.hour).padStart(2, "0") +
       String(dt.minute).padStart(2, "0") +
@@ -446,20 +445,20 @@ export async function advanceTickets(
     }),
     ...(config.jira
       ? [
-          jiraPickupAction({
-            baseUrl: config.jira.baseUrl,
-            email: Deno.env.get("JIRA_EMAIL") ?? "",
-            apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-            appendLog: appendTicketLog,
-          }),
-          jiraDoneAction({
-            baseUrl: config.jira.baseUrl,
-            email: Deno.env.get("JIRA_EMAIL") ?? "",
-            apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-            writeTicket,
-            appendLog: appendTicketLog,
-          }),
-        ]
+        jiraPickupAction({
+          baseUrl: config.jira.baseUrl,
+          email: Deno.env.get("JIRA_EMAIL") ?? "",
+          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+          appendLog: appendTicketLog,
+        }),
+        jiraDoneAction({
+          baseUrl: config.jira.baseUrl,
+          email: Deno.env.get("JIRA_EMAIL") ?? "",
+          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
+          writeTicket,
+          appendLog: appendTicketLog,
+        }),
+      ]
       : []),
   ];
 
@@ -517,8 +516,7 @@ export async function advanceTickets(
   for (const ticket of candidateTickets) {
     if (!selectedSet.has(ticket.id)) continue;
 
-    const willSpawn =
-      ticket.status === "new" ||
+    const willSpawn = ticket.status === "new" ||
       ticket.status === "revising" ||
       (ticket.status === "waiting" &&
         ticket.phase !== "diff" &&

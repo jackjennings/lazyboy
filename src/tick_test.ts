@@ -395,7 +395,11 @@ Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () =>
     appendLog: appendLogSpy,
   });
   assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", { event: "phase-transition", from: "diff", to: "merge" }],
+    args: ["/state", "gh-1", {
+      event: "phase-transition",
+      from: "diff",
+      to: "merge",
+    }],
   });
 });
 
@@ -416,7 +420,11 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     appendLog: appendLogSpy,
   });
   assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", { event: "phase-transition", from: "intake", to: "enrichment" }],
+    args: ["/state", "gh-1", {
+      event: "phase-transition",
+      from: "intake",
+      to: "enrichment",
+    }],
   });
 });
 
@@ -438,7 +446,11 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     appendLog: appendLogSpy,
   });
   assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", { event: "phase-transition", from: "plan", to: "needs-attention" }],
+    args: ["/state", "gh-1", {
+      event: "phase-transition",
+      from: "plan",
+      to: "needs-attention",
+    }],
   });
 });
 
@@ -494,9 +506,19 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
     status: "revising",
     approved: true,
   });
-  let written = { phase: "", status: "", approved: true, pid: undefined as number | undefined };
+  let written = {
+    phase: "",
+    status: "",
+    approved: true,
+    pid: undefined as number | undefined,
+  };
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
-    written = { phase: t.phase, status: t.status, approved: t.approved, pid: t.pid };
+    written = {
+      phase: t.phase,
+      status: t.status,
+      approved: t.approved,
+      pid: t.pid,
+    };
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
@@ -550,7 +572,10 @@ Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format"
     appendLog: async () => {},
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(/^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(spawnedOutputFile ?? ""), true);
+  assertEquals(
+    /^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(spawnedOutputFile ?? ""),
+    true,
+  );
 });
 
 Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
@@ -602,10 +627,12 @@ Deno.test("advanceTicketsImpl: runMigrations receives the ticket list before tic
     await initGitStateDir(tempDir);
     await writeMinimalTicket(tempDir, "gh-1");
     let capturedIds: string[] = [];
-    const runMigrationsSpy = spy((_stateDir: string, tickets: TicketState[]) => {
-      capturedIds = tickets.map((t) => t.id);
-      return Promise.resolve(tickets);
-    });
+    const runMigrationsSpy = spy(
+      (_stateDir: string, tickets: TicketState[]) => {
+        capturedIds = tickets.map((t) => t.id);
+        return Promise.resolve(tickets);
+      },
+    );
     await advanceTickets(
       {
         github: { repos: [] },

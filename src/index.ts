@@ -7,6 +7,7 @@ import { ids } from "./commands/ids.ts";
 import { completion } from "./commands/completion.ts";
 import { review } from "./commands/review.ts";
 import { shell } from "./commands/shell.ts";
+import { update } from "./commands/update.ts";
 import type { Command } from "./commands/types.ts";
 
 const commands: Command[] = [
@@ -19,6 +20,7 @@ const commands: Command[] = [
   completion,
   review,
   shell,
+  update,
 ];
 
 const name = Deno.args[0];

@@ -37,9 +37,9 @@ Deno.test("assertValidPhaseStatus: does not throw for valid combinations", () =>
   assertValidPhaseStatus("plan", "waiting");
   assertValidPhaseStatus("plan", "needs-attention");
   assertValidPhaseStatus("implementation", "running");
+  assertValidPhaseStatus("implementation", "waiting");
+  assertValidPhaseStatus("implementation", "revising");
   assertValidPhaseStatus("implementation", "needs-attention");
-  assertValidPhaseStatus("diff", "waiting");
-  assertValidPhaseStatus("diff", "needs-attention");
   assertValidPhaseStatus("merge", "waiting");
   assertValidPhaseStatus("merge", "done");
   assertValidPhaseStatus("merge", "needs-attention");
@@ -52,14 +52,7 @@ Deno.test("assertValidPhaseStatus: throws for invalid combinations", () => {
   assertThrows(() => assertValidPhaseStatus("spec", "new"), Error);
   assertThrows(() => assertValidPhaseStatus("plan", "done"), Error);
   assertThrows(() => assertValidPhaseStatus("implementation", "new"), Error);
-  assertThrows(
-    () => assertValidPhaseStatus("implementation", "waiting"),
-    Error,
-  );
   assertThrows(() => assertValidPhaseStatus("implementation", "done"), Error);
-  assertThrows(() => assertValidPhaseStatus("diff", "new"), Error);
-  assertThrows(() => assertValidPhaseStatus("diff", "running"), Error);
-  assertThrows(() => assertValidPhaseStatus("diff", "done"), Error);
   assertThrows(() => assertValidPhaseStatus("merge", "new"), Error);
   assertThrows(() => assertValidPhaseStatus("merge", "running"), Error);
 });

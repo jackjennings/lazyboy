@@ -42,14 +42,13 @@ fetches new GitHub Issues via `src/providers/github.ts`, then calls
 
 **Phase state machine**: tickets carry two fields — `phase: TicketPhase` and
 `status: TicketStatus`. Status transitions are
-`new → running → waiting →
-(approved) → running` cycling through phases in
-`PHASE_SEQUENCE`, with `implementation` writing
-`{ phase: "diff", status: "waiting" }` on completion instead of staying in the
-same phase. `PHASE_SEQUENCE` covers only the five runner phases (`intake`
-through `implementation`); `diff` and `merge` are handled explicitly in
-`advancePhase`. Any phase can transition to `needs-attention` on subprocess
-failure. `{ phase: "merge", status: "done" }` is the terminal state.
+`new → running → waiting → (approved) → running` cycling through phases in
+`PHASE_SEQUENCE`. When an `implementation` agent exits, the ticket stays in
+`implementation/waiting` for review. Once approved, it transitions to
+`merge/waiting`. `PHASE_SEQUENCE` covers only the five runner phases (`intake`
+through `implementation`); `merge` is handled explicitly in `advancePhase`. Any
+phase can transition to `needs-attention` on subprocess failure.
+`{ phase: "merge", status: "done" }` is the terminal state.
 
 **Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as
 a detached Deno subprocess. The subprocess runs

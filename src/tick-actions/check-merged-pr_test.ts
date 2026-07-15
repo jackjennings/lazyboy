@@ -45,7 +45,9 @@ Deno.test("checkMergedPRAction: does not apply when prUrl absent", () => {
 
 Deno.test("checkMergedPRAction: does not apply when not merge/waiting", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ phase: "diff", status: "waiting" })),
+    makeAction().applies(
+      makeTicket({ phase: "implementation", status: "running" }),
+    ),
     false,
   );
 });

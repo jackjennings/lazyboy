@@ -4,7 +4,6 @@ export type TicketPhase =
   | "spec"
   | "plan"
   | "implementation"
-  | "diff"
   | "merge";
 
 export type TicketStatus =
@@ -20,8 +19,7 @@ const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
   enrichment: ["running", "waiting", "revising", "needs-attention"],
   spec: ["running", "waiting", "revising", "needs-attention"],
   plan: ["running", "waiting", "revising", "needs-attention"],
-  implementation: ["running", "needs-attention"],
-  diff: ["waiting", "needs-attention"],
+  implementation: ["running", "waiting", "revising", "needs-attention"],
   merge: ["waiting", "done", "needs-attention"],
 };
 

@@ -70,7 +70,7 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
   assertEquals(written.status, "waiting");
 });
 
-Deno.test("advancePhase: implementation running with dead PID transitions to diff/waiting", async () => {
+Deno.test("advancePhase: implementation running with dead PID transitions to implementation/waiting", async () => {
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
@@ -89,7 +89,7 @@ Deno.test("advancePhase: implementation running with dead PID transitions to dif
     appendLog: async () => {},
   });
   assertSpyCall(writeTicketSpy, 0);
-  assertEquals(written.phase, "diff");
+  assertEquals(written.phase, "implementation");
   assertEquals(written.status, "waiting");
 });
 
@@ -147,9 +147,9 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
   assertSpyCalls(spawnSpy, 0);
 });
 
-Deno.test("advancePhase: diff/waiting + approved advances to merge/waiting", async () => {
+Deno.test("advancePhase: implementation/waiting + approved advances to merge/waiting", async () => {
   const ticket = makeTicket({
-    phase: "diff",
+    phase: "implementation",
     status: "waiting",
     approved: true,
   });
@@ -338,7 +338,7 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
   });
 });
 
-Deno.test("advancePhase: dead PID on implementation logs implementation → diff", async () => {
+Deno.test("advancePhase: dead PID on implementation logs status-transition to waiting", async () => {
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
@@ -356,9 +356,10 @@ Deno.test("advancePhase: dead PID on implementation logs implementation → diff
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
-      event: "phase-transition",
-      from: "implementation",
-      to: "diff",
+      event: "status-transition",
+      phase: "implementation",
+      from: "running",
+      to: "waiting",
     }],
   });
 });
@@ -378,9 +379,9 @@ Deno.test("advancePhase: live PID does not log", async () => {
   assertSpyCalls(appendLogSpy, 0);
 });
 
-Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () => {
+Deno.test("advancePhase: implementation/waiting approved logs implementation → merge", async () => {
   const ticket = makeTicket({
-    phase: "diff",
+    phase: "implementation",
     status: "waiting",
     approved: true,
   });
@@ -397,7 +398,7 @@ Deno.test("advancePhase: diff/waiting approved logs diff → merge", async () =>
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
       event: "phase-transition",
-      from: "diff",
+      from: "implementation",
       to: "merge",
     }],
   });
@@ -456,7 +457,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
 
 Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
   const ticket = makeTicket({
-    phase: "diff",
+    phase: "implementation",
     status: "waiting",
     approved: true,
   });

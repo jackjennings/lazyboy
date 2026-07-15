@@ -118,7 +118,7 @@ Deno.test("readTicket: migrates all legacy phase values", async () => {
     ["running-spec", "spec", "running"],
     ["waiting-plan", "plan", "waiting"],
     ["running-implementation", "implementation", "running"],
-    ["waiting-diff", "diff", "waiting"],
+    ["waiting-diff", "implementation", "waiting"],
     ["waiting-merge", "merge", "waiting"],
     ["needs-attention", "intake", "needs-attention"],
     ["done", "merge", "done"],

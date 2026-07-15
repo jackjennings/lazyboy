@@ -142,6 +142,27 @@ that can transition a ticket to `needs-attention` must also exclude
 return type is `{ code: number; stdout: string; stderr: string }`. Do not
 introduce a second git-shelling helper — use or inject `runGit`.
 
+## Conflict resolution
+
+When a rebase conflict is detected, `checkConflictsAction` writes a
+`conflict-context-<branch>.md` sentinel file to the ticket directory and spawns
+a conflict-resolution agent. The agent uses `--model claude-opus-4-7` and
+receives only `@meta.md` and `@conflict-context-<branch>.md` as context (not the
+full `buildContextFiles` set). The worktree is left in the mid-rebase state for
+the agent to resolve.
+
+`resolveConflictsAction` detects completed conflict-resolution runs by checking
+for `conflict-context-*.md` in the ticket directory when a running ticket's PID
+dies. It must be registered **before** `checkConflictsAction` in the
+`tickActions` array so a just-finished resolution run is handled before the
+conflict check can re-fire.
+
+To spawn an agent with a non-default model or an explicit context-file list, set
+`model` and/or `contextFiles` on `ExecutorOptions`. `run-phase.ts` accepts
+`--model` (default `claude-sonnet-4-6`) and `--context-files` (comma-separated
+`@file` paths; omit to use `buildContextFiles`). Do not hardcode the model
+elsewhere.
+
 ## Migrations
 
 Migration files live at `migrations/<UNIX_TIMESTAMP_SECONDS>-<kebab-slug>.ts`

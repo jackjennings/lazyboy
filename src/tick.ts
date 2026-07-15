@@ -20,6 +20,7 @@ import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
+import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import {
   installPackages,
   isPackageInstalled,
@@ -55,7 +56,8 @@ export interface TickDeps {
     prompt: string;
     scope: string[];
     worktrees: Record<string, WorktreeInfo>;
-    outputFile: string;
+    outputFile?: string;
+    model?: string;
   }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
@@ -418,12 +420,58 @@ export async function advanceTickets(
       writeTicket,
       appendLog: appendTicketLog,
     }),
+    resolveConflictsAction({
+      runGit,
+      isPidAlive: defaultIsPidAlive,
+      writeTicket,
+      appendLog: appendTicketLog,
+      stat: async (path) => {
+        try {
+          const info = await Deno.stat(path);
+          return { isFile: info.isFile };
+        } catch {
+          return null;
+        }
+      },
+      readDir: (path) => Deno.readDir(path),
+      remove: (path) => Deno.remove(path),
+    }),
     checkConflictsAction({
       runGit,
       isPidAlive: defaultIsPidAlive,
       worktreeExists: existsSync,
       writeTicket,
       appendLog: appendTicketLog,
+      writeContextFile: async (ticketDir, branch, content) => {
+        await Deno.writeTextFile(
+          join(ticketDir, `conflict-context-${branch}.md`),
+          content,
+        );
+      },
+      spawn: (opts) => {
+        const safeBranch = opts.branch.replaceAll("/", "-");
+        const contextFilePaths = [
+          `@${opts.ticketDir}/meta.md`,
+          `@${opts.ticketDir}/conflict-context-${safeBranch}.md`,
+        ];
+        const prompt = `You are resolving git rebase conflicts. ` +
+          `Examine the conflicted files listed in the context, resolve all merge conflicts, ` +
+          `then run \`git rebase --continue\` until the rebase completes. ` +
+          `After a successful rebase, run \`git push --force-with-lease origin ${opts.branch}\`.`;
+        return Promise.resolve(
+          spawnPhase({
+            ticketDir: opts.ticketDir,
+            prompt,
+            scopeDirs: [opts.worktreePath],
+            outputFile: "conflict-resolution.md",
+            githubToken: token,
+            anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+            worktrees: {},
+            model: "claude-opus-4-7",
+            contextFiles: contextFilePaths,
+          }),
+        );
+      },
     }),
     ...(config.jira
       ? [
@@ -482,6 +530,7 @@ export async function advanceTickets(
           githubToken: token,
           anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
           worktrees: opts.worktrees,
+          model: opts.model,
         }),
       ),
     isPidAlive: defaultIsPidAlive,

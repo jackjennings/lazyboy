@@ -8,6 +8,8 @@ export interface ExecutorOptions {
   githubToken: string;
   anthropicApiKey: string;
   worktrees: Record<string, WorktreeInfo>;
+  model?: string;
+  contextFiles?: string[];
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -22,7 +24,7 @@ export function isPidAlive(pid: number): boolean {
 export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   const runPhaseScript = new URL("./run-phase.ts", import.meta.url).pathname;
   const phase = opts.outputFile.replace(/\.md$/, "");
-  return [
+  const args = [
     "run",
     "--allow-all",
     runPhaseScript,
@@ -39,6 +41,13 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
     "--worktrees",
     JSON.stringify(opts.worktrees),
   ];
+  if (opts.model) {
+    args.push("--model", opts.model);
+  }
+  if (opts.contextFiles) {
+    args.push("--context-files", opts.contextFiles.join(","));
+  }
+  return args;
 }
 
 export function spawnPhase(opts: ExecutorOptions): number {

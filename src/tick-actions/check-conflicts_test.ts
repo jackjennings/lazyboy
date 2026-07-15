@@ -31,6 +31,8 @@ function makeAction(
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    spawn: () => Promise.resolve(0),
+    writeContextFile: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -201,28 +203,40 @@ Deno.test("checkConflictsAction: push failure logs error but returns null (trans
 // ── conflict detected ─────────────────────────────────────────────────────────
 
 Deno.test(
-  "checkConflictsAction: rebase conflict → needs-attention, aborts, logs conflict-detected",
+  "checkConflictsAction: rebase conflict → spawns agent, status running, logs conflict-resolution-started",
   async () => {
     const logged: object[] = [];
     const written: TicketState[] = [];
     const calls: string[][] = [];
+    const spawnCalls: object[] = [];
+    const contextFiles: { branch: string; content: string }[] = [];
+
     const result = await makeAction({
       runGit: (args) => {
         calls.push(args);
-        if (args[0] === "rebase" && args[1] !== "--abort") {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
           return Promise.resolve({
             code: 1,
             stdout: "",
-            stderr:
-              "CONFLICT (content): Merge conflict in foo.ts\nCould not apply abc123...",
+            stderr: "CONFLICT (content): Merge conflict in foo.ts",
           });
         }
         if (args[0] === "diff") {
-          return Promise.resolve(
-            { code: 0, stdout: "foo.ts\nbar.ts", stderr: "" },
-          );
+          return Promise.resolve({
+            code: 0,
+            stdout: "foo.ts\nbar.ts",
+            stderr: "",
+          });
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      spawn: (opts) => {
+        spawnCalls.push(opts);
+        return Promise.resolve(1234);
+      },
+      writeContextFile: (_ticketDir, branch, content) => {
+        contextFiles.push({ branch, content });
+        return Promise.resolve();
       },
       writeTicket: (_dir, t) => {
         written.push(t);
@@ -234,24 +248,25 @@ Deno.test(
       },
     }).run(makeTicket(), "/state");
 
-    assertEquals(result?.status, "needs-attention");
-    assertEquals(written.length, 1);
-    assertEquals(written[0].status, "needs-attention");
     assertEquals(
       calls.some((a) => a[0] === "rebase" && a[1] === "--abort"),
-      true,
+      false,
     );
+    assertEquals(spawnCalls.length, 1);
+    assertEquals(contextFiles.length, 1);
+    assertEquals(contextFiles[0].branch, "gh-7");
+    assertEquals(result?.status, "running");
+    assertEquals(result?.pid, 1234);
 
-    const conflictEntry = (logged as Record<string, unknown>[]).find(
-      (e) => e.event === "conflict-detected",
+    const startEntry = (logged as Record<string, unknown>[]).find(
+      (e) => e.event === "conflict-resolution-started",
     );
-    assertEquals(conflictEntry !== undefined, true);
-    assertEquals(conflictEntry!.context, "checkConflicts");
-    assertEquals(conflictEntry!.worktreePath, "/wt/myorg/myrepo");
-    assertEquals(conflictEntry!.branch, "gh-7");
-    assertEquals(conflictEntry!.conflictedFiles, ["foo.ts", "bar.ts"]);
+    assertEquals(startEntry !== undefined, true);
+    assertEquals(startEntry!.worktreePath, "/wt/myorg/myrepo");
+    assertEquals(startEntry!.branch, "gh-7");
+    assertEquals(startEntry!.conflictedFiles, ["foo.ts", "bar.ts"]);
     assertEquals(
-      (conflictEntry!.rebaseStderr as string).includes("CONFLICT"),
+      (startEntry!.rebaseStderr as string).includes("CONFLICT"),
       true,
     );
   },
@@ -295,33 +310,29 @@ Deno.test(
 );
 
 Deno.test(
-  "checkConflictsAction: multiple worktrees — all conflicts collected before returning needs-attention",
+  "checkConflictsAction: multiple worktrees — loop stops after first conflict spawns agent",
   async () => {
-    const conflictPaths: string[] = [];
-    const result = await makeAction({
+    const spawnCalls: object[] = [];
+    const gitCalls: { args: string[]; cwd: string }[] = [];
+
+    await makeAction({
       runGit: (args, cwd) => {
-        if (args[0] === "rebase" && args[1] !== "--abort") {
-          return Promise.resolve(
-            { code: 1, stdout: "", stderr: "CONFLICT" },
-          );
+        gitCalls.push({ args, cwd });
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({ code: 1, stdout: "", stderr: "CONFLICT" });
         }
         if (args[0] === "diff") {
-          return Promise.resolve({
-            code: 0,
-            stdout: cwd === "/wt/a/repo" ? "a.ts" : "b.ts",
-            stderr: "",
-          });
+          return Promise.resolve({ code: 0, stdout: "a.ts", stderr: "" });
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      appendLog: (_dir, _id, entry) => {
-        const e = entry as Record<string, unknown>;
-        if (e.event === "conflict-detected") {
-          conflictPaths.push(e.worktreePath as string);
-        }
-        return Promise.resolve();
+      spawn: (opts) => {
+        spawnCalls.push(opts);
+        return Promise.resolve(999);
       },
+      writeContextFile: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
     }).run(
       makeTicket({
         worktrees: {
@@ -331,9 +342,11 @@ Deno.test(
       }),
       "/state",
     );
-    assertEquals(result?.status, "needs-attention");
-    assertEquals(conflictPaths.length, 2);
-    assertEquals(conflictPaths.includes("/wt/a/repo"), true);
-    assertEquals(conflictPaths.includes("/wt/b/repo"), true);
+
+    assertEquals(spawnCalls.length, 1);
+    assertEquals(
+      gitCalls.filter((c) => c.cwd === "/wt/b/repo").length,
+      0,
+    );
   },
 );

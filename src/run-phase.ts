@@ -18,18 +18,13 @@ export async function setupPiDirectories(home: string): Promise<void> {
 export async function buildContextFiles(ticketDir: string): Promise<string[]> {
   const contextFiles = [`@${ticketDir}/meta.md`];
   for (const phase of ["intake", "enrichment", "spec", "plan"]) {
-    try {
-      await Deno.stat(`${ticketDir}/${phase}.md`);
-      contextFiles.push(`@${ticketDir}/${phase}.md`);
-    } catch {
-      /* not yet written */
-    }
     const phaseFiles: string[] = [];
+    const prefixPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}[.-]`);
     try {
       for await (const entry of Deno.readDir(ticketDir)) {
         if (
           entry.isFile &&
-          entry.name.startsWith(`${phase}-`) &&
+          prefixPattern.test(entry.name) &&
           entry.name.endsWith(".md")
         ) {
           phaseFiles.push(entry.name);

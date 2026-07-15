@@ -47,7 +47,8 @@ Deno.test("createMigrationRunner: one unapplied migration runs against all ticke
   const writtenTickets: TicketState[] = [];
   let writtenApplied: string[] = [];
   const migration: Migration = {
-    run: (ticket) => Promise.resolve({ ...ticket, title: "migrated" }),
+    run: (ticket: TicketState, _stateDir: string) =>
+      Promise.resolve({ ...ticket, title: "migrated" }),
   };
   const runner = createMigrationRunner({
     listMigrationFiles: () => Promise.resolve(["1000-add-title.ts"]),
@@ -76,7 +77,7 @@ Deno.test("createMigrationRunner: one unapplied migration runs against all ticke
 Deno.test("createMigrationRunner: already applied migration is not re-applied", async () => {
   let runCount = 0;
   const migration: Migration = {
-    run: (ticket) => {
+    run: (ticket: TicketState, _stateDir: string) => {
       runCount++;
       return Promise.resolve(ticket);
     },
@@ -98,7 +99,7 @@ Deno.test("createMigrationRunner: two migrations run in ascending ID order", asy
     listMigrationFiles: () => Promise.resolve(["1000-a.ts", "2000-b.ts"]),
     loadMigration: (id) =>
       Promise.resolve({
-        run: (ticket: TicketState) => {
+        run: (ticket: TicketState, _stateDir: string) => {
           sequence.push(id);
           return Promise.resolve(ticket);
         },
@@ -115,7 +116,8 @@ Deno.test("createMigrationRunner: failing migration re-throws with IDs, no write
   const writtenTickets: TicketState[] = [];
   const writtenApplied: string[][] = [];
   const migration: Migration = {
-    run: () => Promise.reject(new Error("bad data")),
+    run: (_ticket: TicketState, _stateDir: string) =>
+      Promise.reject(new Error("bad data")),
   };
   const runner = createMigrationRunner({
     listMigrationFiles: () => Promise.resolve(["1000-fail.ts"]),
@@ -142,7 +144,7 @@ Deno.test("createMigrationRunner: failing migration re-throws with IDs, no write
 Deno.test("createMigrationRunner: absent .migrations file causes all migrations to run", async () => {
   let runCount = 0;
   const migration: Migration = {
-    run: (ticket) => {
+    run: (ticket: TicketState, _stateDir: string) => {
       runCount++;
       return Promise.resolve(ticket);
     },
@@ -157,4 +159,23 @@ Deno.test("createMigrationRunner: absent .migrations file causes all migrations 
   });
   await runner("/state", [makeTicket("gh-1")]);
   assertEquals(runCount, 2);
+});
+
+Deno.test("createMigrationRunner: stateDir is passed to migration.run for each ticket", async () => {
+  const capturedStateDirs: string[] = [];
+  const migration: Migration = {
+    run: (ticket: TicketState, stateDir: string) => {
+      capturedStateDirs.push(stateDir);
+      return Promise.resolve(ticket);
+    },
+  };
+  const runner = createMigrationRunner({
+    listMigrationFiles: () => Promise.resolve(["1000-a.ts"]),
+    loadMigration: () => Promise.resolve(migration),
+    readApplied: () => Promise.resolve([]),
+    writeApplied: () => Promise.resolve(),
+    writeTicket: () => Promise.resolve(),
+  });
+  await runner("/my-state", [makeTicket("gh-1"), makeTicket("gh-2")]);
+  assertEquals(capturedStateDirs, ["/my-state", "/my-state"]);
 });

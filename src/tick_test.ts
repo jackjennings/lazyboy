@@ -495,9 +495,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "plan");
-  assertEquals(typeof spawnedOutputFile, "string");
-  assertEquals(spawnedOutputFile?.startsWith("plan-"), true);
-  assertEquals(spawnedOutputFile?.endsWith(".md"), true);
+  assertEquals(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""), true);
 });
 
 Deno.test("advancePhase: revising status transitions to running and clears approved", async () => {
@@ -557,7 +555,7 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
   });
 });
 
-Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format", async () => {
+Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format", async () => {
   const ticket = makeTicket({ phase: "plan", status: "revising" });
   let spawnedOutputFile: string | undefined;
   const spawnSpy = spy((opts: SpawnOpts) => {
@@ -573,7 +571,50 @@ Deno.test("advancePhase: revising outputFile uses YYYY-MM-DDTHHMMSS date format"
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(
-    /^plan-\d{4}-\d{2}-\d{2}T\d{6}\.md$/.test(spawnedOutputFile ?? ""),
+    /^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""),
+    true,
+  );
+});
+
+Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake output filename", async () => {
+  const ticket = makeTicket({ phase: "intake", status: "new" });
+  let spawnedOutputFile: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedOutputFile = opts.outputFile;
+    return Promise.resolve(123);
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isPidAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile ?? ""), true);
+});
+
+Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next-phase output filename", async () => {
+  const ticket = makeTicket({
+    phase: "intake",
+    status: "waiting",
+    approved: true,
+  });
+  let spawnedOutputFile: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedOutputFile = opts.outputFile;
+    return Promise.resolve(1);
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isPidAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(
+    /^\d{8}T\d{6}-enrichment\.md$/.test(spawnedOutputFile ?? ""),
     true,
   );
 });

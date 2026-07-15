@@ -14,7 +14,8 @@ import { JiraProvider } from "./providers/jira.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
-import { loadPrompt, nextPhase, outputFileForPhase } from "./phases/runners.ts";
+import { loadPrompt, nextPhase } from "./phases/runners.ts";
+import { compactTimestamp } from "./timestamp.ts";
 import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
@@ -54,7 +55,7 @@ export interface TickDeps {
     prompt: string;
     scope: string[];
     worktrees: Record<string, WorktreeInfo>;
-    outputFile?: string;
+    outputFile: string;
   }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
@@ -101,13 +102,7 @@ export async function advancePhase(
 
   if (ticket.status === "revising") {
     const activePhase = ticket.phase as ActivePhase;
-    const dt = zonedNow.toPlainDateTime();
-    const timestamp = dt.toPlainDate().toString() +
-      "T" +
-      String(dt.hour).padStart(2, "0") +
-      String(dt.minute).padStart(2, "0") +
-      String(dt.second).padStart(2, "0");
-    const outputFile = `${activePhase}-${timestamp}.md`;
+    const outputFile = `${compactTimestamp(zonedNow)}-${activePhase}.md`;
     const prompt = await loadPrompt(activePhase);
     const pid = await deps.spawn({
       phase: activePhase,
@@ -141,6 +136,7 @@ export async function advancePhase(
       prompt,
       scope: [],
       worktrees: {},
+      outputFile: `${compactTimestamp(zonedNow)}-intake.md`,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -246,6 +242,7 @@ export async function advancePhase(
       prompt,
       scope: ticket.scope,
       worktrees: next === "implementation" ? ticket.worktrees : {},
+      outputFile: `${compactTimestamp(zonedNow)}-${next}.md`,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -496,7 +493,7 @@ export async function advanceTickets(
           ticketDir: opts.ticketDir,
           prompt: opts.prompt,
           scopeDirs: opts.scope.map(expandHome),
-          outputFile: opts.outputFile ?? outputFileForPhase(opts.phase),
+          outputFile: opts.outputFile,
           githubToken: token,
           anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
           worktrees: opts.worktrees,

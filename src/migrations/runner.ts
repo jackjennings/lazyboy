@@ -29,7 +29,7 @@ export function createMigrationRunner(deps: MigrationRunnerDeps): MigrationFn {
       const next: TicketState[] = [];
       for (const ticket of current) {
         try {
-          next.push(await migration.run(ticket));
+          next.push(await migration.run(ticket, stateDir));
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           throw new Error(

@@ -182,14 +182,20 @@ Deno.test("review: findLatestPhaseOutput returns null when no output files exist
   }
 });
 
-Deno.test("review: findLatestPhaseOutput prefers revision files over canonical file", async () => {
+Deno.test("review: findLatestPhaseOutput returns latest prefixed revision file", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
-    await Deno.writeTextFile(join(tempDir, "plan.md"), "original");
-    await Deno.writeTextFile(join(tempDir, "plan-20260629T154506.md"), "rev1");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-plan.md"),
+      "rev1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T225507-plan.md"),
+      "rev2",
+    );
     const result = await findLatestPhaseOutput(tempDir);
     assertEquals(result?.phaseName, "plan");
-    assertEquals(result?.filename, "plan-20260629T154506.md");
+    assertEquals(result?.filename, "20260629T225507-plan.md");
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -198,8 +204,14 @@ Deno.test("review: findLatestPhaseOutput prefers revision files over canonical f
 Deno.test("review: findLatestPhaseOutput returns most advanced phase with output", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
-    await Deno.writeTextFile(join(tempDir, "intake.md"), "intake");
-    await Deno.writeTextFile(join(tempDir, "spec.md"), "spec");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-intake.md"),
+      "intake",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-spec.md"),
+      "spec",
+    );
     const result = await findLatestPhaseOutput(tempDir);
     assertEquals(result?.phaseName, "spec");
   } finally {
@@ -211,7 +223,7 @@ Deno.test("review: findLatestPhaseOutput excludes feedback files from revision g
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
-      join(tempDir, "plan-feedback-2026-06-29T154506.md"),
+      join(tempDir, "20260629T154506-plan-feedback.md"),
       "fb",
     );
     const result = await findLatestPhaseOutput(tempDir);

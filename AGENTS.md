@@ -160,3 +160,10 @@ The `Migration.run` method receives two arguments: the `TicketState` being
 migrated and the `stateDir` string (the path to the state git repository). Use
 `stateDir` for any filesystem operations on ticket directories or git log
 queries inside the migration.
+
+## `codebase.roots` semantics
+
+`codebase.roots` entries must be base code directories (e.g. `~/code`), not
+org-scoped directories (e.g. `~/code/myorg`). `findLocalRepo` searches exactly
+two levels deep: `root/<org>/<repo>`. Config examples and test fixtures must use
+org-less paths.

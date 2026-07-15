@@ -39,6 +39,13 @@ Your response must contain:
 
 List each file created or modified with a one-line description.
 
+## Summary of Changes
+
+A human-readable description of what was implemented and why, written for a code
+reviewer who has not read the diff. Describe the overall change at the feature
+level: what problem the implementation solves, what approach was taken, and any
+notable decisions made. Do not reproduce raw `git diff` output here.
+
 ## Tests
 
 Confirm all tests pass and show the test run output.

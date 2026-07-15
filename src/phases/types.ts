@@ -10,7 +10,6 @@ export const PHASE_SEQUENCE = [
 
 export const FULL_PHASE_SEQUENCE = [
   ...PHASE_SEQUENCE,
-  "diff",
   "merge",
 ] as const;
 

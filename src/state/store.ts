@@ -20,7 +20,7 @@ function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
     "running-plan": ["plan", "running"],
     "waiting-plan": ["plan", "waiting"],
     "running-implementation": ["implementation", "running"],
-    "waiting-diff": ["diff", "waiting"],
+    "waiting-diff": ["implementation", "waiting"],
     "waiting-merge": ["merge", "waiting"],
     "needs-attention": ["intake", "needs-attention"],
     "done": ["merge", "done"],

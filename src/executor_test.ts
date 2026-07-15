@@ -22,12 +22,6 @@ Deno.test("buildPhaseArgs: derives --phase from outputFile stem", () => {
   assertEquals(args[idx + 1], "intake");
 });
 
-Deno.test("buildPhaseArgs: derives --phase diff from diff.md", () => {
-  const args = buildPhaseArgs(makeOpts({ outputFile: "diff.md" }));
-  const idx = args.indexOf("--phase");
-  assertEquals(args[idx + 1], "diff");
-});
-
 Deno.test("buildPhaseArgs: includes --ticket-dir", () => {
   const args = buildPhaseArgs(makeOpts({ ticketDir: "/state/gh-42" }));
   const idx = args.indexOf("--ticket-dir");

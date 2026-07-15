@@ -157,39 +157,24 @@ export async function advancePhase(
 
   if (ticket.status === "running") {
     if (ticket.pid !== undefined && !deps.isPidAlive(ticket.pid)) {
-      if (ticket.phase === "implementation") {
-        await deps.writeTicket(stateDir, {
-          ...ticket,
-          phase: "diff",
-          status: "waiting",
-          pid: undefined,
-          updated: now,
-        });
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "phase-transition",
-          from: ticket.phase,
-          to: "diff",
-        });
-      } else {
-        await deps.writeTicket(stateDir, {
-          ...ticket,
-          status: "waiting",
-          pid: undefined,
-          updated: now,
-        });
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "status-transition",
-          phase: ticket.phase,
-          from: "running",
-          to: "waiting",
-        });
-      }
+      await deps.writeTicket(stateDir, {
+        ...ticket,
+        status: "waiting",
+        pid: undefined,
+        updated: now,
+      });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "status-transition",
+        phase: ticket.phase,
+        from: "running",
+        to: "waiting",
+      });
     }
     return;
   }
 
   if (
-    ticket.phase === "diff" &&
+    ticket.phase === "implementation" &&
     ticket.status === "waiting" &&
     ticket.approved
   ) {
@@ -515,9 +500,7 @@ export async function advanceTickets(
 
     const willSpawn = ticket.status === "new" ||
       ticket.status === "revising" ||
-      (ticket.status === "waiting" &&
-        ticket.phase !== "diff" &&
-        ticket.approved);
+      (ticket.status === "waiting" && ticket.approved);
     if (willSpawn && running >= maxRunning) continue;
     if (willSpawn) running++;
 

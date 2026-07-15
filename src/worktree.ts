@@ -25,14 +25,22 @@ export async function findLocalRepo(
 ): Promise<string | null> {
   for (const root of roots) {
     try {
-      for await (const entry of Deno.readDir(root)) {
-        if (!entry.isDirectory) continue;
-        const candidatePath = join(root, entry.name);
-        const { code, stdout } = await runGit(
-          ["remote", "get-url", "origin"],
-          candidatePath,
-        );
-        if (code === 0 && stdout.includes(slug)) return candidatePath;
+      for await (const orgEntry of Deno.readDir(root)) {
+        if (!orgEntry.isDirectory) continue;
+        const orgPath = join(root, orgEntry.name);
+        try {
+          for await (const repoEntry of Deno.readDir(orgPath)) {
+            if (!repoEntry.isDirectory) continue;
+            const candidatePath = join(orgPath, repoEntry.name);
+            const { code, stdout } = await runGit(
+              ["remote", "get-url", "origin"],
+              candidatePath,
+            );
+            if (code === 0 && stdout.includes(slug)) return candidatePath;
+          }
+        } catch {
+          // org-level directory is not readable — skip
+        }
       }
     } catch {
       // root doesn't exist or isn't readable — skip

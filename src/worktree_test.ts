@@ -36,8 +36,9 @@ Deno.test("extractGitHubSlug: throws on non-GitHub URL", () => {
 
 Deno.test("findLocalRepo: finds repo by matching origin remote", async () => {
   const root = await Deno.makeTempDir();
-  const repoDir = join(root, "lazyboy");
-  await Deno.mkdir(repoDir);
+  const orgDir = join(root, "jackjennings");
+  const repoDir = join(orgDir, "lazyboy");
+  await Deno.mkdir(repoDir, { recursive: true });
   await new Deno.Command("git", { args: ["init"], cwd: repoDir }).output();
   await new Deno.Command("git", {
     args: [
@@ -52,6 +53,14 @@ Deno.test("findLocalRepo: finds repo by matching origin remote", async () => {
   const result = await findLocalRepo([root], "jackjennings/lazyboy");
   assertEquals(result, repoDir);
 
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("findLocalRepo: skips non-git org-level directories", async () => {
+  const root = await Deno.makeTempDir();
+  await Deno.mkdir(join(root, "someorg"));
+  const result = await findLocalRepo([root], "jackjennings/lazyboy");
+  assertEquals(result, null);
   await Deno.remove(root, { recursive: true });
 });
 

@@ -43,11 +43,11 @@ dir = "~/code/jackjennings/projects"
 concurrency = 2
 
 [codebase]
-roots = ["~/code/myorg", "~/code/anotherg"]
+roots = ["~/code", "~/code2"]
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.codebase.roots, ["~/code/myorg", "~/code/anotherg"]);
+  assertEquals(cfg.codebase.roots, ["~/code", "~/code2"]);
   await Deno.remove(dir, { recursive: true });
 });
 

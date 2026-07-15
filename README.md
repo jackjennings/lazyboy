@@ -90,7 +90,7 @@ concurrency = 2
 enabled = ["agent-browser"]
 
 [codebase]
-roots = ["~/code/myorg"]
+roots = ["~/code"]
 ```
 
 `codebase.roots` is a list of directories the intake phase can look through when

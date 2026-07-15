@@ -29,7 +29,8 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
-import { PHASE_OUTPUT_FILE, PHASE_SEQUENCE } from "./phases/types.ts";
+import { PHASE_SEQUENCE } from "./phases/types.ts";
+import { compactTimestamp } from "./timestamp.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -52,34 +53,20 @@ export async function findLatestPhaseOutput(
   ticketDir: string,
 ): Promise<{ filename: string; phaseName: string } | null> {
   for (const phase of [...PHASE_SEQUENCE].reverse()) {
-    const revisionFiles: string[] = [];
+    const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\.md$`);
+    const matches: string[] = [];
     try {
       for await (const entry of Deno.readDir(ticketDir)) {
-        if (
-          entry.isFile &&
-          entry.name.startsWith(`${phase}-`) &&
-          entry.name.endsWith(".md") &&
-          !entry.name.includes("-feedback-")
-        ) {
-          revisionFiles.push(entry.name);
+        if (entry.isFile && outputPattern.test(entry.name)) {
+          matches.push(entry.name);
         }
       }
     } catch {
       /* dir missing */
     }
-    if (revisionFiles.length > 0) {
-      revisionFiles.sort();
-      return {
-        filename: revisionFiles[revisionFiles.length - 1],
-        phaseName: phase,
-      };
-    }
-    const canonicalFile = PHASE_OUTPUT_FILE[phase];
-    try {
-      await Deno.stat(join(ticketDir, canonicalFile));
-      return { filename: canonicalFile, phaseName: phase };
-    } catch {
-      /* not found */
+    if (matches.length > 0) {
+      matches.sort();
+      return { filename: matches[matches.length - 1], phaseName: phase };
     }
   }
   return null;
@@ -129,15 +116,8 @@ export async function applyApproval(
   await commitTicket(stateDir, id, `approve: ${id}`);
 }
 
-function formatTimestamp(now: Temporal.ZonedDateTime): string {
-  const dt = now.toPlainDateTime();
-  return (
-    dt.toPlainDate().toString() +
-    "T" +
-    String(dt.hour).padStart(2, "0") +
-    String(dt.minute).padStart(2, "0") +
-    String(dt.second).padStart(2, "0")
-  );
+export function formatTimestamp(now: Temporal.ZonedDateTime): string {
+  return compactTimestamp(now);
 }
 
 class ContentPane implements Component {
@@ -264,7 +244,7 @@ export async function review(id: string): Promise<void> {
       Deno.exit(0);
     }
     const timestamp = formatTimestamp(now);
-    const feedbackFile = `${found!.phaseName}-feedback-${timestamp}.md`;
+    const feedbackFile = `${timestamp}-${found!.phaseName}-feedback.md`;
     await writePhaseOutput(stateDir, id, feedbackFile, text);
     const updated = await readTicket(stateDir, id);
     await writeTicket(stateDir, {

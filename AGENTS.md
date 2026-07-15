@@ -103,6 +103,10 @@ Use the Temporal API (`Temporal.Now`, `Temporal.PlainDate`, `Temporal.Instant`,
 etc.) in preference to `Date`. Avoid `new Date()` or `Date.now()` unless
 interfacing with an API that requires a legacy `Date` object.
 
+For generating compact filename timestamps (`YYYYMMDDTHHMMSS`), use
+`compactTimestamp` from `src/timestamp.ts`. Do not inline the year/month/day
+padding logic at call sites.
+
 ## Code style
 
 Do not add comments or docblocks. The code should be self-explanatory through
@@ -151,3 +155,8 @@ kebab-case format.
 
 Applied migration IDs are recorded globally in `<stateDir>/.migrations`, one ID
 per line. There is no per-ticket migration log and no rollback mechanism.
+
+The `Migration.run` method receives two arguments: the `TicketState` being
+migrated and the `stateDir` string (the path to the state git repository). Use
+`stateDir` for any filesystem operations on ticket directories or git log
+queries inside the migration.

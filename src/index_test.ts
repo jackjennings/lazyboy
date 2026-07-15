@@ -546,3 +546,135 @@ body
     }
   },
 );
+
+async function gitExec(args: string[], cwd: string): Promise<void> {
+  await new Deno.Command("git", {
+    args,
+    cwd,
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+}
+
+async function makeRepoWithRemote(): Promise<
+  { localDir: string; tmpDir: string }
+> {
+  const tmpDir = await Deno.makeTempDir();
+  const upstreamDir = join(tmpDir, "upstream.git");
+  const midDir = join(tmpDir, "mid");
+  const localDir = join(tmpDir, "local");
+
+  await Deno.mkdir(upstreamDir);
+  await gitExec(["init", "--bare"], upstreamDir);
+  await gitExec(["clone", upstreamDir, midDir], tmpDir);
+  await gitExec(["config", "user.email", "test@test.com"], midDir);
+  await gitExec(["config", "user.name", "Test"], midDir);
+  await gitExec(["config", "commit.gpgsign", "false"], midDir);
+  await Deno.writeTextFile(join(midDir, "README.md"), "init");
+  await gitExec(["add", "."], midDir);
+  await gitExec(["commit", "-m", "init"], midDir);
+  await gitExec(["push"], midDir);
+  await gitExec(["clone", upstreamDir, localDir], tmpDir);
+  await gitExec(["config", "user.email", "test@test.com"], localDir);
+  await gitExec(["config", "user.name", "Test"], localDir);
+  await gitExec(["config", "commit.gpgsign", "false"], localDir);
+
+  return { localDir, tmpDir };
+}
+
+Deno.test("update: exits 0 when working tree is clean and pull succeeds", async () => {
+  const { localDir, tmpDir } = await makeRepoWithRemote();
+  try {
+    const { runUpdate } = await import("./commands/update.ts");
+    const code = await runUpdate(localDir);
+    assertEquals(code, 0);
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test(
+  "update: exits 1 when working tree has local modifications",
+  async () => {
+    const { localDir, tmpDir } = await makeRepoWithRemote();
+    try {
+      await Deno.writeTextFile(join(localDir, "dirty.txt"), "change");
+      const { runUpdate } = await import("./commands/update.ts");
+      const code = await runUpdate(localDir);
+      assertEquals(code, 1);
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "update: does not run git pull when working tree is dirty",
+  async () => {
+    const { localDir, tmpDir } = await makeRepoWithRemote();
+    try {
+      await Deno.writeTextFile(join(localDir, "dirty.txt"), "change");
+      const { runUpdate } = await import("./commands/update.ts");
+      await runUpdate(localDir);
+      const result = await new Deno.Command("git", {
+        args: ["log", "--oneline"],
+        cwd: localDir,
+        stdout: "piped",
+        stderr: "piped",
+      }).output();
+      const log = new TextDecoder().decode(result.stdout).trim().split("\n");
+      assertEquals(log.length, 1);
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("update: exits non-zero when pull fails", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    await gitExec(["init"], tmpDir);
+    await gitExec(["config", "user.email", "test@test.com"], tmpDir);
+    await gitExec(["config", "user.name", "Test"], tmpDir);
+    await gitExec(["config", "commit.gpgsign", "false"], tmpDir);
+    await Deno.writeTextFile(join(tmpDir, "README.md"), "init");
+    await gitExec(["add", "."], tmpDir);
+    await gitExec(["commit", "-m", "init"], tmpDir);
+    await gitExec(
+      ["remote", "add", "origin", "file:///nonexistent/repo.git"],
+      tmpDir,
+    );
+    await gitExec(["config", "branch.main.remote", "origin"], tmpDir);
+    await gitExec(
+      ["config", "branch.main.merge", "refs/heads/main"],
+      tmpDir,
+    );
+    const { runUpdate } = await import("./commands/update.ts");
+    const code = await runUpdate(tmpDir);
+    assertEquals(code !== 0, true);
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+Deno.test("update: produces no stdout or stderr output", async () => {
+  const result = await runIndex(["update"]);
+  assertEquals(new TextDecoder().decode(result.stdout), "");
+  assertEquals(new TextDecoder().decode(result.stderr), "");
+});
+
+Deno.test(
+  "tick.sh: calls lazyboy update with || true guard before exec deno",
+  async () => {
+    const tickSh = new URL("../scripts/tick.sh", import.meta.url).pathname;
+    const content = await Deno.readTextFile(tickSh);
+    const lines = content.split("\n");
+    const updateIdx = lines.findIndex(
+      (l) => l.includes("lazyboy") && l.includes("update"),
+    );
+    const execIdx = lines.findIndex((l) => /^\s*exec\s+deno\b/.test(l));
+    assertEquals(updateIdx !== -1, true);
+    assertEquals(lines[updateIdx].trimEnd().endsWith("|| true"), true);
+    assertEquals(updateIdx < execIdx, true);
+  },
+);

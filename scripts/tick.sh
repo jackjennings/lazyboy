@@ -16,4 +16,5 @@ fi
 export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null)}"
 export GITHUB_LOGIN="${GITHUB_LOGIN:-$(gh api user --jq .login 2>/dev/null)}"
 
+"$LAZYBOY_DIR/bin/lazyboy" update || true
 exec deno run --allow-all "$LAZYBOY_DIR/src/index.ts" tick

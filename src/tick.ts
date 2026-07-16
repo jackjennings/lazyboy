@@ -56,7 +56,7 @@ export interface TickDeps {
     prompt: string;
     scope: string[];
     worktrees: Record<string, WorktreeInfo>;
-    outputFile?: string;
+    outputFile: string;
     model?: string;
   }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
@@ -462,11 +462,13 @@ export async function advanceTickets(
           spawnPhase({
             ticketDir: opts.ticketDir,
             prompt,
-            scopeDirs: [opts.worktreePath],
+            scopeDirs: [],
             outputFile: "conflict-resolution.md",
             githubToken: token,
             anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-            worktrees: {},
+            worktrees: {
+              [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
+            },
             model: "claude-opus-4-7",
             contextFiles: contextFilePaths,
           }),

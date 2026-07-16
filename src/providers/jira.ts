@@ -55,7 +55,7 @@ export class JiraProvider implements Provider {
     const items: WorkItem[] = [];
     for (const issue of data.issues) {
       if (!issue.fields) continue;
-      const id = `jira-${issue.key}`;
+      const id = `jira/${issue.key}`;
       if (!knownIds.has(id)) {
         items.push({
           id,

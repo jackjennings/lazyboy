@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
+import { sanitizeBranchForFilename } from "./check-conflicts.ts";
 
 export interface ResolveConflictsDeps {
   runGit: (
@@ -54,7 +55,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
           contextFiles.includes(
             join(
               ticketDir,
-              `conflict-context-${wt.branch.replaceAll("/", "-")}.md`,
+              `conflict-context-${sanitizeBranchForFilename(wt.branch)}.md`,
             ),
           ),
       );

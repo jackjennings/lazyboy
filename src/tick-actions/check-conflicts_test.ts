@@ -1,6 +1,22 @@
-import { assertEquals } from "@std/assert";
-import { checkConflictsAction } from "./check-conflicts.ts";
+import { assertEquals, assertNotEquals } from "@std/assert";
+import {
+  checkConflictsAction,
+  sanitizeBranchForFilename,
+} from "./check-conflicts.ts";
 import type { TicketState } from "../state/types.ts";
+
+// ── sanitizeBranchForFilename ─────────────────────────────────────────────────
+
+Deno.test("sanitizeBranchForFilename: branches differing only by '/' vs '-' do not collide", () => {
+  assertNotEquals(
+    sanitizeBranchForFilename("gh-76"),
+    sanitizeBranchForFilename("gh/76"),
+  );
+});
+
+Deno.test("sanitizeBranchForFilename: leaves simple branch names unchanged", () => {
+  assertEquals(sanitizeBranchForFilename("gh-7"), "gh-7");
+});
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {

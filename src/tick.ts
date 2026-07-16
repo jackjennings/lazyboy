@@ -19,7 +19,10 @@ import { compactTimestamp } from "./timestamp.ts";
 import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
-import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
+import {
+  checkConflictsAction,
+  sanitizeBranchForFilename,
+} from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import {
   installPackages,
@@ -449,7 +452,7 @@ export async function advanceTickets(
         );
       },
       spawn: (opts) => {
-        const safeBranch = opts.branch.replaceAll("/", "-");
+        const safeBranch = sanitizeBranchForFilename(opts.branch);
         const contextFilePaths = [
           `@${opts.ticketDir}/meta.md`,
           `@${opts.ticketDir}/conflict-context-${safeBranch}.md`,

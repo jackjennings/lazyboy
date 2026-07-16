@@ -25,6 +25,10 @@ export interface CheckConflictsDeps {
   ) => Promise<void>;
 }
 
+export function sanitizeBranchForFilename(branch: string): string {
+  return encodeURIComponent(branch);
+}
+
 export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
   return {
     applies(ticket: TicketState): boolean {
@@ -99,7 +103,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
           .filter((f) => f.length > 0);
 
         const ticketDir = join(stateDir, ticket.id);
-        const safeBranch = wt.branch.replaceAll("/", "-");
+        const safeBranch = sanitizeBranchForFilename(wt.branch);
         const contextContent = `# Conflict Context\n\n## Conflicted Files\n\n${
           conflictedFiles.map((f) => `- ${f}`).join("\n")
         }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;

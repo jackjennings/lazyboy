@@ -57,6 +57,13 @@ Deno.test("checkConflictsAction: does not apply to needs-attention", () => {
   );
 });
 
+Deno.test("checkConflictsAction: does not apply to merge phase — work is already done", () => {
+  assertEquals(
+    makeAction().applies(makeTicket({ phase: "merge", status: "waiting" })),
+    false,
+  );
+});
+
 Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
   assertEquals(
     makeAction({

@@ -11,7 +11,8 @@ export class PiCodeAgent implements CodeAgent {
   }): Promise<{ stdout: string; stderr: string; code: number }> {
     const result = await new Deno.Command("pi", {
       args: [
-        "-p",
+        "--mode",
+        "json",
         "--approve",
         "--provider",
         opts.provider,

@@ -57,6 +57,15 @@ export interface TicketState {
   body: string;
 }
 
+export interface PhaseUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  model: string;
+  durationMs: number;
+}
+
 export interface Config {
   github: { repos: string[] };
   state: { dir: string };

@@ -4,6 +4,7 @@ import {
   appendPhaseLog,
   buildContextFiles,
   executePhase,
+  extractUsageAndText,
   getPiEnvironmentVariables,
   setupPiDirectories,
 } from "./run-phase.ts";
@@ -351,48 +352,226 @@ Deno.test("executePhase: passes PI_PROVIDER and PI_MODEL to agent.runPhase", asy
   }
 });
 
-Deno.test("executePhase: writes stdout to output file, logs phase-end with exitCode and stderr, returns exit code", async () => {
-  const ticketDir = await Deno.makeTempDir();
-  const homeDir = await Deno.makeTempDir();
-  try {
-    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+Deno.test(
+  "executePhase: writes extracted text to output file, writes usage sidecar, logs phase-end with exitCode and stderr, returns exit code",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
 
-    const agent: CodeAgent = {
-      runPhase() {
-        return Promise.resolve({
-          stdout: "agent output",
-          stderr: "agent errors",
-          code: 42,
-        });
-      },
-    };
+      const agentEndNdjson = JSON.stringify({
+        type: "agent_end",
+        messages: [
+          {
+            role: "assistant",
+            model: "claude-sonnet-4-6",
+            content: [{ type: "text", text: "agent output" }],
+            usage: {
+              input: 5,
+              output: 3,
+              cacheRead: 10,
+              cacheWrite: 2,
+              totalTokens: 20,
+              cacheWrite1h: 0,
+              reasoning: 0,
+              cost: {},
+            },
+          },
+        ],
+      });
 
-    const exitCode = await executePhase(
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({
+            stdout: agentEndNdjson,
+            stderr: "agent errors",
+            code: 42,
+          });
+        },
+      };
+
+      const exitCode = await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+        },
+        agent,
+      );
+
+      assertEquals(exitCode, 42);
+
+      const written = await Deno.readTextFile(join(ticketDir, "result.md"));
+      assertEquals(written, "agent output");
+
+      const usageRaw = await Deno.readTextFile(
+        join(ticketDir, "result.usage.json"),
+      );
+      const usage = JSON.parse(usageRaw);
+      assertEquals(usage.input, 5);
+      assertEquals(usage.output, 3);
+      assertEquals(usage.cacheRead, 10);
+      assertEquals(usage.cacheWrite, 2);
+      assertEquals(usage.model, "claude-sonnet-4-6");
+
+      const logContent = await Deno.readTextFile(
+        join(ticketDir, "log.ndjson"),
+      );
+      const logLines = logContent.trim().split("\n");
+      const endEntry = JSON.parse(logLines[logLines.length - 1]);
+      assertEquals(endEntry.event, "phase-end");
+      assertEquals(endEntry.exitCode, 42);
+      assertEquals(endEntry.output, "agent errors");
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+// ── extractUsageAndText ──────────────────────────────────────────────────────
+
+const singleTurnNdjson = [
+  JSON.stringify({ type: "session" }),
+  JSON.stringify({
+    type: "agent_end",
+    messages: [
       {
-        ticketDir,
-        outputFile: "result.md",
-        phase: "spec",
-        scopeDirs: [],
-        prompt: "prompt",
-        worktrees: {},
-        homeDir,
+        role: "user",
+        content: [{ type: "text", text: "hi" }],
       },
-      agent,
-    );
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [{ type: "text", text: "Hello!" }],
+        usage: {
+          input: 10,
+          output: 5,
+          cacheRead: 100,
+          cacheWrite: 50,
+          totalTokens: 165,
+          cacheWrite1h: 0,
+          reasoning: 0,
+          cost: {},
+        },
+      },
+    ],
+  }),
+].join("\n");
 
-    assertEquals(exitCode, 42);
+Deno.test(
+  "extractUsageAndText: single-turn returns correct text, usage fields, and durationMs",
+  () => {
+    const result = extractUsageAndText(singleTurnNdjson, 1234);
+    assertEquals(result.text, "Hello!");
+    assertEquals(result.usage?.input, 10);
+    assertEquals(result.usage?.output, 5);
+    assertEquals(result.usage?.cacheRead, 100);
+    assertEquals(result.usage?.cacheWrite, 50);
+    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.durationMs, 1234);
+  },
+);
 
-    const written = await Deno.readTextFile(join(ticketDir, "result.md"));
-    assertEquals(written, "agent output");
+const multiTurnNdjson = [
+  JSON.stringify({ type: "session" }),
+  JSON.stringify({
+    type: "agent_end",
+    messages: [
+      { role: "user", content: [{ type: "text", text: "q" }] },
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [{ type: "text", text: "First." }],
+        usage: {
+          input: 8,
+          output: 3,
+          cacheRead: 40,
+          cacheWrite: 20,
+          totalTokens: 71,
+          cacheWrite1h: 0,
+          reasoning: 0,
+          cost: {},
+        },
+      },
+      { role: "user", content: [{ type: "text", text: "tool result" }] },
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [{ type: "text", text: "Second." }],
+        usage: {
+          input: 2,
+          output: 7,
+          cacheRead: 60,
+          cacheWrite: 30,
+          totalTokens: 99,
+          cacheWrite1h: 0,
+          reasoning: 0,
+          cost: {},
+        },
+      },
+    ],
+  }),
+].join("\n");
 
-    const logContent = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
-    const logLines = logContent.trim().split("\n");
-    const endEntry = JSON.parse(logLines[logLines.length - 1]);
-    assertEquals(endEntry.event, "phase-end");
-    assertEquals(endEntry.exitCode, 42);
-    assertEquals(endEntry.output, "agent errors");
-  } finally {
-    await Deno.remove(ticketDir, { recursive: true });
-    await Deno.remove(homeDir, { recursive: true });
-  }
-});
+Deno.test(
+  "extractUsageAndText: multi-turn sums usage fields and joins text with newline",
+  () => {
+    const result = extractUsageAndText(multiTurnNdjson, 500);
+    assertEquals(result.text, "First.\nSecond.");
+    assertEquals(result.usage?.input, 10);
+    assertEquals(result.usage?.output, 10);
+    assertEquals(result.usage?.cacheRead, 100);
+    assertEquals(result.usage?.cacheWrite, 50);
+    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.durationMs, 500);
+  },
+);
+
+Deno.test(
+  "extractUsageAndText: no agent_end line returns empty text and null usage",
+  () => {
+    const ndjson = [
+      JSON.stringify({ type: "session" }),
+      JSON.stringify({ type: "message_update", delta: "hi" }),
+    ].join("\n");
+    const result = extractUsageAndText(ndjson, 100);
+    assertEquals(result.text, "");
+    assertEquals(result.usage, null);
+  },
+);
+
+Deno.test(
+  "extractUsageAndText: assistant content with only thinking items returns empty text and usage",
+  () => {
+    const ndjson = JSON.stringify({
+      type: "agent_end",
+      messages: [
+        {
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [{ type: "thinking", thinking: "internal" }],
+          usage: {
+            input: 1,
+            output: 2,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 3,
+            cacheWrite1h: 0,
+            reasoning: 0,
+            cost: {},
+          },
+        },
+      ],
+    });
+    const result = extractUsageAndText(ndjson, 50);
+    assertEquals(result.text, "");
+    assertEquals(result.usage?.input, 1);
+    assertEquals(result.usage?.output, 2);
+  },
+);

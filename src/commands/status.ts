@@ -1,7 +1,39 @@
+import { join } from "@std/path";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
+import type { PhaseUsage } from "../state/types.ts";
 import type { Command } from "./types.ts";
+
+export function formatTokens(total: number | null): string {
+  if (total === null) return "—";
+  if (total < 1000) return String(total);
+  return `${(Math.round(total / 100) / 10).toFixed(1)}k`;
+}
+
+export async function readTicketTokens(
+  ticketDir: string,
+): Promise<number | null> {
+  let total = 0;
+  let found = false;
+  try {
+    for await (const entry of Deno.readDir(ticketDir)) {
+      if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
+      try {
+        const raw = await Deno.readTextFile(join(ticketDir, entry.name));
+        const usage = JSON.parse(raw) as PhaseUsage;
+        total += usage.input + usage.output + usage.cacheRead +
+          usage.cacheWrite;
+        found = true;
+      } catch {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return found ? total : null;
+}
 
 export const status: Command = {
   name: "status",
@@ -28,17 +60,22 @@ export const status: Command = {
       if (ai !== bi) return ai - bi;
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
+    const tokenTotals = await Promise.all(
+      tickets.map((t) => readTicketTokens(join(stateDir, t.id))),
+    );
     console.log(
       `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
         "APPROVED".padEnd(9)
-      } TITLE`,
+      } ${"TOKENS".padStart(10)} TITLE`,
     );
-    console.log("-".repeat(90));
-    for (const t of tickets) {
+    console.log("-".repeat(101));
+    for (let i = 0; i < tickets.length; i++) {
+      const t = tickets[i];
+      const tokenStr = formatTokens(tokenTotals[i]);
       console.log(
         `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${t.status.padEnd(17)} ${
           (t.approved ? "yes" : "no").padEnd(9)
-        } ${t.title}`,
+        } ${tokenStr.padStart(10)} ${t.title}`,
       );
     }
   },

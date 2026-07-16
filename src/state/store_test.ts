@@ -241,18 +241,52 @@ Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
 
 Deno.test("listTickets: returns all ticket IDs", async () => {
   const dir = await Deno.makeTempDir();
-  await Deno.mkdir(join(dir, "gh-1"));
-  await Deno.mkdir(join(dir, "gh-2"));
-  await Deno.writeTextFile(
-    join(dir, "gh-1", "meta.md"),
-    "---\nid: gh-1\n---\n",
+  await Deno.mkdir(
+    join(dir, "github", "jackjennings", "lazyboy", "1"),
+    { recursive: true },
+  );
+  await Deno.mkdir(
+    join(dir, "github", "jackjennings", "lazyboy", "2"),
+    { recursive: true },
   );
   await Deno.writeTextFile(
-    join(dir, "gh-2", "meta.md"),
-    "---\nid: gh-2\n---\n",
+    join(dir, "github", "jackjennings", "lazyboy", "1", "meta.md"),
+    "---\nid: github/jackjennings/lazyboy/1\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(dir, "github", "jackjennings", "lazyboy", "2", "meta.md"),
+    "---\nid: github/jackjennings/lazyboy/2\n---\n",
   );
   const ids = await listTickets(dir);
-  assertEquals(ids.sort(), ["gh-1", "gh-2"]);
+  assertEquals(ids.sort(), [
+    "github/jackjennings/lazyboy/1",
+    "github/jackjennings/lazyboy/2",
+  ]);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("listTickets: returns empty array when stateDir does not exist", async () => {
+  const ids = await listTickets("/nonexistent/state/dir");
+  assertEquals(ids, []);
+});
+
+Deno.test("listTickets: skips dot-prefixed directories at every depth", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.mkdir(join(dir, ".migrations"), { recursive: true });
+  await Deno.mkdir(
+    join(dir, "github", "jackjennings", "lazyboy", "1"),
+    { recursive: true },
+  );
+  await Deno.writeTextFile(
+    join(dir, ".migrations", "meta.md"),
+    "---\nid: .migrations\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(dir, "github", "jackjennings", "lazyboy", "1", "meta.md"),
+    "---\nid: github/jackjennings/lazyboy/1\n---\n",
+  );
+  const ids = await listTickets(dir);
+  assertEquals(ids, ["github/jackjennings/lazyboy/1"]);
   await Deno.remove(dir, { recursive: true });
 });
 

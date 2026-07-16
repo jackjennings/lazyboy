@@ -128,14 +128,35 @@ export function readPhaseOutput(
   return Deno.readTextFile(join(stateDir, id, filename));
 }
 
+async function walkStateDir(
+  dir: string,
+  relPath: string,
+  depth: number,
+  ids: string[],
+): Promise<void> {
+  if (depth > 4) return;
+  for await (const entry of Deno.readDir(dir)) {
+    if (!entry.isDirectory || entry.name.startsWith(".")) continue;
+    const entryDir = join(dir, entry.name);
+    const entryRel = relPath ? `${relPath}/${entry.name}` : entry.name;
+    let hasMeta = false;
+    try {
+      await Deno.stat(join(entryDir, "meta.md"));
+      hasMeta = true;
+      // deno-lint-ignore no-empty
+    } catch {}
+    if (hasMeta) {
+      ids.push(entryRel);
+    } else {
+      await walkStateDir(entryDir, entryRel, depth + 1, ids);
+    }
+  }
+}
+
 export async function listTickets(stateDir: string): Promise<string[]> {
   const ids: string[] = [];
   try {
-    for await (const entry of Deno.readDir(stateDir)) {
-      if (entry.isDirectory && !entry.name.startsWith(".")) {
-        ids.push(entry.name);
-      }
-    }
+    await walkStateDir(stateDir, "", 1, ids);
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }

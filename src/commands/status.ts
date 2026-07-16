@@ -35,6 +35,28 @@ export async function readTicketTokens(
   return found ? total : null;
 }
 
+export function formatStatusRow(
+  id: string,
+  phase: string,
+  status: string,
+  approved: boolean,
+  tokenStr: string,
+  title: string,
+): string {
+  return `${id.padEnd(36)} ${phase.padEnd(16)} ${status.padEnd(17)} ${
+    (approved ? "yes" : "no").padEnd(9)
+  } ${tokenStr.padStart(10)} ${title}`;
+}
+
+export function formatStatusHeader(): string {
+  return [
+    `${"ID".padEnd(36)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
+      "APPROVED".padEnd(9)
+    } ${"TOKENS".padStart(10)} TITLE`,
+    "-".repeat(117),
+  ].join("\n");
+}
+
 export const status: Command = {
   name: "status",
   async run(_args) {
@@ -63,19 +85,18 @@ export const status: Command = {
     const tokenTotals = await Promise.all(
       tickets.map((t) => readTicketTokens(join(stateDir, t.id))),
     );
-    console.log(
-      `${"ID".padEnd(20)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
-        "APPROVED".padEnd(9)
-      } ${"TOKENS".padStart(10)} TITLE`,
-    );
-    console.log("-".repeat(101));
+    console.log(formatStatusHeader());
     for (let i = 0; i < tickets.length; i++) {
       const t = tickets[i];
-      const tokenStr = formatTokens(tokenTotals[i]);
       console.log(
-        `${t.id.padEnd(20)} ${t.phase.padEnd(16)} ${t.status.padEnd(17)} ${
-          (t.approved ? "yes" : "no").padEnd(9)
-        } ${tokenStr.padStart(10)} ${t.title}`,
+        formatStatusRow(
+          t.id,
+          t.phase,
+          t.status,
+          t.approved,
+          formatTokens(tokenTotals[i]),
+          t.title,
+        ),
       );
     }
   },

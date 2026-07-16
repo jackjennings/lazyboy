@@ -27,7 +27,7 @@ Deno.test("fetchNew returns all items when knownIds is empty", async () => {
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
-  assertEquals(items[0].id, "jira-PROJ-1");
+  assertEquals(items[0].id, "jira/PROJ-1");
   assertEquals(items[0].provider, "jira");
   assertEquals(items[0].title, "Issue One");
   assertEquals(items[0].url, `${BASE_URL}/browse/PROJ-1`);
@@ -52,9 +52,9 @@ Deno.test("fetchNew filters known IDs", async () => {
         ),
       ),
   });
-  const items = await provider.fetchNew(new Set(["jira-PROJ-1"]));
+  const items = await provider.fetchNew(new Set(["jira/PROJ-1"]));
   assertEquals(items.length, 1);
-  assertEquals(items[0].id, "jira-PROJ-2");
+  assertEquals(items[0].id, "jira/PROJ-2");
 });
 
 Deno.test("fetchNew uses POST to /rest/api/3/search/jql", async () => {
@@ -115,7 +115,7 @@ Deno.test("fetchNew skips issues with missing fields", async () => {
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
-  assertEquals(items[0].id, "jira-PROJ-2");
+  assertEquals(items[0].id, "jira/PROJ-2");
 });
 
 Deno.test("fetchNew description is empty string when fields.description is null", async () => {

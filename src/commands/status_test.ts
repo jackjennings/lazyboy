@@ -1,6 +1,11 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { formatTokens, readTicketTokens } from "./status.ts";
+import {
+  formatStatusHeader,
+  formatStatusRow,
+  formatTokens,
+  readTicketTokens,
+} from "./status.ts";
 
 // ── formatTokens ─────────────────────────────────────────────────────────────
 
@@ -105,4 +110,23 @@ Deno.test("readTicketTokens: ignores non-usage json files", async () => {
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+// ── formatStatusRow / formatStatusHeader ─────────────────────────────────────
+
+Deno.test("formatStatusRow: pads ID field to 36 characters", () => {
+  const row = formatStatusRow(
+    "github/jackjennings/lazyboy/23",
+    "intake",
+    "running",
+    false,
+    "0",
+    "My ticket",
+  );
+  assertEquals(row.startsWith("github/jackjennings/lazyboy/23      "), true);
+});
+
+Deno.test("formatStatusHeader: separator line is 117 characters", () => {
+  const lines = formatStatusHeader().split("\n");
+  assertEquals(lines[1].length, 117);
 });

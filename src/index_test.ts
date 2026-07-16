@@ -120,8 +120,22 @@ concurrency = 1
 
 Deno.test("_ids: prints one ticket ID per line and exits 0", async () => {
   const stateDir = await Deno.makeTempDir();
-  await Deno.mkdir(join(stateDir, "gh-1"));
-  await Deno.mkdir(join(stateDir, "gh-2"));
+  await Deno.mkdir(
+    join(stateDir, "github", "jackjennings", "lazyboy", "1"),
+    { recursive: true },
+  );
+  await Deno.mkdir(
+    join(stateDir, "github", "jackjennings", "lazyboy", "2"),
+    { recursive: true },
+  );
+  await Deno.writeTextFile(
+    join(stateDir, "github", "jackjennings", "lazyboy", "1", "meta.md"),
+    "---\nid: github/jackjennings/lazyboy/1\n---\n",
+  );
+  await Deno.writeTextFile(
+    join(stateDir, "github", "jackjennings", "lazyboy", "2", "meta.md"),
+    "---\nid: github/jackjennings/lazyboy/2\n---\n",
+  );
   const home = await makeFakeHome(stateDir);
   try {
     const result = await runIndex(["_ids"], { HOME: home });
@@ -130,7 +144,10 @@ Deno.test("_ids: prints one ticket ID per line and exits 0", async () => {
       .trim()
       .split("\n")
       .sort();
-    assertEquals(lines, ["gh-1", "gh-2"]);
+    assertEquals(lines, [
+      "github/jackjennings/lazyboy/1",
+      "github/jackjennings/lazyboy/2",
+    ]);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
     await Deno.remove(home, { recursive: true });

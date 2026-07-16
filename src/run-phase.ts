@@ -2,6 +2,7 @@ import { parseArgs } from "@std/cli/parse-args";
 import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
+import type { PhaseUsage } from "./state/types.ts";
 
 const PI_PROVIDER = "anthropic";
 const PI_MODEL = "claude-sonnet-4-6";
@@ -57,6 +58,56 @@ export async function appendPhaseLog(
   );
 }
 
+export function extractUsageAndText(
+  ndjson: string,
+  durationMs: number,
+): { text: string; usage: PhaseUsage | null } {
+  const lines = ndjson.split("\n").filter(Boolean);
+  const events = lines.map((l) => JSON.parse(l));
+  const agentEnd = events.find((e) => e.type === "agent_end");
+  if (!agentEnd) {
+    return { text: "", usage: null };
+  }
+  const assistantMessages = (agentEnd.messages as {
+    role: string;
+    model?: string;
+    content: { type: string; text?: string }[];
+    usage?: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    };
+  }[]).filter((m) => m.role === "assistant");
+
+  const textParts: string[] = [];
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let model = "";
+
+  for (const msg of assistantMessages) {
+    const msgText = msg.content
+      .filter((c) => c.type === "text")
+      .map((c) => c.text ?? "")
+      .join("");
+    if (msgText) textParts.push(msgText);
+    if (msg.usage) {
+      input += msg.usage.input;
+      output += msg.usage.output;
+      cacheRead += msg.usage.cacheRead;
+      cacheWrite += msg.usage.cacheWrite;
+    }
+    if (msg.model) model = msg.model;
+  }
+
+  return {
+    text: textParts.join("\n"),
+    usage: { input, output, cacheRead, cacheWrite, model, durationMs },
+  };
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;
@@ -95,6 +146,7 @@ export async function executePhase(
     phase: opts.phase,
   });
 
+  const startMs = Temporal.Now.instant().epochMilliseconds;
   const result = await agent.runPhase({
     prompt: opts.prompt + pathContext,
     contextFiles,
@@ -107,11 +159,18 @@ export async function executePhase(
     provider: PI_PROVIDER,
     model: opts.model ?? PI_MODEL,
   });
+  const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
-  await Deno.writeTextFile(
-    join(opts.ticketDir, opts.outputFile),
-    result.stdout,
-  );
+  const { text, usage } = extractUsageAndText(result.stdout, durationMs);
+
+  await Deno.writeTextFile(join(opts.ticketDir, opts.outputFile), text);
+
+  if (usage !== null) {
+    await Deno.writeTextFile(
+      join(opts.ticketDir, opts.outputFile.replace(/\.md$/, ".usage.json")),
+      JSON.stringify(usage),
+    );
+  }
 
   await appendPhaseLog(opts.ticketDir, {
     event: "phase-end",

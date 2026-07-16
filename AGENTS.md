@@ -52,9 +52,13 @@ phase can transition to `needs-attention` on subprocess failure.
 
 **Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as
 a detached Deno subprocess. The subprocess runs
-`pi -p "<prompt>" @/ticket/meta.md` with the ticket directory (or worktree path
-during implementation) as `cwd`, writes stdout to the phase output file, then
-exits. The tick detects completion by checking PID liveness on the next run.
+`pi --mode json --approve "<prompt>" @/ticket/meta.md` with the ticket directory
+(or worktree path during implementation) as `cwd`. Stdout is NDJSON;
+`extractUsageAndText` in `run-phase.ts` reconstructs the assistant text for the
+phase output file and aggregates token usage. After the subprocess exits, two
+files are written: the phase output `.md` and a sidecar
+`<timestamped-phase>.usage.json` (omitted if no `agent_end` event was received).
+The tick detects completion by checking PID liveness on the next run.
 
 **State store** (`src/state/store.ts`): each ticket is a directory in the
 configured `state.dir` git repo. `meta.md` uses YAML frontmatter (parsed via
@@ -73,6 +77,16 @@ loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the
 - The state dir is a separate git repo (`~/code/jackjennings/projects` by
   default). `commitState` runs `git add -A && git commit` inside it after each
   tick.
+
+## Usage sidecar files
+
+Each phase run writes a `<timestampedPhase>.usage.json` file alongside the phase
+output `.md` in the ticket directory. The file contains exactly the fields of
+`PhaseUsage` (`input`, `output`, `cacheRead`, `cacheWrite`, `model`,
+`durationMs`). Dollar amounts and `reasoning` tokens are excluded. Files are
+written only when `pi` exits with a complete `agent_end` event. Code that scans
+ticket directories (e.g. `lazyboy status`) identifies usage files by the
+`.usage.json` suffix.
 
 ## Dependency injection
 

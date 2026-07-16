@@ -217,8 +217,8 @@ Ticket IDs encode the provider and, for providers where IDs are not globally
 unique, the repository as a path-like string.
 
 **GitHub**: `github/<org>/<repo>/<issue-number>` — e.g.
-`github/jackjennings/lazyboy/23`. The numeric suffix has no prefix; `github/`
-in the path makes the `gh-` prefix redundant.
+`github/jackjennings/lazyboy/23`. The numeric suffix has no prefix; `github/` in
+the path makes the `gh-` prefix redundant.
 
 **Jira**: `jira/<issue-key>` — e.g. `jira/PROJ-123`. Jira keys are globally
 unique per instance, so no org/project component is needed beyond the provider
@@ -228,8 +228,8 @@ The ID is a valid POSIX relative path. `@std/path`'s `join(stateDir, id, ...)`
 resolves it correctly on all platforms. Slashes in IDs are intentional — they
 create the namespaced directory structure under `stateDir`.
 
-Do not introduce new ID formats that omit the provider prefix or that use a
-flat single-segment string.
+Do not introduce new ID formats that omit the provider prefix or that use a flat
+single-segment string.
 
 ## `codebase.roots` semantics
 

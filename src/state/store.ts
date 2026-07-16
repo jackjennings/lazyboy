@@ -143,6 +143,7 @@ async function walkStateDir(
     try {
       await Deno.stat(join(entryDir, "meta.md"));
       hasMeta = true;
+      // deno-lint-ignore no-empty
     } catch {}
     if (hasMeta) {
       ids.push(entryRel);

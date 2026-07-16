@@ -24,6 +24,13 @@ export async function loadConfig(path?: string): Promise<Config> {
     }
     jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
   }
+  const phasesRaw = parsed.phases as
+    | { defaults?: Record<string, unknown> }
+    | undefined;
+  const phasesDefaults = phasesRaw?.defaults as
+    | Partial<Record<string, { model?: string; thinking?: string }>>
+    | undefined;
+
   return {
     github: {
       repos: (parsed.github as Record<string, unknown>).repos as string[],
@@ -38,6 +45,9 @@ export async function loadConfig(path?: string): Promise<Config> {
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
     jira,
+    phases: phasesDefaults !== undefined
+      ? { defaults: phasesDefaults }
+      : undefined,
   };
 }
 

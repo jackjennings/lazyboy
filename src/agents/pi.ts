@@ -8,6 +8,7 @@ export class PiCodeAgent implements CodeAgent {
     env: Record<string, string>;
     provider: string;
     model: string;
+    thinking: string;
   }): Promise<{ stdout: string; stderr: string; code: number }> {
     const result = await new Deno.Command("pi", {
       args: [
@@ -18,6 +19,8 @@ export class PiCodeAgent implements CodeAgent {
         opts.provider,
         "--model",
         opts.model,
+        "--thinking",
+        opts.thinking,
         "--system-prompt",
         opts.prompt,
         ...opts.contextFiles,

@@ -247,3 +247,28 @@ single-segment string.
 org-scoped directories (e.g. `~/code/myorg`). `findLocalRepo` searches exactly
 two levels deep: `root/<org>/<repo>`. Config examples and test fixtures must use
 org-less paths.
+
+## Per-phase model configuration
+
+Each phase is run with a model and thinking level resolved in this order:
+
+1. `ticket.phases?.[phase]?.model` / `ticket.phases?.[phase]?.thinking` from
+   `TicketState` frontmatter — set by the plan agent for the `implementation`
+   phase; available for any phase key.
+2. `config.phases?.defaults?.[phase]?.model` / `.thinking` from `config.toml`.
+3. Hardcoded defaults in `PHASE_MODEL_DEFAULTS` (exported from `src/tick.ts`).
+
+Model and thinking are resolved independently. The resolution function is
+`resolvePhaseModel(config, phase, ticket)` exported from `src/tick.ts`. The
+`TickDeps.resolveModelConfig` injectable wraps it for `advancePhase`.
+
+To override the model for a phase globally, add to `config.toml`:
+
+```toml
+[phases.defaults.intake]
+model = "claude-haiku-4-5"
+thinking = "off"
+```
+
+The `thinking` field accepts the named levels `pi --thinking` accepts: `off`,
+`minimal`, `low`, `medium`, `high`, `xhigh`, `max`.

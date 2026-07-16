@@ -76,6 +76,7 @@ export async function readTicket(
     created: data.created,
     updated: data.updated,
     body: content.trim(),
+    phases: data.phases as TicketState["phases"],
   };
 
   if (needsMigration) {
@@ -107,6 +108,7 @@ export async function writeTicket(
   };
   if (ticket.pid !== undefined) frontmatter.pid = ticket.pid;
   if (ticket.prUrl !== undefined) frontmatter.prUrl = ticket.prUrl;
+  if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
   const raw = matter.stringify(ticket.body, frontmatter);
   await Deno.writeTextFile(join(dir, "meta.md"), raw);
 }

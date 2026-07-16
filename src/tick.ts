@@ -55,6 +55,32 @@ export interface TickOrchestrationDeps {
 
 const STALE_LOCK_MS = 30 * 60 * 1000;
 
+export const PHASE_MODEL_DEFAULTS: Record<
+  ActivePhase,
+  { model: string; thinking: string }
+> = {
+  intake: { model: "claude-haiku-4-5", thinking: "off" },
+  enrichment: { model: "claude-sonnet-4-6", thinking: "off" },
+  spec: { model: "claude-sonnet-4-6", thinking: "high" },
+  plan: { model: "claude-sonnet-4-6", thinking: "high" },
+  implementation: { model: "claude-sonnet-4-6", thinking: "high" },
+};
+
+export function resolvePhaseModel(
+  config: Config,
+  phase: ActivePhase,
+  ticket: TicketState,
+): { model: string; thinking: string } {
+  const ticketOverride = ticket.phases?.[phase];
+  const configDefault = config.phases?.defaults?.[phase];
+  const hardcoded = PHASE_MODEL_DEFAULTS[phase];
+  return {
+    model: ticketOverride?.model ?? configDefault?.model ?? hardcoded.model,
+    thinking: ticketOverride?.thinking ?? configDefault?.thinking ??
+      hardcoded.thinking,
+  };
+}
+
 export interface TickDeps {
   spawn: (opts: {
     phase: ActivePhase;
@@ -63,7 +89,8 @@ export interface TickDeps {
     scope: string[];
     worktrees: Record<string, WorktreeInfo>;
     outputFile: string;
-    model?: string;
+    model: string;
+    thinking: string;
   }) => Promise<number>;
   isPidAlive: (pid: number) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
@@ -74,6 +101,10 @@ export interface TickDeps {
     content: string,
   ) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  resolveModelConfig: (
+    phase: ActivePhase,
+    ticket: TicketState,
+  ) => { model: string; thinking: string };
 }
 
 export function selectCandidates(
@@ -115,6 +146,8 @@ export async function advancePhase(
     const prompt = isImplementationRevision
       ? await loadPromptFile("implementation-revision.md")
       : await loadPrompt(activePhase);
+    const { model: revisingModel, thinking: revisingThinking } = deps
+      .resolveModelConfig(activePhase, ticket);
     const pid = await deps.spawn({
       phase: activePhase,
       ticketDir: join(stateDir, ticket.id),
@@ -122,6 +155,8 @@ export async function advancePhase(
       scope: ticket.scope,
       worktrees: isImplementationRevision ? ticket.worktrees : {},
       outputFile,
+      model: revisingModel,
+      thinking: revisingThinking,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -141,6 +176,8 @@ export async function advancePhase(
 
   if (ticket.status === "new") {
     const prompt = await loadPrompt("intake");
+    const { model: intakeModel, thinking: intakeThinking } = deps
+      .resolveModelConfig("intake", ticket);
     const pid = await deps.spawn({
       phase: "intake",
       ticketDir: join(stateDir, ticket.id),
@@ -148,6 +185,8 @@ export async function advancePhase(
       scope: [],
       worktrees: {},
       outputFile: `${compactTimestamp(zonedNow)}-intake.md`,
+      model: intakeModel,
+      thinking: intakeThinking,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -232,6 +271,8 @@ export async function advancePhase(
       return;
     }
     const prompt = await loadPrompt(next);
+    const { model: nextModel, thinking: nextThinking } = deps
+      .resolveModelConfig(next, ticket);
     const pid = await deps.spawn({
       phase: next,
       ticketDir: join(stateDir, ticket.id),
@@ -239,6 +280,8 @@ export async function advancePhase(
       scope: ticket.scope,
       worktrees: next === "implementation" ? ticket.worktrees : {},
       outputFile: `${compactTimestamp(zonedNow)}-${next}.md`,
+      model: nextModel,
+      thinking: nextThinking,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,
@@ -479,6 +522,7 @@ export async function advanceTickets(
               [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
             },
             model: "claude-opus-4-7",
+            thinking: "high",
             contextFiles: contextFilePaths,
           }),
         );
@@ -542,12 +586,15 @@ export async function advanceTickets(
           anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
           worktrees: opts.worktrees,
           model: opts.model,
+          thinking: opts.thinking,
         }),
       ),
     isPidAlive: defaultIsPidAlive,
     writeTicket,
     writePhaseOutput,
     appendLog: appendTicketLog,
+    resolveModelConfig: (phase, ticket) =>
+      resolvePhaseModel(config, phase, ticket),
   };
 
   for (const ticket of runningTickets) {

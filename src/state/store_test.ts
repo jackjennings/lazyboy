@@ -391,3 +391,107 @@ Deno.test("appendTicketLog: appends successive entries on separate lines", async
   assertEquals(JSON.parse(lines[1]).event, "b");
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("readTicket: reads phases field from frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir);
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: plan
+status: waiting
+approved: false
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+phases:
+  implementation:
+    model: claude-opus-4-5
+    thinking: xhigh
+---
+`,
+  );
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.phases?.implementation?.model, "claude-opus-4-5");
+  assertEquals(ticket.phases?.implementation?.thinking, "xhigh");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: round-trips phases through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = {
+    id: "gh-7",
+    provider: "github",
+    title: "T",
+    url: "https://github.com/x/y/issues/7",
+    phase: "plan",
+    status: "waiting",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    body: "",
+    phases: { implementation: { model: "claude-opus-4-6", thinking: "high" } },
+  };
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-7");
+  assertEquals(read.phases?.implementation?.model, "claude-opus-4-6");
+  assertEquals(read.phases?.implementation?.thinking, "high");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: omits phases key when undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = {
+    id: "gh-8",
+    provider: "github",
+    title: "T",
+    url: "https://github.com/x/y/issues/8",
+    phase: "intake",
+    status: "new",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    body: "",
+  };
+  await writeTicket(dir, ticket);
+  const raw = await Deno.readTextFile(join(dir, "gh-8", "meta.md"));
+  assertEquals(raw.includes("phases:"), false);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: preserves all phases entries on round-trip", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = {
+    id: "gh-phases-test",
+    provider: "github",
+    title: "T",
+    url: "https://github.com/x/y/issues/9",
+    phase: "plan",
+    status: "waiting",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    body: "",
+    phases: {
+      implementation: { model: "claude-sonnet-4-6", thinking: "high" },
+      enrichment: { model: "claude-haiku-4-5", thinking: "off" },
+    },
+  };
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-phases-test");
+  assertEquals(read.phases?.enrichment?.model, "claude-haiku-4-5");
+  assertEquals(read.phases?.implementation?.model, "claude-sonnet-4-6");
+  await Deno.remove(dir, { recursive: true });
+});

@@ -11,6 +11,8 @@ function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
     githubToken: "tok",
     anthropicApiKey: "key",
     worktrees: {},
+    model: "claude-sonnet-4-6",
+    thinking: "off",
     ...overrides,
   };
 }
@@ -54,16 +56,23 @@ Deno.test("isPidAlive returns false for dead PID", () => {
   assertEquals(isPidAlive(99999999), false);
 });
 
-Deno.test("buildPhaseArgs: includes --model when model is provided", () => {
-  const args = buildPhaseArgs(makeOpts({ model: "claude-opus-4-7" }));
+Deno.test("buildPhaseArgs: includes --model", () => {
+  const args = buildPhaseArgs(makeOpts({ model: "claude-opus-4-5" }));
   const idx = args.indexOf("--model");
   assertNotEquals(idx, -1);
-  assertEquals(args[idx + 1], "claude-opus-4-7");
+  assertEquals(args[idx + 1], "claude-opus-4-5");
 });
 
-Deno.test("buildPhaseArgs: omits --model when model is not provided", () => {
-  const args = buildPhaseArgs(makeOpts());
-  assertEquals(args.includes("--model"), false);
+Deno.test("buildPhaseArgs: includes --thinking", () => {
+  const args = buildPhaseArgs(makeOpts({ thinking: "high" }));
+  const idx = args.indexOf("--thinking");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "high");
+});
+
+Deno.test("buildPhaseArgs: includes --thinking off", () => {
+  const args = buildPhaseArgs(makeOpts({ thinking: "off" }));
+  assertEquals(args[args.indexOf("--thinking") + 1], "off");
 });
 
 Deno.test("buildPhaseArgs: includes --context-files when contextFiles is provided", () => {

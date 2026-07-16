@@ -5,7 +5,8 @@ propose which directories or repositories this ticket will need access to during
 development. Consider which parts of the codebase are likely relevant to the
 described change.
 
-Do not write any files. Print your response directly.
+Do not write any files. Print your response directly. Begin your response
+directly with the first section heading. No preamble.
 
 Your response must contain exactly two sections:
 

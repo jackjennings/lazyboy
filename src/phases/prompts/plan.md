@@ -23,7 +23,8 @@ another five-line helper in the same file is one task, not two.
 
 Write a step-by-step implementation plan following TDD principles.
 
-Do not write any files. Print your response directly.
+Do not write any files. Print your response directly. Begin your response
+directly with the first section heading. No preamble.
 
 Each task must:
 

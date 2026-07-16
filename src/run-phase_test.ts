@@ -3,9 +3,11 @@ import { join } from "@std/path";
 import {
   appendPhaseLog,
   buildContextFiles,
+  executePhase,
   getPiEnvironmentVariables,
   setupPiDirectories,
 } from "./run-phase.ts";
+import type { CodeAgent } from "./agents/types.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────
 
@@ -227,4 +229,170 @@ Deno.test("appendPhaseLog: propagates error when directory does not exist", asyn
       phase: "intake",
     })
   );
+});
+
+// ── executePhase ─────────────────────────────────────────────────────────────
+
+Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-intake.md"),
+      "intake",
+    );
+
+    let capturedContextFiles: string[] = [];
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedContextFiles = opts.contextFiles;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "intake",
+        scopeDirs: [],
+        prompt: "do the thing",
+        worktrees: {},
+        homeDir,
+      },
+      agent,
+    );
+
+    assertEquals(capturedContextFiles.includes(`@${ticketDir}/meta.md`), true);
+    assertEquals(
+      capturedContextFiles.includes(
+        `@${ticketDir}/20260101T000000-intake.md`,
+      ),
+      true,
+    );
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and worktree paths", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+    let capturedPrompt = "";
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedPrompt = opts.prompt;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "intake",
+        scopeDirs: ["/some/scope"],
+        prompt: "base prompt",
+        worktrees: { repo: { path: "/some/worktree", branch: "main" } },
+        homeDir,
+      },
+      agent,
+    );
+
+    assertEquals(capturedPrompt.startsWith("base prompt"), true);
+    assertEquals(capturedPrompt.includes(ticketDir), true);
+    assertEquals(capturedPrompt.includes("/some/scope"), true);
+    assertEquals(capturedPrompt.includes("/some/worktree"), true);
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: passes PI_PROVIDER and PI_MODEL to agent.runPhase", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+    let capturedProvider = "";
+    let capturedModel = "";
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedProvider = opts.provider;
+        capturedModel = opts.model;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "intake",
+        scopeDirs: [],
+        prompt: "prompt",
+        worktrees: {},
+        homeDir,
+      },
+      agent,
+    );
+
+    assertEquals(capturedProvider, "anthropic");
+    assertEquals(capturedModel, "claude-sonnet-4-6");
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: writes stdout to output file, logs phase-end with exitCode and stderr, returns exit code", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+    const agent: CodeAgent = {
+      runPhase() {
+        return Promise.resolve({
+          stdout: "agent output",
+          stderr: "agent errors",
+          code: 42,
+        });
+      },
+    };
+
+    const exitCode = await executePhase(
+      {
+        ticketDir,
+        outputFile: "result.md",
+        phase: "spec",
+        scopeDirs: [],
+        prompt: "prompt",
+        worktrees: {},
+        homeDir,
+      },
+      agent,
+    );
+
+    assertEquals(exitCode, 42);
+
+    const written = await Deno.readTextFile(join(ticketDir, "result.md"));
+    assertEquals(written, "agent output");
+
+    const logContent = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+    const logLines = logContent.trim().split("\n");
+    const endEntry = JSON.parse(logLines[logLines.length - 1]);
+    assertEquals(endEntry.event, "phase-end");
+    assertEquals(endEntry.exitCode, 42);
+    assertEquals(endEntry.output, "agent errors");
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
 });

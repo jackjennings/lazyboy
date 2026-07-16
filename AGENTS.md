@@ -85,6 +85,22 @@ the interface and are named tool-agnostically. `isPackageInstalled` belongs next
 to `InstallDeps` in `src/packages.ts`; the fact that it shells out to `pi` is an
 implementation detail, not part of the name.
 
+## CodeAgent adapters
+
+Code-agent runtimes (CLI tools or SDKs that execute phase prompts) implement the
+`CodeAgent` interface from `src/agents/types.ts`. The sole production adapter is
+`PiCodeAgent` in `src/agents/pi.ts`. The `pi` CLI must not be referenced by name
+outside `src/agents/pi.ts`.
+
+`runPhase` opts include `provider` and `model` — the adapter uses them in
+subprocess args but does not define them. Model and provider selection belongs
+to the call site: `run-phase.ts` defines `PI_PROVIDER` and `PI_MODEL` as
+module-level constants and passes them through `executePhase`.
+
+New adapters belong in `src/agents/<name>.ts` and must implement `CodeAgent`.
+The `if (import.meta.main)` block in `run-phase.ts` is the only place that
+constructs `PiCodeAgent`.
+
 ## Imports
 
 Use the project's import conventions from `deno.json`. For test assertions, use

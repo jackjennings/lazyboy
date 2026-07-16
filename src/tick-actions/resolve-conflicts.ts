@@ -49,10 +49,20 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
 
       if (contextFiles.length === 0) return null;
 
+      const resolvingWorktrees = Object.values(ticket.worktrees).filter(
+        (wt) =>
+          contextFiles.includes(
+            join(
+              ticketDir,
+              `conflict-context-${wt.branch.replaceAll("/", "-")}.md`,
+            ),
+          ),
+      );
+
       const now = Temporal.Now.instant().toString();
 
       let agentFailed = false;
-      for (const wt of Object.values(ticket.worktrees)) {
+      for (const wt of resolvingWorktrees) {
         const gitDirResult = await deps.runGit(
           ["rev-parse", "--git-dir"],
           wt.path,
@@ -70,7 +80,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
       }
 
       if (agentFailed) {
-        for (const wt of Object.values(ticket.worktrees)) {
+        for (const wt of resolvingWorktrees) {
           await deps.runGit(["rebase", "--abort"], wt.path);
         }
         for (const f of contextFiles) {
@@ -83,7 +93,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);
-        for (const wt of Object.values(ticket.worktrees)) {
+        for (const wt of resolvingWorktrees) {
           await deps.appendLog(stateDir, ticket.id, {
             event: "conflict-resolution-failed",
             worktreePath: wt.path,
@@ -94,7 +104,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         return updated;
       }
 
-      for (const wt of Object.values(ticket.worktrees)) {
+      for (const wt of resolvingWorktrees) {
         const push = await deps.runGit(
           ["push", "--force-with-lease", "origin", wt.branch],
           wt.path,
@@ -130,7 +140,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         updated: now,
       };
       await deps.writeTicket(stateDir, updated);
-      for (const wt of Object.values(ticket.worktrees)) {
+      for (const wt of resolvingWorktrees) {
         await deps.appendLog(stateDir, ticket.id, {
           event: "conflict-resolved",
           worktreePath: wt.path,

@@ -132,6 +132,54 @@ Deno.test(
   },
 );
 
+// ── multiple worktrees — only the resolved one is touched ────────────────────
+
+Deno.test(
+  "resolveConflictsAction: multi-worktree — only pushes/logs the worktree with a matching context file",
+  async () => {
+    const logged: object[] = [];
+    const gitCalls: { args: string[]; cwd: string }[] = [];
+
+    const result = await makeAction({
+      runGit: (args, cwd) => {
+        gitCalls.push({ args, cwd });
+        if (args[0] === "rev-parse") {
+          return Promise.resolve({ code: 0, stdout: "/wt/.git\n", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      stat: () => Promise.resolve(null),
+      readDir: async function* () {
+        yield { name: "conflict-context-a-repo.md", isFile: true };
+      },
+      remove: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(
+      makeTicket({
+        worktrees: {
+          "a/repo": { path: "/wt/a/repo", branch: "a-repo" },
+          "b/repo": { path: "/wt/b/repo", branch: "b-repo" },
+        },
+      }),
+      "/state",
+    );
+
+    assertEquals(result?.status, "waiting");
+    assertEquals(
+      gitCalls.some((c) => c.cwd === "/wt/b/repo"),
+      false,
+    );
+    const resolvedEntries = (logged as Record<string, unknown>[]).filter(
+      (e) => e.event === "conflict-resolved",
+    );
+    assertEquals(resolvedEntries.length, 1);
+    assertEquals(resolvedEntries[0].branch, "a-repo");
+  },
+);
+
 // ── failure path: REBASE_HEAD present ────────────────────────────────────────
 
 Deno.test(

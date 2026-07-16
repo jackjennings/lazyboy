@@ -211,6 +211,17 @@ migrated and the `stateDir` string (the path to the state git repository). Use
 `stateDir` for any filesystem operations on ticket directories or git log
 queries inside the migration.
 
+A migration that changes `ticket.id` must move the ticket's on-disk directory
+with `Deno.rename` (creating the destination's parent with
+`Deno.mkdir(..., { recursive: true })` first), never `Deno.remove`. The runner
+only ever writes `meta.md` back to the new location — every other file
+(`log.ndjson`, phase outputs, `.usage.json`) survives solely because the
+migration moved them. A migration test that only asserts the old directory is
+gone is not sufficient; it must also assert file contents exist at the new
+path (a prior migration deleted the old directory outright and passed review
+because its test never checked this, destroying history for every ticket it
+touched).
+
 ## Ticket ID format
 
 Ticket IDs encode the provider and, for providers where IDs are not globally

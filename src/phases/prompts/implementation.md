@@ -31,7 +31,8 @@ project-wide convention not yet documented in `AGENTS.md`. If so, update
 convention.
 
 Do not write any files outside the repository worktree and meta.md. Print your
-response directly. Do not create any other files.
+response directly. Begin your response directly with the first section heading.
+No preamble. Do not create any other files.
 
 Your response must contain:
 

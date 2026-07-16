@@ -1,5 +1,15 @@
-import { join } from "@std/path";
+import { dirname, join } from "@std/path";
 import type { Migration } from "../src/migrations/types.ts";
+
+async function renameTicketDir(
+  stateDir: string,
+  oldId: string,
+  newId: string,
+) {
+  const newPath = join(stateDir, newId);
+  await Deno.mkdir(dirname(newPath), { recursive: true });
+  await Deno.rename(join(stateDir, oldId), newPath);
+}
 
 const migration: Migration = {
   async run(ticket, stateDir) {
@@ -11,13 +21,13 @@ const migration: Migration = {
       if (!match) return ticket;
       const [, org, repo, number] = match;
       const newId = `github/${org}/${repo}/${number}`;
-      await Deno.remove(join(stateDir, ticket.id), { recursive: true });
+      await renameTicketDir(stateDir, ticket.id, newId);
       return { ...ticket, id: newId };
     }
     if (ticket.provider === "jira") {
       if (ticket.id.startsWith("jira/")) return ticket;
       const newId = `jira/${ticket.id.slice("jira-".length)}`;
-      await Deno.remove(join(stateDir, ticket.id), { recursive: true });
+      await renameTicketDir(stateDir, ticket.id, newId);
       return { ...ticket, id: newId };
     }
     return ticket;

@@ -32,6 +32,14 @@ Deno.test(
         join(ticketDir, "meta.md"),
         "---\nid: gh-1\n---\n",
       );
+      await Deno.writeTextFile(
+        join(ticketDir, "log.ndjson"),
+        '{"event":"status-transition"}\n',
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T000000-intake.md"),
+        "intake body",
+      );
       const result = await migration.run(makeTicket(), stateDir);
       assertEquals(result.id, "github/jackjennings/lazyboy/1");
       let oldExists = true;
@@ -41,6 +49,19 @@ Deno.test(
         oldExists = false;
       }
       assertEquals(oldExists, false);
+      const newDir = join(stateDir, "github/jackjennings/lazyboy/1");
+      assertEquals(
+        await Deno.readTextFile(join(newDir, "meta.md")),
+        "---\nid: gh-1\n---\n",
+      );
+      assertEquals(
+        await Deno.readTextFile(join(newDir, "log.ndjson")),
+        '{"event":"status-transition"}\n',
+      );
+      assertEquals(
+        await Deno.readTextFile(join(newDir, "20260101T000000-intake.md")),
+        "intake body",
+      );
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -86,6 +107,10 @@ Deno.test(
         oldExists = false;
       }
       assertEquals(oldExists, false);
+      const preserved = await Deno.readTextFile(
+        join(stateDir, "jira/PROJ-123", "meta.md"),
+      );
+      assertEquals(preserved, "---\nid: jira-PROJ-123\n---\n");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }

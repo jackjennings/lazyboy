@@ -53,3 +53,29 @@ Deno.test("isPidAlive returns true for current process", () => {
 Deno.test("isPidAlive returns false for dead PID", () => {
   assertEquals(isPidAlive(99999999), false);
 });
+
+Deno.test("buildPhaseArgs: includes --model when model is provided", () => {
+  const args = buildPhaseArgs(makeOpts({ model: "claude-opus-4-7" }));
+  const idx = args.indexOf("--model");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "claude-opus-4-7");
+});
+
+Deno.test("buildPhaseArgs: omits --model when model is not provided", () => {
+  const args = buildPhaseArgs(makeOpts());
+  assertEquals(args.includes("--model"), false);
+});
+
+Deno.test("buildPhaseArgs: includes --context-files when contextFiles is provided", () => {
+  const args = buildPhaseArgs(
+    makeOpts({ contextFiles: ["@/ticket/meta.md", "@/ticket/context.md"] }),
+  );
+  const idx = args.indexOf("--context-files");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "@/ticket/meta.md,@/ticket/context.md");
+});
+
+Deno.test("buildPhaseArgs: omits --context-files when contextFiles is not provided", () => {
+  const args = buildPhaseArgs(makeOpts());
+  assertEquals(args.includes("--context-files"), false);
+});

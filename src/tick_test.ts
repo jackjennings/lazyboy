@@ -8,6 +8,7 @@ import {
   tick,
 } from "./tick.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
+import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import { writeTicket } from "./state/store.ts";
 import type { TickDeps } from "./tick.ts";
 import type { TicketState } from "./state/types.ts";
@@ -627,6 +628,22 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    spawn: () => Promise.resolve(0),
+    writeContextFile: () => Promise.resolve(),
+  });
+  assertEquals(typeof action.applies, "function");
+  assertEquals(typeof action.run, "function");
+});
+
+Deno.test("resolveConflictsAction is importable (wiring smoke test)", () => {
+  const action = resolveConflictsAction({
+    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+    isPidAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    stat: () => Promise.resolve(null),
+    readDir: async function* () {},
+    remove: () => Promise.resolve(),
   });
   assertEquals(typeof action.applies, "function");
   assertEquals(typeof action.run, "function");

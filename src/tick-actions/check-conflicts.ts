@@ -1,3 +1,4 @@
+import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 
@@ -10,6 +11,22 @@ export interface CheckConflictsDeps {
   worktreeExists: (path: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  spawn: (opts: {
+    worktreePath: string;
+    branch: string;
+    ticketDir: string;
+    conflictedFiles: string[];
+    rebaseStderr: string;
+  }) => Promise<number>;
+  writeContextFile: (
+    ticketDir: string,
+    branch: string,
+    content: string,
+  ) => Promise<void>;
+}
+
+export function sanitizeBranchForFilename(branch: string): string {
+  return encodeURIComponent(branch);
 }
 
 export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
@@ -17,6 +34,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return (
         ticket.status !== "needs-attention" &&
+        ticket.phase !== "merge" &&
         Object.values(ticket.worktrees).some((wt) =>
           deps.worktreeExists(wt.path)
         ) &&
@@ -27,16 +45,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
       ticket: TicketState,
       stateDir: string,
     ): Promise<TicketState | null> {
-      const now = new Date().toISOString();
-
-      type ConflictRecord = {
-        worktreePath: string;
-        branch: string;
-        conflictedFiles: string[];
-        rebaseStderr: string;
-      };
-
-      const conflicts: ConflictRecord[] = [];
+      const now = Temporal.Now.instant().toString();
 
       for (const wt of Object.values(ticket.worktrees)) {
         if (!deps.worktreeExists(wt.path)) continue;
@@ -93,37 +102,39 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
           .map((f) => f.trim())
           .filter((f) => f.length > 0);
 
-        await deps.runGit(["rebase", "--abort"], wt.path);
+        const ticketDir = join(stateDir, ticket.id);
+        const safeBranch = sanitizeBranchForFilename(wt.branch);
+        const contextContent = `# Conflict Context\n\n## Conflicted Files\n\n${
+          conflictedFiles.map((f) => `- ${f}`).join("\n")
+        }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
+        await deps.writeContextFile(ticketDir, safeBranch, contextContent);
 
-        conflicts.push({
+        const pid = await deps.spawn({
+          worktreePath: wt.path,
+          branch: wt.branch,
+          ticketDir,
+          conflictedFiles,
+          rebaseStderr: rebase.stderr,
+        });
+
+        const updated: TicketState = {
+          ...ticket,
+          status: "running",
+          pid,
+          updated: now,
+        };
+        await deps.writeTicket(stateDir, updated);
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "conflict-resolution-started",
           worktreePath: wt.path,
           branch: wt.branch,
           conflictedFiles,
           rebaseStderr: rebase.stderr,
         });
+        return updated;
       }
 
-      if (conflicts.length === 0) return null;
-
-      const updated: TicketState = {
-        ...ticket,
-        status: "needs-attention",
-        updated: now,
-      };
-      await deps.writeTicket(stateDir, updated);
-
-      for (const c of conflicts) {
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "conflict-detected",
-          context: "checkConflicts",
-          worktreePath: c.worktreePath,
-          branch: c.branch,
-          conflictedFiles: c.conflictedFiles,
-          rebaseStderr: c.rebaseStderr,
-        });
-      }
-
-      return updated;
+      return null;
     },
   };
 }

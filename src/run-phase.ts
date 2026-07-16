@@ -61,6 +61,8 @@ if (import.meta.main) {
       "scope",
       "prompt",
       "worktrees",
+      "model",
+      "context-files",
     ],
   });
 
@@ -78,7 +80,9 @@ if (import.meta.main) {
     >)
     : {};
 
-  const contextFiles = await buildContextFiles(ticketDir);
+  const contextFiles = args["context-files"]
+    ? args["context-files"].split(",").filter(Boolean)
+    : await buildContextFiles(ticketDir);
 
   const allPaths = [
     ...scopeDirs,
@@ -116,7 +120,7 @@ if (import.meta.main) {
       "--provider",
       "anthropic",
       "--model",
-      "claude-sonnet-4-6",
+      args["model"] ?? "claude-sonnet-4-6",
       "--system-prompt",
       prompt + pathContext,
       ...contextFiles,

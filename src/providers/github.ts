@@ -42,7 +42,7 @@ export class GitHubProvider implements Provider {
         `https://api.github.com/repos/${repo}/issues?assignee=${this.login}&state=open&per_page=50`;
       const issues = await this._fetch(url) as GitHubIssue[];
       for (const issue of issues) {
-        const id = `gh-${issue.number}`;
+        const id = `github/${repo}/${issue.number}`;
         if (!knownIds.has(id)) {
           items.push({
             id,

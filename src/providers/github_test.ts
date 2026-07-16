@@ -12,19 +12,21 @@ Deno.test("fetchNew filters out known IDs", async () => {
           number: 1,
           title: "One",
           body: "desc",
-          html_url: "https://github.com/x/y/issues/1",
+          html_url: "https://github.com/jackjennings/lazyboy/issues/1",
         },
         {
           number: 2,
           title: "Two",
           body: "desc2",
-          html_url: "https://github.com/x/y/issues/2",
+          html_url: "https://github.com/jackjennings/lazyboy/issues/2",
         },
       ]),
   });
-  const items = await provider.fetchNew(new Set(["gh-1"]));
+  const items = await provider.fetchNew(
+    new Set(["github/jackjennings/lazyboy/1"]),
+  );
   assertEquals(items.length, 1);
-  assertEquals(items[0].id, "gh-2");
+  assertEquals(items[0].id, "github/jackjennings/lazyboy/2");
   assertEquals(items[0].provider, "github");
   assertEquals(items[0].title, "Two");
 });
@@ -40,11 +42,11 @@ Deno.test("fetchNew returns all when knownIds is empty", async () => {
           number: 1,
           title: "One",
           body: "desc",
-          html_url: "https://github.com/x/y/issues/1",
+          html_url: "https://github.com/jackjennings/lazyboy/issues/1",
         },
       ]),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
-  assertEquals(items[0].id, "gh-1");
+  assertEquals(items[0].id, "github/jackjennings/lazyboy/1");
 });

@@ -47,6 +47,7 @@ Deno.test("completion zsh: offers all subcommands", async () => {
       "disable",
       "completion",
       "review",
+      "shell",
     ]
   ) {
     assertStringIncludes(stdout, cmd);

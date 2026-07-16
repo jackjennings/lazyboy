@@ -50,7 +50,10 @@ export interface TickOrchestrationDeps {
   installPackages: (sources: string[]) => Promise<InstallResult[]>;
   advanceTickets: (config: Config) => Promise<void>;
   isPidAlive?: (pid: number) => boolean;
+  exit?: (code: number) => void;
 }
+
+const STALE_LOCK_MS = 30 * 60 * 1000;
 
 export interface TickDeps {
   spawn: (opts: {
@@ -586,9 +589,21 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
     const existing = await Deno.readTextFile(pidFile).catch(() => null);
     if (existing) {
       const pid = parseInt(existing.trim(), 10);
-      if (!isNaN(pid) && (d.isPidAlive ?? defaultIsPidAlive)(pid)) {
-        console.log(`tick already running (pid ${pid}), exiting`);
-        return;
+      const alive = !isNaN(pid) && (d.isPidAlive ?? defaultIsPidAlive)(pid);
+      if (alive) {
+        const stat = await Deno.stat(pidFile).catch(() => null);
+        const ageMs = stat?.mtime
+          ? Temporal.Now.instant().epochMilliseconds - stat.mtime.getTime()
+          : 0;
+        if (ageMs < STALE_LOCK_MS) {
+          console.log(`tick already running (pid ${pid}), exiting`);
+          return;
+        }
+        console.warn(
+          `tick lock held by pid ${pid} for over ${
+            STALE_LOCK_MS / 60_000
+          }m with no sign of finishing; assuming it is hung and reclaiming the lock`,
+        );
       }
     }
     await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
@@ -600,10 +615,21 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
     return;
   }
 
+  let tickError: unknown;
   try {
     await d.installPackages(config.packages.enabled);
     await d.advanceTickets(config);
+  } catch (e) {
+    tickError = e;
   } finally {
     await Deno.remove(pidFile).catch(() => {});
+  }
+
+  if (tickError) {
+    const msg = tickError instanceof Error
+      ? tickError.message
+      : String(tickError);
+    console.error(`tick failed: ${msg}`);
+    (d.exit ?? Deno.exit)(1);
   }
 }

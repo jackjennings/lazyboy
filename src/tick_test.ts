@@ -34,6 +34,16 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   };
 }
 
+function makeTickConfig(tempDir: string) {
+  return {
+    github: { repos: [] },
+    state: { dir: tempDir },
+    tick: { concurrency: 1 },
+    codebase: { roots: [] },
+    packages: { enabled: [] },
+  };
+}
+
 Deno.test("advancePhase: new ticket starts intake", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
   let spawnedPhase = "";
@@ -292,6 +302,82 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
     assertEquals(sequence, ["install", "advance"]);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("tick: removes the pid file and exits(1) with a clean message when advanceTickets throws", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  try {
+    const exitSpy = spy((_code: number) => {});
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: () => Promise.reject(new Error("boom")),
+      isPidAlive: () => false,
+      exit: exitSpy,
+    });
+    assertSpyCall(exitSpy, 0, { args: [1] });
+    let pidFileExists = true;
+    try {
+      await Deno.stat(pidFile);
+    } catch {
+      pidFileExists = false;
+    }
+    assertEquals(pidFileExists, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
+  }
+});
+
+Deno.test("tick: reclaims a lock held by a live pid once it exceeds the staleness threshold", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  try {
+    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(pidFile, "999999");
+    const staleSeconds =
+      Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) -
+      31 * 60;
+    await Deno.utime(pidFile, staleSeconds, staleSeconds);
+
+    const advanceTicketsSpy = spy(() => Promise.resolve());
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: advanceTicketsSpy,
+      isPidAlive: () => true,
+    });
+    assertSpyCalls(advanceTicketsSpy, 1);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
+  }
+});
+
+Deno.test("tick: does not reclaim a lock held by a live pid within the staleness threshold", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  try {
+    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(pidFile, "999999");
+
+    const advanceTicketsSpy = spy(() => Promise.resolve());
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: advanceTicketsSpy,
+      isPidAlive: () => true,
+    });
+    assertSpyCalls(advanceTicketsSpy, 0);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
   }
 });
 

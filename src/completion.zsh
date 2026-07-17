@@ -13,6 +13,7 @@ _lazyboy() {
         'enable:add cron job'
         'disable:remove cron job'
         'completion:print shell completion script'
+        'retry:reset a needs-attention ticket'
         'review:review the latest phase output'
         'shell:open a shell in the worktree for a ticket'
       )
@@ -25,6 +26,9 @@ _lazyboy() {
           ;;
         completion)
           compadd -- zsh
+          ;;
+        retry)
+          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
           ;;
         review)
           compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}

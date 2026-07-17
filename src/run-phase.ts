@@ -6,28 +6,6 @@ import type { PhaseUsage } from "./state/types.ts";
 
 const PI_PROVIDER = "anthropic";
 
-export function buildPiArgs(
-  prompt: string,
-  model: string,
-  thinking: string,
-  pathContext: string,
-  contextFiles: string[],
-): string[] {
-  return [
-    "-p",
-    "--approve",
-    "--provider",
-    PI_PROVIDER,
-    "--model",
-    model,
-    "--thinking",
-    thinking,
-    "--system-prompt",
-    prompt + pathContext,
-    ...contextFiles,
-  ];
-}
-
 export function getPiEnvironmentVariables(
   home: string,
 ): Record<string, string> {

@@ -3,12 +3,12 @@ import { join } from "@std/path";
 import {
   appendPhaseLog,
   buildContextFiles,
-  buildPiArgs,
   executePhase,
   extractUsageAndText,
   getPiEnvironmentVariables,
   setupPiDirectories,
 } from "./run-phase.ts";
+import { buildPiArgs } from "./agents/pi.ts";
 import type { CodeAgent } from "./agents/types.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────

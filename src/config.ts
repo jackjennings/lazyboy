@@ -1,6 +1,6 @@
 import { parse } from "@std/toml";
 import { join } from "@std/path";
-import type { Config } from "./state/types.ts";
+import type { Config, PhaseModelConfig } from "./state/types.ts";
 
 export async function loadConfig(path?: string): Promise<Config> {
   const configPath = path ??
@@ -27,9 +27,7 @@ export async function loadConfig(path?: string): Promise<Config> {
   const phasesRaw = parsed.phases as
     | { defaults?: Record<string, unknown> }
     | undefined;
-  const phasesDefaults = phasesRaw?.defaults as
-    | Partial<Record<string, { model?: string; thinking?: string }>>
-    | undefined;
+  const phasesDefaults = phasesRaw?.defaults as PhaseModelConfig | undefined;
 
   return {
     github: {

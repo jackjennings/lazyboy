@@ -31,6 +31,25 @@ Deno.test("fetchNew filters out known IDs", async () => {
   assertEquals(items[0].title, "Two");
 });
 
+Deno.test("fetchNew does not re-create an issue tracked under its legacy gh-<n> id", async () => {
+  const provider = new GitHubProvider({
+    repos: ["jackjennings/lazyboy"],
+    token: "fake",
+    login: "jackjennings",
+    _fetch: (_url: string) =>
+      Promise.resolve([
+        {
+          number: 18,
+          title: "Retry subcommand",
+          body: "desc",
+          html_url: "https://github.com/jackjennings/lazyboy/issues/18",
+        },
+      ]),
+  });
+  const items = await provider.fetchNew(new Set(["gh-18"]));
+  assertEquals(items.length, 0);
+});
+
 Deno.test("fetchNew returns all when knownIds is empty", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],

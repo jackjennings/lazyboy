@@ -56,6 +56,14 @@ export class JiraProvider implements Provider {
     for (const issue of data.issues) {
       if (!issue.fields) continue;
       const id = `jira/${issue.key}`;
+      const legacyId = `jira-${issue.key}`;
+      if (knownIds.has(legacyId)) {
+        console.log(
+          `JiraProvider.fetchNew: ${id} already tracked as legacy id ` +
+            `${legacyId} (pending namespace-ticket-ids migration), skipping`,
+        );
+        continue;
+      }
       if (!knownIds.has(id)) {
         items.push({
           id,

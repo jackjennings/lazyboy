@@ -57,6 +57,24 @@ Deno.test("fetchNew filters known IDs", async () => {
   assertEquals(items[0].id, "jira/PROJ-2");
 });
 
+Deno.test("fetchNew does not re-create an issue tracked under its legacy jira-<KEY> id", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    _fetch: (_url, _init) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ issues: [makeIssue("PROJ-1", "One")] }),
+          { status: 200 },
+        ),
+      ),
+  });
+  const items = await provider.fetchNew(new Set(["jira-PROJ-1"]));
+  assertEquals(items.length, 0);
+});
+
 Deno.test("fetchNew uses POST to /rest/api/3/search/jql", async () => {
   let capturedUrl = "";
   let capturedMethod = "";

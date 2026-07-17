@@ -43,6 +43,14 @@ export class GitHubProvider implements Provider {
       const issues = await this._fetch(url) as GitHubIssue[];
       for (const issue of issues) {
         const id = `github/${repo}/${issue.number}`;
+        const legacyId = `gh-${issue.number}`;
+        if (knownIds.has(legacyId)) {
+          console.log(
+            `GitHubProvider.fetchNew: ${id} already tracked as legacy id ` +
+              `${legacyId} (pending namespace-ticket-ids migration), skipping`,
+          );
+          continue;
+        }
         if (!knownIds.has(id)) {
           items.push({
             id,

@@ -181,6 +181,76 @@ Deno.test("buildContextFiles: does not include files for phases not in context l
   }
 });
 
+Deno.test("buildContextFiles: includes implementation output files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260630T100000-implementation.md"),
+      "output",
+    );
+    const files = await buildContextFiles(tempDir);
+    assertEquals(
+      files.includes(`@${tempDir}/20260630T100000-implementation.md`),
+      true,
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: includes implementation feedback files after implementation output", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260630T100000-implementation.md"),
+      "output",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260630T120000-implementation-feedback.md"),
+      "feedback",
+    );
+    const files = await buildContextFiles(tempDir);
+    const outIdx = files.indexOf(
+      `@${tempDir}/20260630T100000-implementation.md`,
+    );
+    const fbIdx = files.indexOf(
+      `@${tempDir}/20260630T120000-implementation-feedback.md`,
+    );
+    assertEquals(outIdx !== -1, true);
+    assertEquals(fbIdx !== -1, true);
+    assertEquals(outIdx < fbIdx, true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: implementation files appear after plan files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T090000-plan.md"),
+      "plan output",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260630T100000-implementation.md"),
+      "implementation output",
+    );
+    const files = await buildContextFiles(tempDir);
+    const planIdx = files.indexOf(`@${tempDir}/20260629T090000-plan.md`);
+    const implIdx = files.indexOf(
+      `@${tempDir}/20260630T100000-implementation.md`,
+    );
+    assertEquals(planIdx !== -1, true);
+    assertEquals(implIdx !== -1, true);
+    assertEquals(planIdx < implIdx, true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 // ── appendPhaseLog ───────────────────────────────────────────────────────────
 
 Deno.test("appendPhaseLog: creates log.ndjson and writes a valid JSON line", async () => {

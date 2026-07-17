@@ -1161,3 +1161,78 @@ Deno.test(
     }
   },
 );
+
+Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", async () => {
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+    },
+  });
+  let spawnedWorktrees: Record<string, unknown> = {};
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedWorktrees = opts.worktrees;
+    return Promise.resolve(42);
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedWorktrees, {
+    "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+  });
+});
+
+Deno.test("advancePhase: implementation/revising prompt does not instruct gh pr create", async () => {
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+    },
+  });
+  let spawnedPrompt = "";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedPrompt = opts.prompt;
+    return Promise.resolve(42);
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedPrompt.includes("gh pr create"), false);
+  assertEquals(spawnedPrompt.includes("git push"), true);
+});
+
+Deno.test("advancePhase: non-implementation revising uses empty worktrees", async () => {
+  const ticket = makeTicket({
+    phase: "plan",
+    status: "revising",
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+    },
+  });
+  let spawnedWorktrees: Record<string, unknown> = {};
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedWorktrees = opts.worktrees;
+    return Promise.resolve(77);
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isPidAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedWorktrees, {});
+});

@@ -14,7 +14,7 @@ import { JiraProvider } from "./providers/jira.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
-import { loadPrompt, nextPhase } from "./phases/runners.ts";
+import { loadPrompt, loadPromptFile, nextPhase } from "./phases/runners.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
@@ -111,13 +111,16 @@ export async function advancePhase(
   if (ticket.status === "revising") {
     const activePhase = ticket.phase as ActivePhase;
     const outputFile = `${compactTimestamp(zonedNow)}-${activePhase}.md`;
-    const prompt = await loadPrompt(activePhase);
+    const isImplementationRevision = activePhase === "implementation";
+    const prompt = isImplementationRevision
+      ? await loadPromptFile("implementation-revision.md")
+      : await loadPrompt(activePhase);
     const pid = await deps.spawn({
       phase: activePhase,
       ticketDir: join(stateDir, ticket.id),
       prompt,
       scope: ticket.scope,
-      worktrees: {},
+      worktrees: isImplementationRevision ? ticket.worktrees : {},
       outputFile,
     });
     await deps.writeTicket(stateDir, {

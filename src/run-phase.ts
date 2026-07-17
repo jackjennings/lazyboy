@@ -23,7 +23,9 @@ export async function setupPiDirectories(home: string): Promise<void> {
 
 export async function buildContextFiles(ticketDir: string): Promise<string[]> {
   const contextFiles = [`@${ticketDir}/meta.md`];
-  for (const phase of ["intake", "enrichment", "spec", "plan"]) {
+  for (
+    const phase of ["intake", "enrichment", "spec", "plan", "implementation"]
+  ) {
     const phaseFiles: string[] = [];
     const prefixPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}[.-]`);
     try {

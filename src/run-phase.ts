@@ -5,7 +5,6 @@ import { PiCodeAgent } from "./agents/pi.ts";
 import type { PhaseUsage } from "./state/types.ts";
 
 const PI_PROVIDER = "anthropic";
-const PI_MODEL = "claude-sonnet-4-6";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -119,7 +118,8 @@ export async function executePhase(
     prompt: string;
     worktrees: Record<string, { path: string; branch: string }>;
     homeDir: string;
-    model?: string;
+    model: string;
+    thinking: string;
     contextFiles?: string[];
   },
   agent: CodeAgent,
@@ -159,7 +159,8 @@ export async function executePhase(
       ...piEnv,
     },
     provider: PI_PROVIDER,
-    model: opts.model ?? PI_MODEL,
+    model: opts.model,
+    thinking: opts.thinking,
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
@@ -194,6 +195,7 @@ if (import.meta.main) {
       "prompt",
       "worktrees",
       "model",
+      "thinking",
       "context-files",
     ],
   });
@@ -230,7 +232,8 @@ if (import.meta.main) {
       prompt,
       worktrees,
       homeDir,
-      model: args["model"],
+      model: args["model"]!,
+      thinking: args["thinking"]!,
       contextFiles,
     },
     new PiCodeAgent(),

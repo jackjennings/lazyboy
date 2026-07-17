@@ -235,3 +235,77 @@ base_url = "https://myorg.atlassian.net"
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig parses [phases.defaults] per-phase entries", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[phases.defaults.intake]
+model = "claude-haiku-4-5"
+thinking = "off"
+
+[phases.defaults.spec]
+model = "claude-sonnet-4-6"
+thinking = "high"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.phases?.defaults?.intake?.model, "claude-haiku-4-5");
+  assertEquals(cfg.phases?.defaults?.intake?.thinking, "off");
+  assertEquals(cfg.phases?.defaults?.spec?.thinking, "high");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig: phases is undefined when [phases] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.phases, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig: per-phase entry with only model set", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[phases.defaults.intake]
+model = "claude-opus-4-5"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.phases?.defaults?.intake?.model, "claude-opus-4-5");
+  assertEquals(cfg.phases?.defaults?.intake?.thinking, undefined);
+  await Deno.remove(dir, { recursive: true });
+});

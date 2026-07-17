@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertNotEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import {
   appendPhaseLog,
@@ -8,6 +8,7 @@ import {
   getPiEnvironmentVariables,
   setupPiDirectories,
 } from "./run-phase.ts";
+import { buildPiArgs } from "./agents/pi.ts";
 import type { CodeAgent } from "./agents/types.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────
@@ -331,6 +332,8 @@ Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", a
         prompt: "do the thing",
         worktrees: {},
         homeDir,
+        model: "claude-sonnet-4-6",
+        thinking: "off",
       },
       agent,
     );
@@ -371,6 +374,8 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
         prompt: "base prompt",
         worktrees: { repo: { path: "/some/worktree", branch: "main" } },
         homeDir,
+        model: "claude-sonnet-4-6",
+        thinking: "off",
       },
       agent,
     );
@@ -385,7 +390,7 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
   }
 });
 
-Deno.test("executePhase: passes PI_PROVIDER and PI_MODEL to agent.runPhase", async () => {
+Deno.test("executePhase: passes provider, model, and thinking to agent.runPhase", async () => {
   const ticketDir = await Deno.makeTempDir();
   const homeDir = await Deno.makeTempDir();
   try {
@@ -393,10 +398,12 @@ Deno.test("executePhase: passes PI_PROVIDER and PI_MODEL to agent.runPhase", asy
 
     let capturedProvider = "";
     let capturedModel = "";
+    let capturedThinking = "";
     const agent: CodeAgent = {
       runPhase(opts) {
         capturedProvider = opts.provider;
         capturedModel = opts.model;
+        capturedThinking = opts.thinking;
         return Promise.resolve({ stdout: "", stderr: "", code: 0 });
       },
     };
@@ -410,12 +417,15 @@ Deno.test("executePhase: passes PI_PROVIDER and PI_MODEL to agent.runPhase", asy
         prompt: "prompt",
         worktrees: {},
         homeDir,
+        model: "claude-haiku-4-5",
+        thinking: "minimal",
       },
       agent,
     );
 
     assertEquals(capturedProvider, "anthropic");
-    assertEquals(capturedModel, "claude-sonnet-4-6");
+    assertEquals(capturedModel, "claude-haiku-4-5");
+    assertEquals(capturedThinking, "minimal");
   } finally {
     await Deno.remove(ticketDir, { recursive: true });
     await Deno.remove(homeDir, { recursive: true });
@@ -470,6 +480,8 @@ Deno.test(
           prompt: "prompt",
           worktrees: {},
           homeDir,
+          model: "claude-sonnet-4-6",
+          thinking: "off",
         },
         agent,
       );
@@ -645,3 +657,38 @@ Deno.test(
     assertEquals(result.usage?.output, 2);
   },
 );
+
+// ── buildPiArgs ──────────────────────────────────────────────────────────────
+
+Deno.test("buildPiArgs: includes --model with provided value", () => {
+  const args = buildPiArgs(
+    "prompt text",
+    "claude-opus-4-5",
+    "xhigh",
+    "ctx",
+    [],
+  );
+  const idx = args.indexOf("--model");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "claude-opus-4-5");
+});
+
+Deno.test("buildPiArgs: includes --thinking with provided value", () => {
+  const args = buildPiArgs("prompt text", "claude-haiku-4-5", "low", "ctx", []);
+  const idx = args.indexOf("--thinking");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "low");
+});
+
+Deno.test("buildPiArgs: includes --thinking when value is off", () => {
+  const args = buildPiArgs("prompt text", "claude-haiku-4-5", "off", "ctx", []);
+  assertNotEquals(args.indexOf("--thinking"), -1);
+  assertEquals(args[args.indexOf("--thinking") + 1], "off");
+});
+
+Deno.test("buildPiArgs: context files are appended after system-prompt", () => {
+  const files = ["@/ticket/meta.md", "@/ticket/intake.md"];
+  const args = buildPiArgs("p", "m", "off", "", files);
+  assertEquals(args[args.length - 2], files[0]);
+  assertEquals(args[args.length - 1], files[1]);
+});

@@ -1,5 +1,29 @@
 import type { CodeAgent } from "./types.ts";
 
+export function buildPiArgs(
+  prompt: string,
+  model: string,
+  thinking: string,
+  pathContext: string,
+  contextFiles: string[],
+  provider = "anthropic",
+): string[] {
+  return [
+    "--mode",
+    "json",
+    "--approve",
+    "--provider",
+    provider,
+    "--model",
+    model,
+    "--thinking",
+    thinking,
+    "--system-prompt",
+    prompt + pathContext,
+    ...contextFiles,
+  ];
+}
+
 export class PiCodeAgent implements CodeAgent {
   async runPhase(opts: {
     prompt: string;
@@ -8,20 +32,17 @@ export class PiCodeAgent implements CodeAgent {
     env: Record<string, string>;
     provider: string;
     model: string;
+    thinking: string;
   }): Promise<{ stdout: string; stderr: string; code: number }> {
     const result = await new Deno.Command("pi", {
-      args: [
-        "--mode",
-        "json",
-        "--approve",
-        "--provider",
-        opts.provider,
-        "--model",
-        opts.model,
-        "--system-prompt",
+      args: buildPiArgs(
         opts.prompt,
-        ...opts.contextFiles,
-      ],
+        opts.model,
+        opts.thinking,
+        "",
+        opts.contextFiles,
+        opts.provider,
+      ),
       cwd: opts.cwd,
       env: opts.env,
       stdout: "piped",

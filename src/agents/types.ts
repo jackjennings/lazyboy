@@ -6,5 +6,6 @@ export interface CodeAgent {
     env: Record<string, string>;
     provider: string;
     model: string;
+    thinking: string;
   }): Promise<{ stdout: string; stderr: string; code: number }>;
 }

@@ -1,6 +1,6 @@
 import { parse } from "@std/toml";
 import { join } from "@std/path";
-import type { Config } from "./state/types.ts";
+import type { Config, PhaseModelConfig } from "./state/types.ts";
 
 export async function loadConfig(path?: string): Promise<Config> {
   const configPath = path ??
@@ -24,6 +24,11 @@ export async function loadConfig(path?: string): Promise<Config> {
     }
     jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
   }
+  const phasesRaw = parsed.phases as
+    | { defaults?: Record<string, unknown> }
+    | undefined;
+  const phasesDefaults = phasesRaw?.defaults as PhaseModelConfig | undefined;
+
   return {
     github: {
       repos: (parsed.github as Record<string, unknown>).repos as string[],
@@ -38,6 +43,9 @@ export async function loadConfig(path?: string): Promise<Config> {
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
     jira,
+    phases: phasesDefaults !== undefined
+      ? { defaults: phasesDefaults }
+      : undefined,
   };
 }
 

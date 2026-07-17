@@ -55,7 +55,12 @@ export interface TicketState {
   created: string;
   updated: string;
   body: string;
+  phases?: PhaseModelConfig;
 }
+
+export type PhaseModelConfig = Partial<
+  Record<string, { model?: string; thinking?: string }>
+>;
 
 export interface PhaseUsage {
   input: number;
@@ -73,4 +78,7 @@ export interface Config {
   codebase: { roots: string[] };
   packages: { enabled: string[] };
   jira?: { baseUrl: string; project: string };
+  phases?: {
+    defaults?: PhaseModelConfig;
+  };
 }

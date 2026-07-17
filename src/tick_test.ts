@@ -1419,3 +1419,155 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
 });
+
+Deno.test(
+  "advancePhase: running ticket with dead PID and selfReview true sets approved and logs self-approved",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      selfReview: () => Promise.resolve(true),
+    });
+    assertSpyCalls(writeTicketSpy, 2);
+    assertEquals(writtenTickets[0].status, "waiting");
+    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[1].status, "waiting");
+    assertEquals(writtenTickets[1].approved, true);
+    assertEquals(logEntries.length, 2);
+    assertEquals(logEntries[0], {
+      event: "status-transition",
+      phase: "intake",
+      from: "running",
+      to: "waiting",
+    });
+    assertEquals(logEntries[1], { event: "self-approved", phase: "intake" });
+  },
+);
+
+Deno.test(
+  "advancePhase: running ticket with dead PID and selfReview false leaves approved false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      selfReview: () => Promise.resolve(false),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(logEntries.length, 1);
+    assertEquals(logEntries[0], {
+      event: "status-transition",
+      phase: "intake",
+      from: "running",
+      to: "waiting",
+    });
+  },
+);
+
+Deno.test(
+  "advancePhase: selfReview throwing is treated as false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
+      Promise.resolve()
+    );
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      selfReview: () => Promise.reject(new Error("review exploded")),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertSpyCalls(appendLogSpy, 1);
+  },
+);
+
+Deno.test(
+  "advancePhase: absent selfReview dep leaves ticket waiting with approved false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertEquals(writtenTickets[0].approved, false);
+  },
+);
+
+Deno.test(
+  "advancePhase: selfReview is called with the ticket phase and ticketDir",
+  async () => {
+    const ticket = makeTicket({
+      id: "github/jackjennings/lazyboy/104",
+      phase: "intake",
+      status: "running",
+      pid: 999,
+    });
+    let capturedPhase = "";
+    let capturedTicketDir = "";
+    const selfReviewSpy = spy((phase: string, ticketDir: string) => {
+      capturedPhase = phase;
+      capturedTicketDir = ticketDir;
+      return Promise.resolve(false);
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      selfReview: selfReviewSpy,
+    });
+    assertEquals(capturedPhase, "intake");
+    assertEquals(
+      capturedTicketDir,
+      "/state/github/jackjennings/lazyboy/104",
+    );
+  },
+);

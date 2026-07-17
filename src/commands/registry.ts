@@ -9,6 +9,7 @@ import { completions } from "./completions.ts";
 import { retry } from "./retry.ts";
 import { review } from "./review.ts";
 import { shell } from "./shell.ts";
+import { tail } from "./tail.ts";
 import { update } from "./update.ts";
 import type { Command } from "./types.ts";
 
@@ -24,5 +25,6 @@ export const commands: Command[] = [
   retry,
   review,
   shell,
+  tail,
   update,
 ];

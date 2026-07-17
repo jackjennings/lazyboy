@@ -1,4 +1,5 @@
 import type { Provider, WorkItem } from "./types.ts";
+import { jiraTransition } from "../tick-actions/jira-transition.ts";
 
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -30,6 +31,21 @@ export class JiraProvider implements Provider {
     this.apiToken = opts.apiToken;
     this.project = opts.project;
     this._fetch = opts._fetch ?? ((url, init) => fetch(url, init));
+  }
+
+  async close(url: string): Promise<void> {
+    const match = url.match(/\/browse\/([^/]+)$/);
+    if (!match) {
+      throw new Error(`Cannot parse Jira issue URL: ${url}`);
+    }
+    await jiraTransition({
+      baseUrl: this.baseUrl,
+      email: this.email,
+      apiToken: this.apiToken,
+      issueKey: match[1],
+      targetStatusCategoryKey: "done",
+      fetch: this._fetch,
+    });
   }
 
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {

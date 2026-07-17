@@ -174,6 +174,52 @@ Deno.test("fetchNew description is empty string when fields.description is undef
   assertEquals(items[0].description, "");
 });
 
+Deno.test("close transitions the issue to the done status category", async () => {
+  const requests: Array<{ url: string; method?: string; body?: string }> = [];
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    _fetch: (url, init) => {
+      requests.push({ url, method: init.method, body: init.body as string });
+      if (!init.method) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              transitions: [
+                { id: "31", to: { statusCategory: { key: "done" } } },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    },
+  });
+  await provider.close(`${BASE_URL}/browse/PROJ-1`);
+  assertEquals(
+    requests[0].url,
+    `${BASE_URL}/rest/api/3/issue/PROJ-1/transitions`,
+  );
+  assertEquals(requests[1].method, "POST");
+  assertEquals(JSON.parse(requests[1].body!), { transition: { id: "31" } });
+});
+
+Deno.test("close throws on unrecognized URL", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+  });
+  await assertRejects(
+    () => provider.close("https://example.com/not-a-jira-issue"),
+    Error,
+  );
+});
+
 Deno.test("fetchNew description is JSON.stringify when fields.description is an object", async () => {
   const desc = { type: "doc", content: [] };
   const provider = new JiraProvider({

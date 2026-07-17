@@ -80,6 +80,7 @@ Deno.test("GitHubProvider.close calls _patch with correct API URL and body", asy
     _patch: async (url, body) => {
       patchedUrl = url;
       patchedBody = body;
+      await Promise.resolve();
     },
   });
   await provider.close("https://github.com/myorg/myrepo/issues/42");
@@ -109,7 +110,7 @@ Deno.test("GitHubProvider.close propagates _patch error", async () => {
     token: "fake",
     login: "user",
     _patch: async () => {
-      throw new Error("network failure");
+      return await Promise.reject(new Error("network failure"));
     },
   });
   await assertRejects(

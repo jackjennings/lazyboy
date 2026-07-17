@@ -14,6 +14,7 @@ export async function runUpdate(dir: string): Promise<number> {
 
 export const update: Command = {
   name: "update",
+  description: "pull latest lazyboy source",
   async run(_args) {
     Deno.exit(await runUpdate(lazboyDir));
   },

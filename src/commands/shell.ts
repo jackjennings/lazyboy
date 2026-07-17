@@ -4,6 +4,8 @@ import type { Command } from "./types.ts";
 
 export const shell: Command = {
   name: "shell",
+  description: "open a shell in the worktree for a ticket",
+  completesWith: "_ids",
   async run(args) {
     const id = args[0];
     if (!id) {

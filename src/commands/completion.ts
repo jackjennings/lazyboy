@@ -2,6 +2,8 @@ import type { Command } from "./types.ts";
 
 export const completion: Command = {
   name: "completion",
+  description: "print shell completion script",
+  completesWith: ["zsh"],
   async run(args) {
     const shell = args[0];
     if (!shell) {

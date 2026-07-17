@@ -4,6 +4,8 @@ import type { Command } from "./types.ts";
 
 export const approve: Command = {
   name: "approve",
+  description: "approve the current phase gate",
+  completesWith: "_ids",
   async run(args) {
     const id = args[0];
     if (!id) {

@@ -7,6 +7,7 @@ const lazboyDir = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 
 export const enable: Command = {
   name: "enable",
+  description: "add cron job",
   async run(_args) {
     await enableCron(lazboyDir);
   },

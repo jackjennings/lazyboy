@@ -59,6 +59,7 @@ export function formatStatusHeader(): string {
 
 export const status: Command = {
   name: "status",
+  description: "show all active tickets",
   async run(_args) {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);

@@ -35,9 +35,39 @@ Deno.test("completion zsh: defines and registers _lazyboy", async () => {
   assertStringIncludes(stdout, "compdef _lazyboy lazyboy");
 });
 
-Deno.test("completion zsh: offers all subcommands", async () => {
-  const result = await runIndex(["completion", "zsh"]);
+Deno.test(
+  "completion zsh: derives the command list from lazyboy _completions",
+  async () => {
+    const result = await runIndex(["completion", "zsh"]);
+    const stdout = new TextDecoder().decode(result.stdout);
+    assertStringIncludes(stdout, "lazyboy _completions 2>/dev/null");
+  },
+);
+
+Deno.test(
+  "completion zsh: args state falls back to lazyboy _ids for id-based commands",
+  async () => {
+    const result = await runIndex(["completion", "zsh"]);
+    const stdout = new TextDecoder().decode(result.stdout);
+    assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
+  },
+);
+
+Deno.test(
+  "completion zsh: args state splits a literal completesWith list on commas",
+  async () => {
+    const result = await runIndex(["completion", "zsh"]);
+    const stdout = new TextDecoder().decode(result.stdout);
+    assertStringIncludes(stdout, "${(s.,.)completesWith}");
+  },
+);
+
+Deno.test("_completions: lists all public subcommands with descriptions", async () => {
+  const result = await runIndex(["_completions"]);
+  assertEquals(result.code, 0);
   const stdout = new TextDecoder().decode(result.stdout);
+  const lines = stdout.trim().split("\n");
+  const names = lines.map((l) => l.split("\t")[0]);
   for (
     const cmd of [
       "tick",
@@ -46,36 +76,48 @@ Deno.test("completion zsh: offers all subcommands", async () => {
       "enable",
       "disable",
       "completion",
+      "retry",
       "review",
       "shell",
+      "update",
     ]
   ) {
-    assertStringIncludes(stdout, cmd);
+    assertEquals(names.includes(cmd), true, `missing ${cmd}`);
   }
 });
 
-Deno.test("completion zsh: approve completion calls lazyboy _ids", async () => {
-  const result = await runIndex(["completion", "zsh"]);
-  const stdout = new TextDecoder().decode(result.stdout);
-  assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
-});
-
 Deno.test(
-  "completion zsh: completion subcommand completion offers zsh",
+  "_completions: excludes internal (underscore-prefixed) commands",
   async () => {
-    const result = await runIndex(["completion", "zsh"]);
+    const result = await runIndex(["_completions"]);
     const stdout = new TextDecoder().decode(result.stdout);
-    assertStringIncludes(stdout, "compadd -- zsh");
+    const names = stdout.trim().split("\n").map((l) => l.split("\t")[0]);
+    assertEquals(names.some((n) => n.startsWith("_")), false);
   },
 );
 
 Deno.test(
-  "completion zsh: _ids not listed as a completion candidate",
+  "_completions: id-based commands report _ids as completesWith",
   async () => {
-    const result = await runIndex(["completion", "zsh"]);
+    const result = await runIndex(["_completions"]);
     const stdout = new TextDecoder().decode(result.stdout);
-    const commandsBlock = stdout.match(/commands=\(([\s\S]*?)\)/)?.[1] ?? "";
-    assertEquals(commandsBlock.includes("_ids"), false);
+    const lines = stdout.trim().split("\n");
+    for (const cmd of ["approve", "retry", "review", "shell"]) {
+      const line = lines.find((l) => l.split("\t")[0] === cmd);
+      assertEquals(line?.split("\t")[2], "_ids", `${cmd} completesWith`);
+    }
+  },
+);
+
+Deno.test(
+  "_completions: completion command reports zsh as completesWith",
+  async () => {
+    const result = await runIndex(["_completions"]);
+    const stdout = new TextDecoder().decode(result.stdout);
+    const line = stdout.trim().split("\n").find((l) =>
+      l.split("\t")[0] === "completion"
+    );
+    assertEquals(line?.split("\t")[2], "zsh");
   },
 );
 
@@ -177,17 +219,10 @@ Deno.test("review: exits 1 with usage message when id is missing", async () => {
   );
 });
 
-Deno.test("completion zsh: offers review subcommand", async () => {
-  const result = await runIndex(["completion", "zsh"]);
+Deno.test("_completions: reports review's description", async () => {
+  const result = await runIndex(["_completions"]);
   const stdout = new TextDecoder().decode(result.stdout);
-  assertStringIncludes(stdout, "review:review the latest phase output");
-});
-
-Deno.test("completion zsh: review completion calls lazyboy _ids", async () => {
-  const result = await runIndex(["completion", "zsh"]);
-  const stdout = new TextDecoder().decode(result.stdout);
-  assertStringIncludes(stdout, "review)");
-  assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
+  assertStringIncludes(stdout, "review\treview the latest phase output\t_ids");
 });
 
 Deno.test("review: findLatestPhaseOutput returns null when no output files exist", async () => {
@@ -493,20 +528,13 @@ body
   }
 });
 
-Deno.test("completion zsh: offers shell subcommand", async () => {
-  const result = await runIndex(["completion", "zsh"]);
+Deno.test("_completions: reports shell's description", async () => {
+  const result = await runIndex(["_completions"]);
   const stdout = new TextDecoder().decode(result.stdout);
   assertStringIncludes(
     stdout,
-    "shell:open a shell in the worktree for a ticket",
+    "shell\topen a shell in the worktree for a ticket\t_ids",
   );
-});
-
-Deno.test("completion zsh: shell completion calls lazyboy _ids", async () => {
-  const result = await runIndex(["completion", "zsh"]);
-  const stdout = new TextDecoder().decode(result.stdout);
-  assertStringIncludes(stdout, "shell)");
-  assertStringIncludes(stdout, "lazyboy _ids 2>/dev/null");
 });
 
 Deno.test(

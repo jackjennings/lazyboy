@@ -3,40 +3,33 @@
 _lazyboy() {
   local state
   _arguments '1: :->cmd' '*: :->args'
+  local -a lines
+  lines=(${(f)"$(lazyboy _completions 2>/dev/null)"})
   case $state in
     cmd)
-      local commands
-      commands=(
-        'tick:advance all active tickets'
-        'approve:approve the current phase gate'
-        'status:show all active tickets'
-        'enable:add cron job'
-        'disable:remove cron job'
-        'completion:print shell completion script'
-        'retry:reset a needs-attention ticket'
-        'review:review the latest phase output'
-        'shell:open a shell in the worktree for a ticket'
-      )
-      _describe 'command' commands
+      local line name desc
+      local -a cmdList
+      for line in $lines; do
+        name=${line%%$'\t'*}
+        desc=${${line#*$'\t'}%%$'\t'*}
+        cmdList+=("$name:$desc")
+      done
+      _describe 'command' cmdList
       ;;
     args)
-      case $words[2] in
-        approve)
+      local line name completesWith
+      for line in $lines; do
+        name=${line%%$'\t'*}
+        if [[ "$name" != "$words[2]" ]]; then
+          continue
+        fi
+        completesWith=${line##*$'\t'}
+        if [[ "$completesWith" == "_ids" ]]; then
           compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
-          ;;
-        completion)
-          compadd -- zsh
-          ;;
-        retry)
-          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
-          ;;
-        review)
-          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
-          ;;
-        shell)
-          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
-          ;;
-      esac
+        elif [[ -n "$completesWith" ]]; then
+          compadd -- ${(s.,.)completesWith}
+        fi
+      done
       ;;
   esac
 }

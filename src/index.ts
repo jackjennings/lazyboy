@@ -1,29 +1,4 @@
-import { tick } from "./commands/tick.ts";
-import { approve } from "./commands/approve.ts";
-import { status } from "./commands/status.ts";
-import { enable } from "./commands/enable.ts";
-import { disable } from "./commands/disable.ts";
-import { ids } from "./commands/ids.ts";
-import { completion } from "./commands/completion.ts";
-import { retry } from "./commands/retry.ts";
-import { review } from "./commands/review.ts";
-import { shell } from "./commands/shell.ts";
-import { update } from "./commands/update.ts";
-import type { Command } from "./commands/types.ts";
-
-const commands: Command[] = [
-  tick,
-  approve,
-  status,
-  enable,
-  disable,
-  ids,
-  completion,
-  retry,
-  review,
-  shell,
-  update,
-];
+import { commands } from "./commands/registry.ts";
 
 const name = Deno.args[0];
 const command = commands.find((c) => c.name === name);

@@ -70,6 +70,13 @@ loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the
 `ActivePhase` values in `src/phases/types.ts` (`intake`, `enrichment`, `spec`,
 `plan`, `implementation`).
 
+**Self-review prompts** (`src/phases/prompts/*-self-review.md`): one optional
+prompt per phase. When present, `selfReview` in `src/self-review.ts` calls the
+Anthropic API after a `running → waiting` transition and, if the response is
+`APPROVE`, writes the ticket a second time with `approved: true`. When absent
+for a phase, self-review is skipped and the ticket waits for human approval as
+before. Currently only `intake` has a self-review prompt.
+
 ## Key constraints
 
 - `advancePhase` is pure except for the injected `TickDeps` — keep it that way
@@ -87,6 +94,19 @@ output `.md` in the ticket directory. The file contains exactly the fields of
 written only when `pi` exits with a complete `agent_end` event. Code that scans
 ticket directories (e.g. `lazyboy status`) identifies usage files by the
 `.usage.json` suffix.
+
+## Self-review
+
+`selfReview` in `src/self-review.ts` is the only module that reads
+`*-self-review.md` prompt files and makes self-approval API calls. Do not add
+Anthropic API calls for automated approval in any other module. Tests for
+`selfReview` live in `src/self-review_test.ts` and use an injected `fetcher` spy
+— no real network calls.
+
+To add self-review support for a new phase, create
+`src/phases/prompts/<phase>-self-review.md` with a system prompt that instructs
+the model to respond with exactly `APPROVE` or `REJECT`. No code changes are
+required.
 
 ## Dependency injection
 

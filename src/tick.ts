@@ -38,6 +38,7 @@ import type { TickAction } from "./tick-actions/types.ts";
 import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 import type { InstallResult } from "./packages.ts";
+import { selfReview } from "./self-review.ts";
 
 export interface AdvanceTicketsDeps {
   readLastWorked: () => Promise<string[]>;
@@ -105,6 +106,7 @@ export interface TickDeps {
     phase: ActivePhase,
     ticket: TicketState,
   ) => { model: string; thinking: string };
+  selfReview: (phase: string, ticketDir: string) => Promise<boolean>;
 }
 
 export function selectCandidates(
@@ -207,18 +209,35 @@ export async function advancePhase(
 
   if (ticket.status === "running") {
     if (ticket.pid !== undefined && !deps.isPidAlive(ticket.pid)) {
-      await deps.writeTicket(stateDir, {
+      const waitingTicket: TicketState = {
         ...ticket,
         status: "waiting",
         pid: undefined,
         updated: now,
-      });
+      };
+      await deps.writeTicket(stateDir, waitingTicket);
       await deps.appendLog(stateDir, ticket.id, {
         event: "status-transition",
         phase: ticket.phase,
         from: "running",
         to: "waiting",
       });
+      let approved = false;
+      try {
+        approved = await deps.selfReview(
+          ticket.phase,
+          join(stateDir, ticket.id),
+        );
+      } catch {
+        approved = false;
+      }
+      if (approved) {
+        await deps.writeTicket(stateDir, { ...waitingTicket, approved: true });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "self-approved",
+          phase: ticket.phase,
+        });
+      }
     }
     return;
   }
@@ -595,6 +614,7 @@ export async function advanceTickets(
     appendLog: appendTicketLog,
     resolveModelConfig: (phase, ticket) =>
       resolvePhaseModel(config, phase, ticket),
+    selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
   };
 
   for (const ticket of runningTickets) {

@@ -60,6 +60,7 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "intake");
@@ -79,6 +80,7 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "intake");
@@ -103,6 +105,7 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
@@ -121,6 +124,7 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCalls(writeTicketSpy, 0);
 });
@@ -143,6 +147,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "enrichment");
@@ -162,6 +167,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCalls(spawnSpy, 0);
 });
@@ -184,6 +190,7 @@ Deno.test("advancePhase: implementation/waiting + approved advances to merge/wai
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "merge");
@@ -209,6 +216,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
@@ -235,6 +243,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
@@ -254,6 +263,7 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
@@ -278,6 +288,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
@@ -406,6 +417,7 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -429,6 +441,7 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -456,6 +469,7 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
     writePhaseOutput: async () => {},
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -479,6 +493,7 @@ Deno.test("advancePhase: live PID does not log", async () => {
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCalls(appendLogSpy, 0);
 });
@@ -499,6 +514,7 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -525,6 +541,7 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -552,6 +569,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -578,6 +596,7 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0);
   assertEquals(
@@ -602,6 +621,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "plan");
@@ -636,6 +656,7 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "plan");
@@ -656,6 +677,7 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
     writePhaseOutput: async () => {},
     appendLog: appendLogSpy,
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(appendLogSpy, 0, {
     args: ["/state", "gh-1", {
@@ -681,6 +703,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(
@@ -703,6 +726,7 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile ?? ""), true);
@@ -726,6 +750,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(
@@ -1315,6 +1340,7 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
       model: "claude-opus-4-5",
       thinking: "minimal",
     }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedModel, "claude-opus-4-5");
@@ -1338,6 +1364,7 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
       resolvedPhase = phase;
       return { model: "m", thinking: "off" };
     },
+    selfReview: () => Promise.resolve(false),
   });
   assertEquals(resolvedPhase, "enrichment");
 });
@@ -1362,6 +1389,7 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
@@ -1389,6 +1417,7 @@ Deno.test("advancePhase: implementation/revising prompt does not instruct gh pr 
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPrompt.includes("gh pr create"), false);
@@ -1415,7 +1444,166 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
     writePhaseOutput: async () => {},
     appendLog: async () => {},
     resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve(false),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
 });
+
+Deno.test(
+  "advancePhase: running ticket with dead PID and selfReview true sets approved and logs self-approved",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve(true),
+    });
+    assertSpyCalls(writeTicketSpy, 2);
+    assertEquals(writtenTickets[0].status, "waiting");
+    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[1].status, "waiting");
+    assertEquals(writtenTickets[1].approved, true);
+    assertEquals(logEntries.length, 2);
+    assertEquals(logEntries[0], {
+      event: "status-transition",
+      phase: "intake",
+      from: "running",
+      to: "waiting",
+    });
+    assertEquals(logEntries[1], { event: "self-approved", phase: "intake" });
+  },
+);
+
+Deno.test(
+  "advancePhase: running ticket with dead PID and selfReview false leaves approved false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve(false),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(logEntries.length, 1);
+    assertEquals(logEntries[0], {
+      event: "status-transition",
+      phase: "intake",
+      from: "running",
+      to: "waiting",
+    });
+  },
+);
+
+Deno.test(
+  "advancePhase: selfReview throwing is treated as false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
+      Promise.resolve()
+    );
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.reject(new Error("review exploded")),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertSpyCalls(appendLogSpy, 1);
+  },
+);
+
+Deno.test(
+  "advancePhase: selfReview returning false leaves ticket waiting with approved false",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const writtenTickets: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTickets.push(t);
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve(false),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+    assertEquals(writtenTickets[0].approved, false);
+  },
+);
+
+Deno.test(
+  "advancePhase: selfReview is called with the ticket phase and ticketDir",
+  async () => {
+    const ticket = makeTicket({
+      id: "github/jackjennings/lazyboy/104",
+      phase: "intake",
+      status: "running",
+      pid: 999,
+    });
+    let capturedPhase = "";
+    let capturedTicketDir = "";
+    const selfReviewSpy = spy((phase: string, ticketDir: string) => {
+      capturedPhase = phase;
+      capturedTicketDir = ticketDir;
+      return Promise.resolve(false);
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(0),
+      isPidAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: selfReviewSpy,
+    });
+    assertEquals(capturedPhase, "intake");
+    assertEquals(
+      capturedTicketDir,
+      "/state/github/jackjennings/lazyboy/104",
+    );
+  },
+);

@@ -106,7 +106,7 @@ export interface TickDeps {
     phase: ActivePhase,
     ticket: TicketState,
   ) => { model: string; thinking: string };
-  selfReview?: (phase: string, ticketDir: string) => Promise<boolean>;
+  selfReview: (phase: string, ticketDir: string) => Promise<boolean>;
 }
 
 export function selectCandidates(
@@ -224,9 +224,10 @@ export async function advancePhase(
       });
       let approved = false;
       try {
-        approved = deps.selfReview
-          ? await deps.selfReview(ticket.phase, join(stateDir, ticket.id))
-          : false;
+        approved = await deps.selfReview(
+          ticket.phase,
+          join(stateDir, ticket.id),
+        );
       } catch {
         approved = false;
       }

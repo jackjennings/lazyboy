@@ -5,6 +5,7 @@ import { enable } from "./commands/enable.ts";
 import { disable } from "./commands/disable.ts";
 import { ids } from "./commands/ids.ts";
 import { completion } from "./commands/completion.ts";
+import { retry } from "./commands/retry.ts";
 import { review } from "./commands/review.ts";
 import { shell } from "./commands/shell.ts";
 import { update } from "./commands/update.ts";
@@ -18,6 +19,7 @@ const commands: Command[] = [
   disable,
   ids,
   completion,
+  retry,
   review,
   shell,
   update,

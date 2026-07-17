@@ -217,10 +217,9 @@ with `Deno.rename` (creating the destination's parent with
 only ever writes `meta.md` back to the new location — every other file
 (`log.ndjson`, phase outputs, `.usage.json`) survives solely because the
 migration moved them. A migration test that only asserts the old directory is
-gone is not sufficient; it must also assert file contents exist at the new
-path (a prior migration deleted the old directory outright and passed review
-because its test never checked this, destroying history for every ticket it
-touched).
+gone is not sufficient; it must also assert file contents exist at the new path
+(a prior migration deleted the old directory outright and passed review because
+its test never checked this, destroying history for every ticket it touched).
 
 ## Ticket ID format
 

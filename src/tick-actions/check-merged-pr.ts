@@ -6,6 +6,7 @@ export interface CheckMergedPRDeps {
   cleanupWorktree: (wt: WorktreeInfo) => Promise<void>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  closeWorkItem: (url: string) => Promise<void>;
 }
 
 export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
@@ -58,6 +59,17 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
         from: "waiting-merge",
         to: "done",
       });
+
+      try {
+        await deps.closeWorkItem(ticket.url);
+      } catch (e) {
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "error",
+          context: "checkMergedPR",
+          message: String(e),
+        });
+      }
+
       return updated;
     },
   };

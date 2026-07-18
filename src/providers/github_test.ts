@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { GitHubProvider } from "./github.ts";
 
 Deno.test("fetchNew filters out known IDs", async () => {
@@ -68,4 +68,54 @@ Deno.test("fetchNew returns all when knownIds is empty", async () => {
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
   assertEquals(items[0].id, "github/jackjennings/lazyboy/1");
+});
+
+Deno.test("GitHubProvider.close calls _patch with correct API URL and body", async () => {
+  let patchedUrl = "";
+  let patchedBody: unknown;
+  const provider = new GitHubProvider({
+    repos: [],
+    token: "fake",
+    login: "user",
+    _patch: async (url, body) => {
+      patchedUrl = url;
+      patchedBody = body;
+      await Promise.resolve();
+    },
+  });
+  await provider.close("https://github.com/myorg/myrepo/issues/42");
+  assertEquals(
+    patchedUrl,
+    "https://api.github.com/repos/myorg/myrepo/issues/42",
+  );
+  assertEquals(patchedBody, { state: "closed", state_reason: "completed" });
+});
+
+Deno.test("GitHubProvider.close throws on unrecognized URL", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    token: "fake",
+    login: "user",
+    _patch: async () => {},
+  });
+  await assertRejects(
+    () => provider.close("https://example.com/not-a-github-issue"),
+    Error,
+  );
+});
+
+Deno.test("GitHubProvider.close propagates _patch error", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    token: "fake",
+    login: "user",
+    _patch: async () => {
+      return await Promise.reject(new Error("network failure"));
+    },
+  });
+  await assertRejects(
+    () => provider.close("https://github.com/myorg/myrepo/issues/42"),
+    Error,
+    "network failure",
+  );
 });

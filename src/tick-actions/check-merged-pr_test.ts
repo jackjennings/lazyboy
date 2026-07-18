@@ -31,6 +31,7 @@ function makeAction(
     cleanupWorktree: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    closeWorkItem: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -171,4 +172,43 @@ Deno.test("checkMergedPRAction: PR merged logs waiting-merge → done transition
   assertEquals(transitions.length, 1);
   assertEquals(transitions[0].from, "waiting-merge");
   assertEquals(transitions[0].to, "done");
+});
+
+Deno.test("checkMergedPRAction: PR merged → closeWorkItem called with ticket url", async () => {
+  const closedUrls: string[] = [];
+  const result = await makeAction({
+    isPRMerged: () => Promise.resolve(true),
+    closeWorkItem: (url) => {
+      closedUrls.push(url);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(result?.status, "done");
+  assertEquals(closedUrls, ["https://github.com/myorg/myrepo/issues/42"]);
+});
+
+Deno.test("checkMergedPRAction: closeWorkItem throws → still returns done, logs error", async () => {
+  const written: string[] = [];
+  const logged: object[] = [];
+  const result = await makeAction({
+    isPRMerged: () => Promise.resolve(true),
+    writeTicket: (_dir, t) => {
+      written.push(t.status);
+      return Promise.resolve();
+    },
+    closeWorkItem: () => {
+      throw new Error("close failed");
+    },
+    appendLog: (_dir, _id, entry) => {
+      logged.push(entry);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(), "/state");
+  assertEquals(result?.status, "done");
+  assertEquals(written, ["done"]);
+  const errorEntries = (logged as Record<string, string>[]).filter((e) =>
+    e.event === "error"
+  );
+  assertEquals(errorEntries.length, 1);
+  assertEquals(errorEntries[0].message, "Error: close failed");
 });

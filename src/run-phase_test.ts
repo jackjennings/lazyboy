@@ -4,6 +4,7 @@ import {
   appendPhaseLog,
   buildContextFiles,
   executePhase,
+  extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
   setupPiDirectories,
@@ -519,7 +520,7 @@ Deno.test(
 // ── extractUsageAndText ──────────────────────────────────────────────────────
 
 const singleTurnNdjson = [
-  JSON.stringify({ type: "session" }),
+  JSON.stringify({ type: "session", version: 3, id: "test-session-id-single" }),
   JSON.stringify({
     type: "agent_end",
     messages: [
@@ -561,7 +562,7 @@ Deno.test(
 );
 
 const multiTurnNdjson = [
-  JSON.stringify({ type: "session" }),
+  JSON.stringify({ type: "session", version: 3, id: "test-session-id-multi" }),
   JSON.stringify({
     type: "agent_end",
     messages: [
@@ -619,7 +620,11 @@ Deno.test(
   "extractUsageAndText: no agent_end line returns empty text and null usage",
   () => {
     const ndjson = [
-      JSON.stringify({ type: "session" }),
+      JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "test-session-id-none",
+      }),
       JSON.stringify({ type: "message_update", delta: "hi" }),
     ].join("\n");
     const result = extractUsageAndText(ndjson, 100);
@@ -655,6 +660,88 @@ Deno.test(
     assertEquals(result.text, "");
     assertEquals(result.usage?.input, 1);
     assertEquals(result.usage?.output, 2);
+  },
+);
+
+// ── extractSessionId ─────────────────────────────────────────────────────────
+
+Deno.test("extractSessionId: returns id from session event", () => {
+  const ndjson = [
+    JSON.stringify({
+      type: "session",
+      version: 3,
+      id: "019efc41-6064-70b9-bc99-8656c9148a50",
+    }),
+    JSON.stringify({ type: "message_update", delta: "hi" }),
+  ].join("\n");
+  assertEquals(
+    extractSessionId(ndjson),
+    "019efc41-6064-70b9-bc99-8656c9148a50",
+  );
+});
+
+Deno.test("extractSessionId: returns null when no session event is present", () => {
+  const ndjson = JSON.stringify({ type: "agent_end", messages: [] });
+  assertEquals(extractSessionId(ndjson), null);
+});
+
+Deno.test("extractSessionId: returns null when session event has no id field", () => {
+  const ndjson = [
+    JSON.stringify({ type: "session" }),
+    JSON.stringify({ type: "agent_end", messages: [] }),
+  ].join("\n");
+  assertEquals(extractSessionId(ndjson), null);
+});
+
+Deno.test(
+  "executePhase: phase-end log entry includes sessionId when agent stdout contains a session event with an id",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const stdout = [
+        JSON.stringify({
+          type: "session",
+          version: 3,
+          id: "abc123-session-id",
+        }),
+        JSON.stringify({ type: "agent_end", messages: [] }),
+      ].join("\n");
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({ stdout, stderr: "", code: 0 });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "intake",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        },
+        agent,
+      );
+
+      const logContent = await Deno.readTextFile(
+        join(ticketDir, "log.ndjson"),
+      );
+      const logLines = logContent.trim().split("\n");
+      const endEntry = JSON.parse(logLines[logLines.length - 1]);
+      assertEquals(endEntry.event, "phase-end");
+      assertEquals(endEntry.sessionId, "abc123-session-id");
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
   },
 );
 

@@ -2,6 +2,7 @@ import matter from "gray-matter";
 import { join } from "@std/path";
 import {
   assertValidPhaseStatus,
+  type PrEntry,
   type TicketPhase,
   type TicketState,
   type TicketStatus,
@@ -61,6 +62,21 @@ export async function readTicket(
     }
   }
 
+  const prsRaw = data.prs as PrEntry[] | undefined;
+  const prUrlLegacy = data.prUrl as string | undefined;
+  let prs: PrEntry[] | undefined;
+  if (prsRaw !== undefined) {
+    prs = prsRaw;
+  } else if (prUrlLegacy) {
+    prs = [{
+      url: prUrlLegacy,
+      title: "",
+      dependsOn: [],
+      merged: false,
+      worktreeKey: Object.keys(worktrees)[0],
+    }];
+  }
+
   const ticket: TicketState = {
     id: data.id,
     provider: data.provider,
@@ -72,7 +88,7 @@ export async function readTicket(
     scope: data.scope ?? [],
     pid: data.pid,
     worktrees,
-    prUrl: data.prUrl,
+    prs,
     created: data.created,
     updated: data.updated,
     body: content.trim(),
@@ -107,7 +123,7 @@ export async function writeTicket(
     updated: ticket.updated,
   };
   if (ticket.pid !== undefined) frontmatter.pid = ticket.pid;
-  if (ticket.prUrl !== undefined) frontmatter.prUrl = ticket.prUrl;
+  if (ticket.prs !== undefined) frontmatter.prs = ticket.prs;
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
   const raw = matter.stringify(ticket.body, frontmatter);
   await Deno.writeTextFile(join(dir, "meta.md"), raw);

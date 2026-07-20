@@ -39,6 +39,14 @@ export interface WorktreeInfo {
   branch: string;
 }
 
+export interface PrEntry {
+  url: string;
+  title: string;
+  dependsOn: string[];
+  merged: boolean;
+  worktreeKey?: string;
+}
+
 export interface TicketState {
   id: string;
   provider: string;
@@ -51,6 +59,7 @@ export interface TicketState {
   pid?: number;
   worktrees: Record<string, WorktreeInfo>;
   prUrl?: string;
+  prs?: PrEntry[];
   providerDone?: boolean;
   created: string;
   updated: string;

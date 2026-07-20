@@ -26,7 +26,7 @@ message. Then push to the existing remote branch:
 git push origin HEAD
 
 Do not open a new pull request. The pull request already exists and will update
-automatically when you push. Do not modify the `prUrl` field in meta.md.
+automatically when you push. Do not modify the `prs` array in meta.md.
 
 Before committing, check whether any change introduces or formalises a
 project-wide convention not yet documented in `AGENTS.md`. If so, update

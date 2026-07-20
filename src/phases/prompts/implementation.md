@@ -21,9 +21,14 @@ message. Then push the branch and open a draft pull request using the `gh` CLI:
 
 gh pr create --draft --title "<title>" --body "<body>"
 
-After creating the PR, write the PR URL to the `prUrl` field in meta.md (in the
-ticket directory shown in your context). Use the write tool to update that field
-in the YAML frontmatter.
+After creating the PR, append an entry to the `prs` array in the `meta.md` YAML
+frontmatter (in the ticket directory shown in your context). Each entry must
+have `url` (the PR URL), `title` (the PR title, obtainable via
+`gh pr view --json title`), `dependsOn` (an array of PR URLs that must merge
+before this one — empty for the first PR or independent PRs), `merged` (always
+`false` when first written), and `worktreeKey` (the key used in the `worktrees`
+map for the worktree this PR was created from). Use the write tool to update
+`meta.md`.
 
 Before committing, check whether any change introduces or formalises a
 project-wide convention not yet documented in `AGENTS.md`. If so, update

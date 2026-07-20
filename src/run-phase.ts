@@ -59,6 +59,17 @@ export async function appendPhaseLog(
   );
 }
 
+export function extractSessionId(ndjson: string): string | null {
+  const lines = ndjson.split("\n").filter(Boolean);
+  for (const line of lines) {
+    const event = JSON.parse(line);
+    if (event.type === "session" && typeof event.id === "string") {
+      return event.id;
+    }
+  }
+  return null;
+}
+
 export function extractUsageAndText(
   ndjson: string,
   durationMs: number,
@@ -175,11 +186,14 @@ export async function executePhase(
     );
   }
 
+  const sessionId = extractSessionId(result.stdout);
+
   await appendPhaseLog(opts.ticketDir, {
     event: "phase-end",
     phase: opts.phase,
     exitCode: result.code,
     output: result.stderr,
+    ...(sessionId !== null ? { sessionId } : {}),
   });
 
   return result.code;

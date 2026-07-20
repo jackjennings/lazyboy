@@ -185,6 +185,24 @@ while a live agent holds the worktree corrupts the agent's git state. Actions
 that can transition a ticket to `needs-attention` must also exclude
 `status === "needs-attention"` to avoid an infinite retry loop.
 
+## PR tracking
+
+Ticket state uses a `prs?: PrEntry[]` array (defined in `src/state/types.ts`) to
+track pull requests. The legacy `prUrl?: string` field has been removed.
+
+When the implementation agent creates a PR, it appends a `PrEntry` to `prs` in
+`meta.md`. Each entry carries `url`, `title`, `dependsOn` (PR URLs that must
+merge first), `merged` (always `false` on creation), and `worktreeKey` (the key
+into `ticket.worktrees` for the branch this PR was cut from).
+
+`checkMergedPRAction` iterates `prs` in order, honouring `dependsOn`
+relationships. A PR is only checked for merge once all its `dependsOn` entries
+are marked `merged: true`. When a PR merges its associated worktree is cleaned
+up immediately; the ticket reaches `done` only when every entry in `prs` is
+merged.
+
+Do not introduce a `prUrl` field or any other single-PR field on `TicketState`.
+
 ## `runGit` in `src/worktree.ts`
 
 `runGit` is the shared helper for shelling out to git. It is exported so

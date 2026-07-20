@@ -624,26 +624,3 @@ Deno.test("writeTicket: round-trips prs array through meta.md", async () => {
   assertEquals(read.prs?.[0].merged, false);
   await Deno.remove(dir, { recursive: true });
 });
-
-Deno.test("writeTicket: never writes prUrl to frontmatter", async () => {
-  const dir = await Deno.makeTempDir();
-  const ticket: TicketState = {
-    id: "gh-5",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/x/y/issues/5",
-    phase: "merge",
-    status: "waiting",
-    approved: false,
-    scope: [],
-    worktrees: {},
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-01T00:00:00Z",
-    body: "",
-    prUrl: "https://github.com/x/y/pull/11",
-  };
-  await writeTicket(dir, ticket);
-  const raw = await Deno.readTextFile(join(dir, "gh-5", "meta.md"));
-  assertEquals(raw.includes("prUrl"), false);
-  await Deno.remove(dir, { recursive: true });
-});

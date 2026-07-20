@@ -69,7 +69,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         );
 
         if (rebase.code === 0) {
-          if (ticket.prUrl !== undefined) {
+          if (ticket.prs !== undefined && ticket.prs.length > 0) {
             const push = await deps.runGit(
               ["push", "--force-with-lease", "origin", wt.branch],
               wt.path,

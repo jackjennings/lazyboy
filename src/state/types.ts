@@ -58,7 +58,6 @@ export interface TicketState {
   scope: string[];
   pid?: number;
   worktrees: Record<string, WorktreeInfo>;
-  prUrl?: string;
   prs?: PrEntry[];
   providerDone?: boolean;
   created: string;

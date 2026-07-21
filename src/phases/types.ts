@@ -11,6 +11,7 @@ export const PHASE_SEQUENCE = [
 export const FULL_PHASE_SEQUENCE = [
   ...PHASE_SEQUENCE,
   "merge",
+  "wont-do",
 ] as const;
 
 export type ActivePhase = typeof PHASE_SEQUENCE[number];

@@ -316,3 +316,19 @@ thinking = "off"
 
 The `thinking` field accepts the named levels `pi --thinking` accepts: `off`,
 `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+
+## `wont-do` phase
+
+`wont-do` is a terminal phase (alongside `merge/done`) that permanently excludes
+a ticket from the tick queue. The only valid status for `wont-do` tickets is
+`"done"`.
+
+- `wont-do` is **not** in `PHASE_SEQUENCE` or `ActivePhase` — it is never run as
+  an agent phase.
+- `wont-do` is in `FULL_PHASE_SEQUENCE` (after `merge`) so it sorts last in
+  `lazyboy status` output and passes the `indexOf` cast in `status.ts`.
+- The tick advance pass explicitly filters `t.phase !== "wont-do"` so future
+  status expansions cannot accidentally re-admit these tickets.
+- Use `lazyboy decline <id> [reason]` to set a ticket to `wont-do/done`. The
+  optional reason is appended to the body as `\n\n---\nDeclined: <reason>`. The
+  upstream provider ticket is **not** closed.

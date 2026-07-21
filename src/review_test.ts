@@ -1,7 +1,9 @@
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import {
+  answerQuestion,
   applyApproval,
+  buildQuestionSystemPrompt,
   classifyApproval,
   findLatestPhaseOutput,
   formatTimestamp,
@@ -350,6 +352,187 @@ Deno.test("findLatestPhaseOutput: returns null when ticket directory is empty", 
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+// ── buildQuestionSystemPrompt ────────────────────────────────────────────────
+
+Deno.test("buildQuestionSystemPrompt: includes fixed framing sentence", async () => {
+  const readFile = spy((_path: string | URL) => Promise.resolve("content"));
+  const result = await buildQuestionSystemPrompt(
+    ["@/ticket/meta.md"],
+    readFile,
+  );
+  assertEquals(
+    result.startsWith(
+      "You are a helpful assistant answering questions about a ticket's phase output.",
+    ),
+    true,
+  );
+});
+
+Deno.test("buildQuestionSystemPrompt: strips leading @ when reading file", async () => {
+  const readFile = spy((_path: string | URL) => Promise.resolve("content"));
+  await buildQuestionSystemPrompt(["@/ticket/meta.md"], readFile);
+  assertSpyCalls(readFile, 1);
+  assertEquals(readFile.calls[0].args[0] as string, "/ticket/meta.md");
+});
+
+Deno.test("buildQuestionSystemPrompt: includes file content in output", async () => {
+  const readFile = spy((_path: string | URL) =>
+    Promise.resolve("# Phase Output\n\nSome content.")
+  );
+  const result = await buildQuestionSystemPrompt(
+    ["@/ticket/spec.md"],
+    readFile,
+  );
+  assertEquals(result.includes("# Phase Output"), true);
+  assertEquals(result.includes("Some content."), true);
+});
+
+Deno.test("buildQuestionSystemPrompt: silently skips unreadable files", async () => {
+  const readFile = spy((_path: string | URL) =>
+    Promise.reject(new Error("ENOENT"))
+  );
+  const result = await buildQuestionSystemPrompt(["@/missing.md"], readFile);
+  assertEquals(typeof result, "string");
+  assertSpyCalls(readFile, 1);
+  assertEquals(result.includes("ENOENT"), false);
+});
+
+Deno.test("buildQuestionSystemPrompt: separates multiple files with headings", async () => {
+  const readFile = spy((_path: string | URL) => Promise.resolve("body"));
+  const result = await buildQuestionSystemPrompt(
+    ["@/ticket/meta.md", "@/ticket/spec.md"],
+    readFile,
+  );
+  assertSpyCalls(readFile, 2);
+  assertEquals(result.includes("/ticket/meta.md"), true);
+  assertEquals(result.includes("/ticket/spec.md"), true);
+});
+
+// ── answerQuestion ────────────────────────────────────────────────────────────
+
+Deno.test(
+  "answerQuestion: appends user then assistant message on success",
+  async () => {
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              content: [{ type: "text", text: "Here is the answer." }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    await answerQuestion(messages, "What does this do?", "System.", fetcher);
+    assertEquals(messages.length, 2);
+    assertEquals(messages[0], { role: "user", content: "What does this do?" });
+    assertEquals(messages[1], {
+      role: "assistant",
+      content: "Here is the answer.",
+    });
+  },
+);
+
+Deno.test(
+  "answerQuestion: appends error message on non-2xx response",
+  async () => {
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(new Response("Unauthorized", { status: 401 })),
+    );
+    await answerQuestion(messages, "What?", "System.", fetcher);
+    assertEquals(messages.length, 2);
+    assertEquals(messages[1].content, "Error: could not get a response.");
+  },
+);
+
+Deno.test(
+  "answerQuestion: appends error message when fetch throws",
+  async () => {
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.reject(new Error("network error")),
+    );
+    await answerQuestion(messages, "What?", "System.", fetcher);
+    assertEquals(messages.length, 2);
+    assertEquals(messages[1].content, "Error: could not get a response.");
+  },
+);
+
+Deno.test(
+  "answerQuestion: sends full conversation history on each call",
+  async () => {
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+      { role: "user", content: "First question" },
+      { role: "assistant", content: "First answer" },
+    ];
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              content: [{ type: "text", text: "Second answer." }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    await answerQuestion(messages, "Second question", "System.", fetcher);
+    assertSpyCalls(fetcher, 1);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertEquals(body.messages.length, 3);
+    assertEquals(body.messages[0], {
+      role: "user",
+      content: "First question",
+    });
+    assertEquals(body.messages[1], {
+      role: "assistant",
+      content: "First answer",
+    });
+    assertEquals(body.messages[2], {
+      role: "user",
+      content: "Second question",
+    });
+    assertEquals(messages.length, 4);
+  },
+);
+
+Deno.test("answerQuestion: uses model claude-haiku-4-5", async () => {
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await answerQuestion(messages, "hi", "System.", fetcher);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.model, "claude-haiku-4-5");
+});
+
+Deno.test("answerQuestion: sends system prompt in request body", async () => {
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await answerQuestion(messages, "hi", "Custom system prompt.", fetcher);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.system, "Custom system prompt.");
 });
 
 // ── formatTimestamp ───────────────────────────────────────────────────────────

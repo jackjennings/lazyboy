@@ -12,14 +12,17 @@ import { join } from "@std/path";
 import {
   type Component,
   Editor,
+  type Focusable,
   KeybindingsManager,
   Markdown,
   type MarkdownTheme,
   matchesKey,
+  type OverlayHandle,
   ProcessTerminal,
   setKeybindings,
   TUI,
   TUI_KEYBINDINGS,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "./config.ts";
 import {
@@ -29,6 +32,7 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
+import { buildContextFiles } from "./run-phase.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 
@@ -118,6 +122,152 @@ export async function applyApproval(
 
 export function formatTimestamp(now: Temporal.ZonedDateTime): string {
   return compactTimestamp(now);
+}
+
+export async function buildQuestionSystemPrompt(
+  contextFiles: string[],
+  readFile: (path: string | URL) => Promise<string> = Deno.readTextFile,
+): Promise<string> {
+  const parts: string[] = [
+    "You are a helpful assistant answering questions about a ticket's phase output. The following are the ticket files:",
+  ];
+  for (const contextFile of contextFiles) {
+    const path = contextFile.startsWith("@")
+      ? contextFile.slice(1)
+      : contextFile;
+    try {
+      const content = await readFile(path);
+      parts.push(`\n---\n\n## ${path}\n\n${content}`);
+    } catch {
+      /* unreadable, skip */
+    }
+  }
+  return parts.join("\n");
+}
+
+export async function answerQuestion(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  userText: string,
+  systemPrompt: string,
+  fetcher: typeof fetch,
+): Promise<void> {
+  messages.push({ role: "user", content: userText });
+  try {
+    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+    if (!response.ok) {
+      messages.push({
+        role: "assistant",
+        content: "Error: could not get a response.",
+      });
+      return;
+    }
+    const data = await response.json();
+    const text = (data?.content?.[0]?.text ?? "").trim();
+    messages.push({ role: "assistant", content: text });
+  } catch {
+    messages.push({
+      role: "assistant",
+      content: "Error: could not get a response.",
+    });
+  }
+}
+
+class QuestionOverlay implements Component, Focusable {
+  private _focused = false;
+  private messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  private pending = false;
+  private editor: Editor;
+  private handle: OverlayHandle | null = null;
+  private onDismiss: (() => void) | null = null;
+
+  constructor(
+    private systemPrompt: string,
+    private fetcher: typeof fetch,
+    tui: TUI,
+  ) {
+    this.editor = new Editor(tui, {
+      borderColor: (s) => s,
+      selectList: {
+        selectedPrefix: (s) => s,
+        selectedText: (s) => s,
+        description: (s) => s,
+        scrollInfo: (s) => s,
+        noMatch: (s) => s,
+      },
+    });
+    this.editor.onSubmit = async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      this.editor.setText("");
+      this.pending = true;
+      tui.requestRender(true);
+      await answerQuestion(
+        this.messages,
+        trimmed,
+        this.systemPrompt,
+        this.fetcher,
+      );
+      this.pending = false;
+      tui.requestRender(true);
+    };
+  }
+
+  get focused(): boolean {
+    return this._focused;
+  }
+
+  set focused(value: boolean) {
+    this._focused = value;
+    this.editor.focused = value;
+  }
+
+  setHandle(handle: OverlayHandle, onDismiss: () => void): void {
+    this.handle = handle;
+    this.onDismiss = onDismiss;
+  }
+
+  handleInput(data: string): void {
+    if (matchesKey(data, "escape")) {
+      this.handle?.setHidden(true);
+      this.onDismiss?.();
+      return;
+    }
+    this.editor.handleInput?.(data);
+  }
+
+  invalidate(): void {
+    this.editor.invalidate();
+  }
+
+  render(width: number): string[] {
+    const lines: string[] = [];
+    for (const msg of this.messages) {
+      const label = msg.role === "user" ? dim("You:") : dim("Assistant:");
+      lines.push(label);
+      for (const line of wrapTextWithAnsi(msg.content, width - 2)) {
+        lines.push(`  ${line}`);
+      }
+      lines.push("");
+    }
+    if (this.pending) {
+      lines.push(dim("…"));
+    }
+    lines.push(...this.editor.render(width));
+    return lines;
+  }
 }
 
 class ContentPane implements Component {
@@ -235,6 +385,21 @@ export async function review(id: string): Promise<void> {
   tui.addChild(editor);
   tui.setFocus(contentPane);
 
+  const contextFiles = await buildContextFiles(ticketDir);
+  const systemPrompt = await buildQuestionSystemPrompt(contextFiles);
+  const overlay = new QuestionOverlay(systemPrompt, fetch, tui);
+  const overlayHandle = tui.showOverlay(overlay, {
+    width: "80%",
+    minWidth: 60,
+    maxHeight: "80%",
+    margin: 1,
+  });
+  overlayHandle.setHidden(true);
+  overlay.setHandle(overlayHandle, () => {
+    tui.setFocus(focused === "content" ? contentPane : editor);
+    tui.requestRender(true);
+  });
+
   async function handleSubmit(text: string): Promise<void> {
     if (!text.trim()) return;
     const now = Temporal.Now.zonedDateTimeISO("UTC");
@@ -263,6 +428,13 @@ export async function review(id: string): Promise<void> {
     if (matchesKey(data, "ctrl+c")) {
       tui.stop();
       Deno.exit(0);
+    }
+    if (matchesKey(data, "alt+?")) {
+      if (overlayHandle.isHidden()) {
+        overlayHandle.setHidden(false);
+        overlayHandle.focus();
+      }
+      return { consume: true };
     }
     if (matchesKey(data, "tab")) {
       if (focused === "content") {

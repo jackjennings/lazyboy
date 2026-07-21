@@ -92,7 +92,7 @@ export function extractUsageAndText(
     };
   }[]).filter((m) => m.role === "assistant");
 
-  const textParts: string[] = [];
+  let lastText = "";
   let input = 0;
   let output = 0;
   let cacheRead = 0;
@@ -104,7 +104,7 @@ export function extractUsageAndText(
       .filter((c) => c.type === "text")
       .map((c) => c.text ?? "")
       .join("");
-    if (msgText) textParts.push(msgText);
+    if (msgText) lastText = msgText;
     if (msg.usage) {
       input += msg.usage.input;
       output += msg.usage.output;
@@ -115,7 +115,7 @@ export function extractUsageAndText(
   }
 
   return {
-    text: textParts.join("\n"),
+    text: lastText,
     usage: { input, output, cacheRead, cacheWrite, model, durationMs },
   };
 }

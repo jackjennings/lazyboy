@@ -603,16 +603,43 @@ const multiTurnNdjson = [
 ].join("\n");
 
 Deno.test(
-  "extractUsageAndText: multi-turn sums usage fields and joins text with newline",
+  "extractUsageAndText: multi-turn sums usage fields and keeps only the final assistant turn's text",
   () => {
     const result = extractUsageAndText(multiTurnNdjson, 500);
-    assertEquals(result.text, "First.\nSecond.");
+    assertEquals(result.text, "Second.");
     assertEquals(result.usage?.input, 10);
     assertEquals(result.usage?.output, 10);
     assertEquals(result.usage?.cacheRead, 100);
     assertEquals(result.usage?.cacheWrite, 50);
     assertEquals(result.usage?.model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 500);
+  },
+);
+
+Deno.test(
+  "extractUsageAndText: trailing text-only assistant turn after a tool-only turn returns only that final text",
+  () => {
+    const ndjson = JSON.stringify({
+      type: "agent_end",
+      messages: [
+        {
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [
+            { type: "text", text: "Let me check the file." },
+            { type: "tool_use", name: "read", input: {} },
+          ],
+        },
+        { role: "user", content: [{ type: "tool_result", text: "..." }] },
+        {
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [{ type: "text", text: "## Proposed Scope\n..." }],
+        },
+      ],
+    });
+    const result = extractUsageAndText(ndjson, 50);
+    assertEquals(result.text, "## Proposed Scope\n...");
   },
 );
 

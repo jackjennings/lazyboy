@@ -99,7 +99,7 @@ export class GitHubProvider implements Provider {
     return items;
   }
 
-  toSortable(id: string): Array<string | number> {
+  static toSortable(id: string): Array<string | number> {
     const m = id.match(/\/(\d+)$/);
     if (!m) return [id];
     return [parseInt(m[1], 10)];

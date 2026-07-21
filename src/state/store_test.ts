@@ -533,41 +533,6 @@ prs:
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("readTicket: constructs prs from legacy prUrl when prs absent", async () => {
-  const dir = await Deno.makeTempDir();
-  const ticketDir = join(dir, "gh-2");
-  await Deno.mkdir(ticketDir);
-  await Deno.writeTextFile(
-    join(ticketDir, "meta.md"),
-    `---
-id: gh-2
-provider: github
-title: T
-url: https://github.com/x/y/issues/2
-phase: merge
-status: waiting
-approved: false
-scope: []
-worktrees:
-  x/y:
-    path: /wt/x/y
-    branch: gh-2
-created: "2026-07-01T00:00:00Z"
-updated: "2026-07-01T00:00:00Z"
-prUrl: https://github.com/x/y/pull/5
----
-`,
-  );
-  const ticket = await readTicket(dir, "gh-2");
-  assertEquals(ticket.prs?.length, 1);
-  assertEquals(ticket.prs?.[0].url, "https://github.com/x/y/pull/5");
-  assertEquals(ticket.prs?.[0].title, "");
-  assertEquals(ticket.prs?.[0].dependsOn, []);
-  assertEquals(ticket.prs?.[0].merged, false);
-  assertEquals(ticket.prs?.[0].worktreeKey, "x/y");
-  await Deno.remove(dir, { recursive: true });
-});
-
 Deno.test("readTicket: prs is undefined when neither prs nor prUrl present", async () => {
   const dir = await Deno.makeTempDir();
   const ticketDir = join(dir, "gh-3");

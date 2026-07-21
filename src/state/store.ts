@@ -62,20 +62,7 @@ export async function readTicket(
     }
   }
 
-  const prsRaw = data.prs as PrEntry[] | undefined;
-  const prUrlLegacy = data.prUrl as string | undefined;
-  let prs: PrEntry[] | undefined;
-  if (prsRaw !== undefined) {
-    prs = prsRaw;
-  } else if (prUrlLegacy) {
-    prs = [{
-      url: prUrlLegacy,
-      title: "",
-      dependsOn: [],
-      merged: false,
-      worktreeKey: Object.keys(worktrees)[0],
-    }];
-  }
+  const prs = data.prs as PrEntry[] | undefined;
 
   const ticket: TicketState = {
     id: data.id,

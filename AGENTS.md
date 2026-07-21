@@ -249,6 +249,12 @@ migrated and the `stateDir` string (the path to the state git repository). Use
 `stateDir` for any filesystem operations on ticket directories or git log
 queries inside the migration.
 
+Each migration file at `migrations/<timestamp>-<slug>.ts` should have a
+companion test at `migrations/<timestamp>-<slug>_test.ts`. Migration tests are
+included in `deno task test` (the test task covers both `src/` and
+`migrations/`). Tests should verify behaviour directly against the
+`migration.run()` function using a real temp directory.
+
 A migration that changes `ticket.id` must move the ticket's on-disk directory
 with `Deno.rename` (creating the destination's parent with
 `Deno.mkdir(..., { recursive: true })` first), never `Deno.remove`. The runner

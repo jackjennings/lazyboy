@@ -1,7 +1,7 @@
 {
   "tasks": {
     "start": "deno run --allow-all src/index.ts",
-    "test": "deno test --allow-all src/"
+    "test": "deno test --allow-all src/ migrations/"
   },
   "imports": {
     "@std/fs": "jsr:@std/fs@^1.0.24",

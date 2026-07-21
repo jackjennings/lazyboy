@@ -221,8 +221,15 @@ Deno.test("close throws on unrecognized URL", async () => {
   );
 });
 
-Deno.test("fetchNew description is JSON.stringify when fields.description is an object", async () => {
-  const desc = { type: "doc", content: [] };
+Deno.test("fetchNew description is Markdown when fields.description is an ADF object", async () => {
+  const desc = {
+    type: "doc",
+    version: 1,
+    content: [{
+      type: "paragraph",
+      content: [{ type: "text", text: "Hello world" }],
+    }],
+  };
   const provider = new JiraProvider({
     baseUrl: BASE_URL,
     email: "test@example.com",
@@ -239,7 +246,7 @@ Deno.test("fetchNew description is JSON.stringify when fields.description is an 
       ),
   });
   const items = await provider.fetchNew(new Set());
-  assertEquals(items[0].description, JSON.stringify(desc));
+  assertEquals(items[0].description, "Hello world");
 });
 
 Deno.test("toSortable: jira/PROJ-3 returns [PROJ, 3]", () => {

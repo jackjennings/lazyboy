@@ -4,6 +4,14 @@ import { expandHome, loadConfig } from "../config.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type { PhaseUsage } from "../state/types.ts";
 import type { Command } from "./types.ts";
+import { GitHubProvider } from "../providers/github.ts";
+import { JiraProvider } from "../providers/jira.ts";
+import { compareSortKeys } from "../providers/types.ts";
+
+const toSortableMap: Record<string, (id: string) => Array<string | number>> = {
+  github: GitHubProvider.toSortable,
+  jira: JiraProvider.toSortable,
+};
 
 export function formatTokens(total: number | null): string {
   if (total === null) return "—";
@@ -81,7 +89,12 @@ export const status: Command = {
       const ai = aIdx === -1 ? FULL_PHASE_SEQUENCE.length : aIdx;
       const bi = bIdx === -1 ? FULL_PHASE_SEQUENCE.length : bIdx;
       if (ai !== bi) return ai - bi;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      if (a.provider !== b.provider) {
+        return a.provider < b.provider ? -1 : 1;
+      }
+      const toSortableA = toSortableMap[a.provider] ?? ((id: string) => [id]);
+      const toSortableB = toSortableMap[b.provider] ?? ((id: string) => [id]);
+      return compareSortKeys(toSortableA(a.id), toSortableB(b.id));
     });
     const tokenTotals = await Promise.all(
       tickets.map((t) => readTicketTokens(join(stateDir, t.id))),

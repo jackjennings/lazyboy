@@ -185,6 +185,24 @@ while a live agent holds the worktree corrupts the agent's git state. Actions
 that can transition a ticket to `needs-attention` must also exclude
 `status === "needs-attention"` to avoid an infinite retry loop.
 
+## PR tracking
+
+Ticket state uses a `prs?: PrEntry[]` array (defined in `src/state/types.ts`) to
+track pull requests. The legacy `prUrl?: string` field has been removed.
+
+When the implementation agent creates a PR, it appends a `PrEntry` to `prs` in
+`meta.md`. Each entry carries `url`, `title`, `dependsOn` (PR URLs that must
+merge first), `merged` (always `false` on creation), and `worktreeKey` (the key
+into `ticket.worktrees` for the branch this PR was cut from).
+
+`checkMergedPRAction` iterates `prs` in order, honouring `dependsOn`
+relationships. A PR is only checked for merge once all its `dependsOn` entries
+are marked `merged: true`. When a PR merges its associated worktree is cleaned
+up immediately; the ticket reaches `done` only when every entry in `prs` is
+merged.
+
+Do not introduce a `prUrl` field or any other single-PR field on `TicketState`.
+
 ## `runGit` in `src/worktree.ts`
 
 `runGit` is the shared helper for shelling out to git. It is exported so
@@ -230,6 +248,12 @@ The `Migration.run` method receives two arguments: the `TicketState` being
 migrated and the `stateDir` string (the path to the state git repository). Use
 `stateDir` for any filesystem operations on ticket directories or git log
 queries inside the migration.
+
+Each migration file at `migrations/<timestamp>-<slug>.ts` should have a
+companion test at `migrations/<timestamp>-<slug>_test.ts`. Migration tests are
+included in `deno task test` (the test task covers both `src/` and
+`migrations/`). Tests should verify behaviour directly against the
+`migration.run()` function using a real temp directory.
 
 A migration that changes `ticket.id` must move the ticket's on-disk directory
 with `Deno.rename` (creating the destination's parent with

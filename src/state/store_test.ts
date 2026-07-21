@@ -495,3 +495,97 @@ Deno.test("writeTicket: preserves all phases entries on round-trip", async () =>
   assertEquals(read.phases?.implementation?.model, "claude-sonnet-4-6");
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("readTicket: reads prs array from frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir);
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: merge
+status: waiting
+approved: false
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+prs:
+  - url: https://github.com/x/y/pull/1
+    title: my PR
+    dependsOn: []
+    merged: false
+    worktreeKey: x/y
+---
+`,
+  );
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.prs?.length, 1);
+  assertEquals(ticket.prs?.[0].url, "https://github.com/x/y/pull/1");
+  assertEquals(ticket.prs?.[0].title, "my PR");
+  assertEquals(ticket.prs?.[0].merged, false);
+  assertEquals(ticket.prs?.[0].dependsOn, []);
+  assertEquals(ticket.prs?.[0].worktreeKey, "x/y");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("readTicket: prs is undefined when neither prs nor prUrl present", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-3");
+  await Deno.mkdir(ticketDir);
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-3
+provider: github
+title: T
+url: https://github.com/x/y/issues/3
+phase: intake
+status: new
+approved: false
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+---
+`,
+  );
+  const ticket = await readTicket(dir, "gh-3");
+  assertEquals(ticket.prs, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: round-trips prs array through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = {
+    id: "gh-4",
+    provider: "github",
+    title: "T",
+    url: "https://github.com/x/y/issues/4",
+    phase: "merge",
+    status: "waiting",
+    approved: false,
+    scope: [],
+    worktrees: {},
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    body: "",
+    prs: [{
+      url: "https://github.com/x/y/pull/10",
+      title: "feat: my PR",
+      dependsOn: [],
+      merged: false,
+      worktreeKey: "x/y",
+    }],
+  };
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-4");
+  assertEquals(read.prs?.length, 1);
+  assertEquals(read.prs?.[0].url, "https://github.com/x/y/pull/10");
+  assertEquals(read.prs?.[0].merged, false);
+  await Deno.remove(dir, { recursive: true });
+});

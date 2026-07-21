@@ -12,32 +12,78 @@ export interface CheckMergedPRDeps {
 export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
   return {
     applies(ticket: TicketState): boolean {
-      return ticket.phase === "merge" &&
+      return (
+        ticket.phase === "merge" &&
         ticket.status === "waiting" &&
-        ticket.prUrl !== undefined;
+        ticket.prs !== undefined &&
+        ticket.prs.length > 0
+      );
     },
     async run(
       ticket: TicketState,
       stateDir: string,
     ): Promise<TicketState | null> {
-      let merged: boolean;
-      try {
-        merged = await deps.isPRMerged(ticket.prUrl!);
-      } catch (e) {
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "error",
-          context: "checkMergedPR",
-          message: String(e),
-        });
-        return null;
+      const prs = ticket.prs!.map((pr) => ({ ...pr }));
+      const worktrees = { ...ticket.worktrees };
+      const mergedUrls = new Set(
+        prs.filter((pr) => pr.merged).map((pr) => pr.url),
+      );
+      const initialMergedCount = mergedUrls.size;
+
+      for (const pr of prs) {
+        if (pr.merged) continue;
+        if (pr.dependsOn.some((dep) => !mergedUrls.has(dep))) continue;
+
+        let merged: boolean;
+        try {
+          merged = await deps.isPRMerged(pr.url);
+        } catch (e) {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "error",
+            context: "checkMergedPR",
+            message: String(e),
+          });
+          return null;
+        }
+
+        if (!merged) continue;
+
+        pr.merged = true;
+        mergedUrls.add(pr.url);
+
+        if (pr.worktreeKey !== undefined && worktrees[pr.worktreeKey]) {
+          try {
+            await deps.cleanupWorktree(worktrees[pr.worktreeKey]);
+          } catch (e) {
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "error",
+              context: "checkMergedPR",
+              message: String(e),
+            });
+          }
+          delete worktrees[pr.worktreeKey];
+        }
       }
 
-      if (!merged) return null;
-
       const now = Temporal.Now.instant().toString();
-      for (const wt of Object.values(ticket.worktrees)) {
+
+      if (mergedUrls.size === prs.length) {
+        const updated: TicketState = {
+          ...ticket,
+          phase: "merge",
+          status: "done",
+          prs,
+          worktrees,
+          updated: now,
+        };
+        await deps.writeTicket(stateDir, updated);
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-transition",
+          from: "waiting-merge",
+          to: "done",
+        });
         try {
-          await deps.cleanupWorktree(wt);
+          await deps.closeWorkItem(ticket.url);
         } catch (e) {
           await deps.appendLog(stateDir, ticket.id, {
             event: "error",
@@ -45,32 +91,23 @@ export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
             message: String(e),
           });
         }
+        return updated;
       }
 
-      const updated = {
-        ...ticket,
-        phase: "merge" as const,
-        status: "done" as const,
-        updated: now,
-      };
-      await deps.writeTicket(stateDir, updated);
-      await deps.appendLog(stateDir, ticket.id, {
-        event: "phase-transition",
-        from: "waiting-merge",
-        to: "done",
-      });
-
-      try {
-        await deps.closeWorkItem(ticket.url);
-      } catch (e) {
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "error",
-          context: "checkMergedPR",
-          message: String(e),
-        });
+      if (mergedUrls.size > initialMergedCount) {
+        const updated: TicketState = {
+          ...ticket,
+          phase: "merge",
+          status: "waiting",
+          prs,
+          worktrees,
+          updated: now,
+        };
+        await deps.writeTicket(stateDir, updated);
+        return updated;
       }
 
-      return updated;
+      return null;
     },
   };
 }

@@ -163,7 +163,14 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
       return Promise.resolve();
     },
   }).run(
-    makeTicket({ prUrl: "https://github.com/myorg/myrepo/pull/7" }),
+    makeTicket({
+      prs: [{
+        url: "https://github.com/myorg/myrepo/pull/7",
+        title: "",
+        dependsOn: [],
+        merged: false,
+      }],
+    }),
     "/state",
   );
   assertEquals(result, null);
@@ -177,7 +184,7 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
   assertEquals(calls.some((a) => a[0] === "push"), true);
 });
 
-Deno.test("checkConflictsAction: clean rebase with no prUrl → null, no push, no log", async () => {
+Deno.test("checkConflictsAction: clean rebase with no prs → null, no push, no log", async () => {
   const logged: object[] = [];
   const calls: string[][] = [];
   const result = await makeAction({
@@ -211,7 +218,14 @@ Deno.test("checkConflictsAction: push failure logs error but returns null (trans
       return Promise.resolve();
     },
   }).run(
-    makeTicket({ prUrl: "https://github.com/myorg/myrepo/pull/7" }),
+    makeTicket({
+      prs: [{
+        url: "https://github.com/myorg/myrepo/pull/7",
+        title: "",
+        dependsOn: [],
+        merged: false,
+      }],
+    }),
     "/state",
   );
   assertEquals(result, null);
@@ -316,7 +330,12 @@ Deno.test(
       },
     }).run(
       makeTicket({
-        prUrl: "https://github.com/myorg/myrepo/pull/7",
+        prs: [{
+          url: "https://github.com/myorg/myrepo/pull/7",
+          title: "",
+          dependsOn: [],
+          merged: false,
+        }],
         worktrees: {
           "a/repo": { path: "/wt/a/repo", branch: "gh-7" },
           "b/repo": { path: "/wt/b/repo", branch: "gh-7" },

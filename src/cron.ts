@@ -1,7 +1,7 @@
 const MARKER = "# lazyboy";
 
-function cronLine(lazboyDir: string): string {
-  return `*/5 * * * * ${lazboyDir}/scripts/tick.sh >> $HOME/.lazyboy/tick.log 2>&1 ${MARKER}`;
+export function cronLine(lazboyDir: string): string {
+  return `*/5 * * * * ${lazboyDir}/scripts/tick.sh ${MARKER}`;
 }
 
 async function readCrontab(): Promise<string> {

@@ -673,6 +673,18 @@ function defaultTickDeps(): TickOrchestrationDeps {
   };
 }
 
+async function appendTickLog(entry: object): Promise<void> {
+  const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.log");
+  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+    recursive: true,
+  });
+  await Deno.writeTextFile(
+    tickLogPath,
+    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
+    { append: true },
+  );
+}
+
 export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
   const d = deps ?? defaultTickDeps();
   const config = await d.loadConfig();
@@ -689,14 +701,14 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
           ? Temporal.Now.instant().epochMilliseconds - stat.mtime.getTime()
           : 0;
         if (ageMs < STALE_LOCK_MS) {
-          console.log(`tick already running (pid ${pid}), exiting`);
+          await appendTickLog({ event: "tick-already-running", pid });
           return;
         }
-        console.warn(
-          `tick lock held by pid ${pid} for over ${
-            STALE_LOCK_MS / 60_000
-          }m with no sign of finishing; assuming it is hung and reclaiming the lock`,
-        );
+        await appendTickLog({
+          event: "stale-lock",
+          pid,
+          thresholdMinutes: STALE_LOCK_MS / 60_000,
+        });
       }
     }
     await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
@@ -704,7 +716,10 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
     });
     await Deno.writeTextFile(pidFile, String(Deno.pid));
   } catch (e) {
-    console.error("Failed to acquire lock:", e);
+    await appendTickLog({
+      event: "lock-failed",
+      error: e instanceof Error ? e.message : String(e),
+    });
     return;
   }
 
@@ -722,7 +737,7 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
     const msg = tickError instanceof Error
       ? tickError.message
       : String(tickError);
-    console.error(`tick failed: ${msg}`);
+    await appendTickLog({ event: "tick-failed", error: msg });
     (d.exit ?? Deno.exit)(1);
   }
 }

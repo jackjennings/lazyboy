@@ -218,3 +218,29 @@ Deno.test("selfReview: is case-insensitive for APPROVE response", async () => {
     await Deno.remove(tempDir, { recursive: true });
   }
 });
+
+Deno.test("selfReview: returns true for enrichment phase when output file exists and API responds APPROVE", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const enrichmentContent =
+      "## Relevant Code\n\nFile: src/main.ts\n\n## Dependencies and Constraints\n\nDepends on deno runtime.\n\n## Open Questions\n\nNone at this time.\n";
+    await Deno.writeTextFile(
+      join(tempDir, "20260717T120000-enrichment.md"),
+      enrichmentContent,
+    );
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ content: [{ type: "text", text: "APPROVE" }] }),
+            { status: 200 },
+          ),
+        ),
+    );
+    const result = await selfReview("enrichment", tempDir, fetcher);
+    assertEquals(result, true);
+    assertSpyCalls(fetcher, 1);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});

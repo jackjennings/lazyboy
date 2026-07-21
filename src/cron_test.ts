@@ -11,7 +11,7 @@ Deno.test("cronLine: references the tick.sh script", () => {
   assertStringIncludes(line, "/home/user/.lazyboy/scripts/tick.sh");
 });
 
-Deno.test("cronLine: does not redirect stdout/stderr to tick.log", () => {
+Deno.test("cronLine: does not redirect stdout/stderr to tick.ndjson", () => {
   const line = cronLine("/home/user/.lazyboy");
   assertEquals(line.includes("tick.log"), false);
   assertEquals(line.includes(">>"), false);

@@ -1799,10 +1799,10 @@ Deno.test(
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
-Deno.test("tick: writes NDJSON to tick.log when tick is already running", async () => {
+Deno.test("tick: writes NDJSON to tick.ndjson when tick is already running", async () => {
   const tempDir = await Deno.makeTempDir();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.log");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
   await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
     recursive: true,
   });
@@ -1829,10 +1829,10 @@ Deno.test("tick: writes NDJSON to tick.log when tick is already running", async 
   }
 });
 
-Deno.test("tick: writes NDJSON to tick.log when lock is stale", async () => {
+Deno.test("tick: writes NDJSON to tick.ndjson when lock is stale", async () => {
   const tempDir = await Deno.makeTempDir();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.log");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
   await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
     recursive: true,
   });
@@ -1861,10 +1861,10 @@ Deno.test("tick: writes NDJSON to tick.log when lock is stale", async () => {
   }
 });
 
-Deno.test("tick: writes NDJSON to tick.log when advanceTickets fails", async () => {
+Deno.test("tick: writes NDJSON to tick.ndjson when advanceTickets fails", async () => {
   const tempDir = await Deno.makeTempDir();
   const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.log");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
   await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
     recursive: true,
   });

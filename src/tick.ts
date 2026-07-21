@@ -674,7 +674,7 @@ function defaultTickDeps(): TickOrchestrationDeps {
 }
 
 async function appendTickLog(entry: object): Promise<void> {
-  const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.log");
+  const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
   await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
     recursive: true,
   });

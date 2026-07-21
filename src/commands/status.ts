@@ -5,10 +5,12 @@ import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type { PhaseUsage } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
+import { JiraProvider } from "../providers/jira.ts";
 import { compareSortKeys } from "../providers/types.ts";
 
 const toSortableMap: Record<string, (id: string) => Array<string | number>> = {
   github: GitHubProvider.prototype.toSortable,
+  jira: JiraProvider.prototype.toSortable,
 };
 
 export function formatTokens(total: number | null): string {

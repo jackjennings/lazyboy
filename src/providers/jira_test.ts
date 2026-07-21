@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { JiraProvider } from "./jira.ts";
+import { compareSortKeys } from "./types.ts";
 
 const BASE_URL = "https://myorg.atlassian.net";
 
@@ -239,4 +240,56 @@ Deno.test("fetchNew description is JSON.stringify when fields.description is an 
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items[0].description, JSON.stringify(desc));
+});
+
+Deno.test("toSortable: jira/PROJ-3 returns [PROJ, 3]", () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+  });
+  assertEquals(provider.toSortable("jira/PROJ-3"), ["PROJ", 3]);
+});
+
+Deno.test("toSortable: issue 3 sorts before issue 12 via compareSortKeys", () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+  });
+  assertEquals(
+    compareSortKeys(
+      provider.toSortable("jira/PROJ-3"),
+      provider.toSortable("jira/PROJ-12"),
+    ) < 0,
+    true,
+  );
+});
+
+Deno.test("toSortable: different projects sort by key first", () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+  });
+  assertEquals(
+    compareSortKeys(
+      provider.toSortable("jira/ABC-100"),
+      provider.toSortable("jira/PROJ-1"),
+    ) < 0,
+    true,
+  );
+});
+
+Deno.test("toSortable: malformed id falls back to [id]", () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+  });
+  assertEquals(provider.toSortable("jira/malformed"), ["jira/malformed"]);
 });

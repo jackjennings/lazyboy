@@ -1214,6 +1214,47 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "advanceTicketsImpl: wont-do tickets not included in candidates or writeLastWorked",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await new Deno.Command("git", { args: ["init", tempDir] }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.email", "t@t"],
+      }).output();
+      await new Deno.Command("git", {
+        args: ["-C", tempDir, "config", "user.name", "t"],
+      }).output();
+
+      await writeTicket(
+        tempDir,
+        makeTicket({ id: "gh-wont-do", phase: "wont-do", status: "done" }),
+      );
+
+      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
+      await advanceTickets(
+        {
+          github: { repos: [] },
+          state: { dir: tempDir },
+          tick: { concurrency: 3 },
+          codebase: { roots: [] },
+          packages: { enabled: [] },
+        },
+        {
+          runMigrations: (_, tickets) => Promise.resolve(tickets),
+          readLastWorked: () => Promise.resolve([]),
+          writeLastWorked,
+        },
+      );
+
+      assertSpyCall(writeLastWorked, 0, { args: [[]] });
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
 // ── PHASE_MODEL_DEFAULTS ─────────────────────────────────────────────────────
 
 Deno.test("PHASE_MODEL_DEFAULTS: intake is haiku/off", () => {

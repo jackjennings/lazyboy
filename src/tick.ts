@@ -583,7 +583,8 @@ export async function advanceTickets(
       t.status !== "done" &&
       t.status !== "needs-attention" &&
       !(t.phase === "merge" && t.status === "waiting") &&
-      t.status !== "running",
+      t.status !== "running" &&
+      t.phase !== "wont-do",
   );
 
   const lastWorked = await deps.readLastWorked();

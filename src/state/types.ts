@@ -4,7 +4,8 @@ export type TicketPhase =
   | "spec"
   | "plan"
   | "implementation"
-  | "merge";
+  | "merge"
+  | "wont-do";
 
 export type TicketStatus =
   | "new"
@@ -21,6 +22,7 @@ const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
   plan: ["running", "waiting", "revising", "needs-attention"],
   implementation: ["running", "waiting", "revising", "needs-attention"],
   merge: ["waiting", "done", "needs-attention"],
+  "wont-do": ["done"],
 };
 
 export function assertValidPhaseStatus(

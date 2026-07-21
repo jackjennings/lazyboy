@@ -7,6 +7,7 @@ import { ids } from "./ids.ts";
 import { completion } from "./completion.ts";
 import { completions } from "./completions.ts";
 import { retry } from "./retry.ts";
+import { decline } from "./decline.ts";
 import { review } from "./review.ts";
 import { shell } from "./shell.ts";
 import { tail } from "./tail.ts";
@@ -23,6 +24,7 @@ export const commands: Command[] = [
   completion,
   completions,
   retry,
+  decline,
   review,
   shell,
   tail,

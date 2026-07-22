@@ -13,6 +13,17 @@ Deno.test(
 );
 
 Deno.test(
+  "github-implementation supplement references meta.md and omits gh pr create",
+  async () => {
+    const content = await Deno.readTextFile(
+      new URL("github-implementation.md", import.meta.url).pathname,
+    );
+    assertEquals(content.includes("gh pr create"), false);
+    assertEquals(content.includes("meta.md"), true);
+  },
+);
+
+Deno.test(
   "implementation-revision prompt does not reference prUrl",
   async () => {
     const content = await Deno.readTextFile(

@@ -14,7 +14,12 @@ import { JiraProvider } from "./providers/jira.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
-import { loadPrompt, loadPromptFile, nextPhase } from "./phases/runners.ts";
+import {
+  loadPrompt,
+  loadPromptFile,
+  loadProviderPrompt,
+  nextPhase,
+} from "./phases/runners.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
@@ -145,9 +150,16 @@ export async function advancePhase(
     const activePhase = ticket.phase as ActivePhase;
     const outputFile = `${compactTimestamp(zonedNow)}-${activePhase}.md`;
     const isImplementationRevision = activePhase === "implementation";
-    const prompt = isImplementationRevision
+    const basePrompt = isImplementationRevision
       ? await loadPromptFile("implementation-revision.md")
       : await loadPrompt(activePhase);
+    const revisingSupplement = await loadProviderPrompt(
+      activePhase,
+      ticket.provider,
+    );
+    const prompt = revisingSupplement
+      ? basePrompt + "\n\n" + revisingSupplement
+      : basePrompt;
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
     const pid = await deps.spawn({
@@ -177,7 +189,14 @@ export async function advancePhase(
   }
 
   if (ticket.status === "new") {
-    const prompt = await loadPrompt("intake");
+    const intakeBase = await loadPrompt("intake");
+    const intakeSupplement = await loadProviderPrompt(
+      "intake",
+      ticket.provider,
+    );
+    const prompt = intakeSupplement
+      ? intakeBase + "\n\n" + intakeSupplement
+      : intakeBase;
     const { model: intakeModel, thinking: intakeThinking } = deps
       .resolveModelConfig("intake", ticket);
     const pid = await deps.spawn({
@@ -289,7 +308,9 @@ export async function advancePhase(
       });
       return;
     }
-    const prompt = await loadPrompt(next);
+    const basePrompt = await loadPrompt(next);
+    const supplement = await loadProviderPrompt(next, ticket.provider);
+    const prompt = supplement ? basePrompt + "\n\n" + supplement : basePrompt;
     const { model: nextModel, thinking: nextThinking } = deps
       .resolveModelConfig(next, ticket);
     const pid = await deps.spawn({

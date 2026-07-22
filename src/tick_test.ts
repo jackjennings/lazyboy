@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
+import { join } from "@std/path";
 import {
   advancePhase,
   PHASE_MODEL_DEFAULTS,
@@ -956,6 +957,79 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: writeLastWorked called with empty array when no candidates",
+  async () => {
+    const running = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
+    const store: Record<string, TicketState> = { "gh-1": running };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 2,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [[]] });
+  },
+);
+
+Deno.test(
+  "TickService: skipped-status tickets not included in candidates or writeLastWorked",
+  async () => {
+    const done = makeTicket({ id: "gh-1", phase: "merge", status: "done" });
+    const needsAttention = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "needs-attention",
+    });
+    const mergeWaiting = makeTicket({
+      id: "gh-3",
+      phase: "merge",
+      status: "waiting",
+    });
+    const store: Record<string, TicketState> = {
+      "gh-1": done,
+      "gh-2": needsAttention,
+      "gh-3": mergeWaiting,
+    };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 3,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [[]] });
+  },
+);
+
+Deno.test(
+  "TickService: wont-do tickets not included in candidates or writeLastWorked",
+  async () => {
+    const wontDo = makeTicket({
+      id: "gh-wont-do",
+      phase: "wont-do",
+      status: "done",
+    });
+    const store: Record<string, TicketState> = { "gh-wont-do": wontDo };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-wont-do"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 3,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [[]] });
+  },
+);
+
+Deno.test(
   "TickService: commitState called after writeLastWorked",
   async () => {
     const sequence: string[] = [];
@@ -986,6 +1060,29 @@ Deno.test("TickService: exit(1) called when workflow throws", async () => {
   await new TickService(deps).run();
   assertSpyCall(exitSpy, 0, { args: [1] });
 });
+
+Deno.test(
+  "TickService: writes tick-failed to tick.ndjson when workflow throws",
+  async () => {
+    const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+      recursive: true,
+    });
+    const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.reject(new Error("workflow error")),
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    const logAfter = await Deno.readTextFile(tickLog);
+    const newLines = logAfter.slice(logBefore.length).trim().split("\n")
+      .filter(Boolean);
+    const entry = JSON.parse(newLines[newLines.length - 1]);
+    assertEquals(entry.event, "tick-failed");
+    assertEquals(entry.error, "workflow error");
+    assertEquals(typeof entry.ts, "string");
+  },
+);
 
 // ── selectCandidates ──────────────────────────────────────────────────────────
 

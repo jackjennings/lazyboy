@@ -1,33 +1,26 @@
-import { dirname, join } from "@std/path";
+import { dirname } from "@std/path";
 import { isProcessAlive } from "./executor.ts";
 
 export interface Lock {
   withLock(fn: () => Promise<void>): Promise<void>;
 }
 
-const STALE_LOCK_MS = 30 * 60 * 1000;
-
-async function appendTickLog(entry: object): Promise<void> {
-  const home = Deno.env.get("HOME")!;
-  const tickLogPath = join(home, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(home, ".lazyboy"), { recursive: true });
-  await Deno.writeTextFile(
-    tickLogPath,
-    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
-    { append: true },
-  );
+export interface PidFileLockDeps {
+  log: (entry: object) => Promise<void>;
+  isPidAlive?: (pid: number) => boolean;
 }
+
+const STALE_LOCK_MS = 30 * 60 * 1000;
 
 export class PidFileLock implements Lock {
   #pidFile: string;
+  #log: (entry: object) => Promise<void>;
   #isPidAlive: (pid: number) => boolean;
 
-  constructor(
-    pidFile: string,
-    isPidAlive: (pid: number) => boolean = isProcessAlive,
-  ) {
+  constructor(pidFile: string, deps: PidFileLockDeps) {
     this.#pidFile = pidFile;
-    this.#isPidAlive = isPidAlive;
+    this.#log = deps.log;
+    this.#isPidAlive = deps.isPidAlive ?? isProcessAlive;
   }
 
   async withLock(fn: () => Promise<void>): Promise<void> {
@@ -44,10 +37,10 @@ export class PidFileLock implements Lock {
             ? Temporal.Now.instant().epochMilliseconds - stat.mtime.getTime()
             : 0;
           if (ageMs < STALE_LOCK_MS) {
-            await appendTickLog({ event: "tick-already-running", pid });
+            await this.#log({ event: "tick-already-running", pid });
             return;
           }
-          await appendTickLog({
+          await this.#log({
             event: "stale-lock",
             pid,
             thresholdMinutes: STALE_LOCK_MS / 60_000,
@@ -57,7 +50,7 @@ export class PidFileLock implements Lock {
       await Deno.mkdir(dirname(this.#pidFile), { recursive: true });
       await Deno.writeTextFile(this.#pidFile, String(Deno.pid));
     } catch (e) {
-      await appendTickLog({
+      await this.#log({
         event: "lock-failed",
         error: e instanceof Error ? e.message : String(e),
       });

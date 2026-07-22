@@ -35,7 +35,11 @@ import {
 } from "./packages.ts";
 import { createMigrationRunner } from "./migrations/runner.ts";
 import type { Migration } from "./migrations/types.ts";
-import { resolvePhaseModel, type TickServiceDeps } from "./tick.ts";
+import {
+  appendTickLog,
+  resolvePhaseModel,
+  type TickServiceDeps,
+} from "./tick.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
 import type { Config } from "./state/types.ts";
@@ -324,6 +328,8 @@ export function composeTickDeps(
       await ensureRunPidGitignored(stateDir);
       await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
     },
-    lock: new PidFileLock(join(home, ".lazyboy", "tick.pid")),
+    lock: new PidFileLock(join(home, ".lazyboy", "tick.pid"), {
+      log: appendTickLog,
+    }),
   };
 }

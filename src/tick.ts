@@ -326,6 +326,17 @@ export async function advancePhase(
   }
 }
 
+export async function appendTickLog(entry: object): Promise<void> {
+  const home = Deno.env.get("HOME")!;
+  const tickLogPath = join(home, ".lazyboy", "tick.ndjson");
+  await Deno.mkdir(join(home, ".lazyboy"), { recursive: true });
+  await Deno.writeTextFile(
+    tickLogPath,
+    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
+    { append: true },
+  );
+}
+
 export class TickService {
   #deps: TickServiceDeps;
 
@@ -337,92 +348,104 @@ export class TickService {
     const deps = this.#deps;
     try {
       await deps.lock.withLock(async () => {
-        await deps.installPackages(deps.packageSources);
-
-        const existingIds = new Set(await deps.listTickets());
-        for (const provider of deps.providers) {
-          const newItems = await provider.fetchNew(existingIds);
-          for (const item of newItems) {
-            await deps.writeTicket({
-              id: item.id,
-              provider: item.provider,
-              title: item.title,
-              url: item.url,
-              phase: "intake",
-              status: "new",
-              approved: false,
-              scope: [],
-              worktrees: {},
-              created: Temporal.Now.instant().toString(),
-              updated: Temporal.Now.instant().toString(),
-              body: item.description,
-            });
-          }
+        try {
+          await this.#runWorkflow(deps);
+        } catch (e) {
+          await appendTickLog({
+            event: "tick-failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+          throw e;
         }
-
-        const ids = (await deps.listTickets()).sort();
-        const tickets = await Promise.all(
-          ids.map((id) => deps.readTicket(id)),
-        );
-        const migratedTickets = await deps.runMigrations(
-          deps.stateDir,
-          tickets,
-        );
-
-        const processedTickets = [...migratedTickets];
-        for (let i = 0; i < processedTickets.length; i++) {
-          for (const action of deps.tickActions) {
-            if (action.applies(processedTickets[i])) {
-              const updated = await action.run(
-                processedTickets[i],
-                deps.stateDir,
-              );
-              if (updated !== null) processedTickets[i] = updated;
-            }
-          }
-        }
-
-        const runningTickets = processedTickets.filter(
-          (t) => t.status === "running",
-        );
-        const candidateTickets = processedTickets.filter(
-          (t) =>
-            t.status !== "done" &&
-            t.status !== "needs-attention" &&
-            !(t.phase === "merge" && t.status === "waiting") &&
-            t.status !== "running" &&
-            t.phase !== "wont-do",
-        );
-
-        const lastWorked = await deps.readLastWorked();
-        const selectedIds = selectCandidates(
-          candidateTickets.map((t) => t.id),
-          lastWorked,
-          deps.concurrency,
-        );
-        const selectedSet = new Set(selectedIds);
-
-        for (const ticket of runningTickets) {
-          await advancePhase(ticket, deps.stateDir, deps.tickDeps);
-        }
-
-        let running = runningTickets.length;
-        for (const ticket of candidateTickets) {
-          if (!selectedSet.has(ticket.id)) continue;
-          const willSpawn = ticket.status === "new" ||
-            ticket.status === "revising" ||
-            (ticket.status === "waiting" && ticket.approved);
-          if (willSpawn && running >= deps.concurrency) continue;
-          if (willSpawn) running++;
-          await advancePhase(ticket, deps.stateDir, deps.tickDeps);
-        }
-
-        await deps.writeLastWorked(selectedIds);
-        await deps.commitState();
       });
     } catch (e) {
       console.error(e);
       (deps.exit ?? Deno.exit)(1);
     }
+  }
+
+  async #runWorkflow(deps: TickServiceDeps): Promise<void> {
+    await deps.installPackages(deps.packageSources);
+
+    const existingIds = new Set(await deps.listTickets());
+    for (const provider of deps.providers) {
+      const newItems = await provider.fetchNew(existingIds);
+      for (const item of newItems) {
+        await deps.writeTicket({
+          id: item.id,
+          provider: item.provider,
+          title: item.title,
+          url: item.url,
+          phase: "intake",
+          status: "new",
+          approved: false,
+          scope: [],
+          worktrees: {},
+          created: Temporal.Now.instant().toString(),
+          updated: Temporal.Now.instant().toString(),
+          body: item.description,
+        });
+      }
+    }
+
+    const ids = (await deps.listTickets()).sort();
+    const tickets = await Promise.all(
+      ids.map((id) => deps.readTicket(id)),
+    );
+    const migratedTickets = await deps.runMigrations(
+      deps.stateDir,
+      tickets,
+    );
+
+    const processedTickets = [...migratedTickets];
+    for (let i = 0; i < processedTickets.length; i++) {
+      for (const action of deps.tickActions) {
+        if (action.applies(processedTickets[i])) {
+          const updated = await action.run(
+            processedTickets[i],
+            deps.stateDir,
+          );
+          if (updated !== null) processedTickets[i] = updated;
+        }
+      }
+    }
+
+    const runningTickets = processedTickets.filter(
+      (t) => t.status === "running",
+    );
+    const candidateTickets = processedTickets.filter(
+      (t) =>
+        t.status !== "done" &&
+        t.status !== "needs-attention" &&
+        !(t.phase === "merge" && t.status === "waiting") &&
+        t.status !== "running" &&
+        t.phase !== "wont-do",
+    );
+
+    const lastWorked = await deps.readLastWorked();
+    const selectedIds = selectCandidates(
+      candidateTickets.map((t) => t.id),
+      lastWorked,
+      deps.concurrency,
+    );
+    const selectedSet = new Set(selectedIds);
+
+    for (const ticket of runningTickets) {
+      await advancePhase(ticket, deps.stateDir, deps.tickDeps);
+    }
+
+    let running = runningTickets.length;
+    for (const ticket of candidateTickets) {
+      if (!selectedSet.has(ticket.id)) continue;
+      const willSpawn = ticket.status === "new" ||
+        ticket.status === "revising" ||
+        (ticket.status === "waiting" && ticket.approved);
+      if (willSpawn && running >= deps.concurrency) continue;
+      if (willSpawn) running++;
+      await advancePhase(ticket, deps.stateDir, deps.tickDeps);
+    }
+
+    await deps.writeLastWorked(selectedIds);
+    await deps.commitState();
   }
 }

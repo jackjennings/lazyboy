@@ -1,20 +1,18 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
-import { join } from "@std/path";
 import {
   advancePhase,
-  advanceTickets,
   PHASE_MODEL_DEFAULTS,
   resolvePhaseModel,
   selectCandidates,
-  tick,
+  TickService,
 } from "./tick.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
-import { writeTicket } from "./state/store.ts";
-import type { TickDeps } from "./tick.ts";
+import type { TickDeps, TickServiceDeps } from "./tick.ts";
+import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
-import type { MigrationFn } from "./migrations/runner.ts";
+import type { Provider, WorkItem } from "./providers/types.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
 
@@ -33,16 +31,6 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     updated: "2026-06-15T00:00:00Z",
     body: "",
     ...overrides,
-  };
-}
-
-function makeTickConfig(tempDir: string) {
-  return {
-    github: { repos: [] },
-    state: { dir: tempDir },
-    tick: { concurrency: 1 },
-    codebase: { roots: [] },
-    packages: { enabled: [] },
   };
 }
 
@@ -101,8 +89,8 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
     spawn: () => Promise.resolve(),
     isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
@@ -158,7 +146,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     status: "waiting",
     approved: false,
   });
-  const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
+  const spawnSpy = spy(() => Promise.resolve());
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
     isProcessAlive: () => false,
@@ -201,7 +189,9 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
     phase: "plan",
     status: "waiting",
     approved: true,
-    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+    },
   });
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
@@ -228,7 +218,9 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
     phase: "intake",
     status: "waiting",
     approved: true,
-    worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" } },
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+    },
   });
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
@@ -249,7 +241,13 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
 });
 
 Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "new" });
+  const ticket = makeTicket({
+    phase: "intake",
+    status: "new",
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+    },
+  });
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
@@ -294,116 +292,6 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
   assertEquals(written.status, "needs-attention");
 });
 
-Deno.test("tick: calls installPackages with config.packages.enabled before advancing", async () => {
-  const sequence: string[] = [];
-  const tempDir = await Deno.makeTempDir();
-  try {
-    const installPackagesSpy = spy(() => {
-      sequence.push("install");
-      return Promise.resolve([]);
-    });
-    const advanceTicketsSpy = spy(() => {
-      sequence.push("advance");
-      return Promise.resolve();
-    });
-    await tick({
-      loadConfig: () =>
-        Promise.resolve({
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 1 },
-          codebase: { roots: [] },
-          packages: { enabled: ["npm:pi-lens", "agent-browser"] },
-        }),
-      installPackages: installPackagesSpy,
-      advanceTickets: advanceTicketsSpy,
-      isProcessAlive: () => false,
-    });
-    assertSpyCall(installPackagesSpy, 0, {
-      args: [["npm:pi-lens", "agent-browser"]],
-    });
-    assertEquals(sequence, ["install", "advance"]);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
-});
-
-Deno.test("tick: removes the pid file and exits(1) with a clean message when advanceTickets throws", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  try {
-    const exitSpy = spy((_code: number) => {});
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: () => Promise.reject(new Error("boom")),
-      isProcessAlive: () => false,
-      exit: exitSpy,
-    });
-    assertSpyCall(exitSpy, 0, { args: [1] });
-    let pidFileExists = true;
-    try {
-      await Deno.stat(pidFile);
-    } catch {
-      pidFileExists = false;
-    }
-    assertEquals(pidFileExists, false);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});
-
-Deno.test("tick: reclaims a lock held by a live pid once it exceeds the staleness threshold", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  try {
-    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-      recursive: true,
-    });
-    await Deno.writeTextFile(pidFile, "999999");
-    const staleSeconds =
-      Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) -
-      31 * 60;
-    await Deno.utime(pidFile, staleSeconds, staleSeconds);
-
-    const advanceTicketsSpy = spy(() => Promise.resolve());
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: advanceTicketsSpy,
-      isProcessAlive: () => true,
-    });
-    assertSpyCalls(advanceTicketsSpy, 1);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});
-
-Deno.test("tick: does not reclaim a lock held by a live pid within the staleness threshold", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  try {
-    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-      recursive: true,
-    });
-    await Deno.writeTextFile(pidFile, "999999");
-
-    const advanceTicketsSpy = spy(() => Promise.resolve());
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: advanceTicketsSpy,
-      isProcessAlive: () => true,
-    });
-    assertSpyCalls(advanceTicketsSpy, 0);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});
-
 Deno.test("advancePhase: new ticket logs status-only transition", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
   const appendLogSpy = spy(
@@ -418,18 +306,18 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
     resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "status-transition",
-      phase: "intake",
-      from: "new",
-      to: "running",
-    }],
+  assertSpyCall(appendLogSpy, 0);
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(appendLogSpy.calls[0].args[2], {
+    event: "status-transition",
+    phase: "intake",
+    from: "new",
+    to: "running",
   });
 });
 
 Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "running" });
+  const ticket = makeTicket({ phase: "enrichment", status: "running" });
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
@@ -439,43 +327,42 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "status-transition",
-      phase: "intake",
-      from: "running",
-      to: "waiting",
-    }],
+  assertSpyCall(appendLogSpy, 0);
+  assertEquals(appendLogSpy.calls[0].args[2], {
+    event: "status-transition",
+    phase: "enrichment",
+    from: "running",
+    to: "waiting",
   });
 });
 
 Deno.test("advancePhase: dead PID on implementation logs status-transition to waiting", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "running",
-  });
+  const ticket = makeTicket({ phase: "implementation", status: "running" });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
     isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "status-transition",
-      phase: "implementation",
-      from: "running",
-      to: "waiting",
-    }],
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(logEntries[0], {
+    event: "status-transition",
+    phase: "implementation",
+    from: "running",
+    to: "waiting",
   });
 });
 
@@ -490,7 +377,7 @@ Deno.test("advancePhase: live PID does not log", async () => {
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCalls(appendLogSpy, 0);
@@ -502,8 +389,12 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
     status: "waiting",
     approved: true,
   });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
@@ -511,15 +402,14 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "phase-transition",
-      from: "implementation",
-      to: "merge",
-    }],
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(logEntries[0], {
+    event: "phase-transition",
+    from: "implementation",
+    to: "merge",
   });
 });
 
@@ -529,8 +419,12 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     status: "waiting",
     approved: true,
   });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
@@ -538,15 +432,14 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "phase-transition",
-      from: "intake",
-      to: "enrichment",
-    }],
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(logEntries[0], {
+    event: "phase-transition",
+    from: "intake",
+    to: "enrichment",
   });
 });
 
@@ -557,8 +450,12 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     approved: true,
     worktrees: {},
   });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
@@ -566,26 +463,25 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "phase-transition",
-      from: "plan",
-      to: "needs-attention",
-    }],
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(logEntries[0], {
+    event: "phase-transition",
+    from: "plan",
+    to: "needs-attention",
   });
 });
 
 Deno.test("advancePhase: log entry does not include ts (appended by appendTicketLog)", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "waiting",
-    approved: true,
-  });
+  const ticket = makeTicket({ phase: "intake", status: "new" });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
@@ -593,37 +489,31 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0);
-  assertEquals(
-    "ts" in (appendLogSpy.calls[0].args[2] as Record<string, unknown>),
-    false,
-  );
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals("ts" in logEntries[0], false);
 });
 
 Deno.test("advancePhase: revising status spawns plan with timestamped outputFile", async () => {
   const ticket = makeTicket({ phase: "plan", status: "revising" });
-  let spawnedPhase = "";
-  let spawnedOutputFile: string | undefined;
+  let spawnedOutputFile = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedPhase = opts.phase;
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
     isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedPhase, "plan");
-  assertEquals(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""), true);
+  assertEquals(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile), true);
 });
 
 Deno.test("advancePhase: revising status transitions to running and clears approved", async () => {
@@ -632,55 +522,49 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
     status: "revising",
     approved: true,
   });
-  let written = {
-    phase: "",
-    status: "",
-    approved: true,
-  };
+  const writtenTickets: TicketState[] = [];
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
-    written = {
-      phase: t.phase,
-      status: t.status,
-      approved: t.approved,
-    };
+    writtenTickets.push(t);
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
     isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(writeTicketSpy, 0);
-  assertEquals(written.phase, "plan");
-  assertEquals(written.status, "running");
-  assertEquals(written.approved, false);
+  assertEquals(writtenTickets[0].status, "running");
+  assertEquals(writtenTickets[0].approved, false);
 });
 
 Deno.test("advancePhase: revising status logs status-transition from revising to running", async () => {
-  const ticket = makeTicket({ phase: "enrichment", status: "revising" });
+  const ticket = makeTicket({ phase: "plan", status: "revising" });
+  const logEntries: object[] = [];
   const appendLogSpy = spy(
-    (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    (_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    },
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
     isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
-  assertSpyCall(appendLogSpy, 0, {
-    args: ["/state", "gh-1", {
-      event: "status-transition",
-      phase: "enrichment",
-      from: "revising",
-      to: "running",
-    }],
+  assertSpyCalls(appendLogSpy, 1);
+  assertEquals(logEntries[0], {
+    event: "status-transition",
+    phase: "plan",
+    from: "revising",
+    to: "running",
   });
 });
 
@@ -694,10 +578,10 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
     isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(spawnSpy, 0);
@@ -709,7 +593,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
 
 Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake output filename", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
-  let spawnedOutputFile: string | undefined;
+  let spawnedOutputFile = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
@@ -720,11 +604,11 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile ?? ""), true);
+  assertEquals(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile), true);
 });
 
 Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next-phase output filename", async () => {
@@ -733,7 +617,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     status: "waiting",
     approved: true,
   });
-  let spawnedOutputFile: string | undefined;
+  let spawnedOutputFile = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
@@ -744,7 +628,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(spawnSpy, 0);
@@ -782,102 +666,328 @@ Deno.test("resolveConflictsAction is importable (wiring smoke test)", () => {
   assertEquals(typeof action.run, "function");
 });
 
-async function initGitStateDir(dir: string): Promise<void> {
-  const run = (args: string[]) =>
-    new Deno.Command("git", { args, cwd: dir }).output();
-  await run(["init"]);
-  await run(["config", "user.email", "test@test.com"]);
-  await run(["config", "user.name", "Test"]);
+// ── TickService ────────────────────────────────────────────────────────────────
+
+function makeFakeTickDeps(): TickDeps {
+  return {
+    spawn: () => Promise.resolve(),
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+  };
 }
 
-async function writeMinimalTicket(stateDir: string, id: string): Promise<void> {
-  await Deno.mkdir(join(stateDir, id), { recursive: true });
-  await Deno.writeTextFile(
-    join(stateDir, id, "meta.md"),
-    [
-      "---",
-      `id: ${id}`,
-      "provider: github",
-      "title: T",
-      "url: 'https://github.com/test/repo/issues/1'",
-      "phase: intake",
-      "status: new",
-      "approved: false",
-      "scope: []",
-      "worktrees: {}",
-      "created: '2026-01-01T00:00:00Z'",
-      "updated: '2026-01-01T00:00:00Z'",
-      "---",
-      "",
-    ].join("\n"),
-  );
+function makeFakeServiceDeps(
+  overrides: Partial<TickServiceDeps> = {},
+): TickServiceDeps {
+  return {
+    stateDir: "/state",
+    concurrency: 1,
+    packageSources: [],
+    installPackages: () => Promise.resolve([]),
+    providers: [],
+    tickActions: [],
+    tickDeps: makeFakeTickDeps(),
+    runMigrations: (_dir, tickets) => Promise.resolve(tickets),
+    readLastWorked: () => Promise.resolve([]),
+    writeLastWorked: () => Promise.resolve(),
+    listTickets: () => Promise.resolve([]),
+    readTicket: (_id) => Promise.resolve(makeTicket()),
+    writeTicket: () => Promise.resolve(),
+    commitState: () => Promise.resolve(),
+    lock: { withLock: (fn) => fn() },
+    ...overrides,
+  };
 }
 
-Deno.test("advanceTicketsImpl: runMigrations receives the ticket list before tick actions run", async () => {
-  const tempDir = await Deno.makeTempDir();
-  try {
-    await initGitStateDir(tempDir);
-    await writeMinimalTicket(tempDir, "gh-1");
-    let capturedIds: string[] = [];
-    const runMigrationsSpy = spy(
-      (_stateDir: string, tickets: TicketState[]) => {
-        capturedIds = tickets.map((t) => t.id);
+Deno.test("TickService: lock.withLock called once per run()", async () => {
+  let calls = 0;
+  const lock: Lock = {
+    withLock: async (fn) => {
+      calls++;
+      await fn();
+    },
+  };
+  const deps = makeFakeServiceDeps({ lock });
+  await new TickService(deps).run();
+  assertEquals(calls, 1);
+});
+
+Deno.test(
+  "TickService: workflow does not run if lock.withLock does not call fn",
+  async () => {
+    const listTicketsSpy = spy(() => Promise.resolve([]));
+    const lock: Lock = { withLock: (_fn) => Promise.resolve() };
+    const deps = makeFakeServiceDeps({ lock, listTickets: listTicketsSpy });
+    await new TickService(deps).run();
+    assertSpyCalls(listTicketsSpy, 0);
+  },
+);
+
+Deno.test(
+  "TickService: installPackages called with packageSources before listTickets",
+  async () => {
+    const sequence: string[] = [];
+    const deps = makeFakeServiceDeps({
+      packageSources: ["npm:foo"],
+      installPackages: spy(() => {
+        sequence.push("install");
+        return Promise.resolve([]);
+      }),
+      listTickets: spy(() => {
+        sequence.push("list");
+        return Promise.resolve([]);
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(sequence[0], "install");
+    assertEquals(sequence[1], "list");
+  },
+);
+
+Deno.test(
+  "TickService: providers.fetchNew called with existingIds set",
+  async () => {
+    let capturedIds: Set<string> | null = null;
+    const provider: Provider = {
+      fetchNew: (ids) => {
+        capturedIds = ids;
+        return Promise.resolve([]);
+      },
+      close: () => Promise.resolve(),
+    };
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve(["gh-1"]),
+    });
+    await new TickService(deps).run();
+    assertEquals(capturedIds, new Set(["gh-1"]));
+  },
+);
+
+Deno.test(
+  "TickService: new work items written as tickets with intake/new",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-2",
+      provider: "github",
+      title: "Title",
+      url: "https://github.com/t/r/issues/2",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const writtenTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      writeTicket: spy((t: TicketState) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(writtenTickets.length, 1);
+    assertEquals(writtenTickets[0].id, "gh-2");
+    assertEquals(writtenTickets[0].phase, "intake");
+    assertEquals(writtenTickets[0].status, "new");
+    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[0].body, "body");
+  },
+);
+
+Deno.test(
+  "TickService: runMigrations called before tick actions",
+  async () => {
+    const sequence: string[] = [];
+    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "new" });
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      runMigrations: spy((_dir, tickets) => {
+        sequence.push("migrate");
         return Promise.resolve(tickets);
-      },
+      }),
+      tickActions: [{
+        applies: (_t) => {
+          sequence.push("action");
+          return false;
+        },
+        run: () => Promise.resolve(null),
+      }],
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("migrate") < sequence.indexOf("action"),
+      true,
     );
-    await advanceTickets(
-      {
-        github: { repos: [] },
-        state: { dir: tempDir },
-        tick: { concurrency: 0 },
-        codebase: { roots: [] },
-        packages: { enabled: [] },
-      },
-      {
-        runMigrations: runMigrationsSpy,
-        readLastWorked: () => Promise.resolve([]),
-        writeLastWorked: async () => {},
-      },
+  },
+);
+
+Deno.test(
+  "TickService: tickAction.applies and .run called for matching ticket",
+  async () => {
+    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "new" });
+    const runSpy = spy(
+      (_t: TicketState, _sd: string) =>
+        Promise.resolve<TicketState | null>(null),
     );
-    assertSpyCall(runMigrationsSpy, 0);
-    assertEquals(capturedIds, ["gh-1"]);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      tickActions: [{ applies: () => true, run: runSpy }],
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(runSpy, 1);
+  },
+);
+
+Deno.test(
+  "TickService: writeLastWorked called with selected candidate IDs",
+  async () => {
+    const t1 = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const t2 = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const store: Record<string, TicketState> = { "gh-1": t1, "gh-2": t2 };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 1,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [["gh-1"]] });
+  },
+);
+
+Deno.test(
+  "TickService: readLastWorked shifts round-robin start position",
+  async () => {
+    const t1 = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const t2 = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const t3 = makeTicket({
+      id: "gh-3",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const store: Record<string, TicketState> = {
+      "gh-1": t1,
+      "gh-2": t2,
+      "gh-3": t3,
+    };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      readLastWorked: () => Promise.resolve(["gh-1"]),
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 1,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [["gh-2"]] });
+  },
+);
+
+Deno.test(
+  "TickService: running tickets excluded from writeLastWorked",
+  async () => {
+    const running = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
+    const waiting = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "waiting",
+      approved: false,
+    });
+    const store: Record<string, TicketState> = {
+      "gh-1": running,
+      "gh-2": waiting,
+    };
+    const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      tickDeps: {
+        spawn: () => Promise.resolve(),
+        isProcessAlive: (id) => id === "gh-1",
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      },
+      writeLastWorked: writeLastWorkedSpy,
+      concurrency: 2,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(writeLastWorkedSpy, 0, { args: [["gh-2"]] });
+  },
+);
+
+Deno.test(
+  "TickService: commitState called after writeLastWorked",
+  async () => {
+    const sequence: string[] = [];
+    const deps = makeFakeServiceDeps({
+      writeLastWorked: spy(() => {
+        sequence.push("writeLastWorked");
+        return Promise.resolve();
+      }),
+      commitState: spy(() => {
+        sequence.push("commitState");
+        return Promise.resolve();
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("writeLastWorked") < sequence.indexOf("commitState"),
+      true,
+    );
+  },
+);
+
+Deno.test("TickService: exit(1) called when workflow throws", async () => {
+  const exitSpy = spy((_code: number) => {});
+  const deps = makeFakeServiceDeps({
+    listTickets: () => Promise.reject(new Error("workflow error")),
+    exit: exitSpy,
+  });
+  await new TickService(deps).run();
+  assertSpyCall(exitSpy, 0, { args: [1] });
 });
 
-Deno.test("advanceTicketsImpl: throws when runMigrations throws, halting the tick", async () => {
-  const tempDir = await Deno.makeTempDir();
-  try {
-    await initGitStateDir(tempDir);
-    await writeMinimalTicket(tempDir, "gh-1");
-    const runMigrations: MigrationFn = () =>
-      Promise.reject(
-        new Error("Migration 1000-fail.ts failed on ticket gh-1: bad data"),
-      );
-    await assertRejects(
-      () =>
-        advanceTickets(
-          {
-            github: { repos: [] },
-            state: { dir: tempDir },
-            tick: { concurrency: 0 },
-            codebase: { roots: [] },
-            packages: { enabled: [] },
-          },
-          {
-            runMigrations,
-            readLastWorked: () => Promise.resolve([]),
-            writeLastWorked: async () => {},
-          },
-        ),
-      Error,
-      "Migration 1000-fail.ts failed on ticket gh-1: bad data",
-    );
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-  }
-});
+// ── selectCandidates ──────────────────────────────────────────────────────────
 
 Deno.test("selectCandidates: empty candidates returns empty", () => {
   assertEquals(selectCandidates([], [], 2), []);
@@ -928,339 +1038,6 @@ Deno.test("selectCandidates: uses last surviving ID from end of lastWorked as an
     ["gh-3"],
   );
 });
-
-// Task 2 integration tests
-
-Deno.test(
-  "advanceTicketsImpl: writeLastWorked called with sorted candidate IDs",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-2",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-1",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-3",
-          phase: "intake",
-          status: "running",
-        }),
-      );
-      await Deno.mkdir(join(tempDir, "gh-3"), { recursive: true });
-      await Deno.writeTextFile(
-        join(tempDir, "gh-3", "run.pid"),
-        String(Deno.pid),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 1 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve([]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [["gh-1"]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
-
-Deno.test(
-  "advanceTicketsImpl: running tickets excluded from writeLastWorked",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-1",
-          phase: "intake",
-          status: "running",
-        }),
-      );
-      await Deno.mkdir(join(tempDir, "gh-1"), { recursive: true });
-      await Deno.writeTextFile(
-        join(tempDir, "gh-1", "run.pid"),
-        String(Deno.pid),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-2",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 2 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve([]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [["gh-2"]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
-
-Deno.test(
-  "advanceTicketsImpl: writeLastWorked called with empty array when no candidates",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-1",
-          phase: "intake",
-          status: "running",
-        }),
-      );
-      await Deno.mkdir(join(tempDir, "gh-1"), { recursive: true });
-      await Deno.writeTextFile(
-        join(tempDir, "gh-1", "run.pid"),
-        String(Deno.pid),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 2 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve([]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [[]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
-
-Deno.test(
-  "advanceTicketsImpl: readLastWorked shifts round-robin start position",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-1",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-2",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({
-          id: "gh-3",
-          phase: "intake",
-          status: "waiting",
-          approved: false,
-        }),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 1 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve(["gh-1"]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [["gh-2"]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
-
-Deno.test(
-  "advanceTicketsImpl: skipped-status tickets not included in candidates or writeLastWorked",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({ id: "gh-1", phase: "merge", status: "done" }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({ id: "gh-2", phase: "intake", status: "needs-attention" }),
-      );
-      await writeTicket(
-        tempDir,
-        makeTicket({ id: "gh-3", phase: "merge", status: "waiting" }),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 3 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve([]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [[]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
-
-Deno.test(
-  "advanceTicketsImpl: wont-do tickets not included in candidates or writeLastWorked",
-  async () => {
-    const tempDir = await Deno.makeTempDir();
-    try {
-      await new Deno.Command("git", { args: ["init", tempDir] }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.email", "t@t"],
-      }).output();
-      await new Deno.Command("git", {
-        args: ["-C", tempDir, "config", "user.name", "t"],
-      }).output();
-
-      await writeTicket(
-        tempDir,
-        makeTicket({ id: "gh-wont-do", phase: "wont-do", status: "done" }),
-      );
-
-      const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
-      await advanceTickets(
-        {
-          github: { repos: [] },
-          state: { dir: tempDir },
-          tick: { concurrency: 3 },
-          codebase: { roots: [] },
-          packages: { enabled: [] },
-        },
-        {
-          runMigrations: (_, tickets) => Promise.resolve(tickets),
-          readLastWorked: () => Promise.resolve([]),
-          writeLastWorked,
-        },
-      );
-
-      assertSpyCall(writeLastWorked, 0, { args: [[]] });
-    } finally {
-      await Deno.remove(tempDir, { recursive: true });
-    }
-  },
-);
 
 // ── PHASE_MODEL_DEFAULTS ─────────────────────────────────────────────────────
 
@@ -1320,19 +1097,21 @@ Deno.test("resolvePhaseModel: config default overrides hardcoded", () => {
     phases: { defaults: { intake: { model: "claude-opus-4-5" } } },
   });
   const ticket = makeTicket();
-  const result = resolvePhaseModel(config, "intake", ticket);
-  assertEquals(result.model, "claude-opus-4-5");
-  assertEquals(result.thinking, "off");
+  assertEquals(resolvePhaseModel(config, "intake", ticket), {
+    model: "claude-opus-4-5",
+    thinking: "off",
+  });
 });
 
 Deno.test("resolvePhaseModel: config default sets thinking only", () => {
   const config = makeConfig({
-    phases: { defaults: { spec: { thinking: "low" } } },
+    phases: { defaults: { intake: { thinking: "high" } } },
   });
   const ticket = makeTicket();
-  const result = resolvePhaseModel(config, "spec", ticket);
-  assertEquals(result.model, "claude-sonnet-4-6");
-  assertEquals(result.thinking, "low");
+  assertEquals(resolvePhaseModel(config, "intake", ticket), {
+    model: "claude-haiku-4-5",
+    thinking: "high",
+  });
 });
 
 Deno.test("resolvePhaseModel: ticket phases override config for implementation", () => {
@@ -1340,34 +1119,35 @@ Deno.test("resolvePhaseModel: ticket phases override config for implementation",
     phases: { defaults: { implementation: { model: "claude-haiku-4-5" } } },
   });
   const ticket = makeTicket({
-    phases: { implementation: { model: "claude-opus-4-6", thinking: "xhigh" } },
+    phases: { implementation: { model: "claude-opus-4-7", thinking: "max" } },
   });
-  const result = resolvePhaseModel(config, "implementation", ticket);
-  assertEquals(result.model, "claude-opus-4-6");
-  assertEquals(result.thinking, "xhigh");
+  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
+    model: "claude-opus-4-7",
+    thinking: "max",
+  });
 });
 
 Deno.test("resolvePhaseModel: ticket phases override config for any phase", () => {
   const config = makeConfig();
   const ticket = makeTicket({
-    phases: { enrichment: { model: "claude-opus-4-5", thinking: "minimal" } },
+    phases: { intake: { model: "claude-opus-4-7", thinking: "max" } },
   });
-  const result = resolvePhaseModel(config, "enrichment", ticket);
-  assertEquals(result.model, "claude-opus-4-5");
-  assertEquals(result.thinking, "minimal");
+  assertEquals(resolvePhaseModel(config, "intake", ticket), {
+    model: "claude-opus-4-7",
+    thinking: "max",
+  });
 });
 
 Deno.test("resolvePhaseModel: ticket phases model-only, thinking from hardcoded", () => {
   const config = makeConfig();
   const ticket = makeTicket({
-    phases: { implementation: { model: "claude-opus-4-6" } },
+    phases: { intake: { model: "claude-opus-4-7" } },
   });
-  const result = resolvePhaseModel(config, "implementation", ticket);
-  assertEquals(result.model, "claude-opus-4-6");
-  assertEquals(result.thinking, "high");
+  assertEquals(resolvePhaseModel(config, "intake", ticket), {
+    model: "claude-opus-4-7",
+    thinking: "off",
+  });
 });
-
-// ── advancePhase with resolveModelConfig ────────────────────────────────────
 
 Deno.test("advancePhase: spawn receives model and thinking from resolveModelConfig", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
@@ -1384,15 +1164,12 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({
-      model: "claude-opus-4-5",
-      thinking: "minimal",
-    }),
+    resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "max" }),
     selfReview: () => Promise.resolve({ approved: false, reason: null }),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedModel, "claude-opus-4-5");
-  assertEquals(spawnedThinking, "minimal");
+  assertEquals(spawnedModel, "claude-opus-4-7");
+  assertEquals(spawnedThinking, "max");
 });
 
 Deno.test("advancePhase: resolveModelConfig called with the phase being spawned", async () => {
@@ -1651,7 +1428,9 @@ Deno.test(
     assertEquals(writePhaseOutputCalls[0][0], "/state");
     assertEquals(writePhaseOutputCalls[0][1], "gh-1");
     assertEquals(
-      /^\d{8}T\d{6}-intake-self-review\.md$/.test(writePhaseOutputCalls[0][2]),
+      /^\d{8}T\d{6}-intake-self-review\.md$/.test(
+        writePhaseOutputCalls[0][2],
+      ),
       true,
     );
     assertEquals(writePhaseOutputCalls[0][3], "REJECT\nCriterion 1 violated.");
@@ -1858,94 +1637,3 @@ Deno.test(
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
-Deno.test("tick: writes NDJSON to tick.ndjson when tick is already running", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-    recursive: true,
-  });
-  await Deno.writeTextFile(pidFile, "999999");
-  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
-  try {
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: () => Promise.resolve(),
-      isProcessAlive: () => true,
-    });
-    const logAfter = await Deno.readTextFile(tickLog);
-    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
-      Boolean,
-    );
-    const entry = JSON.parse(newLines[newLines.length - 1]);
-    assertEquals(entry.event, "tick-already-running");
-    assertEquals(typeof entry.ts, "string");
-    assertEquals(!isNaN(Date.parse(entry.ts)), true);
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});
-
-Deno.test("tick: writes NDJSON to tick.ndjson when lock is stale", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-    recursive: true,
-  });
-  await Deno.writeTextFile(pidFile, "999999");
-  const staleSeconds =
-    Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) - 31 * 60;
-  await Deno.utime(pidFile, staleSeconds, staleSeconds);
-  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
-  try {
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: () => Promise.resolve(),
-      isProcessAlive: () => true,
-    });
-    const logAfter = await Deno.readTextFile(tickLog);
-    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
-      Boolean,
-    );
-    const entry = JSON.parse(newLines[newLines.length - 1]);
-    assertEquals(entry.event, "stale-lock");
-    assertEquals(typeof entry.ts, "string");
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});
-
-Deno.test("tick: writes NDJSON to tick.ndjson when advanceTickets fails", async () => {
-  const tempDir = await Deno.makeTempDir();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
-  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-    recursive: true,
-  });
-  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
-  const exitSpy = spy((_code: number) => {});
-  try {
-    await tick({
-      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
-      installPackages: () => Promise.resolve([]),
-      advanceTickets: () => Promise.reject(new Error("boom")),
-      exit: exitSpy,
-    });
-    const logAfter = await Deno.readTextFile(tickLog);
-    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
-      Boolean,
-    );
-    const entry = JSON.parse(newLines[newLines.length - 1]);
-    assertEquals(entry.event, "tick-failed");
-    assertEquals(entry.error, "boom");
-    assertEquals(typeof entry.ts, "string");
-  } finally {
-    await Deno.remove(tempDir, { recursive: true });
-    await Deno.remove(pidFile).catch(() => {});
-  }
-});

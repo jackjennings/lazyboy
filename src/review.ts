@@ -26,6 +26,12 @@ import {
 } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "./config.ts";
 import {
+  checkApfelAvailable,
+  defaultCommandRunner,
+  defaultProcessSpawner,
+  startApfelServer,
+} from "./apfel.ts";
+import {
   commitTicket,
   readPhaseOutput,
   readTicket,
@@ -79,8 +85,37 @@ export async function findLatestPhaseOutput(
 export async function classifyApproval(
   text: string,
   fetcher: typeof fetch,
+  apfelUrl: string | null = null,
 ): Promise<boolean> {
   if (text.trim().length > 20) return false;
+  if (apfelUrl !== null) {
+    try {
+      const response = await fetcher(`${apfelUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "apple-foundationmodel",
+          max_tokens: 5,
+          messages: [
+            {
+              role: "system",
+              content:
+                "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval, acceptance, or intent to continue without changes (e.g. 'approved', 'looks good', 'continue', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
+            },
+            { role: "user", content: text },
+          ],
+        }),
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      const result = (data?.choices?.[0]?.message?.content ?? "")
+        .trim()
+        .toUpperCase();
+      return result === "APPROVE";
+    } catch {
+      return false;
+    }
+  }
   try {
     const response = await fetcher("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -350,6 +385,12 @@ export async function review(id: string): Promise<void> {
 
   const content = await readPhaseOutput(stateDir, id, found.filename);
 
+  const available = await checkApfelAvailable(defaultCommandRunner());
+  const server = available
+    ? await startApfelServer(defaultProcessSpawner(), fetch)
+    : null;
+  const killServer = () => server?.kill();
+
   const kb = new KeybindingsManager({
     ...TUI_KEYBINDINGS,
     "tui.input.submit": {
@@ -400,11 +441,20 @@ export async function review(id: string): Promise<void> {
     tui.requestRender(true);
   });
 
+  const sigtermHandler = () => {
+    killServer();
+    tui.stop();
+    Deno.exit(0);
+  };
+  Deno.addSignalListener("SIGTERM", sigtermHandler);
+
   async function handleSubmit(text: string): Promise<void> {
     if (!text.trim()) return;
     const now = Temporal.Now.zonedDateTimeISO("UTC");
-    if (await classifyApproval(text, fetch)) {
+    if (await classifyApproval(text, fetch, server?.url ?? null)) {
       await applyApproval(stateDir, id, now);
+      killServer();
+      Deno.removeSignalListener("SIGTERM", sigtermHandler);
       tui.stop();
       Deno.exit(0);
     }
@@ -418,6 +468,8 @@ export async function review(id: string): Promise<void> {
       updated: now.toInstant().toString(),
     });
     await commitTicket(stateDir, id, `review: ${id}`);
+    killServer();
+    Deno.removeSignalListener("SIGTERM", sigtermHandler);
     tui.stop();
     Deno.exit(0);
   }
@@ -426,6 +478,8 @@ export async function review(id: string): Promise<void> {
 
   tui.addInputListener((data) => {
     if (matchesKey(data, "ctrl+c")) {
+      killServer();
+      Deno.removeSignalListener("SIGTERM", sigtermHandler);
       tui.stop();
       Deno.exit(0);
     }

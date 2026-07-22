@@ -7,12 +7,13 @@ this repository.
 
 These must be present on the host; they are not managed by Deno.
 
-| Dependency                    | Purpose                                              |
-| ----------------------------- | ---------------------------------------------------- |
-| `git`                         | Worktree management, rebase/push, state repo commits |
-| `pi`                          | Runs phase prompts; checks/installs agent packages   |
-| `crontab`                     | Installs and removes the tick cron job               |
-| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status      |
+| Dependency                    | Purpose                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `git`                         | Worktree management, rebase/push, state repo commits                                                                            |
+| `pi`                          | Runs phase prompts; checks/installs agent packages                                                                              |
+| `crontab`                     | Installs and removes the tick cron job                                                                                          |
+| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                 |
+| `apfel`                       | Runs local LLM server for approval classification in review mode (optional; falls back to Anthropic when absent or unavailable) |
 
 Environment variables required at runtime (tick only): `GITHUB_TOKEN`,
 `GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.

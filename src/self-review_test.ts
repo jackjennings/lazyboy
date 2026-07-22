@@ -277,3 +277,16 @@ Deno.test("selfReview: returns reason text when LLM returns REJECT with explanat
     await Deno.remove(tempDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "intake-self-review.md criterion 3 accepts GitHub slug and URL formats",
+  async () => {
+    const promptPath = new URL(
+      "./phases/prompts/intake-self-review.md",
+      import.meta.url,
+    ).pathname;
+    const content = await Deno.readTextFile(promptPath);
+    assertEquals(content.includes("https://github.com/"), true);
+    assertEquals(content.includes("org/repo"), true);
+  },
+);

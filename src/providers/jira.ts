@@ -1,3 +1,4 @@
+import { adf2markdown } from "adf2markdown";
 import type { Provider, WorkItem } from "./types.ts";
 import { jiraTransition } from "../tick-actions/jira-transition.ts";
 
@@ -85,9 +86,11 @@ export class JiraProvider implements Provider {
           id,
           provider: "jira",
           title: issue.fields.summary,
-          description: issue.fields.description == null
+          description: issue.fields.description == null ||
+              typeof issue.fields.description !== "object"
             ? ""
-            : JSON.stringify(issue.fields.description),
+            // deno-lint-ignore no-explicit-any
+            : adf2markdown(issue.fields.description as any).trim(),
           url: `${this.baseUrl}/browse/${issue.key}`,
         });
       }

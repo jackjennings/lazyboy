@@ -134,7 +134,15 @@ export function extractUsageAndText(
 
   return {
     text: lastText,
-    usage: { input, output, cacheRead, cacheWrite, model, durationMs },
+    usage: {
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      model,
+      durationMs,
+      turns: assistantMessages.length,
+    },
   };
 }
 

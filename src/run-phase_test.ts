@@ -591,6 +591,7 @@ Deno.test(
       assertEquals(usage.cacheRead, 10);
       assertEquals(usage.cacheWrite, 2);
       assertEquals(usage.model, "claude-sonnet-4-6");
+      assertEquals(usage.turns, 1);
 
       const logContent = await Deno.readTextFile(
         join(ticketDir, "log.ndjson"),
@@ -648,6 +649,7 @@ Deno.test(
     assertEquals(result.usage?.cacheWrite, 50);
     assertEquals(result.usage?.model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 1234);
+    assertEquals(result.usage?.turns, 1);
   },
 );
 
@@ -703,6 +705,7 @@ Deno.test(
     assertEquals(result.usage?.cacheWrite, 50);
     assertEquals(result.usage?.model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 500);
+    assertEquals(result.usage?.turns, 2);
   },
 );
 
@@ -777,6 +780,7 @@ Deno.test(
     assertEquals(result.text, "");
     assertEquals(result.usage?.input, 1);
     assertEquals(result.usage?.output, 2);
+    assertEquals(result.usage?.turns, 1);
   },
 );
 

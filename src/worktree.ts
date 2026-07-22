@@ -49,6 +49,75 @@ export async function findLocalRepo(
   return null;
 }
 
+export function parseIntakeScope(content: string): string[] {
+  const sectionStart = content.search(/^## Proposed Scope$/m);
+  if (sectionStart === -1) return [];
+  const afterSection = content.slice(sectionStart);
+  const codeBlockMatch = afterSection.match(/```yaml\n([\s\S]*?)```/);
+  if (!codeBlockMatch) return [];
+  const yaml = codeBlockMatch[1];
+  const lines = yaml.split("\n");
+  let inScope = false;
+  const results: string[] = [];
+  for (const line of lines) {
+    if (/^scope:\s*$/.test(line)) {
+      inScope = true;
+      continue;
+    }
+    if (inScope) {
+      const itemMatch = line.match(/^\s+-\s+(.+)$/);
+      if (itemMatch) {
+        results.push(itemMatch[1].trim());
+      } else if (line.trim() && !/^\s/.test(line)) {
+        break;
+      }
+    }
+  }
+  return results;
+}
+
+const SLUG_RE = /^([a-zA-Z0-9_.\-]+)\/([a-zA-Z0-9_.\-]+)$/;
+const GITHUB_URL_RE = /^\/([^/]+)\/([^/]+)/;
+
+export function resolveGitHubSlug(entry: string): string | null {
+  if (entry.startsWith("https://github.com/")) {
+    const path = entry.slice("https://github.com".length);
+    const match = path.match(GITHUB_URL_RE);
+    if (!match || !match[2]) return null;
+    return `${match[1]}/${match[2]}`;
+  }
+  if (entry.startsWith("/") || entry.startsWith("~/")) return null;
+  const match = entry.match(SLUG_RE);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
+export async function cloneRemoteRepo(
+  slug: string,
+  token: string,
+): Promise<string> {
+  const home = Deno.env.get("HOME")!;
+  const [org, repo] = slug.split("/");
+  const orgDir = join(home, ".lazyboy", "repositories", org);
+  const repoDir = join(orgDir, repo);
+  await Deno.mkdir(orgDir, { recursive: true });
+  try {
+    await Deno.stat(repoDir);
+    return repoDir;
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const url = token
+    ? `https://${token}@github.com/${slug}.git`
+    : `https://github.com/${slug}.git`;
+  const { code, stderr } = await runGit(
+    ["clone", "--depth", "1", "--single-branch", url, repo],
+    orgDir,
+  );
+  if (code !== 0) throw new Error(`git clone failed for ${slug}: ${stderr}`);
+  return repoDir;
+}
+
 export async function createWorktree(
   repoPath: string,
   ticketId: string,

@@ -2,9 +2,12 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import {
+  cloneRemoteRepo,
   createWorktree,
   extractGitHubSlug,
   findLocalRepo,
+  parseIntakeScope,
+  resolveGitHubSlug,
   runGit,
 } from "./worktree.ts";
 
@@ -141,6 +144,150 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
     await Deno.remove(repoDir, { recursive: true });
   }
 });
+
+// ── parseIntakeScope ─────────────────────────────────────────────────────────
+
+Deno.test("parseIntakeScope: returns [] for empty string", () => {
+  assertEquals(parseIntakeScope(""), []);
+});
+
+Deno.test(
+  "parseIntakeScope: returns [] when Proposed Scope section is absent",
+  () => {
+    assertEquals(parseIntakeScope("## Reasoning\n\nSome text.\n"), []);
+  },
+);
+
+Deno.test(
+  "parseIntakeScope: returns [] when fenced code block is absent",
+  () => {
+    assertEquals(
+      parseIntakeScope("## Proposed Scope\n\nNo code block here.\n"),
+      [],
+    );
+  },
+);
+
+Deno.test("parseIntakeScope: returns [] for empty scope list", () => {
+  assertEquals(
+    parseIntakeScope(
+      "## Proposed Scope\n\n```yaml\nscope: []\n```\n\n## Reasoning\n\nText.\n",
+    ),
+    [],
+  );
+});
+
+Deno.test("parseIntakeScope: extracts single local path entry", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - /code/myorg/repo\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), ["/code/myorg/repo"]);
+});
+
+Deno.test("parseIntakeScope: extracts multiple entries", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - ~/code/org/a\n  - org/repo\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), ["~/code/org/a", "org/repo"]);
+});
+
+Deno.test("parseIntakeScope: ignores content after the section", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - /code/repo\n```\n\n## Reasoning\n\nAnother section with ```yaml\nscope:\n  - /other\n````.\n";
+  assertEquals(parseIntakeScope(content), ["/code/repo"]);
+});
+
+// ── resolveGitHubSlug ────────────────────────────────────────────────────────
+
+Deno.test("resolveGitHubSlug: returns null for local absolute path", () => {
+  assertEquals(resolveGitHubSlug("/code/myorg/repo"), null);
+});
+
+Deno.test("resolveGitHubSlug: returns null for tilde-prefixed path", () => {
+  assertEquals(resolveGitHubSlug("~/code/myorg/repo"), null);
+});
+
+Deno.test("resolveGitHubSlug: returns slug for valid org/repo entry", () => {
+  assertEquals(resolveGitHubSlug("myorg/myrepo"), "myorg/myrepo");
+});
+
+Deno.test(
+  "resolveGitHubSlug: slug components allow dots, hyphens, underscores",
+  () => {
+    assertEquals(
+      resolveGitHubSlug("my-org.v2/my_repo.v2"),
+      "my-org.v2/my_repo.v2",
+    );
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: returns null for slug with more than two components",
+  () => {
+    assertEquals(resolveGitHubSlug("org/repo/extra"), null);
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: returns null for single-component string",
+  () => {
+    assertEquals(resolveGitHubSlug("justarepo"), null);
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: extracts slug from full github.com issue URL",
+  () => {
+    assertEquals(
+      resolveGitHubSlug("https://github.com/myorg/myrepo/issues/1"),
+      "myorg/myrepo",
+    );
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: extracts slug from bare github.com repo URL",
+  () => {
+    assertEquals(
+      resolveGitHubSlug("https://github.com/myorg/myrepo"),
+      "myorg/myrepo",
+    );
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: returns null for github.com URL with only org",
+  () => {
+    assertEquals(resolveGitHubSlug("https://github.com/myorg"), null);
+  },
+);
+
+Deno.test(
+  "resolveGitHubSlug: returns null for non-github https URL",
+  () => {
+    assertEquals(resolveGitHubSlug("https://gitlab.com/org/repo"), null);
+  },
+);
+
+// ── cloneRemoteRepo ──────────────────────────────────────────────────────────
+
+Deno.test(
+  "cloneRemoteRepo: returns existing path without re-cloning",
+  async () => {
+    const home = await Deno.makeTempDir();
+    const orgDir = join(home, ".lazyboy", "repositories", "org");
+    const repoDir = join(orgDir, "repo");
+    await Deno.mkdir(repoDir, { recursive: true });
+
+    const originalHome = Deno.env.get("HOME")!;
+    Deno.env.set("HOME", home);
+    try {
+      const result = await cloneRemoteRepo("org/repo", "");
+      assertEquals(result, repoDir);
+    } finally {
+      Deno.env.set("HOME", originalHome);
+      await Deno.remove(home, { recursive: true });
+    }
+  },
+);
 
 // ── runGit ───────────────────────────────────────────────────────────────────
 

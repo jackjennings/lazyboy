@@ -26,7 +26,12 @@ import {
   nextPhase,
 } from "./phases/runners.ts";
 import { compactTimestamp } from "./timestamp.ts";
-import { createWorktree, findLocalRepo, runGit } from "./worktree.ts";
+import {
+  cloneRemoteRepo,
+  createWorktree,
+  findLocalRepo,
+  runGit,
+} from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import {
@@ -506,6 +511,33 @@ export async function advanceTickets(
       findLocalRepo,
       createWorktree,
       writeTicket,
+      readIntakeOutput: async (ticketDir: string) => {
+        const files: string[] = [];
+        try {
+          for await (const entry of Deno.readDir(ticketDir)) {
+            if (
+              entry.isFile &&
+              /^\d{8}T\d{6}-intake\.md$/.test(entry.name)
+            ) {
+              files.push(entry.name);
+            }
+          }
+        } catch {
+          return null;
+        }
+        if (files.length === 0) return null;
+        files.sort();
+        return Deno.readTextFile(join(ticketDir, files[files.length - 1]));
+      },
+      cloneRemoteRepo: (slug: string) => cloneRemoteRepo(slug, token),
+      stat: async (path: string) => {
+        try {
+          await Deno.stat(path);
+          return true;
+        } catch {
+          return false;
+        }
+      },
     }),
     checkMergedPRAction({
       isPRMerged: async (prUrl: string) => {

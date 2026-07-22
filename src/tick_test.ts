@@ -1819,7 +1819,7 @@ Deno.test("tick: writes NDJSON to tick.ndjson when tick is already running", asy
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: () => Promise.resolve(),
-      isPidAlive: () => true,
+      isProcessAlive: () => true,
     });
     const logAfter = await Deno.readTextFile(tickLog);
     const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
@@ -1852,7 +1852,7 @@ Deno.test("tick: writes NDJSON to tick.ndjson when lock is stale", async () => {
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: () => Promise.resolve(),
-      isPidAlive: () => true,
+      isProcessAlive: () => true,
     });
     const logAfter = await Deno.readTextFile(tickLog);
     const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
@@ -1881,7 +1881,6 @@ Deno.test("tick: writes NDJSON to tick.ndjson when advanceTickets fails", async 
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: () => Promise.reject(new Error("boom")),
-      isPidAlive: () => false,
       exit: exitSpy,
     });
     const logAfter = await Deno.readTextFile(tickLog);

@@ -11,7 +11,7 @@ Deno.test("selfReview: returns false when no self-review prompt exists for phase
         Promise.resolve(new Response("{}", { status: 200 })),
     );
     const result = await selfReview("spec", tempDir, fetcher);
-    assertEquals(result, false);
+    assertEquals(result, { approved: false, reason: null });
     assertSpyCalls(fetcher, 0);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
@@ -26,7 +26,7 @@ Deno.test("selfReview: returns false when no phase output file is found", async 
         Promise.resolve(new Response("{}", { status: 200 })),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, false);
+    assertEquals(result, { approved: false, reason: null });
     assertSpyCalls(fetcher, 0);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
@@ -50,7 +50,7 @@ Deno.test("selfReview: returns true when API responds APPROVE", async () => {
         ),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, true);
+    assertEquals(result, { approved: true, reason: null });
     assertSpyCalls(fetcher, 1);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
@@ -74,7 +74,7 @@ Deno.test("selfReview: returns false when API responds REJECT", async () => {
         ),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, false);
+    assertEquals(result, { approved: false, reason: "REJECT" });
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -92,7 +92,7 @@ Deno.test("selfReview: returns false on non-OK HTTP status", async () => {
         Promise.resolve(new Response("{}", { status: 500 })),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, false);
+    assertEquals(result, { approved: false, reason: null });
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -110,7 +110,7 @@ Deno.test("selfReview: returns false when fetch throws", async () => {
         Promise.reject(new Error("network error")),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, false);
+    assertEquals(result, { approved: false, reason: null });
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -170,7 +170,7 @@ Deno.test("selfReview: uses intake-self-review.md content as system message", as
   }
 });
 
-Deno.test("selfReview: requests model claude-haiku-4-5 with max_tokens 5", async () => {
+Deno.test("selfReview: requests model claude-haiku-4-5 with max_tokens 200", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -190,7 +190,7 @@ Deno.test("selfReview: requests model claude-haiku-4-5 with max_tokens 5", async
     assertSpyCalls(fetcher, 1);
     const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
     assertEquals(body.model, "claude-haiku-4-5");
-    assertEquals(body.max_tokens, 5);
+    assertEquals(body.max_tokens, 200);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -213,7 +213,7 @@ Deno.test("selfReview: is case-insensitive for APPROVE response", async () => {
         ),
     );
     const result = await selfReview("intake", tempDir, fetcher);
-    assertEquals(result, true);
+    assertEquals(result, { approved: true, reason: null });
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -238,8 +238,41 @@ Deno.test("selfReview: returns true for enrichment phase when output file exists
         ),
     );
     const result = await selfReview("enrichment", tempDir, fetcher);
-    assertEquals(result, true);
+    assertEquals(result, { approved: true, reason: null });
     assertSpyCalls(fetcher, 1);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("selfReview: returns reason text when LLM returns REJECT with explanation", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260717T120000-intake.md"),
+      "bad output",
+    );
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              content: [{
+                type: "text",
+                text:
+                  "REJECT\nCriterion 2 was violated because the scope list is missing.",
+              }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    const result = await selfReview("intake", tempDir, fetcher);
+    assertEquals(result, {
+      approved: false,
+      reason:
+        "REJECT\nCriterion 2 was violated because the scope list is missing.",
+    });
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }

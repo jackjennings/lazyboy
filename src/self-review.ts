@@ -7,18 +7,18 @@ export async function selfReview(
   phase: string,
   ticketDir: string,
   fetcher: typeof fetch,
-): Promise<boolean> {
+): Promise<{ approved: boolean; reason: string | null }> {
   let systemPrompt: string;
   try {
     systemPrompt = await Deno.readTextFile(
       join(PROMPT_DIR, `${phase}-self-review.md`),
     );
   } catch {
-    return false;
+    return { approved: false, reason: null };
   }
 
   const found = await findLatestPhaseOutput(ticketDir);
-  if (!found) return false;
+  if (!found) return { approved: false, reason: null };
 
   const outputContent = await Deno.readTextFile(
     join(ticketDir, found.filename),
@@ -34,16 +34,18 @@ export async function selfReview(
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5",
-        max_tokens: 5,
+        max_tokens: 200,
         system: systemPrompt,
         messages: [{ role: "user", content: outputContent }],
       }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) return { approved: false, reason: null };
     const data = await response.json();
-    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
-    return result === "APPROVE";
+    const text = (data?.content?.[0]?.text ?? "").trim();
+    const firstLine = text.split("\n")[0].trim().toUpperCase();
+    if (firstLine === "APPROVE") return { approved: true, reason: null };
+    return { approved: false, reason: text.length > 0 ? text : null };
   } catch {
-    return false;
+    return { approved: false, reason: null };
   }
 }

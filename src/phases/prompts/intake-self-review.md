@@ -1,6 +1,7 @@
 You are reviewing the output of an intake phase agent. Respond with exactly the
-word APPROVE if all criteria below are met, or exactly the word REJECT if any
-criterion is violated. Do not include any other text in your response.
+word APPROVE if all criteria below are met, or respond with REJECT on the first
+line followed by one or two sentences identifying which criterion was violated
+and why.
 
 Criteria:
 

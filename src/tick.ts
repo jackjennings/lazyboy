@@ -89,6 +89,7 @@ export interface TickServiceDeps {
   commitState(): Promise<void>;
   lock: Lock;
   exit?(code: number): void;
+  refreshAnthropicPricing?(): Promise<void>;
 }
 
 export function selectCandidates(
@@ -367,6 +368,7 @@ export class TickService {
   }
 
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
+    await deps.refreshAnthropicPricing?.();
     await deps.installPackages(deps.packageSources);
 
     const existingIds = new Set(await deps.listTickets());

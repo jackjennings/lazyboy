@@ -79,6 +79,7 @@ export interface PhaseUsage {
   model: string;
   durationMs: number;
   turns?: number;
+  costUsd?: number;
 }
 
 export interface Config {

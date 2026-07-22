@@ -1809,3 +1809,37 @@ Deno.test(
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
+
+Deno.test(
+  "TickService: refreshAnthropicPricing called before installPackages",
+  async () => {
+    const sequence: string[] = [];
+    const refreshSpy = spy((): Promise<void> => {
+      sequence.push("refresh");
+      return Promise.resolve();
+    });
+    const deps = makeFakeServiceDeps({
+      refreshAnthropicPricing: refreshSpy,
+      installPackages: spy(() => {
+        sequence.push("install");
+        return Promise.resolve([]);
+      }),
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(refreshSpy, 1);
+    assertEquals(sequence[0], "refresh");
+    assertEquals(sequence[1], "install");
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when refreshAnthropicPricing is omitted",
+  async () => {
+    const installPackagesSpy = spy(() => Promise.resolve([]));
+    const deps = makeFakeServiceDeps({
+      installPackages: installPackagesSpy,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(installPackagesSpy, 1);
+  },
+);

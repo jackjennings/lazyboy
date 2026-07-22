@@ -11,6 +11,7 @@ import {
 } from "./run-phase.ts";
 import { buildPiArgs } from "./agents/pi.ts";
 import type { CodeAgent } from "./agents/types.ts";
+import type { AnthropicPricingCache } from "./anthropic-pricing.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────
 
@@ -900,3 +901,214 @@ Deno.test("buildPiArgs: context files are appended after system-prompt", () => {
   assertEquals(args[args.length - 2], files[0]);
   assertEquals(args[args.length - 1], files[1]);
 });
+
+// ── executePhase: costUsd in sidecar ─────────────────────────────────────────
+
+Deno.test(
+  "executePhase: includes costUsd in sidecar when pricing cache contains the model",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      await Deno.mkdir(join(homeDir, ".lazyboy"));
+
+      const pricingCache: AnthropicPricingCache = {
+        fetchedAt: Temporal.Now.instant().toString(),
+        models: {
+          "claude-sonnet-4-6": {
+            inputPerMTok: 3,
+            outputPerMTok: 15,
+            cacheWritePerMTok: 3.75,
+            cacheReadPerMTok: 0.30,
+          },
+        },
+      };
+      await Deno.writeTextFile(
+        join(homeDir, ".lazyboy", "anthropic-pricing.json"),
+        JSON.stringify(pricingCache),
+      );
+
+      const agentEndNdjson = JSON.stringify({
+        type: "agent_end",
+        messages: [
+          {
+            role: "assistant",
+            model: "claude-sonnet-4-6",
+            content: [{ type: "text", text: "output" }],
+            usage: {
+              input: 1_000_000,
+              output: 1_000_000,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+          },
+        ],
+      });
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({
+            stdout: agentEndNdjson,
+            stderr: "",
+            code: 0,
+          });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        },
+        agent,
+      );
+
+      const usageRaw = await Deno.readTextFile(
+        join(ticketDir, "result.usage.json"),
+      );
+      const usage = JSON.parse(usageRaw);
+      // 1_000_000 * 3/1_000_000 + 1_000_000 * 15/1_000_000 = 18
+      assertEquals(usage.costUsd, 18);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: omits costUsd from sidecar when pricing cache is absent",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const agentEndNdjson = JSON.stringify({
+        type: "agent_end",
+        messages: [
+          {
+            role: "assistant",
+            model: "claude-sonnet-4-6",
+            content: [{ type: "text", text: "output" }],
+            usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 },
+          },
+        ],
+      });
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({
+            stdout: agentEndNdjson,
+            stderr: "",
+            code: 0,
+          });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        },
+        agent,
+      );
+
+      const usageRaw = await Deno.readTextFile(
+        join(ticketDir, "result.usage.json"),
+      );
+      const usage = JSON.parse(usageRaw);
+      assertEquals("costUsd" in usage, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: omits costUsd from sidecar when model is not in pricing cache",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      await Deno.mkdir(join(homeDir, ".lazyboy"));
+      await Deno.writeTextFile(
+        join(homeDir, ".lazyboy", "anthropic-pricing.json"),
+        JSON.stringify({
+          fetchedAt: Temporal.Now.instant().toString(),
+          models: {
+            "claude-haiku-4-5": {
+              inputPerMTok: 1,
+              outputPerMTok: 5,
+              cacheWritePerMTok: 1.25,
+              cacheReadPerMTok: 0.10,
+            },
+          },
+        }),
+      );
+
+      const agentEndNdjson = JSON.stringify({
+        type: "agent_end",
+        messages: [
+          {
+            role: "assistant",
+            model: "claude-unknown-model",
+            content: [{ type: "text", text: "output" }],
+            usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 },
+          },
+        ],
+      });
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({
+            stdout: agentEndNdjson,
+            stderr: "",
+            code: 0,
+          });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        },
+        agent,
+      );
+
+      const usageRaw = await Deno.readTextFile(
+        join(ticketDir, "result.usage.json"),
+      );
+      const usage = JSON.parse(usageRaw);
+      assertEquals("costUsd" in usage, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);

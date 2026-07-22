@@ -116,7 +116,10 @@ export interface TickDeps {
     phase: ActivePhase,
     ticket: TicketState,
   ) => { model: string; thinking: string };
-  selfReview: (phase: string, ticketDir: string) => Promise<boolean>;
+  selfReview: (
+    phase: string,
+    ticketDir: string,
+  ) => Promise<{ approved: boolean; reason: string | null }>;
 }
 
 export function selectCandidates(
@@ -244,21 +247,34 @@ export async function advancePhase(
         from: "running",
         to: "waiting",
       });
-      let approved = false;
+      let selfReviewResult: { approved: boolean; reason: string | null } = {
+        approved: false,
+        reason: null,
+      };
       try {
-        approved = await deps.selfReview(
+        selfReviewResult = await deps.selfReview(
           ticket.phase,
           join(stateDir, ticket.id),
         );
       } catch {
-        approved = false;
+        // treated as { approved: false, reason: null }
       }
-      if (approved) {
+      if (selfReviewResult.approved) {
         await deps.writeTicket(stateDir, { ...waitingTicket, approved: true });
         await deps.appendLog(stateDir, ticket.id, {
           event: "self-approved",
           phase: ticket.phase,
         });
+      } else if (selfReviewResult.reason !== null) {
+        const filename = `${
+          compactTimestamp(zonedNow)
+        }-${ticket.phase}-self-review.md`;
+        await deps.writePhaseOutput(
+          stateDir,
+          ticket.id,
+          filename,
+          selfReviewResult.reason,
+        );
       }
     }
     return;

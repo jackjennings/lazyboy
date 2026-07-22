@@ -253,6 +253,96 @@ Deno.test("buildContextFiles: implementation files appear after plan files", asy
   }
 });
 
+Deno.test("buildContextFiles: prunes superseded drafts, keeping only the latest doc and feedback per phase", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T090000-spec.md"),
+      "draft 1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T091000-spec-feedback.md"),
+      "feedback 1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T092000-spec.md"),
+      "draft 2",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T093000-spec-feedback.md"),
+      "feedback 2",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T094000-spec.md"),
+      "draft 3",
+    );
+
+    const files = await buildContextFiles(tempDir);
+
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T090000-spec.md`),
+      false,
+    );
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T091000-spec-feedback.md`),
+      false,
+    );
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T092000-spec.md`),
+      false,
+    );
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T093000-spec-feedback.md`),
+      false,
+    );
+    assertEquals(files.includes(`@${tempDir}/20260629T094000-spec.md`), true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: keeps latest doc and pending feedback when a revision is awaiting rework", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T090000-plan.md"),
+      "draft 1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T091000-plan-feedback.md"),
+      "feedback 1",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T092000-plan.md"),
+      "draft 2",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T093000-plan-feedback.md"),
+      "feedback 2 (latest, revision pending)",
+    );
+
+    const files = await buildContextFiles(tempDir);
+
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T090000-plan.md`),
+      false,
+    );
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T091000-plan-feedback.md`),
+      false,
+    );
+    assertEquals(files.includes(`@${tempDir}/20260629T092000-plan.md`), true);
+    assertEquals(
+      files.includes(`@${tempDir}/20260629T093000-plan-feedback.md`),
+      true,
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 // ── appendPhaseLog ───────────────────────────────────────────────────────────
 
 Deno.test("appendPhaseLog: creates log.ndjson and writes a valid JSON line", async () => {

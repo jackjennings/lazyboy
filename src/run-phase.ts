@@ -20,6 +20,24 @@ export async function setupPiDirectories(home: string): Promise<void> {
   await Deno.mkdir(sessionsDir, { recursive: true });
 }
 
+function selectLatestPhaseFiles(
+  sortedFiles: string[],
+  phase: string,
+): string[] {
+  if (sortedFiles.length === 0) return [];
+  const docSuffix = `-${phase}.md`;
+  const latest = sortedFiles[sortedFiles.length - 1];
+  if (latest.endsWith(docSuffix)) {
+    return [latest];
+  }
+  for (let i = sortedFiles.length - 2; i >= 0; i--) {
+    if (sortedFiles[i].endsWith(docSuffix)) {
+      return [sortedFiles[i], latest];
+    }
+  }
+  return [latest];
+}
+
 export async function buildContextFiles(ticketDir: string): Promise<string[]> {
   const contextFiles = [`@${ticketDir}/meta.md`];
   for (
@@ -41,7 +59,7 @@ export async function buildContextFiles(ticketDir: string): Promise<string[]> {
       /* ticketDir not found */
     }
     phaseFiles.sort();
-    for (const f of phaseFiles) {
+    for (const f of selectLatestPhaseFiles(phaseFiles, phase)) {
       contextFiles.push(`@${ticketDir}/${f}`);
     }
   }

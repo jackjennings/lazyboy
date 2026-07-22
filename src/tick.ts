@@ -1,24 +1,5 @@
-import { existsSync } from "@std/fs";
 import { join } from "@std/path";
-import {
-  appendTicketLog,
-  commitState,
-  listTickets,
-  readTicket,
-  writePhaseOutput,
-  writeTicket,
-} from "./state/store.ts";
-import { expandHome, loadConfig } from "./config.ts";
-import { GitHubProvider } from "./providers/github.ts";
-import { JiraProvider } from "./providers/jira.ts";
-import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
-import { jiraDoneAction } from "./tick-actions/jira-done.ts";
-import {
-  deleteRunPid,
-  isPhaseAlive,
-  isProcessAlive as defaultIsProcessAlive,
-  spawnPhase,
-} from "./executor.ts";
+import { deleteRunPid } from "./executor.ts";
 import {
   loadPrompt,
   loadPromptFile,
@@ -26,50 +7,13 @@ import {
   nextPhase,
 } from "./phases/runners.ts";
 import { compactTimestamp } from "./timestamp.ts";
-import {
-  cloneRemoteRepo,
-  createWorktree,
-  findLocalRepo,
-  runGit,
-} from "./worktree.ts";
-import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
-import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
-import {
-  checkConflictsAction,
-  sanitizeBranchForFilename,
-} from "./tick-actions/check-conflicts.ts";
-import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
-import {
-  installPackages,
-  isPackageInstalled,
-  runPiInstall,
-} from "./packages.ts";
-import {
-  createMigrationRunner,
-  type MigrationFn,
-} from "./migrations/runner.ts";
-import type { Migration } from "./migrations/types.ts";
+import type { Lock } from "./lock.ts";
+import type { Provider } from "./providers/types.ts";
 import type { TickAction } from "./tick-actions/types.ts";
+import type { MigrationFn } from "./migrations/runner.ts";
+import type { InstallResult } from "./packages.ts";
 import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
-import type { InstallResult } from "./packages.ts";
-import { selfReview } from "./self-review.ts";
-
-export interface AdvanceTicketsDeps {
-  readLastWorked: () => Promise<string[]>;
-  writeLastWorked: (ids: string[]) => Promise<void>;
-  runMigrations: MigrationFn;
-}
-
-export interface TickOrchestrationDeps {
-  loadConfig: () => Promise<Config>;
-  installPackages: (sources: string[]) => Promise<InstallResult[]>;
-  advanceTickets: (config: Config) => Promise<void>;
-  isProcessAlive?: (pid: number) => boolean;
-  exit?: (code: number) => void;
-}
-
-const STALE_LOCK_MS = 30 * 60 * 1000;
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase,
@@ -125,6 +69,25 @@ export interface TickDeps {
     phase: string,
     ticketDir: string,
   ) => Promise<{ approved: boolean; reason: string | null }>;
+}
+
+export interface TickServiceDeps {
+  stateDir: string;
+  concurrency: number;
+  packageSources: string[];
+  installPackages(sources: string[]): Promise<InstallResult[]>;
+  providers: Provider[];
+  tickActions: TickAction[];
+  tickDeps: TickDeps;
+  runMigrations: MigrationFn;
+  readLastWorked(): Promise<string[]>;
+  writeLastWorked(ids: string[]): Promise<void>;
+  listTickets(): Promise<string[]>;
+  readTicket(id: string): Promise<TicketState>;
+  writeTicket(ticket: TicketState): Promise<void>;
+  commitState(): Promise<void>;
+  lock: Lock;
+  exit?(code: number): void;
 }
 
 export function selectCandidates(
@@ -363,387 +326,10 @@ export async function advancePhase(
   }
 }
 
-async function ensureRunPidGitignored(stateDir: string): Promise<void> {
-  const gitignorePath = join(stateDir, ".gitignore");
-  let content = "";
-  try {
-    content = await Deno.readTextFile(gitignorePath);
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
-  }
-  const lines = content.split("\n");
-  if (lines.some((l) => l.trim() === "run.pid")) return;
-  await Deno.writeTextFile(
-    gitignorePath,
-    content ? content + "run.pid\n" : "run.pid\n",
-  );
-}
-
-function defaultAdvanceTicketsDeps(): AdvanceTicketsDeps {
-  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
-  const lastWorkedPath = join(
-    Deno.env.get("HOME")!,
-    ".lazyboy",
-    "last-worked.json",
-  );
-  return {
-    readLastWorked: async () => {
-      try {
-        const raw = await Deno.readTextFile(lastWorkedPath);
-        const parsed = JSON.parse(raw);
-        if (
-          !Array.isArray(parsed) ||
-          !parsed.every((x) => typeof x === "string")
-        ) {
-          return [];
-        }
-        return parsed as string[];
-      } catch {
-        return [];
-      }
-    },
-    writeLastWorked: (ids) =>
-      Deno.writeTextFile(lastWorkedPath, JSON.stringify(ids)),
-    runMigrations: createMigrationRunner({
-      listMigrationFiles: async () => {
-        const files: string[] = [];
-        try {
-          for await (const entry of Deno.readDir(migrationsDir)) {
-            if (entry.isFile && /^\d+-[a-z0-9-]+\.ts$/.test(entry.name)) {
-              files.push(entry.name);
-            }
-          }
-        } catch (e) {
-          if (!(e instanceof Deno.errors.NotFound)) throw e;
-        }
-        return files.sort();
-      },
-      loadMigration: async (id: string): Promise<Migration> => {
-        const module = await import(join(migrationsDir, id));
-        return module.default;
-      },
-      readApplied: async (dir: string) => {
-        try {
-          const content = await Deno.readTextFile(join(dir, ".migrations"));
-          return content.split("\n").filter((l) => l.length > 0);
-        } catch (e) {
-          if (e instanceof Deno.errors.NotFound) return [];
-          throw e;
-        }
-      },
-      writeApplied: (dir: string, ids: string[]) =>
-        Deno.writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
-      writeTicket,
-    }),
-  };
-}
-
-export async function advanceTickets(
-  config: Config,
-  deps: AdvanceTicketsDeps = defaultAdvanceTicketsDeps(),
-): Promise<void> {
-  const stateDir = expandHome(config.state.dir);
-
-  const token = Deno.env.get("GITHUB_TOKEN") ?? "";
-  const login = Deno.env.get("GITHUB_LOGIN") ?? "";
-  const provider = new GitHubProvider({
-    repos: config.github.repos,
-    token,
-    login,
-  });
-  const existingIds = new Set(await listTickets(stateDir));
-  const newItems = await provider.fetchNew(existingIds);
-
-  for (const item of newItems) {
-    await writeTicket(stateDir, {
-      id: item.id,
-      provider: item.provider,
-      title: item.title,
-      url: item.url,
-      phase: "intake",
-      status: "new",
-      approved: false,
-      scope: [],
-      worktrees: {},
-      created: Temporal.Now.instant().toString(),
-      updated: Temporal.Now.instant().toString(),
-      body: item.description,
-    });
-  }
-
-  if (config.jira) {
-    const jiraEmail = Deno.env.get("JIRA_EMAIL") ?? "";
-    const jiraApiToken = Deno.env.get("JIRA_API_TOKEN") ?? "";
-    const jiraProvider = new JiraProvider({
-      baseUrl: config.jira.baseUrl,
-      email: jiraEmail,
-      apiToken: jiraApiToken,
-      project: config.jira.project,
-    });
-    const newJiraItems = await jiraProvider.fetchNew(existingIds);
-    for (const item of newJiraItems) {
-      await writeTicket(stateDir, {
-        id: item.id,
-        provider: item.provider,
-        title: item.title,
-        url: item.url,
-        phase: "intake",
-        status: "new",
-        approved: false,
-        scope: [],
-        worktrees: {},
-        created: Temporal.Now.instant().toString(),
-        updated: Temporal.Now.instant().toString(),
-        body: item.description,
-      });
-    }
-  }
-
-  const maxRunning = config.tick.concurrency;
-  const ids = (await listTickets(stateDir)).sort();
-  const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));
-
-  const migratedTickets = await deps.runMigrations(stateDir, tickets);
-
-  const tickActions: TickAction[] = [
-    createWorktreeAction({
-      roots: config.codebase.roots.map(expandHome),
-      findLocalRepo,
-      createWorktree,
-      writeTicket,
-      readIntakeOutput: async (ticketDir: string) => {
-        const files: string[] = [];
-        try {
-          for await (const entry of Deno.readDir(ticketDir)) {
-            if (
-              entry.isFile &&
-              /^\d{8}T\d{6}-intake\.md$/.test(entry.name)
-            ) {
-              files.push(entry.name);
-            }
-          }
-        } catch {
-          return null;
-        }
-        if (files.length === 0) return null;
-        files.sort();
-        return Deno.readTextFile(join(ticketDir, files[files.length - 1]));
-      },
-      cloneRemoteRepo: (slug: string) => cloneRemoteRepo(slug, token),
-      stat: async (path: string) => {
-        try {
-          await Deno.stat(path);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-    }),
-    checkMergedPRAction({
-      isPRMerged: async (prUrl: string) => {
-        const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-        if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-        const [, slug, number] = match;
-        const res = await fetch(
-          `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github+json",
-            },
-          },
-        );
-        if (res.status === 204) return true;
-        if (res.status === 404) return false;
-        throw new Error(
-          `Unexpected GitHub API status: ${res.status} for ${prUrl}`,
-        );
-      },
-      cleanupWorktree: async (wt) => {
-        const result = await new Deno.Command("git", {
-          args: ["rev-parse", "--git-common-dir"],
-          cwd: wt.path,
-        }).output();
-        const gitDir = new TextDecoder().decode(result.stdout).trim();
-        const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
-        await new Deno.Command("git", {
-          args: ["worktree", "remove", wt.path],
-          cwd: mainRepoPath,
-        }).output();
-        await new Deno.Command("git", {
-          args: ["branch", "-D", wt.branch],
-          cwd: mainRepoPath,
-        }).output();
-      },
-      closeWorkItem: (url: string) => provider.close(url),
-      writeTicket,
-      appendLog: appendTicketLog,
-    }),
-    resolveConflictsAction({
-      runGit,
-      isProcessAlive: (ticketId: string) =>
-        isPhaseAlive(join(stateDir, ticketId)),
-      writeTicket,
-      appendLog: appendTicketLog,
-      stat: async (path) => {
-        try {
-          const info = await Deno.stat(path);
-          return { isFile: info.isFile };
-        } catch {
-          return null;
-        }
-      },
-      readDir: (path) => Deno.readDir(path),
-      remove: (path) => Deno.remove(path),
-    }),
-    checkConflictsAction({
-      runGit,
-      isProcessAlive: (ticketId: string) =>
-        isPhaseAlive(join(stateDir, ticketId)),
-      worktreeExists: existsSync,
-      writeTicket,
-      appendLog: appendTicketLog,
-      writeContextFile: async (ticketDir, branch, content) => {
-        await Deno.writeTextFile(
-          join(ticketDir, `conflict-context-${branch}.md`),
-          content,
-        );
-      },
-      spawn: (opts) => {
-        const safeBranch = sanitizeBranchForFilename(opts.branch);
-        const contextFilePaths = [
-          `@${opts.ticketDir}/meta.md`,
-          `@${opts.ticketDir}/conflict-context-${safeBranch}.md`,
-        ];
-        const prompt = `You are resolving git rebase conflicts. ` +
-          `Examine the conflicted files listed in the context, resolve all merge conflicts, ` +
-          `then run \`git rebase --continue\` until the rebase completes. ` +
-          `After a successful rebase, run \`git push --force-with-lease origin ${opts.branch}\`.`;
-        return spawnPhase({
-          ticketDir: opts.ticketDir,
-          prompt,
-          scopeDirs: [],
-          outputFile: "conflict-resolution.md",
-          githubToken: token,
-          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-          worktrees: {
-            [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
-          },
-          model: "claude-opus-4-7",
-          thinking: "high",
-          contextFiles: contextFilePaths,
-        });
-      },
-    }),
-    ...(config.jira
-      ? [
-        jiraPickupAction({
-          baseUrl: config.jira.baseUrl,
-          email: Deno.env.get("JIRA_EMAIL") ?? "",
-          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-          appendLog: appendTicketLog,
-        }),
-        jiraDoneAction({
-          baseUrl: config.jira.baseUrl,
-          email: Deno.env.get("JIRA_EMAIL") ?? "",
-          apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
-          writeTicket,
-          appendLog: appendTicketLog,
-        }),
-      ]
-      : []),
-  ];
-
-  const processedTickets = [...migratedTickets];
-  for (let i = 0; i < processedTickets.length; i++) {
-    for (const action of tickActions) {
-      if (action.applies(processedTickets[i])) {
-        const updated = await action.run(processedTickets[i], stateDir);
-        if (updated !== null) processedTickets[i] = updated;
-      }
-    }
-  }
-
-  const runningTickets = processedTickets.filter((t) => t.status === "running");
-  const candidateTickets = processedTickets.filter(
-    (t) =>
-      t.status !== "done" &&
-      t.status !== "needs-attention" &&
-      !(t.phase === "merge" && t.status === "waiting") &&
-      t.status !== "running" &&
-      t.phase !== "wont-do",
-  );
-
-  const lastWorked = await deps.readLastWorked();
-  const selectedIds = selectCandidates(
-    candidateTickets.map((t) => t.id),
-    lastWorked,
-    maxRunning,
-  );
-  const selectedSet = new Set(selectedIds);
-
-  const tickDepImpls: TickDeps = {
-    spawn: (opts) =>
-      spawnPhase({
-        ticketDir: opts.ticketDir,
-        prompt: opts.prompt,
-        scopeDirs: opts.scope.map(expandHome),
-        outputFile: opts.outputFile,
-        githubToken: token,
-        anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        worktrees: opts.worktrees,
-        model: opts.model,
-        thinking: opts.thinking,
-      }),
-    isProcessAlive: (ticketId: string) =>
-      isPhaseAlive(join(stateDir, ticketId)),
-    writeTicket,
-    writePhaseOutput,
-    appendLog: appendTicketLog,
-    resolveModelConfig: (phase, ticket) =>
-      resolvePhaseModel(config, phase, ticket),
-    selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
-  };
-
-  for (const ticket of runningTickets) {
-    await advancePhase(ticket, stateDir, tickDepImpls);
-  }
-
-  let running = runningTickets.length;
-  for (const ticket of candidateTickets) {
-    if (!selectedSet.has(ticket.id)) continue;
-
-    const willSpawn = ticket.status === "new" ||
-      ticket.status === "revising" ||
-      (ticket.status === "waiting" && ticket.approved);
-    if (willSpawn && running >= maxRunning) continue;
-    if (willSpawn) running++;
-
-    await advancePhase(ticket, stateDir, tickDepImpls);
-  }
-
-  await deps.writeLastWorked(selectedIds);
-  await ensureRunPidGitignored(stateDir);
-  await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
-}
-
-function defaultTickDeps(): TickOrchestrationDeps {
-  return {
-    loadConfig,
-    installPackages: (sources) =>
-      installPackages(sources, {
-        run: runPiInstall,
-        isInstalled: isPackageInstalled,
-      }),
-    advanceTickets,
-  };
-}
-
-async function appendTickLog(entry: object): Promise<void> {
-  const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-    recursive: true,
-  });
+export async function appendTickLog(entry: object): Promise<void> {
+  const home = Deno.env.get("HOME")!;
+  const tickLogPath = join(home, ".lazyboy", "tick.ndjson");
+  await Deno.mkdir(join(home, ".lazyboy"), { recursive: true });
   await Deno.writeTextFile(
     tickLogPath,
     JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
@@ -751,60 +337,115 @@ async function appendTickLog(entry: object): Promise<void> {
   );
 }
 
-export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
-  const d = deps ?? defaultTickDeps();
-  const config = await d.loadConfig();
-  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+export class TickService {
+  #deps: TickServiceDeps;
 
-  try {
-    const existing = await Deno.readTextFile(pidFile).catch(() => null);
-    if (existing) {
-      const pid = parseInt(existing.trim(), 10);
-      const alive = !isNaN(pid) &&
-        (d.isProcessAlive ?? defaultIsProcessAlive)(pid);
-      if (alive) {
-        const stat = await Deno.stat(pidFile).catch(() => null);
-        const ageMs = stat?.mtime
-          ? Temporal.Now.instant().epochMilliseconds - stat.mtime.getTime()
-          : 0;
-        if (ageMs < STALE_LOCK_MS) {
-          await appendTickLog({ event: "tick-already-running", pid });
-          return;
+  constructor(deps: TickServiceDeps) {
+    this.#deps = deps;
+  }
+
+  async run(): Promise<void> {
+    const deps = this.#deps;
+    try {
+      await deps.lock.withLock(async () => {
+        try {
+          await this.#runWorkflow(deps);
+        } catch (e) {
+          await appendTickLog({
+            event: "tick-failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+          throw e;
         }
-        await appendTickLog({
-          event: "stale-lock",
-          pid,
-          thresholdMinutes: STALE_LOCK_MS / 60_000,
+      });
+    } catch (e) {
+      console.error(e);
+      (deps.exit ?? Deno.exit)(1);
+    }
+  }
+
+  async #runWorkflow(deps: TickServiceDeps): Promise<void> {
+    await deps.installPackages(deps.packageSources);
+
+    const existingIds = new Set(await deps.listTickets());
+    for (const provider of deps.providers) {
+      const newItems = await provider.fetchNew(existingIds);
+      for (const item of newItems) {
+        await deps.writeTicket({
+          id: item.id,
+          provider: item.provider,
+          title: item.title,
+          url: item.url,
+          phase: "intake",
+          status: "new",
+          approved: false,
+          scope: [],
+          worktrees: {},
+          created: Temporal.Now.instant().toString(),
+          updated: Temporal.Now.instant().toString(),
+          body: item.description,
         });
       }
     }
-    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-      recursive: true,
-    });
-    await Deno.writeTextFile(pidFile, String(Deno.pid));
-  } catch (e) {
-    await appendTickLog({
-      event: "lock-failed",
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return;
-  }
 
-  let tickError: unknown;
-  try {
-    await d.installPackages(config.packages.enabled);
-    await d.advanceTickets(config);
-  } catch (e) {
-    tickError = e;
-  } finally {
-    await Deno.remove(pidFile).catch(() => {});
-  }
+    const ids = (await deps.listTickets()).sort();
+    const tickets = await Promise.all(
+      ids.map((id) => deps.readTicket(id)),
+    );
+    const migratedTickets = await deps.runMigrations(
+      deps.stateDir,
+      tickets,
+    );
 
-  if (tickError) {
-    const msg = tickError instanceof Error
-      ? tickError.message
-      : String(tickError);
-    await appendTickLog({ event: "tick-failed", error: msg });
-    (d.exit ?? Deno.exit)(1);
+    const processedTickets = [...migratedTickets];
+    for (let i = 0; i < processedTickets.length; i++) {
+      for (const action of deps.tickActions) {
+        if (action.applies(processedTickets[i])) {
+          const updated = await action.run(
+            processedTickets[i],
+            deps.stateDir,
+          );
+          if (updated !== null) processedTickets[i] = updated;
+        }
+      }
+    }
+
+    const runningTickets = processedTickets.filter(
+      (t) => t.status === "running",
+    );
+    const candidateTickets = processedTickets.filter(
+      (t) =>
+        t.status !== "done" &&
+        t.status !== "needs-attention" &&
+        !(t.phase === "merge" && t.status === "waiting") &&
+        t.status !== "running" &&
+        t.phase !== "wont-do",
+    );
+
+    const lastWorked = await deps.readLastWorked();
+    const selectedIds = selectCandidates(
+      candidateTickets.map((t) => t.id),
+      lastWorked,
+      deps.concurrency,
+    );
+    const selectedSet = new Set(selectedIds);
+
+    for (const ticket of runningTickets) {
+      await advancePhase(ticket, deps.stateDir, deps.tickDeps);
+    }
+
+    let running = runningTickets.length;
+    for (const ticket of candidateTickets) {
+      if (!selectedSet.has(ticket.id)) continue;
+      const willSpawn = ticket.status === "new" ||
+        ticket.status === "revising" ||
+        (ticket.status === "waiting" && ticket.approved);
+      if (willSpawn && running >= deps.concurrency) continue;
+      if (willSpawn) running++;
+      await advancePhase(ticket, deps.stateDir, deps.tickDeps);
+    }
+
+    await deps.writeLastWorked(selectedIds);
+    await deps.commitState();
   }
 }

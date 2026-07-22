@@ -7,7 +7,7 @@ export interface CheckConflictsDeps {
     args: string[],
     cwd: string,
   ) => Promise<{ code: number; stdout: string; stderr: string }>;
-  isPidAlive: (pid: number) => boolean;
+  isProcessAlive: (ticketId: string) => boolean;
   worktreeExists: (path: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
@@ -17,7 +17,7 @@ export interface CheckConflictsDeps {
     ticketDir: string;
     conflictedFiles: string[];
     rebaseStderr: string;
-  }) => Promise<number>;
+  }) => Promise<void>;
   writeContextFile: (
     ticketDir: string,
     branch: string,
@@ -38,7 +38,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         Object.values(ticket.worktrees).some((wt) =>
           deps.worktreeExists(wt.path)
         ) &&
-        !(ticket.pid !== undefined && deps.isPidAlive(ticket.pid))
+        !deps.isProcessAlive(ticket.id)
       );
     },
     async run(
@@ -109,7 +109,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
         await deps.writeContextFile(ticketDir, safeBranch, contextContent);
 
-        const pid = await deps.spawn({
+        await deps.spawn({
           worktreePath: wt.path,
           branch: wt.branch,
           ticketDir,
@@ -120,7 +120,6 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         const updated: TicketState = {
           ...ticket,
           status: "running",
-          pid,
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);

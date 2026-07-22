@@ -13,7 +13,7 @@ export interface ExecutorOptions {
   contextFiles?: string[];
 }
 
-export function isPidAlive(pid: number): boolean {
+export function isProcessAlive(pid: number): boolean {
   try {
     Deno.kill(pid, "SIGCONT");
     return true;
@@ -49,7 +49,7 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   return args;
 }
 
-export function spawnPhase(opts: ExecutorOptions): number {
+export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
   const cmd = new Deno.Command(Deno.execPath(), {
     args: buildPhaseArgs(opts),
     env: {
@@ -63,5 +63,25 @@ export function spawnPhase(opts: ExecutorOptions): number {
   });
   const child = cmd.spawn();
   child.unref();
-  return child.pid;
+  await Deno.writeTextFile(`${opts.ticketDir}/run.pid`, child.pid.toString());
+}
+
+export function isPhaseAlive(ticketDir: string): boolean {
+  let content: string;
+  try {
+    content = Deno.readTextFileSync(`${ticketDir}/run.pid`);
+  } catch {
+    return false;
+  }
+  const pid = parseInt(content.trim(), 10);
+  if (isNaN(pid)) return false;
+  return isProcessAlive(pid);
+}
+
+export async function deleteRunPid(ticketDir: string): Promise<void> {
+  try {
+    await Deno.remove(`${ticketDir}/run.pid`);
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
 }

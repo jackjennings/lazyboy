@@ -25,7 +25,6 @@ export async function performDecline(
     phase: "wont-do",
     status: "done",
     approved: false,
-    pid: undefined,
     updated: Temporal.Now.instant().toString(),
     body,
   });

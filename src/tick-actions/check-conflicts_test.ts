@@ -43,11 +43,11 @@ function makeAction(
 ) {
   return checkConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     writeContextFile: () => Promise.resolve(),
     ...overrides,
   });
@@ -83,17 +83,15 @@ Deno.test("checkConflictsAction: does not apply to merge phase — work is alrea
 Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
   assertEquals(
     makeAction({
-      isPidAlive: () => true,
-    }).applies(makeTicket({ pid: 999 })),
+      isProcessAlive: () => true,
+    }).applies(makeTicket()),
     false,
   );
 });
 
-Deno.test("checkConflictsAction: applies when pid is undefined (treat as dead)", () => {
+Deno.test("checkConflictsAction: applies when no live process", () => {
   assertEquals(
-    makeAction({
-      isPidAlive: () => true,
-    }).applies(makeTicket({ pid: undefined })),
+    makeAction({ isProcessAlive: () => false }).applies(makeTicket()),
     true,
   );
 });
@@ -269,7 +267,7 @@ Deno.test(
       },
       spawn: (opts) => {
         spawnCalls.push(opts);
-        return Promise.resolve(1234);
+        return Promise.resolve();
       },
       writeContextFile: (_ticketDir, branch, content) => {
         contextFiles.push({ branch, content });
@@ -293,7 +291,6 @@ Deno.test(
     assertEquals(contextFiles.length, 1);
     assertEquals(contextFiles[0].branch, "gh-7");
     assertEquals(result?.status, "running");
-    assertEquals(result?.pid, 1234);
 
     const startEntry = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-started",
@@ -370,7 +367,7 @@ Deno.test(
       },
       spawn: (opts) => {
         spawnCalls.push(opts);
-        return Promise.resolve(999);
+        return Promise.resolve();
       },
       writeContextFile: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),

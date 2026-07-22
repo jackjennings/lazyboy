@@ -28,7 +28,6 @@ export async function performRetry(
     ...ticket,
     status: targetStatus,
     approved: false,
-    pid: undefined,
     updated: Temporal.Now.instant().toString(),
   });
 

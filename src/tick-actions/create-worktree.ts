@@ -1,6 +1,11 @@
+import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
-import { extractGitHubSlug } from "../worktree.ts";
+import {
+  extractGitHubSlug,
+  parseIntakeScope,
+  resolveGitHubSlug,
+} from "../worktree.ts";
 
 export interface CreateWorktreeDeps {
   roots: string[];
@@ -11,24 +16,63 @@ export interface CreateWorktreeDeps {
     slug: string,
   ) => Promise<WorktreeInfo>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
+  readIntakeOutput: (ticketDir: string) => Promise<string | null>;
+  cloneRemoteRepo: (slug: string) => Promise<string>;
+  stat: (path: string) => Promise<boolean>;
 }
 
 export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
   return {
     applies(ticket: TicketState): boolean {
-      return ticket.status === "new" &&
-        Object.keys(ticket.worktrees).length === 0;
+      return (
+        ticket.phase === "intake" &&
+        ticket.status === "waiting" &&
+        ticket.approved === true &&
+        Object.keys(ticket.worktrees).length === 0
+      );
     },
     async run(
       ticket: TicketState,
       stateDir: string,
     ): Promise<TicketState | null> {
       const now = Temporal.Now.instant().toString();
-      const slug = ticket.provider === "github"
-        ? extractGitHubSlug(ticket.url)
-        : ticket.scope[0];
-      const repoPath = await deps.findLocalRepo(deps.roots, slug);
-      if (!repoPath) {
+      const ticketDir = join(stateDir, ticket.id);
+
+      const intakeContent = await deps.readIntakeOutput(ticketDir);
+      const scopeEntries = intakeContent !== null
+        ? parseIntakeScope(intakeContent)
+        : [];
+
+      const resolvedLocalPaths: string[] = [];
+      const githubSlugs = new Set<string>();
+
+      if (ticket.provider === "github") {
+        try {
+          githubSlugs.add(extractGitHubSlug(ticket.url));
+        } catch {
+          const updated = {
+            ...ticket,
+            status: "needs-attention" as const,
+            updated: now,
+          };
+          await deps.writeTicket(stateDir, updated);
+          return updated;
+        }
+      }
+
+      for (const entry of scopeEntries) {
+        if (entry.startsWith("/") || entry.startsWith("~/")) {
+          const expanded = entry.startsWith("~/")
+            ? join(Deno.env.get("HOME")!, entry.slice(2))
+            : entry;
+          if (await deps.stat(expanded)) resolvedLocalPaths.push(expanded);
+        } else {
+          const slug = resolveGitHubSlug(entry);
+          if (slug) githubSlugs.add(slug);
+        }
+      }
+
+      if (ticket.provider !== "github" && githubSlugs.size === 0) {
         const updated = {
           ...ticket,
           status: "needs-attention" as const,
@@ -37,11 +81,37 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         await deps.writeTicket(stateDir, updated);
         return updated;
       }
+
+      const resolvedRepos: Array<{ slug: string; repoPath: string }> = [];
+      for (const slug of githubSlugs) {
+        const localPath = await deps.findLocalRepo(deps.roots, slug);
+        if (localPath) {
+          resolvedRepos.push({ slug, repoPath: localPath });
+        } else {
+          try {
+            const clonedPath = await deps.cloneRemoteRepo(slug);
+            resolvedRepos.push({ slug, repoPath: clonedPath });
+          } catch {
+            const updated = {
+              ...ticket,
+              status: "needs-attention" as const,
+              updated: now,
+            };
+            await deps.writeTicket(stateDir, updated);
+            return updated;
+          }
+        }
+      }
+
+      const worktrees: Record<string, WorktreeInfo> = {};
       try {
-        const wt = await deps.createWorktree(repoPath, ticket.id, slug);
-        const updated = { ...ticket, worktrees: { [slug]: wt }, updated: now };
-        await deps.writeTicket(stateDir, updated);
-        return updated;
+        for (const { slug, repoPath } of resolvedRepos) {
+          worktrees[slug] = await deps.createWorktree(
+            repoPath,
+            ticket.id,
+            slug,
+          );
+        }
       } catch {
         const updated = {
           ...ticket,
@@ -51,6 +121,15 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         await deps.writeTicket(stateDir, updated);
         return updated;
       }
+
+      const updated = {
+        ...ticket,
+        scope: resolvedLocalPaths,
+        worktrees,
+        updated: now,
+      };
+      await deps.writeTicket(stateDir, updated);
+      return updated;
     },
   };
 }

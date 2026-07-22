@@ -7,12 +7,13 @@ this repository.
 
 These must be present on the host; they are not managed by Deno.
 
-| Dependency                    | Purpose                                              |
-| ----------------------------- | ---------------------------------------------------- |
-| `git`                         | Worktree management, rebase/push, state repo commits |
-| `pi`                          | Runs phase prompts; checks/installs agent packages   |
-| `crontab`                     | Installs and removes the tick cron job               |
-| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status      |
+| Dependency                    | Purpose                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `git`                         | Worktree management, rebase/push, state repo commits                                                                            |
+| `pi`                          | Runs phase prompts; checks/installs agent packages                                                                              |
+| `crontab`                     | Installs and removes the tick cron job                                                                                          |
+| GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                 |
+| `apfel`                       | Runs local LLM server for approval classification in review mode (optional; falls back to Anthropic when absent or unavailable) |
 
 Environment variables required at runtime (tick only): `GITHUB_TOKEN`,
 `GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.
@@ -188,9 +189,8 @@ workaround.
 
 Run `deno fmt` and `deno lint` after writing all files and before committing,
 including when the only files changed are Markdown (`.md`). `deno fmt` formats
-Markdown as well as source — do not skip it just because no `.ts` files
-changed. Do not manually adjust indentation or spacing — let the formatter
-handle it.
+Markdown as well as source — do not skip it just because no `.ts` files changed.
+Do not manually adjust indentation or spacing — let the formatter handle it.
 
 ## Planning
 

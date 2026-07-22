@@ -546,3 +546,186 @@ Deno.test("formatTimestamp: zero-pads single-digit month, day, hour, minute, sec
   const zdt = Temporal.ZonedDateTime.from("2026-01-05T03:07:09+00:00[UTC]");
   assertEquals(formatTimestamp(zdt), "20260105T030709");
 });
+
+// ── classifyApproval — apfel path ─────────────────────────────────────────────
+
+function makeApfelApproveResponse(): Response {
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: "APPROVE" } }] }),
+    { status: 200 },
+  );
+}
+
+function makeApfelFeedbackResponse(): Response {
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: "FEEDBACK" } }] }),
+    { status: 200 },
+  );
+}
+
+const APFEL_URL = "http://127.0.0.1:11434";
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns true when OpenAI response contains APPROVE",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelApproveResponse()),
+    );
+    assertEquals(await classifyApproval("lgtm", fetcher, APFEL_URL), true);
+    assertSpyCalls(fetcher, 1);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, is case-insensitive for APPROVE",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ choices: [{ message: { content: "approve" } }] }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), true);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, trims whitespace from response before comparing",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "  APPROVE  " } }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertEquals(await classifyApproval("ship it", fetcher, APFEL_URL), true);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false when response contains FEEDBACK",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    assertEquals(
+      await classifyApproval("fix tests", fetcher, APFEL_URL),
+      false,
+    );
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false on non-2xx status",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ choices: [{ message: { content: "APPROVE" } }] }),
+            { status: 500 },
+          ),
+        ),
+    );
+    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), false);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false when fetch throws",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.reject(new Error("network error")),
+    );
+    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), false);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false without calling fetch when text exceeds 20 characters",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelApproveResponse()),
+    );
+    const result = await classifyApproval(
+      "this is definitely longer than twenty chars",
+      fetcher,
+      APFEL_URL,
+    );
+    assertEquals(result, false);
+    assertSpyCalls(fetcher, 0);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, sends request to apfel chat completions endpoint",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("lgtm", fetcher, APFEL_URL);
+    assertSpyCalls(fetcher, 1);
+    assertEquals(
+      fetcher.calls[0].args[0],
+      "http://127.0.0.1:11434/v1/chat/completions",
+    );
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, sets model apple-foundationmodel and max_tokens 5",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("ok", fetcher, APFEL_URL);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertEquals(body.model, "apple-foundationmodel");
+    assertEquals(body.max_tokens, 5);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, sends system prompt as first messages entry with role system",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("ok", fetcher, APFEL_URL);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertEquals(body.messages[0].role, "system");
+    assertEquals(body.system, undefined);
+    assertEquals(typeof body.messages[0].content, "string");
+    assertEquals(body.messages[0].content.includes("APPROVE"), true);
+    assertEquals(body.messages[0].content.includes("FEEDBACK"), true);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, sends user text as second messages entry with role user",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("ship it", fetcher, APFEL_URL);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertEquals(body.messages[1].role, "user");
+    assertEquals(body.messages[1].content, "ship it");
+  },
+);

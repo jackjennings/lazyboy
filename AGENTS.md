@@ -164,8 +164,11 @@ workaround.
 
 ## Formatting
 
-Run `deno fmt` and `deno lint` after writing all files and before committing. Do
-not manually adjust indentation or spacing — let the formatter handle it.
+Run `deno fmt` and `deno lint` after writing all files and before committing,
+including when the only files changed are Markdown (`.md`). `deno fmt` formats
+Markdown as well as source — do not skip it just because no `.ts` files
+changed. Do not manually adjust indentation or spacing — let the formatter
+handle it.
 
 ## Planning
 

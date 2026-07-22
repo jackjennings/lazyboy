@@ -19,6 +19,8 @@ import {
   cloneRemoteRepo,
   createWorktree,
   findLocalRepo,
+  formatRepoCorpus,
+  listRepoCorpus,
   runGit,
 } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
@@ -272,6 +274,12 @@ export function composeTickDeps(
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
       selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
+      buildRepoCorpusText: () =>
+        listRepoCorpus(
+          config.codebase.roots.map(expandHome),
+          config.github.repos,
+        )
+          .then(formatRepoCorpus),
     },
     runMigrations: createMigrationRunner({
       listMigrationFiles: async () => {

@@ -36,6 +36,12 @@ scope:
   - https://github.com/myorg/frontend
 ```
 
+If an `## Available Repositories` section appears below this prompt, prefer
+selecting `Proposed Scope` entries from it — those are repositories confirmed to
+exist locally or in the configured GitHub organization. You may still propose an
+unlisted GitHub slug or URL when the ticket clearly references an external
+repository not present in that list.
+
 ## Reasoning
 
 One short paragraph explaining why you chose these directories.

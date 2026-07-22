@@ -375,7 +375,12 @@ export async function review(id: string): Promise<void> {
   const stateDir = expandHome(config.state.dir);
   const ticketDir = join(stateDir, id);
 
-  await readTicket(stateDir, id);
+  const ticket = await readTicket(stateDir, id);
+
+  if (ticket.status === "running") {
+    console.error(`ticket ${id} is currently running`);
+    Deno.exit(1);
+  }
 
   const found = await findLatestPhaseOutput(ticketDir);
   if (!found) {

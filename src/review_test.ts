@@ -1,5 +1,5 @@
-import { assertEquals } from "@std/assert";
-import { assertSpyCalls, spy } from "@std/testing/mock";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   answerQuestion,
   applyApproval,
@@ -7,6 +7,7 @@ import {
   classifyApproval,
   findLatestPhaseOutput,
   formatTimestamp,
+  review,
 } from "./review.ts";
 import { join } from "@std/path";
 import { readTicket, writeTicket } from "./state/store.ts";
@@ -727,5 +728,108 @@ Deno.test(
     const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
     assertEquals(body.messages[1].role, "user");
     assertEquals(body.messages[1].content, "ship it");
+  },
+);
+
+// ── review ───────────────────────────────────────────────────────────────────
+
+async function withReviewConfig(
+  stateDir: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const homeDir = await Deno.makeTempDir();
+  const configDir = join(homeDir, ".config", "lazyboy");
+  await Deno.mkdir(configDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(configDir, "config.toml"),
+    `[github]\nrepos = []\n\n[state]\ndir = "${stateDir}"\n\n[tick]\nconcurrency = 1\n\n[codebase]\nroots = []\n`,
+  );
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", homeDir);
+  try {
+    await fn();
+  } finally {
+    if (originalHome !== undefined) {
+      Deno.env.set("HOME", originalHome);
+    } else {
+      Deno.env.delete("HOME");
+    }
+    await Deno.remove(homeDir, { recursive: true });
+  }
+}
+
+Deno.test(
+  "review: exits with code 1 and prints error when ticket is running",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/1";
+      await writeTicket(
+        stateDir,
+        makeTicket({ id: ticketId, phase: "spec", status: "running" }),
+      );
+      await Deno.writeTextFile(
+        join(stateDir, ticketId, "20260101T000000-spec.md"),
+        "spec output",
+      );
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId);
+        } catch {
+          // expected: exitStub throws
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 1);
+        assertSpyCalls(errorStub, 1);
+        assertEquals(
+          errorStub.calls[0].args[0],
+          `ticket ${ticketId} is currently running`,
+        );
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: does not print running error for non-running ticket",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/2";
+      await writeTicket(
+        stateDir,
+        makeTicket({ id: ticketId, phase: "spec", status: "waiting" }),
+      );
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId);
+        } catch {
+          // expected: exitStub throws on "no phase output"
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(errorStub, 1);
+        assertStringIncludes(
+          errorStub.calls[0].args[0] as string,
+          "No phase output found",
+        );
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
   },
 );

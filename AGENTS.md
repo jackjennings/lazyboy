@@ -340,6 +340,36 @@ org-scoped directories (e.g. `~/code/myorg`). `findLocalRepo` searches exactly
 two levels deep: `root/<org>/<repo>`. Config examples and test fixtures must use
 org-less paths.
 
+## Remote repository cache
+
+When a scope entry is a GitHub slug (`org/repo`) or GitHub URL and no local
+checkout is found, `cloneRemoteRepo` in `src/worktree.ts` clones the repository
+to `~/.lazyboy/repositories/<org>/<repo>` using
+`git clone --depth 1
+--single-branch`. This path is hardcoded parallel to
+`~/.lazyboy/worktrees/`.
+
+Existing entries in `~/.lazyboy/repositories/` are reused without re-cloning. No
+`git fetch` or `git pull` is run on cached clones — they are persistent
+snapshots.
+
+`createWorktreeAction` fires at
+`phase === "intake" && status === "waiting" &&
+approved === true` (after intake
+self-review or manual `approve`). It reads the latest `*-intake.md` file via the
+`readIntakeOutput` dep, resolves all GitHub scope entries to worktrees, and
+resolves local-path entries to `ticket.scope`. The three production deps wired
+in `tick.ts` are `readIntakeOutput`, `cloneRemoteRepo`, and `stat`.
+
+Three utility functions exported from `src/worktree.ts`:
+
+- `parseIntakeScope(content)` — extracts the YAML `scope:` list from the
+  `## Proposed Scope` section of an intake output file.
+- `resolveGitHubSlug(entry)` — returns `org/repo` for a GitHub slug or URL
+  entry, `null` for local paths or invalid entries.
+- `cloneRemoteRepo(slug, token)` — clones to `~/.lazyboy/repositories/org/repo`
+  and returns the path; returns the existing path if already present.
+
 ## Per-phase model configuration
 
 Each phase is run with a model and thinking level resolved in this order:

@@ -24,8 +24,8 @@ another five-line helper in the same file is one task, not two.
 ## Model recommendation
 
 Before writing the plan, assess the complexity of the implementation work
-described in the spec and select an appropriate model and thinking level for
-the implementation phase agent.
+described in the spec and select an appropriate model and thinking level for the
+implementation phase agent.
 
 Edit `meta.md` directly by adding or merging a `phases` key into the YAML
 frontmatter. The result must look like this (without disturbing any existing

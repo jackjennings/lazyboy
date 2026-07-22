@@ -70,6 +70,15 @@ loaded at runtime by `src/phases/runners.ts`. Prompt filenames must match the
 `ActivePhase` values in `src/phases/types.ts` (`intake`, `enrichment`, `spec`,
 `plan`, `implementation`).
 
+**Provider-specific prompt supplements**
+(`src/phases/prompts/<provider>-<phase>.md`): optional per-provider additions to
+a phase prompt. When a file named `<provider>-<phase>.md` exists in the same
+directory, `loadProviderPrompt` in `src/phases/runners.ts` reads it and
+`advancePhase` appends its contents to the base prompt, separated by a blank
+line. When the file is absent, the base prompt is used unchanged — no code
+change is needed to add supplement support for a new provider or phase.
+Currently only `github-implementation.md` exists.
+
 **Self-review prompts** (`src/phases/prompts/*-self-review.md`): one optional
 prompt per phase. When present, `selfReview` in `src/self-review.ts` calls the
 Anthropic API after a `running → waiting` transition and, if the response is
@@ -94,6 +103,19 @@ output `.md` in the ticket directory. The file contains exactly the fields of
 written only when `pi` exits with a complete `agent_end` event. Code that scans
 ticket directories (e.g. `lazyboy status`) identifies usage files by the
 `.usage.json` suffix.
+
+## Provider-specific prompt supplements
+
+`loadProviderPrompt(phase, provider)` in `src/phases/runners.ts` loads
+`src/phases/prompts/<provider>-<phase>.md` and returns `""` when absent.
+`advancePhase` calls it at every prompt-loading site and appends the result with
+`\n\n` when non-empty.
+
+To add a supplement for a new provider or phase, create the corresponding `.md`
+file in `src/phases/prompts/`. No code changes are required. Supplement files
+must not contain `gh pr create` — the implementation-revision path uses the same
+supplement as the initial implementation, and the revising prompt already
+handles PR creation differently.
 
 ## Self-review
 

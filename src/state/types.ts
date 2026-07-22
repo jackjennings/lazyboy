@@ -79,6 +79,7 @@ export interface PhaseUsage {
   cacheWrite: number;
   model: string;
   durationMs: number;
+  turns?: number;
 }
 
 export interface Config {

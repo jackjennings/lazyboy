@@ -27,7 +27,7 @@ function makeAction(
 ) {
   return resolveConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     stat: () => Promise.resolve(null),
@@ -45,7 +45,7 @@ Deno.test("resolveConflictsAction: applies when running, pid dead", () => {
 
 Deno.test("resolveConflictsAction: does not apply when pid is alive", () => {
   assertEquals(
-    makeAction({ isPidAlive: () => true }).applies(makeTicket()),
+    makeAction({ isProcessAlive: () => true }).applies(makeTicket()),
     false,
   );
 });

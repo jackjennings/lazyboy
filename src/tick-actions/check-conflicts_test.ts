@@ -43,7 +43,7 @@ function makeAction(
 ) {
   return checkConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -83,7 +83,7 @@ Deno.test("checkConflictsAction: does not apply to merge phase — work is alrea
 Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
   assertEquals(
     makeAction({
-      isPidAlive: () => true,
+      isProcessAlive: () => true,
     }).applies(makeTicket()),
     false,
   );
@@ -91,7 +91,7 @@ Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
 
 Deno.test("checkConflictsAction: applies when no live process", () => {
   assertEquals(
-    makeAction({ isPidAlive: () => false }).applies(makeTicket()),
+    makeAction({ isProcessAlive: () => false }).applies(makeTicket()),
     true,
   );
 });

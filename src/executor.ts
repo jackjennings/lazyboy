@@ -13,7 +13,7 @@ export interface ExecutorOptions {
   contextFiles?: string[];
 }
 
-export function isPidAlive(pid: number): boolean {
+export function isProcessAlive(pid: number): boolean {
   try {
     Deno.kill(pid, "SIGCONT");
     return true;
@@ -75,7 +75,7 @@ export function isPhaseAlive(ticketDir: string): boolean {
   }
   const pid = parseInt(content.trim(), 10);
   if (isNaN(pid)) return false;
-  return isPidAlive(pid);
+  return isProcessAlive(pid);
 }
 
 export async function deleteRunPid(ticketDir: string): Promise<void> {

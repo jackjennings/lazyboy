@@ -208,11 +208,11 @@ function, and a corresponding `*_test.ts` file following the pattern in
 `check-merged-pr.ts`. Actions are registered in `src/tick.ts`.
 
 The applies predicate for actions that operate on worktrees must exclude tickets
-where `isPhaseAlive(ticketDir)` returns true (i.e. `!deps.isPidAlive(ticket.id)`
-is false) — rebasing or pushing while a live agent holds the worktree corrupts
-the agent's git state. Actions that can transition a ticket to `needs-attention`
-must also exclude `status === "needs-attention"` to avoid an infinite retry
-loop.
+where `isPhaseAlive(ticketDir)` returns true (i.e.
+`!deps.isProcessAlive(ticket.id)` is false) — rebasing or pushing while a live
+agent holds the worktree corrupts the agent's git state. Actions that can
+transition a ticket to `needs-attention` must also exclude
+`status === "needs-attention"` to avoid an infinite retry loop.
 
 ## PR tracking
 

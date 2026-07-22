@@ -1,6 +1,6 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
 import { join } from "@std/path";
-import { buildPhaseArgs, isPhaseAlive, isPidAlive } from "./executor.ts";
+import { buildPhaseArgs, isPhaseAlive, isProcessAlive } from "./executor.ts";
 import type { ExecutorOptions } from "./executor.ts";
 
 function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
@@ -49,12 +49,12 @@ Deno.test("buildPhaseArgs: first two args are run --allow-all", () => {
   assertEquals(args[1], "--allow-all");
 });
 
-Deno.test("isPidAlive returns true for current process", () => {
-  assertEquals(isPidAlive(Deno.pid), true);
+Deno.test("isProcessAlive returns true for current process", () => {
+  assertEquals(isProcessAlive(Deno.pid), true);
 });
 
-Deno.test("isPidAlive returns false for dead PID", () => {
-  assertEquals(isPidAlive(99999999), false);
+Deno.test("isProcessAlive returns false for dead PID", () => {
+  assertEquals(isProcessAlive(99999999), false);
 });
 
 Deno.test("buildPhaseArgs: includes --model", () => {

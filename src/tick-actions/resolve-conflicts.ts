@@ -9,7 +9,7 @@ export interface ResolveConflictsDeps {
     args: string[],
     cwd: string,
   ) => Promise<{ code: number; stdout: string; stderr: string }>;
-  isPidAlive: (ticketId: string) => boolean;
+  isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
   stat: (path: string) => Promise<{ isFile: boolean } | null>;
@@ -24,7 +24,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return (
         ticket.status === "running" &&
-        !deps.isPidAlive(ticket.id)
+        !deps.isProcessAlive(ticket.id)
       );
     },
     async run(

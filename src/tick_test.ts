@@ -55,7 +55,7 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -75,7 +75,7 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -99,7 +99,7 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -118,7 +118,7 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => true,
+    isProcessAlive: () => true,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -141,7 +141,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -161,7 +161,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
   const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -184,7 +184,7 @@ Deno.test("advancePhase: implementation/waiting + approved advances to merge/wai
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -210,7 +210,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -237,7 +237,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -257,7 +257,7 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -282,7 +282,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -317,7 +317,7 @@ Deno.test("tick: calls installPackages with config.packages.enabled before advan
         }),
       installPackages: installPackagesSpy,
       advanceTickets: advanceTicketsSpy,
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
     });
     assertSpyCall(installPackagesSpy, 0, {
       args: [["npm:pi-lens", "agent-browser"]],
@@ -337,7 +337,7 @@ Deno.test("tick: removes the pid file and exits(1) with a clean message when adv
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: () => Promise.reject(new Error("boom")),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       exit: exitSpy,
     });
     assertSpyCall(exitSpy, 0, { args: [1] });
@@ -372,7 +372,7 @@ Deno.test("tick: reclaims a lock held by a live pid once it exceeds the stalenes
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: advanceTicketsSpy,
-      isPidAlive: () => true,
+      isProcessAlive: () => true,
     });
     assertSpyCalls(advanceTicketsSpy, 1);
   } finally {
@@ -395,7 +395,7 @@ Deno.test("tick: does not reclaim a lock held by a live pid within the staleness
       loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
       installPackages: () => Promise.resolve([]),
       advanceTickets: advanceTicketsSpy,
-      isPidAlive: () => true,
+      isProcessAlive: () => true,
     });
     assertSpyCalls(advanceTicketsSpy, 0);
   } finally {
@@ -411,7 +411,7 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -435,7 +435,7 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -462,7 +462,7 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: appendLogSpy,
@@ -486,7 +486,7 @@ Deno.test("advancePhase: live PID does not log", async () => {
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => true,
+    isProcessAlive: () => true,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -507,7 +507,7 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -534,7 +534,7 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -562,7 +562,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -589,7 +589,7 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: appendLogSpy,
@@ -614,7 +614,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -647,7 +647,7 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
   });
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -667,7 +667,7 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
   );
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: appendLogSpy,
@@ -693,7 +693,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -716,7 +716,7 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -740,7 +740,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -757,7 +757,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
 Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
   const action = checkConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -771,7 +771,7 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
 Deno.test("resolveConflictsAction is importable (wiring smoke test)", () => {
   const action = resolveConflictsAction({
     runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     stat: () => Promise.resolve(null),
@@ -1380,7 +1380,7 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -1404,7 +1404,7 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
   let resolvedPhase = "";
   await advancePhase(ticket, "/state", {
     spawn: () => Promise.resolve(),
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -1432,7 +1432,7 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -1460,7 +1460,7 @@ Deno.test("advancePhase: implementation/revising prompt does not instruct gh pr 
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -1487,7 +1487,7 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
-    isPidAlive: () => false,
+    isProcessAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
     appendLog: async () => {},
@@ -1516,7 +1516,7 @@ Deno.test(
     );
     await advancePhase(ticket, "/state", {
       spawn: () => Promise.resolve(),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
       appendLog: appendLogSpy,
@@ -1557,7 +1557,7 @@ Deno.test(
     );
     await advancePhase(ticket, "/state", {
       spawn: () => Promise.resolve(),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
       appendLog: appendLogSpy,
@@ -1588,7 +1588,7 @@ Deno.test(
     );
     await advancePhase(ticket, "/state", {
       spawn: () => Promise.resolve(),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
       appendLog: appendLogSpy,
@@ -1611,7 +1611,7 @@ Deno.test(
     });
     await advancePhase(ticket, "/state", {
       spawn: () => Promise.resolve(),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
@@ -1640,7 +1640,7 @@ Deno.test(
     });
     await advancePhase(ticket, "/state", {
       spawn: () => Promise.resolve(),
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
@@ -1670,11 +1670,11 @@ Deno.test(
     let spawnedPrompt = "";
     const spawnSpy = spy((opts: SpawnOpts) => {
       spawnedPrompt = opts.prompt;
-      return Promise.resolve(1);
+      return Promise.resolve();
     });
     await advancePhase(ticket, "/state", {
       spawn: spawnSpy,
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
@@ -1710,11 +1710,11 @@ Deno.test(
     let spawnedPrompt = "";
     const spawnSpy = spy((opts: SpawnOpts) => {
       spawnedPrompt = opts.prompt;
-      return Promise.resolve(42);
+      return Promise.resolve();
     });
     await advancePhase(ticket, "/state", {
       spawn: spawnSpy,
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
@@ -1748,11 +1748,11 @@ Deno.test(
     let spawnedPrompt = "";
     const spawnSpy = spy((opts: SpawnOpts) => {
       spawnedPrompt = opts.prompt;
-      return Promise.resolve(1);
+      return Promise.resolve();
     });
     await advancePhase(ticket, "/state", {
       spawn: spawnSpy,
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
@@ -1784,11 +1784,11 @@ Deno.test(
     let spawnedPrompt = "";
     const spawnSpy = spy((opts: SpawnOpts) => {
       spawnedPrompt = opts.prompt;
-      return Promise.resolve(123);
+      return Promise.resolve();
     });
     await advancePhase(ticket, "/state", {
       spawn: spawnSpy,
-      isPidAlive: () => false,
+      isProcessAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),

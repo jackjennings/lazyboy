@@ -16,7 +16,7 @@ import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import {
   deleteRunPid,
   isPhaseAlive,
-  isPidAlive as defaultIsPidAlive,
+  isProcessAlive as defaultIsProcessAlive,
   spawnPhase,
 } from "./executor.ts";
 import {
@@ -60,7 +60,7 @@ export interface TickOrchestrationDeps {
   loadConfig: () => Promise<Config>;
   installPackages: (sources: string[]) => Promise<InstallResult[]>;
   advanceTickets: (config: Config) => Promise<void>;
-  isPidAlive?: (pid: number) => boolean;
+  isProcessAlive?: (pid: number) => boolean;
   exit?: (code: number) => void;
 }
 
@@ -103,7 +103,7 @@ export interface TickDeps {
     model: string;
     thinking: string;
   }) => Promise<void>;
-  isPidAlive: (ticketId: string) => boolean;
+  isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   writePhaseOutput: (
     stateDir: string,
@@ -230,7 +230,7 @@ export async function advancePhase(
   }
 
   if (ticket.status === "running") {
-    if (!deps.isPidAlive(ticket.id)) {
+    if (!deps.isProcessAlive(ticket.id)) {
       await deleteRunPid(join(stateDir, ticket.id));
       const waitingTicket: TicketState = {
         ...ticket,
@@ -533,7 +533,8 @@ export async function advanceTickets(
     }),
     resolveConflictsAction({
       runGit,
-      isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
+      isProcessAlive: (ticketId: string) =>
+        isPhaseAlive(join(stateDir, ticketId)),
       writeTicket,
       appendLog: appendTicketLog,
       stat: async (path) => {
@@ -549,7 +550,8 @@ export async function advanceTickets(
     }),
     checkConflictsAction({
       runGit,
-      isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
+      isProcessAlive: (ticketId: string) =>
+        isPhaseAlive(join(stateDir, ticketId)),
       worktreeExists: existsSync,
       writeTicket,
       appendLog: appendTicketLog,
@@ -645,7 +647,8 @@ export async function advanceTickets(
         model: opts.model,
         thinking: opts.thinking,
       }),
-    isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
+    isProcessAlive: (ticketId: string) =>
+      isPhaseAlive(join(stateDir, ticketId)),
     writeTicket,
     writePhaseOutput,
     appendLog: appendTicketLog,
@@ -697,7 +700,8 @@ export async function tick(deps?: TickOrchestrationDeps): Promise<void> {
     const existing = await Deno.readTextFile(pidFile).catch(() => null);
     if (existing) {
       const pid = parseInt(existing.trim(), 10);
-      const alive = !isNaN(pid) && (d.isPidAlive ?? defaultIsPidAlive)(pid);
+      const alive = !isNaN(pid) &&
+        (d.isProcessAlive ?? defaultIsProcessAlive)(pid);
       if (alive) {
         const stat = await Deno.stat(pidFile).catch(() => null);
         const ageMs = stat?.mtime

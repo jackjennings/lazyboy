@@ -13,7 +13,12 @@ import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
-import { isPidAlive as defaultIsPidAlive, spawnPhase } from "./executor.ts";
+import {
+  deleteRunPid,
+  isPhaseAlive,
+  isPidAlive as defaultIsPidAlive,
+  spawnPhase,
+} from "./executor.ts";
 import {
   loadPrompt,
   loadPromptFile,
@@ -97,8 +102,8 @@ export interface TickDeps {
     outputFile: string;
     model: string;
     thinking: string;
-  }) => Promise<number>;
-  isPidAlive: (pid: number) => boolean;
+  }) => Promise<void>;
+  isPidAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   writePhaseOutput: (
     stateDir: string,
@@ -162,7 +167,7 @@ export async function advancePhase(
       : basePrompt;
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
-    const pid = await deps.spawn({
+    await deps.spawn({
       phase: activePhase,
       ticketDir: join(stateDir, ticket.id),
       prompt,
@@ -176,7 +181,6 @@ export async function advancePhase(
       ...ticket,
       status: "running",
       approved: false,
-      pid,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -199,7 +203,7 @@ export async function advancePhase(
       : intakeBase;
     const { model: intakeModel, thinking: intakeThinking } = deps
       .resolveModelConfig("intake", ticket);
-    const pid = await deps.spawn({
+    await deps.spawn({
       phase: "intake",
       ticketDir: join(stateDir, ticket.id),
       prompt,
@@ -213,7 +217,6 @@ export async function advancePhase(
       ...ticket,
       phase: "intake",
       status: "running",
-      pid,
       approved: false,
       updated: now,
     });
@@ -227,11 +230,11 @@ export async function advancePhase(
   }
 
   if (ticket.status === "running") {
-    if (ticket.pid !== undefined && !deps.isPidAlive(ticket.pid)) {
+    if (!deps.isPidAlive(ticket.id)) {
+      await deleteRunPid(join(stateDir, ticket.id));
       const waitingTicket: TicketState = {
         ...ticket,
         status: "waiting",
-        pid: undefined,
         updated: now,
       };
       await deps.writeTicket(stateDir, waitingTicket);
@@ -313,7 +316,7 @@ export async function advancePhase(
     const prompt = supplement ? basePrompt + "\n\n" + supplement : basePrompt;
     const { model: nextModel, thinking: nextThinking } = deps
       .resolveModelConfig(next, ticket);
-    const pid = await deps.spawn({
+    await deps.spawn({
       phase: next,
       ticketDir: join(stateDir, ticket.id),
       prompt,
@@ -328,7 +331,6 @@ export async function advancePhase(
       phase: next,
       status: "running",
       approved: false,
-      pid,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -338,6 +340,22 @@ export async function advancePhase(
     });
     return;
   }
+}
+
+async function ensureRunPidGitignored(stateDir: string): Promise<void> {
+  const gitignorePath = join(stateDir, ".gitignore");
+  let content = "";
+  try {
+    content = await Deno.readTextFile(gitignorePath);
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const lines = content.split("\n");
+  if (lines.some((l) => l.trim() === "run.pid")) return;
+  await Deno.writeTextFile(
+    gitignorePath,
+    content ? content + "run.pid\n" : "run.pid\n",
+  );
 }
 
 function defaultAdvanceTicketsDeps(): AdvanceTicketsDeps {
@@ -515,7 +533,7 @@ export async function advanceTickets(
     }),
     resolveConflictsAction({
       runGit,
-      isPidAlive: defaultIsPidAlive,
+      isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
       writeTicket,
       appendLog: appendTicketLog,
       stat: async (path) => {
@@ -531,7 +549,7 @@ export async function advanceTickets(
     }),
     checkConflictsAction({
       runGit,
-      isPidAlive: defaultIsPidAlive,
+      isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
       worktreeExists: existsSync,
       writeTicket,
       appendLog: appendTicketLog,
@@ -551,22 +569,20 @@ export async function advanceTickets(
           `Examine the conflicted files listed in the context, resolve all merge conflicts, ` +
           `then run \`git rebase --continue\` until the rebase completes. ` +
           `After a successful rebase, run \`git push --force-with-lease origin ${opts.branch}\`.`;
-        return Promise.resolve(
-          spawnPhase({
-            ticketDir: opts.ticketDir,
-            prompt,
-            scopeDirs: [],
-            outputFile: "conflict-resolution.md",
-            githubToken: token,
-            anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-            worktrees: {
-              [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
-            },
-            model: "claude-opus-4-7",
-            thinking: "high",
-            contextFiles: contextFilePaths,
-          }),
-        );
+        return spawnPhase({
+          ticketDir: opts.ticketDir,
+          prompt,
+          scopeDirs: [],
+          outputFile: "conflict-resolution.md",
+          githubToken: token,
+          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+          worktrees: {
+            [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
+          },
+          model: "claude-opus-4-7",
+          thinking: "high",
+          contextFiles: contextFilePaths,
+        });
       },
     }),
     ...(config.jira
@@ -618,20 +634,18 @@ export async function advanceTickets(
 
   const tickDepImpls: TickDeps = {
     spawn: (opts) =>
-      Promise.resolve(
-        spawnPhase({
-          ticketDir: opts.ticketDir,
-          prompt: opts.prompt,
-          scopeDirs: opts.scope.map(expandHome),
-          outputFile: opts.outputFile,
-          githubToken: token,
-          anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-          worktrees: opts.worktrees,
-          model: opts.model,
-          thinking: opts.thinking,
-        }),
-      ),
-    isPidAlive: defaultIsPidAlive,
+      spawnPhase({
+        ticketDir: opts.ticketDir,
+        prompt: opts.prompt,
+        scopeDirs: opts.scope.map(expandHome),
+        outputFile: opts.outputFile,
+        githubToken: token,
+        anthropicApiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        worktrees: opts.worktrees,
+        model: opts.model,
+        thinking: opts.thinking,
+      }),
+    isPidAlive: (ticketId: string) => isPhaseAlive(join(stateDir, ticketId)),
     writeTicket,
     writePhaseOutput,
     appendLog: appendTicketLog,
@@ -658,6 +672,7 @@ export async function advanceTickets(
   }
 
   await deps.writeLastWorked(selectedIds);
+  await ensureRunPidGitignored(stateDir);
   await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
 }
 

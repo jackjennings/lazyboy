@@ -58,11 +58,10 @@ Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   }
 });
 
-Deno.test("performDecline: clears pid and sets approved false", async () => {
+Deno.test("performDecline: sets approved false", async () => {
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
-    pid: 12345,
     approved: true,
   });
   const stateDir = await setupGitStateDir(ticket);

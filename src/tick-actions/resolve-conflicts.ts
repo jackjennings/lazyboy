@@ -2,13 +2,14 @@ import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 import { sanitizeBranchForFilename } from "./check-conflicts.ts";
+import { deleteRunPid } from "../executor.ts";
 
 export interface ResolveConflictsDeps {
   runGit: (
     args: string[],
     cwd: string,
   ) => Promise<{ code: number; stdout: string; stderr: string }>;
-  isPidAlive: (pid: number) => boolean;
+  isPidAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
   stat: (path: string) => Promise<{ isFile: boolean } | null>;
@@ -23,8 +24,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return (
         ticket.status === "running" &&
-        ticket.pid !== undefined &&
-        !deps.isPidAlive(ticket.pid)
+        !deps.isPidAlive(ticket.id)
       );
     },
     async run(
@@ -87,10 +87,10 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         for (const f of contextFiles) {
           await deps.remove(f);
         }
+        await deleteRunPid(join(stateDir, ticket.id));
         const updated: TicketState = {
           ...ticket,
           status: "needs-attention",
-          pid: undefined,
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);
@@ -114,10 +114,10 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
           for (const f of contextFiles) {
             await deps.remove(f);
           }
+          await deleteRunPid(join(stateDir, ticket.id));
           const updated: TicketState = {
             ...ticket,
             status: "needs-attention",
-            pid: undefined,
             updated: now,
           };
           await deps.writeTicket(stateDir, updated);
@@ -134,10 +134,10 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
       for (const f of contextFiles) {
         await deps.remove(f);
       }
+      await deleteRunPid(join(stateDir, ticket.id));
       const updated: TicketState = {
         ...ticket,
         status: "waiting",
-        pid: undefined,
         updated: now,
       };
       await deps.writeTicket(stateDir, updated);

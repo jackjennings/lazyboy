@@ -58,7 +58,11 @@ a detached Deno subprocess. The subprocess runs
 phase output file and aggregates token usage. After the subprocess exits, two
 files are written: the phase output `.md` and a sidecar
 `<timestamped-phase>.usage.json` (omitted if no `agent_end` event was received).
-The tick detects completion by checking PID liveness on the next run.
+`spawnPhase()` also writes the child PID to `<ticketDir>/run.pid`. The tick
+detects completion by calling `isPhaseAlive(ticketDir)` on the next run; when
+the process is dead, the pidfile is deleted and the ticket transitions to
+`waiting`. `run.pid` is never committed to git (gitignored at the state-repo
+root).
 
 **State store** (`src/state/store.ts`): each ticket is a directory in the
 configured `state.dir` git repo. `meta.md` uses YAML frontmatter (parsed via
@@ -204,10 +208,11 @@ function, and a corresponding `*_test.ts` file following the pattern in
 `check-merged-pr.ts`. Actions are registered in `src/tick.ts`.
 
 The applies predicate for actions that operate on worktrees must exclude tickets
-where `ticket.pid !== undefined && isPidAlive(ticket.pid)` — rebasing or pushing
-while a live agent holds the worktree corrupts the agent's git state. Actions
-that can transition a ticket to `needs-attention` must also exclude
-`status === "needs-attention"` to avoid an infinite retry loop.
+where `isPhaseAlive(ticketDir)` returns true (i.e. `!deps.isPidAlive(ticket.id)`
+is false) — rebasing or pushing while a live agent holds the worktree corrupts
+the agent's git state. Actions that can transition a ticket to `needs-attention`
+must also exclude `status === "needs-attention"` to avoid an infinite retry
+loop.
 
 ## PR tracking
 

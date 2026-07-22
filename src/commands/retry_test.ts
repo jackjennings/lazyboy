@@ -85,7 +85,6 @@ Deno.test(
     const ticket = makeTicket({
       phase: "spec",
       status: "needs-attention",
-      pid: 99999,
     });
     const stateDir = await setupGitStateDir(ticket);
     try {
@@ -109,7 +108,6 @@ Deno.test(
     const ticket = makeTicket({
       phase: "intake",
       status: "needs-attention",
-      pid: 12345,
     });
     const stateDir = await setupGitStateDir(ticket);
     try {

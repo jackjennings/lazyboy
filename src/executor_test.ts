@@ -1,5 +1,6 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
-import { buildPhaseArgs, isPidAlive } from "./executor.ts";
+import { join } from "@std/path";
+import { buildPhaseArgs, isPhaseAlive, isPidAlive } from "./executor.ts";
 import type { ExecutorOptions } from "./executor.ts";
 
 function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
@@ -87,4 +88,33 @@ Deno.test("buildPhaseArgs: includes --context-files when contextFiles is provide
 Deno.test("buildPhaseArgs: omits --context-files when contextFiles is not provided", () => {
   const args = buildPhaseArgs(makeOpts());
   assertEquals(args.includes("--context-files"), false);
+});
+
+Deno.test("isPhaseAlive: returns false when no run.pid exists", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    assertEquals(isPhaseAlive(tempDir), false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("isPhaseAlive: returns true when run.pid contains current process PID", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "run.pid"), String(Deno.pid));
+    assertEquals(isPhaseAlive(tempDir), true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("isPhaseAlive: returns false when run.pid contains a dead PID", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "run.pid"), "99999999");
+    assertEquals(isPhaseAlive(tempDir), false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
 });

@@ -51,7 +51,7 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
   let spawnedPhase = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedPhase = opts.phase;
-    return Promise.resolve(123);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -67,14 +67,14 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
 });
 
 Deno.test("advancePhase: running phase with dead PID sets waiting", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+  const ticket = makeTicket({ phase: "intake", status: "running" });
   let written = { phase: "", status: "" };
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
     written = { phase: t.phase, status: t.status };
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
@@ -91,7 +91,6 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
-    pid: 999,
   });
   let written = { phase: "", status: "" };
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
@@ -99,7 +98,7 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: async () => {},
@@ -113,12 +112,12 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
 });
 
 Deno.test("advancePhase: running phase with live PID does nothing", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+  const ticket = makeTicket({ phase: "intake", status: "running" });
   const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
     Promise.resolve()
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => true,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
@@ -138,7 +137,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
   let spawnedPhase = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedPhase = opts.phase;
-    return Promise.resolve(1);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -159,7 +158,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     status: "waiting",
     approved: false,
   });
-  const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve(1));
+  const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
     isPidAlive: () => false,
@@ -184,7 +183,7 @@ Deno.test("advancePhase: implementation/waiting + approved advances to merge/wai
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
@@ -207,7 +206,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
-    return Promise.resolve(1);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -234,7 +233,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
-    return Promise.resolve(1);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -254,7 +253,7 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
-    return Promise.resolve(123);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -282,7 +281,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: () => Promise.resolve(),
@@ -411,7 +410,7 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(123),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -430,12 +429,12 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
 });
 
 Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+  const ticket = makeTicket({ phase: "intake", status: "running" });
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -457,13 +456,12 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
-    pid: 999,
   });
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
@@ -482,12 +480,12 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
 });
 
 Deno.test("advancePhase: live PID does not log", async () => {
-  const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+  const ticket = makeTicket({ phase: "intake", status: "running" });
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => true,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -508,7 +506,7 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -535,7 +533,7 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -563,7 +561,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -590,7 +588,7 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(123),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -612,7 +610,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedPhase = opts.phase;
     spawnedOutputFile = opts.outputFile;
-    return Promise.resolve(77);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -638,19 +636,17 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
     phase: "",
     status: "",
     approved: true,
-    pid: undefined as number | undefined,
   };
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
     written = {
       phase: t.phase,
       status: t.status,
       approved: t.approved,
-      pid: t.pid,
     };
     return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(77),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: writeTicketSpy,
     writePhaseOutput: async () => {},
@@ -662,7 +658,6 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
   assertEquals(written.phase, "plan");
   assertEquals(written.status, "running");
   assertEquals(written.approved, false);
-  assertEquals(written.pid, 77);
 });
 
 Deno.test("advancePhase: revising status logs status-transition from revising to running", async () => {
@@ -671,7 +666,7 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(5),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: async () => {},
     writePhaseOutput: async () => {},
@@ -694,7 +689,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
   let spawnedOutputFile: string | undefined;
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedOutputFile = opts.outputFile;
-    return Promise.resolve(77);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -717,7 +712,7 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
   let spawnedOutputFile: string | undefined;
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedOutputFile = opts.outputFile;
-    return Promise.resolve(123);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -741,7 +736,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
   let spawnedOutputFile: string | undefined;
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedOutputFile = opts.outputFile;
-    return Promise.resolve(1);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -766,7 +761,7 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
     worktreeExists: () => true,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    spawn: () => Promise.resolve(0),
+    spawn: () => Promise.resolve(),
     writeContextFile: () => Promise.resolve(),
   });
   assertEquals(typeof action.applies, "function");
@@ -973,8 +968,12 @@ Deno.test(
           id: "gh-3",
           phase: "intake",
           status: "running",
-          pid: Deno.pid,
         }),
+      );
+      await Deno.mkdir(join(tempDir, "gh-3"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tempDir, "gh-3", "run.pid"),
+        String(Deno.pid),
       );
 
       const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
@@ -1019,8 +1018,12 @@ Deno.test(
           id: "gh-1",
           phase: "intake",
           status: "running",
-          pid: Deno.pid,
         }),
+      );
+      await Deno.mkdir(join(tempDir, "gh-1"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tempDir, "gh-1", "run.pid"),
+        String(Deno.pid),
       );
       await writeTicket(
         tempDir,
@@ -1074,8 +1077,12 @@ Deno.test(
           id: "gh-1",
           phase: "intake",
           status: "running",
-          pid: Deno.pid,
         }),
+      );
+      await Deno.mkdir(join(tempDir, "gh-1"), { recursive: true });
+      await Deno.writeTextFile(
+        join(tempDir, "gh-1", "run.pid"),
+        String(Deno.pid),
       );
 
       const writeLastWorked = spy((_ids: string[]) => Promise.resolve());
@@ -1369,7 +1376,7 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedModel = opts.model;
     spawnedThinking = opts.thinking;
-    return Promise.resolve(123);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -1396,7 +1403,7 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
   });
   let resolvedPhase = "";
   await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(1),
+    spawn: () => Promise.resolve(),
     isPidAlive: () => false,
     writeTicket: () => Promise.resolve(),
     writePhaseOutput: () => Promise.resolve(),
@@ -1421,7 +1428,7 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
-    return Promise.resolve(42);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -1449,7 +1456,7 @@ Deno.test("advancePhase: implementation/revising prompt does not instruct gh pr 
   let spawnedPrompt = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedPrompt = opts.prompt;
-    return Promise.resolve(42);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -1476,7 +1483,7 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
   let spawnedWorktrees: Record<string, unknown> = {};
   const spawnSpy = spy((opts: SpawnOpts) => {
     spawnedWorktrees = opts.worktrees;
-    return Promise.resolve(77);
+    return Promise.resolve();
   });
   await advancePhase(ticket, "/state", {
     spawn: spawnSpy,
@@ -1494,7 +1501,7 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
 Deno.test(
   "advancePhase: running ticket with dead PID and selfReview true sets approved and logs self-approved",
   async () => {
-    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
     const writeTicketSpy = spy((_dir: string, t: TicketState) => {
       writtenTickets.push(t);
@@ -1508,7 +1515,7 @@ Deno.test(
       },
     );
     await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(0),
+      spawn: () => Promise.resolve(),
       isPidAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
@@ -1535,7 +1542,7 @@ Deno.test(
 Deno.test(
   "advancePhase: running ticket with dead PID and selfReview false leaves approved false",
   async () => {
-    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
     const writeTicketSpy = spy((_dir: string, t: TicketState) => {
       writtenTickets.push(t);
@@ -1549,7 +1556,7 @@ Deno.test(
       },
     );
     await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(0),
+      spawn: () => Promise.resolve(),
       isPidAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
@@ -1572,7 +1579,7 @@ Deno.test(
 Deno.test(
   "advancePhase: selfReview throwing is treated as false",
   async () => {
-    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const ticket = makeTicket({ phase: "intake", status: "running" });
     const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
       Promise.resolve()
     );
@@ -1580,7 +1587,7 @@ Deno.test(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
     await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(0),
+      spawn: () => Promise.resolve(),
       isPidAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
@@ -1596,14 +1603,14 @@ Deno.test(
 Deno.test(
   "advancePhase: selfReview returning false leaves ticket waiting with approved false",
   async () => {
-    const ticket = makeTicket({ phase: "intake", status: "running", pid: 999 });
+    const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
     const writeTicketSpy = spy((_dir: string, t: TicketState) => {
       writtenTickets.push(t);
       return Promise.resolve();
     });
     await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(0),
+      spawn: () => Promise.resolve(),
       isPidAlive: () => false,
       writeTicket: writeTicketSpy,
       writePhaseOutput: () => Promise.resolve(),
@@ -1623,7 +1630,6 @@ Deno.test(
       id: "github/jackjennings/lazyboy/104",
       phase: "intake",
       status: "running",
-      pid: 999,
     });
     let capturedPhase = "";
     let capturedTicketDir = "";
@@ -1633,7 +1639,7 @@ Deno.test(
       return Promise.resolve(false);
     });
     await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(0),
+      spawn: () => Promise.resolve(),
       isPidAlive: () => false,
       writeTicket: () => Promise.resolve(),
       writePhaseOutput: () => Promise.resolve(),

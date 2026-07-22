@@ -73,7 +73,6 @@ export async function readTicket(
     status,
     approved: data.approved ?? false,
     scope: data.scope ?? [],
-    pid: data.pid,
     worktrees,
     prs,
     created: data.created,
@@ -109,7 +108,6 @@ export async function writeTicket(
     created: ticket.created,
     updated: ticket.updated,
   };
-  if (ticket.pid !== undefined) frontmatter.pid = ticket.pid;
   if (ticket.prs !== undefined) frontmatter.prs = ticket.prs;
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
   const raw = matter.stringify(ticket.body, frontmatter);

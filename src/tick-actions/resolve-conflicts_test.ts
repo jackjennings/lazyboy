@@ -15,7 +15,6 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     worktrees: {
       "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
     },
-    pid: 999,
     created: "2026-06-30T00:00:00Z",
     updated: "2026-06-30T00:00:00Z",
     body: "",
@@ -54,13 +53,6 @@ Deno.test("resolveConflictsAction: does not apply when pid is alive", () => {
 Deno.test("resolveConflictsAction: does not apply when status is not running", () => {
   assertEquals(
     makeAction().applies(makeTicket({ status: "waiting" })),
-    false,
-  );
-});
-
-Deno.test("resolveConflictsAction: does not apply when pid is undefined", () => {
-  assertEquals(
-    makeAction().applies(makeTicket({ pid: undefined })),
     false,
   );
 });
@@ -121,7 +113,6 @@ Deno.test(
     assertEquals(gitCalls.some((a) => a[0] === "push"), true);
     assertEquals(removed.length > 0, true);
     assertEquals(result?.status, "waiting");
-    assertEquals(result?.pid, undefined);
 
     const resolved = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolved",
@@ -172,6 +163,7 @@ Deno.test(
       gitCalls.some((c) => c.cwd === "/wt/b/repo"),
       false,
     );
+    // (no pid assertion — pid field removed from TicketState)
     const resolvedEntries = (logged as Record<string, unknown>[]).filter(
       (e) => e.event === "conflict-resolved",
     );
@@ -227,7 +219,6 @@ Deno.test(
     );
     assertEquals(removed.length > 0, true);
     assertEquals(result?.status, "needs-attention");
-    assertEquals(result?.pid, undefined);
 
     const failed = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-failed",
@@ -280,7 +271,6 @@ Deno.test(
     }).run(makeTicket(), "/state");
 
     assertEquals(result?.status, "needs-attention");
-    assertEquals(result?.pid, undefined);
 
     const failed = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-failed",

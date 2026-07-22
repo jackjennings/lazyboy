@@ -55,6 +55,53 @@ export async function findLocalRepo(
   return null;
 }
 
+export interface RepoCandidate {
+  slug: string;
+  localPath: string | null;
+}
+
+export async function listRepoCorpus(
+  roots: string[],
+  configuredRepos: string[],
+): Promise<RepoCandidate[]> {
+  const bySlug = new Map<string, RepoCandidate>();
+
+  for (const root of roots) {
+    try {
+      for await (const orgEntry of Deno.readDir(root)) {
+        if (!orgEntry.isDirectory) continue;
+        const orgPath = join(root, orgEntry.name);
+        try {
+          for await (const repoEntry of Deno.readDir(orgPath)) {
+            if (!repoEntry.isDirectory) continue;
+            const repoPath = join(orgPath, repoEntry.name);
+            const { code, stdout } = await runGit(
+              ["remote", "get-url", "origin"],
+              repoPath,
+            );
+            if (code !== 0) continue;
+            const slug = parseRemoteSlug(stdout);
+            if (!slug) continue;
+            bySlug.set(slug, { slug, localPath: repoPath });
+          }
+        } catch {
+          // org-level directory is not readable — skip
+        }
+      }
+    } catch {
+      // root doesn't exist or isn't readable — skip
+    }
+  }
+
+  for (const slug of configuredRepos) {
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, { slug, localPath: null });
+    }
+  }
+
+  return [...bySlug.values()];
+}
+
 export function parseIntakeScope(content: string): string[] {
   const sectionStart = content.search(/^## Proposed Scope$/m);
   if (sectionStart === -1) return [];

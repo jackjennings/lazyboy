@@ -1,11 +1,13 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
+import type { RepoCandidate } from "./worktree.ts";
 import {
   cloneRemoteRepo,
   createWorktree,
   extractGitHubSlug,
   findLocalRepo,
+  listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
   resolveGitHubSlug,
@@ -130,6 +132,92 @@ Deno.test("findLocalRepo: returns null for nonexistent root", async () => {
     "jackjennings/lazyboy",
   );
   assertEquals(result, null);
+});
+
+// ── listRepoCorpus ───────────────────────────────────────────────────────────
+
+async function initRepoWithRemote(
+  repoPath: string,
+  remoteUrl: string,
+): Promise<void> {
+  await Deno.mkdir(repoPath, { recursive: true });
+  await new Deno.Command("git", { args: ["init"], cwd: repoPath }).output();
+  await new Deno.Command("git", {
+    args: ["remote", "add", "origin", remoteUrl],
+    cwd: repoPath,
+  }).output();
+}
+
+Deno.test("listRepoCorpus: finds local repo and derives slug from remote", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "lazyboy");
+  await initRepoWithRemote(
+    repoPath,
+    "https://github.com/jackjennings/lazyboy.git",
+  );
+
+  const result: RepoCandidate[] = await listRepoCorpus([root], []);
+  assertEquals(result, [
+    { slug: "jackjennings/lazyboy", localPath: repoPath },
+  ]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: skips repos whose remote is not a GitHub URL", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "internal");
+  await initRepoWithRemote(
+    repoPath,
+    "https://gitlab.com/jackjennings/internal.git",
+  );
+
+  const result = await listRepoCorpus([root], []);
+  assertEquals(result, []);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: skips directories with no git remote", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "norepo");
+  await Deno.mkdir(repoPath, { recursive: true });
+  await new Deno.Command("git", { args: ["init"], cwd: repoPath }).output();
+
+  const result = await listRepoCorpus([root], []);
+  assertEquals(result, []);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: tolerates a nonexistent root", async () => {
+  const result = await listRepoCorpus(["/nonexistent/path"], []);
+  assertEquals(result, []);
+});
+
+Deno.test("listRepoCorpus: adds configuredRepos not found locally, with null localPath", async () => {
+  const root = await Deno.makeTempDir();
+
+  const result = await listRepoCorpus([root], ["myorg/frontend"]);
+  assertEquals(result, [{ slug: "myorg/frontend", localPath: null }]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: local match wins over configuredRepos duplicate", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "myorg", "frontend");
+  await initRepoWithRemote(repoPath, "git@github.com:myorg/frontend.git");
+
+  const result = await listRepoCorpus([root], ["myorg/frontend"]);
+  assertEquals(result, [{ slug: "myorg/frontend", localPath: repoPath }]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: returns empty array when no roots and no configuredRepos", async () => {
+  const result = await listRepoCorpus([], []);
+  assertEquals(result, []);
 });
 
 // ── createWorktree ───────────────────────────────────────────────────────────

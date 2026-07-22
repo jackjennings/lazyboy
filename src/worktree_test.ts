@@ -7,6 +7,7 @@ import {
   extractGitHubSlug,
   findLocalRepo,
   parseIntakeScope,
+  parseRemoteSlug,
   resolveGitHubSlug,
   runGit,
 } from "./worktree.ts";
@@ -33,6 +34,47 @@ Deno.test("extractGitHubSlug: throws on non-GitHub URL", () => {
     Error,
     "Cannot extract GitHub slug",
   );
+});
+
+// ── parseRemoteSlug ──────────────────────────────────────────────────────────
+
+Deno.test("parseRemoteSlug: extracts slug from HTTPS remote with .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("https://github.com/jackjennings/lazyboy.git"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from HTTPS remote without .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("https://github.com/jackjennings/lazyboy"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from SSH remote with .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github.com:jackjennings/lazyboy.git"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from SSH remote without .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github.com:jackjennings/lazyboy"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: returns null for non-GitHub remote", () => {
+  assertEquals(
+    parseRemoteSlug("https://gitlab.com/jackjennings/lazyboy.git"),
+    null,
+  );
+});
+
+Deno.test("parseRemoteSlug: returns null for empty string", () => {
+  assertEquals(parseRemoteSlug(""), null);
 });
 
 // ── findLocalRepo ────────────────────────────────────────────────────────────

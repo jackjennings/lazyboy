@@ -7,6 +7,12 @@ export function extractGitHubSlug(url: string): string {
   return match[1];
 }
 
+export function parseRemoteSlug(url: string): string | null {
+  const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
 export async function runGit(
   args: string[],
   cwd: string,

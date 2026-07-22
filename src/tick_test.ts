@@ -1805,3 +1805,95 @@ Deno.test(
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
+Deno.test("tick: writes NDJSON to tick.ndjson when tick is already running", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+    recursive: true,
+  });
+  await Deno.writeTextFile(pidFile, "999999");
+  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
+  try {
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: () => Promise.resolve(),
+      isPidAlive: () => true,
+    });
+    const logAfter = await Deno.readTextFile(tickLog);
+    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
+      Boolean,
+    );
+    const entry = JSON.parse(newLines[newLines.length - 1]);
+    assertEquals(entry.event, "tick-already-running");
+    assertEquals(typeof entry.ts, "string");
+    assertEquals(!isNaN(Date.parse(entry.ts)), true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
+  }
+});
+
+Deno.test("tick: writes NDJSON to tick.ndjson when lock is stale", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+    recursive: true,
+  });
+  await Deno.writeTextFile(pidFile, "999999");
+  const staleSeconds =
+    Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) - 31 * 60;
+  await Deno.utime(pidFile, staleSeconds, staleSeconds);
+  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
+  try {
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: () => Promise.resolve(),
+      isPidAlive: () => true,
+    });
+    const logAfter = await Deno.readTextFile(tickLog);
+    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
+      Boolean,
+    );
+    const entry = JSON.parse(newLines[newLines.length - 1]);
+    assertEquals(entry.event, "stale-lock");
+    assertEquals(typeof entry.ts, "string");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
+  }
+});
+
+Deno.test("tick: writes NDJSON to tick.ndjson when advanceTickets fails", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const pidFile = join(Deno.env.get("HOME")!, ".lazyboy", "tick.pid");
+  const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+  await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
+    recursive: true,
+  });
+  const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
+  const exitSpy = spy((_code: number) => {});
+  try {
+    await tick({
+      loadConfig: () => Promise.resolve(makeTickConfig(tempDir)),
+      installPackages: () => Promise.resolve([]),
+      advanceTickets: () => Promise.reject(new Error("boom")),
+      isPidAlive: () => false,
+      exit: exitSpy,
+    });
+    const logAfter = await Deno.readTextFile(tickLog);
+    const newLines = logAfter.slice(logBefore.length).trim().split("\n").filter(
+      Boolean,
+    );
+    const entry = JSON.parse(newLines[newLines.length - 1]);
+    assertEquals(entry.event, "tick-failed");
+    assertEquals(entry.error, "boom");
+    assertEquals(typeof entry.ts, "string");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+    await Deno.remove(pidFile).catch(() => {});
+  }
+});

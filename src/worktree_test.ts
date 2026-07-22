@@ -7,6 +7,7 @@ import {
   createWorktree,
   extractGitHubSlug,
   findLocalRepo,
+  formatRepoCorpus,
   listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
@@ -218,6 +219,47 @@ Deno.test("listRepoCorpus: local match wins over configuredRepos duplicate", asy
 Deno.test("listRepoCorpus: returns empty array when no roots and no configuredRepos", async () => {
   const result = await listRepoCorpus([], []);
   assertEquals(result, []);
+});
+
+// ── formatRepoCorpus ─────────────────────────────────────────────────────────
+
+Deno.test("formatRepoCorpus: returns empty string for empty input", () => {
+  assertEquals(formatRepoCorpus([]), "");
+});
+
+Deno.test("formatRepoCorpus: renders a local candidate with its path", () => {
+  const result = formatRepoCorpus([
+    { slug: "jackjennings/lazyboy", localPath: "/code/jackjennings/lazyboy" },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- jackjennings/lazyboy (checked out at /code/jackjennings/lazyboy)\n",
+  );
+});
+
+Deno.test("formatRepoCorpus: renders a remote-only candidate", () => {
+  const result = formatRepoCorpus([
+    { slug: "myorg/frontend", localPath: null },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- myorg/frontend (not checked out locally)\n",
+  );
+});
+
+Deno.test("formatRepoCorpus: renders multiple candidates in order given", () => {
+  const result = formatRepoCorpus([
+    { slug: "jackjennings/lazyboy", localPath: "/code/jackjennings/lazyboy" },
+    { slug: "myorg/frontend", localPath: null },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- jackjennings/lazyboy (checked out at /code/jackjennings/lazyboy)\n" +
+      "- myorg/frontend (not checked out locally)\n",
+  );
 });
 
 // ── createWorktree ───────────────────────────────────────────────────────────

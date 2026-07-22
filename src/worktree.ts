@@ -102,6 +102,16 @@ export async function listRepoCorpus(
   return [...bySlug.values()];
 }
 
+export function formatRepoCorpus(candidates: RepoCandidate[]): string {
+  if (candidates.length === 0) return "";
+  const lines = candidates.map((c) =>
+    c.localPath
+      ? `- ${c.slug} (checked out at ${c.localPath})`
+      : `- ${c.slug} (not checked out locally)`
+  );
+  return ["## Available Repositories", "", ...lines].join("\n") + "\n";
+}
+
 export function parseIntakeScope(content: string): string[] {
   const sectionStart = content.search(/^## Proposed Scope$/m);
   if (sectionStart === -1) return [];

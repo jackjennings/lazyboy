@@ -24,6 +24,11 @@ export async function loadConfig(path?: string): Promise<Config> {
     }
     jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
   }
+  const piRaw = parsed.pi as Record<string, unknown> | undefined;
+  if (piRaw?.provider !== undefined && typeof piRaw.provider !== "string") {
+    throw new Error("config.toml: [pi].provider must be a string");
+  }
+  const piProvider = (piRaw?.provider as string | undefined) ?? "anthropic";
   const phasesRaw = parsed.phases as
     | { defaults?: Record<string, unknown> }
     | undefined;
@@ -42,6 +47,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
+    pi: { provider: piProvider },
     jira,
     phases: phasesDefaults !== undefined
       ? { defaults: phasesDefaults }

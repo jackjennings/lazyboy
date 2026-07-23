@@ -91,7 +91,18 @@ enabled = ["agent-browser"]
 
 [codebase]
 roots = ["~/code"]
+
+[pi]
+provider = "anthropic"
 ```
+
+`[pi].provider` selects which backend `pi` talks to for every phase —
+`"anthropic"` (default) for the direct Console API, or `"bedrock"` for Amazon
+Bedrock. When using `"bedrock"`, model IDs configured under `[phases.defaults]`
+must already carry Bedrock's `anthropic.` prefix (e.g.
+`anthropic.claude-opus-4-8`, not `claude-opus-4-8`), and `AWS_REGION` plus AWS
+credentials must be available in lazyboy's own environment (env vars, a shared
+profile, or an instance role) — lazyboy does not manage AWS auth itself.
 
 `codebase.roots` is a list of directories the intake phase can look through when
 proposing scope. A top-level directory listing of each root is passed to the

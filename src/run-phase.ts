@@ -3,6 +3,10 @@ import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
 import type { PhaseUsage } from "./state/types.ts";
+import {
+  type AnthropicPricingCache,
+  calculateAnthropicCost,
+} from "./anthropic-pricing.ts";
 
 const PI_PROVIDER = "anthropic";
 
@@ -206,9 +210,21 @@ export async function executePhase(
   await Deno.writeTextFile(join(opts.ticketDir, opts.outputFile), text);
 
   if (usage !== null) {
+    let costUsd: number | undefined;
+    try {
+      const cacheText = await Deno.readTextFile(
+        join(opts.homeDir, ".lazyboy", "anthropic-pricing.json"),
+      );
+      const pricingCache = JSON.parse(cacheText) as AnthropicPricingCache;
+      const cost = calculateAnthropicCost(usage, pricingCache.models);
+      if (cost !== null) costUsd = cost;
+    } catch {
+      // pricing unavailable
+    }
+
     await Deno.writeTextFile(
       join(opts.ticketDir, opts.outputFile.replace(/\.md$/, ".usage.json")),
-      JSON.stringify(usage),
+      JSON.stringify(costUsd !== undefined ? { ...usage, costUsd } : usage),
     );
   }
 

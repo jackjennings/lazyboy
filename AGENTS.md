@@ -125,11 +125,13 @@ before. Currently only `intake` has a self-review prompt.
 ## Usage sidecar files
 
 Each phase run writes a `<timestampedPhase>.usage.json` file alongside the phase
-output `.md` in the ticket directory. The file contains exactly the fields of
+output `.md` in the ticket directory. The file contains the fields of
 `PhaseUsage` (`input`, `output`, `cacheRead`, `cacheWrite`, `model`,
-`durationMs`). Dollar amounts and `reasoning` tokens are excluded. Files are
-written only when `pi` exits with a complete `agent_end` event. Code that scans
-ticket directories (e.g. `lazyboy status`) identifies usage files by the
+`durationMs`, and optionally `costUsd`). `costUsd` is the calculated cost in USD
+based on Anthropic's published pricing; it is absent when pricing is unavailable
+or the model is not found in the cache. `reasoning` tokens are excluded. Files
+are written only when `pi` exits with a complete `agent_end` event. Code that
+scans ticket directories (e.g. `lazyboy status`) identifies usage files by the
 `.usage.json` suffix.
 
 ## Provider-specific prompt supplements

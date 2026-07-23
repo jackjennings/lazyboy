@@ -44,6 +44,7 @@ import {
 } from "./tick.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
+import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
 
 async function ensureRunPidGitignored(stateDir: string): Promise<void> {
@@ -339,5 +340,6 @@ export function composeTickDeps(
     lock: new PidFileLock(join(home, ".lazyboy", "tick.pid"), {
       log: appendTickLog,
     }),
+    refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
   };
 }

@@ -1734,3 +1734,78 @@ Deno.test(
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
+
+Deno.test(
+  "advancePhase: new ticket intake prompt appends repo corpus text when present",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "new",
+      provider: "jira",
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      buildRepoCorpusText: () =>
+        Promise.resolve(
+          "## Available Repositories\n\n- myorg/frontend (checked out at /code/myorg/frontend)\n",
+        ),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const basePrompt = await Deno.readTextFile(
+      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
+    );
+    assertEquals(
+      spawnedPrompt,
+      basePrompt +
+        "\n\n## Available Repositories\n\n" +
+        "- myorg/frontend (checked out at /code/myorg/frontend)\n",
+    );
+  },
+);
+
+Deno.test(
+  "advancePhase: new ticket intake prompt has no trailing corpus block when buildRepoCorpusText is absent",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "new",
+      provider: "jira",
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const basePrompt = await Deno.readTextFile(
+      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
+    );
+    assertEquals(spawnedPrompt, basePrompt);
+  },
+);

@@ -7,6 +7,12 @@ export function extractGitHubSlug(url: string): string {
   return match[1];
 }
 
+export function parseRemoteSlug(url: string): string | null {
+  const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
 export async function runGit(
   args: string[],
   cwd: string,
@@ -47,6 +53,63 @@ export async function findLocalRepo(
     }
   }
   return null;
+}
+
+export interface RepoCandidate {
+  slug: string;
+  localPath: string | null;
+}
+
+export async function listRepoCorpus(
+  roots: string[],
+  configuredRepos: string[],
+): Promise<RepoCandidate[]> {
+  const bySlug = new Map<string, RepoCandidate>();
+
+  for (const root of roots) {
+    try {
+      for await (const orgEntry of Deno.readDir(root)) {
+        if (!orgEntry.isDirectory) continue;
+        const orgPath = join(root, orgEntry.name);
+        try {
+          for await (const repoEntry of Deno.readDir(orgPath)) {
+            if (!repoEntry.isDirectory) continue;
+            const repoPath = join(orgPath, repoEntry.name);
+            const { code, stdout } = await runGit(
+              ["remote", "get-url", "origin"],
+              repoPath,
+            );
+            if (code !== 0) continue;
+            const slug = parseRemoteSlug(stdout);
+            if (!slug) continue;
+            bySlug.set(slug, { slug, localPath: repoPath });
+          }
+        } catch {
+          // org-level directory is not readable — skip
+        }
+      }
+    } catch {
+      // root doesn't exist or isn't readable — skip
+    }
+  }
+
+  for (const slug of configuredRepos) {
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, { slug, localPath: null });
+    }
+  }
+
+  return [...bySlug.values()];
+}
+
+export function formatRepoCorpus(candidates: RepoCandidate[]): string {
+  if (candidates.length === 0) return "";
+  const lines = candidates.map((c) =>
+    c.localPath
+      ? `- ${c.slug} (checked out at ${c.localPath})`
+      : `- ${c.slug} (not checked out locally)`
+  );
+  return ["## Available Repositories", "", ...lines].join("\n") + "\n";
 }
 
 export function parseIntakeScope(content: string): string[] {

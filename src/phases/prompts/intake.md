@@ -36,6 +36,17 @@ scope:
   - https://github.com/myorg/frontend
 ```
 
+If an `## Available Repositories` section appears below this prompt, prefer
+selecting `Proposed Scope` entries from it — those are repositories confirmed to
+exist locally or in the configured GitHub organization. Reference these entries
+by their `org/repo` slug, even if the entry notes it is checked out locally
+(e.g. `(checked out at /path/to/repo)`) — the system automatically resolves the
+slug to that local checkout, so the slug form works identically whether or not
+the repository happens to be checked out. Reserve the local-path form for a
+repository that is **not** listed in `## Available Repositories` at all. You may
+still propose an unlisted GitHub slug or URL when the ticket clearly references
+an external repository not present in that list.
+
 ## Reasoning
 
 One short paragraph explaining why you chose these directories.

@@ -1,12 +1,16 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
+import type { RepoCandidate } from "./worktree.ts";
 import {
   cloneRemoteRepo,
   createWorktree,
   extractGitHubSlug,
   findLocalRepo,
+  formatRepoCorpus,
+  listRepoCorpus,
   parseIntakeScope,
+  parseRemoteSlug,
   resolveGitHubSlug,
   runGit,
 } from "./worktree.ts";
@@ -33,6 +37,47 @@ Deno.test("extractGitHubSlug: throws on non-GitHub URL", () => {
     Error,
     "Cannot extract GitHub slug",
   );
+});
+
+// ── parseRemoteSlug ──────────────────────────────────────────────────────────
+
+Deno.test("parseRemoteSlug: extracts slug from HTTPS remote with .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("https://github.com/jackjennings/lazyboy.git"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from HTTPS remote without .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("https://github.com/jackjennings/lazyboy"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from SSH remote with .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github.com:jackjennings/lazyboy.git"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from SSH remote without .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github.com:jackjennings/lazyboy"),
+    "jackjennings/lazyboy",
+  );
+});
+
+Deno.test("parseRemoteSlug: returns null for non-GitHub remote", () => {
+  assertEquals(
+    parseRemoteSlug("https://gitlab.com/jackjennings/lazyboy.git"),
+    null,
+  );
+});
+
+Deno.test("parseRemoteSlug: returns null for empty string", () => {
+  assertEquals(parseRemoteSlug(""), null);
 });
 
 // ── findLocalRepo ────────────────────────────────────────────────────────────
@@ -88,6 +133,133 @@ Deno.test("findLocalRepo: returns null for nonexistent root", async () => {
     "jackjennings/lazyboy",
   );
   assertEquals(result, null);
+});
+
+// ── listRepoCorpus ───────────────────────────────────────────────────────────
+
+async function initRepoWithRemote(
+  repoPath: string,
+  remoteUrl: string,
+): Promise<void> {
+  await Deno.mkdir(repoPath, { recursive: true });
+  await new Deno.Command("git", { args: ["init"], cwd: repoPath }).output();
+  await new Deno.Command("git", {
+    args: ["remote", "add", "origin", remoteUrl],
+    cwd: repoPath,
+  }).output();
+}
+
+Deno.test("listRepoCorpus: finds local repo and derives slug from remote", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "lazyboy");
+  await initRepoWithRemote(
+    repoPath,
+    "https://github.com/jackjennings/lazyboy.git",
+  );
+
+  const result: RepoCandidate[] = await listRepoCorpus([root], []);
+  assertEquals(result, [
+    { slug: "jackjennings/lazyboy", localPath: repoPath },
+  ]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: skips repos whose remote is not a GitHub URL", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "internal");
+  await initRepoWithRemote(
+    repoPath,
+    "https://gitlab.com/jackjennings/internal.git",
+  );
+
+  const result = await listRepoCorpus([root], []);
+  assertEquals(result, []);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: skips directories with no git remote", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "jackjennings", "norepo");
+  await Deno.mkdir(repoPath, { recursive: true });
+  await new Deno.Command("git", { args: ["init"], cwd: repoPath }).output();
+
+  const result = await listRepoCorpus([root], []);
+  assertEquals(result, []);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: tolerates a nonexistent root", async () => {
+  const result = await listRepoCorpus(["/nonexistent/path"], []);
+  assertEquals(result, []);
+});
+
+Deno.test("listRepoCorpus: adds configuredRepos not found locally, with null localPath", async () => {
+  const root = await Deno.makeTempDir();
+
+  const result = await listRepoCorpus([root], ["myorg/frontend"]);
+  assertEquals(result, [{ slug: "myorg/frontend", localPath: null }]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: local match wins over configuredRepos duplicate", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "myorg", "frontend");
+  await initRepoWithRemote(repoPath, "git@github.com:myorg/frontend.git");
+
+  const result = await listRepoCorpus([root], ["myorg/frontend"]);
+  assertEquals(result, [{ slug: "myorg/frontend", localPath: repoPath }]);
+
+  await Deno.remove(root, { recursive: true });
+});
+
+Deno.test("listRepoCorpus: returns empty array when no roots and no configuredRepos", async () => {
+  const result = await listRepoCorpus([], []);
+  assertEquals(result, []);
+});
+
+// ── formatRepoCorpus ─────────────────────────────────────────────────────────
+
+Deno.test("formatRepoCorpus: returns empty string for empty input", () => {
+  assertEquals(formatRepoCorpus([]), "");
+});
+
+Deno.test("formatRepoCorpus: renders a local candidate with its path", () => {
+  const result = formatRepoCorpus([
+    { slug: "jackjennings/lazyboy", localPath: "/code/jackjennings/lazyboy" },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- jackjennings/lazyboy (checked out at /code/jackjennings/lazyboy)\n",
+  );
+});
+
+Deno.test("formatRepoCorpus: renders a remote-only candidate", () => {
+  const result = formatRepoCorpus([
+    { slug: "myorg/frontend", localPath: null },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- myorg/frontend (not checked out locally)\n",
+  );
+});
+
+Deno.test("formatRepoCorpus: renders multiple candidates in order given", () => {
+  const result = formatRepoCorpus([
+    { slug: "jackjennings/lazyboy", localPath: "/code/jackjennings/lazyboy" },
+    { slug: "myorg/frontend", localPath: null },
+  ]);
+  assertEquals(
+    result,
+    "## Available Repositories\n\n" +
+      "- jackjennings/lazyboy (checked out at /code/jackjennings/lazyboy)\n" +
+      "- myorg/frontend (not checked out locally)\n",
+  );
 });
 
 // ── createWorktree ───────────────────────────────────────────────────────────

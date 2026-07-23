@@ -69,6 +69,7 @@ export interface TickDeps {
     phase: string,
     ticketDir: string,
   ) => Promise<{ approved: boolean; reason: string | null }>;
+  buildRepoCorpusText?: () => Promise<string>;
 }
 
 export interface TickServiceDeps {
@@ -169,9 +170,10 @@ export async function advancePhase(
       "intake",
       ticket.provider,
     );
-    const prompt = intakeSupplement
-      ? intakeBase + "\n\n" + intakeSupplement
-      : intakeBase;
+    const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
+    const prompt = [intakeBase, intakeSupplement, corpusText]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     const { model: intakeModel, thinking: intakeThinking } = deps
       .resolveModelConfig("intake", ticket);
     await deps.spawn({

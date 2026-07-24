@@ -4,6 +4,8 @@ import {
   appendPhaseLog,
   buildContextFiles,
   executePhase,
+  extractClaudeCodeSessionId,
+  extractClaudeCodeUsageAndText,
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
@@ -854,6 +856,87 @@ Deno.test("extractSessionId: returns null when session event has no id field", (
     JSON.stringify({ type: "agent_end", messages: [] }),
   ].join("\n");
   assertEquals(extractSessionId(ndjson), null);
+});
+
+// ── extractClaudeCodeUsageAndText / extractClaudeCodeSessionId ─────────────
+
+const claudeCodeResultNdjson = [
+  JSON.stringify({
+    type: "system",
+    subtype: "init",
+    session_id: "cc-session-abc",
+  }),
+  JSON.stringify({
+    type: "assistant",
+    message: { role: "assistant", content: [{ type: "text", text: "..." }] },
+  }),
+  JSON.stringify({
+    type: "result",
+    subtype: "success",
+    session_id: "cc-session-abc",
+    num_turns: 2,
+    duration_ms: 4321,
+    total_cost_usd: 0.0123,
+    usage: {
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_input_tokens: 10,
+      cache_creation_input_tokens: 5,
+    },
+    result: "final assistant text",
+    model: "claude-sonnet-4-6",
+  }),
+].join("\n");
+
+Deno.test(
+  "extractClaudeCodeUsageAndText: returns result text, mapped usage fields, and durationMs override",
+  () => {
+    const result = extractClaudeCodeUsageAndText(claudeCodeResultNdjson, 999);
+    assertEquals(result.text, "final assistant text");
+    assertEquals(result.usage?.input, 100);
+    assertEquals(result.usage?.output, 50);
+    assertEquals(result.usage?.cacheRead, 10);
+    assertEquals(result.usage?.cacheWrite, 5);
+    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.durationMs, 999);
+    assertEquals(result.usage?.turns, 2);
+  },
+);
+
+Deno.test(
+  "extractClaudeCodeUsageAndText: no result event returns empty text and null usage",
+  () => {
+    const ndjson = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "x" }),
+      JSON.stringify({ type: "assistant", message: { content: [] } }),
+    ].join("\n");
+    const result = extractClaudeCodeUsageAndText(ndjson, 100);
+    assertEquals(result.text, "");
+    assertEquals(result.usage, null);
+  },
+);
+
+Deno.test("extractClaudeCodeSessionId: returns session_id from the system init event", () => {
+  assertEquals(
+    extractClaudeCodeSessionId(claudeCodeResultNdjson),
+    "cc-session-abc",
+  );
+});
+
+Deno.test("extractClaudeCodeSessionId: returns null when no system event is present", () => {
+  const ndjson = JSON.stringify({
+    type: "result",
+    session_id: "should-not-use-this",
+  });
+  assertEquals(extractClaudeCodeSessionId(ndjson), null);
+});
+
+Deno.test("extractClaudeCodeSessionId: returns null when system event has no session_id field", () => {
+  const ndjson = [
+    JSON.stringify({ type: "system", subtype: "init" }),
+    JSON.stringify({ type: "result", session_id: "x" }),
+  ].join("\n");
+  assertEquals(extractClaudeCodeSessionId(ndjson), null);
 });
 
 Deno.test(

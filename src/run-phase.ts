@@ -148,6 +148,50 @@ export function extractUsageAndText(
   };
 }
 
+export function extractClaudeCodeSessionId(ndjson: string): string | null {
+  const lines = ndjson.split("\n").filter(Boolean);
+  for (const line of lines) {
+    const event = JSON.parse(line);
+    if (event.type === "system" && typeof event.session_id === "string") {
+      return event.session_id;
+    }
+  }
+  return null;
+}
+
+export function extractClaudeCodeUsageAndText(
+  ndjson: string,
+  durationMs: number,
+): { text: string; usage: PhaseUsage | null } {
+  const lines = ndjson.split("\n").filter(Boolean);
+  const events = lines.map((l) => JSON.parse(l));
+  const result = events.find((e) => e.type === "result");
+  if (!result) {
+    return { text: "", usage: null };
+  }
+  const usage = result.usage as {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  } | undefined;
+
+  return {
+    text: typeof result.result === "string" ? result.result : "",
+    usage: {
+      input: usage?.input_tokens ?? 0,
+      output: usage?.output_tokens ?? 0,
+      cacheRead: usage?.cache_read_input_tokens ?? 0,
+      cacheWrite: usage?.cache_creation_input_tokens ?? 0,
+      model: typeof result.model === "string" ? result.model : "",
+      durationMs,
+      turns: typeof result.num_turns === "number"
+        ? result.num_turns
+        : undefined,
+    },
+  };
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;

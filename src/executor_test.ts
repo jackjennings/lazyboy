@@ -12,6 +12,7 @@ function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
     githubToken: "tok",
     anthropicApiKey: "key",
     worktrees: {},
+    provider: "anthropic",
     model: "claude-sonnet-4-6",
     thinking: "off",
     ...overrides,
@@ -62,6 +63,13 @@ Deno.test("buildPhaseArgs: includes --model", () => {
   const idx = args.indexOf("--model");
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "claude-opus-4-5");
+});
+
+Deno.test("buildPhaseArgs: includes --provider", () => {
+  const args = buildPhaseArgs(makeOpts({ provider: "bedrock" }));
+  const idx = args.indexOf("--provider");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "bedrock");
 });
 
 Deno.test("buildPhaseArgs: includes --thinking", () => {

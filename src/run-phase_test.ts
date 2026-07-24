@@ -424,6 +424,7 @@ Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", a
         prompt: "do the thing",
         worktrees: {},
         homeDir,
+        provider: "anthropic",
         model: "claude-sonnet-4-6",
         thinking: "off",
       },
@@ -466,6 +467,7 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
         prompt: "base prompt",
         worktrees: { repo: { path: "/some/worktree", branch: "main" } },
         homeDir,
+        provider: "anthropic",
         model: "claude-sonnet-4-6",
         thinking: "off",
       },
@@ -509,6 +511,7 @@ Deno.test("executePhase: passes provider, model, and thinking to agent.runPhase"
         prompt: "prompt",
         worktrees: {},
         homeDir,
+        provider: "anthropic",
         model: "claude-haiku-4-5",
         thinking: "minimal",
       },
@@ -518,6 +521,43 @@ Deno.test("executePhase: passes provider, model, and thinking to agent.runPhase"
     assertEquals(capturedProvider, "anthropic");
     assertEquals(capturedModel, "claude-haiku-4-5");
     assertEquals(capturedThinking, "minimal");
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: forwards a non-default provider (bedrock) to agent.runPhase", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+    let capturedProvider = "";
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedProvider = opts.provider;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "intake",
+        scopeDirs: [],
+        prompt: "prompt",
+        worktrees: {},
+        homeDir,
+        provider: "bedrock",
+        model: "anthropic.claude-opus-4-8",
+        thinking: "off",
+      },
+      agent,
+    );
+
+    assertEquals(capturedProvider, "bedrock");
   } finally {
     await Deno.remove(ticketDir, { recursive: true });
     await Deno.remove(homeDir, { recursive: true });
@@ -572,6 +612,7 @@ Deno.test(
           prompt: "prompt",
           worktrees: {},
           homeDir,
+          provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
         },
@@ -847,6 +888,7 @@ Deno.test(
           prompt: "prompt",
           worktrees: {},
           homeDir,
+          provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
         },
@@ -965,6 +1007,7 @@ Deno.test(
           prompt: "p",
           worktrees: {},
           homeDir,
+          provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
         },
@@ -1023,6 +1066,7 @@ Deno.test(
           prompt: "p",
           worktrees: {},
           homeDir,
+          provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
         },
@@ -1095,6 +1139,7 @@ Deno.test(
           prompt: "p",
           worktrees: {},
           homeDir,
+          provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
         },

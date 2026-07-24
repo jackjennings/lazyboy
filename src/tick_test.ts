@@ -1181,6 +1181,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     tick: { concurrency: 1 },
     codebase: { roots: [] },
     packages: { enabled: [] },
+    pi: { provider: "anthropic" },
     ...overrides,
   };
 }

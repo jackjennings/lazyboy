@@ -88,6 +88,7 @@ export interface Config {
   tick: { concurrency: number };
   codebase: { roots: string[] };
   packages: { enabled: string[] };
+  pi: { provider: string };
   jira?: { baseUrl: string; project: string };
   phases?: {
     defaults?: PhaseModelConfig;

@@ -71,6 +71,7 @@ export function composeTickDeps(
   const token = Deno.env.get("GITHUB_TOKEN") ?? "";
   const login = Deno.env.get("GITHUB_LOGIN") ?? "";
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+  const piProvider = config.pi.provider;
 
   const githubProvider = new GitHubProvider({
     repos: config.github.repos,
@@ -217,6 +218,7 @@ export function composeTickDeps(
           worktrees: {
             [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
           },
+          provider: piProvider,
           model: opts.model,
           thinking: opts.thinking,
           contextFiles: contextFilePaths,
@@ -266,6 +268,7 @@ export function composeTickDeps(
           githubToken: token,
           anthropicApiKey,
           worktrees: opts.worktrees,
+          provider: piProvider,
           model: opts.model,
           thinking: opts.thinking,
         }),

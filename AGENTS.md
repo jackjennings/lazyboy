@@ -213,13 +213,35 @@ Code-agent runtimes (CLI tools or SDKs that execute phase prompts) implement the
 outside `src/agents/pi.ts`.
 
 `runPhase` opts include `provider` and `model` — the adapter uses them in
-subprocess args but does not define them. Model and provider selection belongs
-to the call site: `run-phase.ts` defines `PI_PROVIDER` and `PI_MODEL` as
-module-level constants and passes them through `executePhase`.
+subprocess args but does not define them. Model selection is resolved per-phase
+by `resolvePhaseModel` (see below). Provider selection is a single global
+`config.toml` setting (`[pi].provider`, default `"anthropic"`) resolved once in
+`composeTickDeps` and threaded through `ExecutorOptions.provider` →
+`buildPhaseArgs`'s `--provider` flag → `run-phase.ts`'s CLI parsing → the
+`opts.provider` field `executePhase` passes to `agent.runPhase()`. There is no
+module-level `PI_PROVIDER` or `PI_MODEL` constant.
 
 New adapters belong in `src/agents/<name>.ts` and must implement `CodeAgent`.
 The `if (import.meta.main)` block in `run-phase.ts` is the only place that
 constructs `PiCodeAgent`.
+
+### Bedrock support
+
+Setting `[pi] provider = "bedrock"` in `config.toml` runs every phase through
+`pi --provider bedrock` instead of the direct Anthropic API. Two things are the
+user's responsibility, not lazyboy's: model IDs configured anywhere in
+`config.toml` (`[phases.defaults.<phase>].model`) must already carry the Bedrock
+`anthropic.` prefix (e.g. `anthropic.claude-opus-4-8`, not `claude-opus-4-8`) —
+lazyboy does not rewrite model strings based on provider — and `AWS_REGION`
+(plus AWS credentials, via env vars, a shared profile, or an instance role) must
+be present in the environment `executePhase` inherits, since `executePhase`
+already spreads `Deno.env.toObject()` into the `pi` subprocess's environment.
+
+`PHASE_MODEL_DEFAULTS` in `src/tick.ts` is unprefixed, so any phase not
+explicitly overridden in `[phases.defaults]` will send an unprefixed model ID
+under `provider = "bedrock"` and fail — Bedrock users must override every phase,
+including `"conflict-resolution"` (see the Conflict resolution section below),
+the same way as the five runner phases.
 
 ## Imports
 

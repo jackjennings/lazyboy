@@ -8,6 +8,7 @@ export interface ExecutorOptions {
   githubToken: string;
   anthropicApiKey: string;
   worktrees: Record<string, WorktreeInfo>;
+  provider: string;
   model: string;
   thinking: string;
   contextFiles?: string[];
@@ -42,7 +43,14 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
     "--worktrees",
     JSON.stringify(opts.worktrees),
   ];
-  args.push("--model", opts.model, "--thinking", opts.thinking);
+  args.push(
+    "--provider",
+    opts.provider,
+    "--model",
+    opts.model,
+    "--thinking",
+    opts.thinking,
+  );
   if (opts.contextFiles) {
     args.push("--context-files", opts.contextFiles.join(","));
   }

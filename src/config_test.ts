@@ -236,6 +236,75 @@ base_url = "https://myorg.atlassian.net"
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("loadConfig parses [pi].provider", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[pi]
+provider = "bedrock"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.pi.provider, "bedrock");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig defaults pi.provider to anthropic when [pi] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.pi.provider, "anthropic");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [pi].provider is not a string", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[pi]
+provider = 123
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [pi].provider must be a string",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("loadConfig parses [phases.defaults] per-phase entries", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(

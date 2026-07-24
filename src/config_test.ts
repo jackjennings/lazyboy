@@ -378,3 +378,72 @@ model = "claude-opus-4-5"
   assertEquals(cfg.phases?.defaults?.intake?.thinking, undefined);
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig parses [agent].type", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[agent]
+type = "claude-code"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.agent.type, "claude-code");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig defaults agent.type to pi when [agent] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.agent.type, "pi");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [agent].type is not a string", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[agent]
+type = 123
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [agent].type must be a string",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

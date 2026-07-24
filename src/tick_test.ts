@@ -1182,6 +1182,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     codebase: { roots: [] },
     packages: { enabled: [] },
     pi: { provider: "anthropic" },
+    agent: { type: "pi" },
     ...overrides,
   };
 }

@@ -17,12 +17,17 @@ export interface CheckConflictsDeps {
     ticketDir: string;
     conflictedFiles: string[];
     rebaseStderr: string;
+    model: string;
+    thinking: string;
   }) => Promise<void>;
   writeContextFile: (
     ticketDir: string,
     branch: string,
     content: string,
   ) => Promise<void>;
+  resolveModelConfig: (
+    ticket: TicketState,
+  ) => { model: string; thinking: string };
 }
 
 export function sanitizeBranchForFilename(branch: string): string {
@@ -109,12 +114,15 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
         await deps.writeContextFile(ticketDir, safeBranch, contextContent);
 
+        const { model, thinking } = deps.resolveModelConfig(ticket);
         await deps.spawn({
           worktreePath: wt.path,
           branch: wt.branch,
           ticketDir,
           conflictedFiles,
           rebaseStderr: rebase.stderr,
+          model,
+          thinking,
         });
 
         const updated: TicketState = {

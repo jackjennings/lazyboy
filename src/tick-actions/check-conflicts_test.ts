@@ -49,6 +49,7 @@ function makeAction(
     appendLog: () => Promise.resolve(),
     spawn: () => Promise.resolve(),
     writeContextFile: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "high" }),
     ...overrides,
   });
 }
@@ -303,6 +304,41 @@ Deno.test(
       (startEntry!.rebaseStderr as string).includes("CONFLICT"),
       true,
     );
+  },
+);
+
+Deno.test(
+  "checkConflictsAction: spawn receives model and thinking from resolveModelConfig(ticket)",
+  async () => {
+    const spawnCalls: Record<string, unknown>[] = [];
+
+    await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({
+            code: 1,
+            stdout: "",
+            stderr: "CONFLICT",
+          });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({ code: 0, stdout: "foo.ts", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      spawn: (opts) => {
+        spawnCalls.push(opts);
+        return Promise.resolve();
+      },
+      resolveModelConfig: (ticket) => {
+        assertEquals(ticket.id, "gh-7");
+        return { model: "claude-sonnet-4-6", thinking: "off" };
+      },
+    }).run(makeTicket(), "/state");
+
+    assertEquals(spawnCalls.length, 1);
+    assertEquals(spawnCalls[0].model, "claude-sonnet-4-6");
+    assertEquals(spawnCalls[0].thinking, "off");
   },
 );
 

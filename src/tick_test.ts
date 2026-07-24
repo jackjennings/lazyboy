@@ -648,6 +648,7 @@ Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
     appendLog: () => Promise.resolve(),
     spawn: () => Promise.resolve(),
     writeContextFile: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "high" }),
   });
   assertEquals(typeof action.applies, "function");
   assertEquals(typeof action.run, "function");
@@ -1163,6 +1164,14 @@ Deno.test("PHASE_MODEL_DEFAULTS: enrichment is sonnet/off", () => {
   assertEquals(PHASE_MODEL_DEFAULTS.enrichment.thinking, "off");
 });
 
+Deno.test("PHASE_MODEL_DEFAULTS: conflict-resolution is opus-4-7/high", () => {
+  assertEquals(
+    PHASE_MODEL_DEFAULTS["conflict-resolution"].model,
+    "claude-opus-4-7",
+  );
+  assertEquals(PHASE_MODEL_DEFAULTS["conflict-resolution"].thinking, "high");
+});
+
 // ── resolvePhaseModel ────────────────────────────────────────────────────────
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -1186,6 +1195,40 @@ Deno.test("resolvePhaseModel: returns hardcoded defaults when no overrides", () 
   assertEquals(resolvePhaseModel(config, "spec", ticket), {
     model: "claude-sonnet-4-6",
     thinking: "high",
+  });
+  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
+    model: "claude-opus-4-7",
+    thinking: "high",
+  });
+});
+
+Deno.test("resolvePhaseModel: config default overrides hardcoded for conflict-resolution", () => {
+  const config = makeConfig({
+    phases: {
+      defaults: { "conflict-resolution": { model: "claude-sonnet-4-6" } },
+    },
+  });
+  const ticket = makeTicket();
+  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
+    model: "claude-sonnet-4-6",
+    thinking: "high",
+  });
+});
+
+Deno.test("resolvePhaseModel: ticket phases override config for conflict-resolution", () => {
+  const config = makeConfig({
+    phases: {
+      defaults: { "conflict-resolution": { model: "claude-sonnet-4-6" } },
+    },
+  });
+  const ticket = makeTicket({
+    phases: {
+      "conflict-resolution": { model: "claude-haiku-4-5", thinking: "off" },
+    },
+  });
+  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
+    model: "claude-haiku-4-5",
+    thinking: "off",
   });
 });
 

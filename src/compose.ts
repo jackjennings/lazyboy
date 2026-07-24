@@ -195,6 +195,8 @@ export function composeTickDeps(
           content,
         );
       },
+      resolveModelConfig: (ticket) =>
+        resolvePhaseModel(config, "conflict-resolution", ticket),
       spawn: (opts) => {
         const safeBranch = sanitizeBranchForFilename(opts.branch);
         const contextFilePaths = [
@@ -215,8 +217,8 @@ export function composeTickDeps(
           worktrees: {
             [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
           },
-          model: "claude-opus-4-7",
-          thinking: "high",
+          model: opts.model,
+          thinking: opts.thinking,
           contextFiles: contextFilePaths,
         });
       },

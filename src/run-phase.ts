@@ -8,8 +8,6 @@ import {
   calculateAnthropicCost,
 } from "./anthropic-pricing.ts";
 
-const PI_PROVIDER = "anthropic";
-
 export function getPiEnvironmentVariables(
   home: string,
 ): Record<string, string> {
@@ -159,6 +157,7 @@ export async function executePhase(
     prompt: string;
     worktrees: Record<string, { path: string; branch: string }>;
     homeDir: string;
+    provider: string;
     model: string;
     thinking: string;
     contextFiles?: string[];
@@ -199,7 +198,7 @@ export async function executePhase(
       ANTHROPIC_API_KEY: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
       ...piEnv,
     },
-    provider: PI_PROVIDER,
+    provider: opts.provider,
     model: opts.model,
     thinking: opts.thinking,
   });
@@ -250,6 +249,7 @@ if (import.meta.main) {
       "scope",
       "prompt",
       "worktrees",
+      "provider",
       "model",
       "thinking",
       "context-files",
@@ -288,6 +288,7 @@ if (import.meta.main) {
       prompt,
       worktrees,
       homeDir,
+      provider: args["provider"]!,
       model: args["model"]!,
       thinking: args["thinking"]!,
       contextFiles,

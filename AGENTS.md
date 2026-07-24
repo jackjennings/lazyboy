@@ -237,6 +237,15 @@ lazyboy does not rewrite model strings based on provider — and `AWS_REGION`
 be present in the environment `executePhase` inherits, since `executePhase`
 already spreads `Deno.env.toObject()` into the `pi` subprocess's environment.
 
+`PHASE_MODEL_DEFAULTS` in `src/tick.ts` is unprefixed, so any phase not
+explicitly overridden in `[phases.defaults]` will send an unprefixed model ID
+under `provider = "bedrock"` and fail — Bedrock users must override every phase.
+The conflict-resolution `spawnPhase` call in `src/compose.ts` (inside
+`checkConflictsAction`'s `spawn:` closure) hardcodes `model:
+"claude-opus-4-7"`
+with no config path — it is not Bedrock-compatible; this is a known limitation,
+not yet fixed.
+
 ## Imports
 
 Use the project's import conventions from `deno.json`. For test assertions, use

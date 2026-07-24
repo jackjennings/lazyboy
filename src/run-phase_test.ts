@@ -429,6 +429,7 @@ Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", a
         provider: "anthropic",
         model: "claude-sonnet-4-6",
         thinking: "off",
+        agentType: "pi",
       },
       agent,
     );
@@ -472,6 +473,7 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
         provider: "anthropic",
         model: "claude-sonnet-4-6",
         thinking: "off",
+        agentType: "pi",
       },
       agent,
     );
@@ -516,6 +518,7 @@ Deno.test("executePhase: passes provider, model, and thinking to agent.runPhase"
         provider: "anthropic",
         model: "claude-haiku-4-5",
         thinking: "minimal",
+        agentType: "pi",
       },
       agent,
     );
@@ -555,6 +558,7 @@ Deno.test("executePhase: forwards a non-default provider (bedrock) to agent.runP
         provider: "bedrock",
         model: "anthropic.claude-opus-4-8",
         thinking: "off",
+        agentType: "pi",
       },
       agent,
     );
@@ -617,6 +621,7 @@ Deno.test(
           provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
+          agentType: "pi",
         },
         agent,
       );
@@ -974,6 +979,7 @@ Deno.test(
           provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
+          agentType: "pi",
         },
         agent,
       );
@@ -985,6 +991,117 @@ Deno.test(
       const endEntry = JSON.parse(logLines[logLines.length - 1]);
       assertEquals(endEntry.event, "phase-end");
       assertEquals(endEntry.sessionId, "abc123-session-id");
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: agentType 'claude-code' uses the Claude Code parser for text and usage",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const resultNdjson = JSON.stringify({
+        type: "result",
+        subtype: "success",
+        num_turns: 1,
+        result: "claude code output",
+        model: "claude-sonnet-4-6",
+        usage: {
+          input_tokens: 7,
+          output_tokens: 4,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+        },
+      });
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({ stdout: resultNdjson, stderr: "", code: 0 });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "claude-code",
+        },
+        agent,
+      );
+
+      const written = await Deno.readTextFile(join(ticketDir, "result.md"));
+      assertEquals(written, "claude code output");
+
+      const usage = JSON.parse(
+        await Deno.readTextFile(join(ticketDir, "result.usage.json")),
+      );
+      assertEquals(usage.input, 7);
+      assertEquals(usage.output, 4);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: phase-end log entry includes sessionId parsed via the Claude Code parser when agentType is claude-code",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const stdout = [
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "cc-xyz",
+        }),
+        JSON.stringify({ type: "result", result: "" }),
+      ].join("\n");
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({ stdout, stderr: "", code: 0 });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "intake",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "claude-code",
+        },
+        agent,
+      );
+
+      const logContent = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+      const logLines = logContent.trim().split("\n");
+      const endEntry = JSON.parse(logLines[logLines.length - 1]);
+      assertEquals(endEntry.sessionId, "cc-xyz");
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1093,6 +1210,7 @@ Deno.test(
           provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
+          agentType: "pi",
         },
         agent,
       );
@@ -1152,6 +1270,7 @@ Deno.test(
           provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
+          agentType: "pi",
         },
         agent,
       );
@@ -1225,6 +1344,7 @@ Deno.test(
           provider: "anthropic",
           model: "claude-sonnet-4-6",
           thinking: "off",
+          agentType: "pi",
         },
         agent,
       );

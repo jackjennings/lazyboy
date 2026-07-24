@@ -2,6 +2,7 @@ import { parseArgs } from "@std/cli/parse-args";
 import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
+import { ClaudeCodeAgent } from "./agents/claude-code.ts";
 import type { PhaseUsage } from "./state/types.ts";
 import {
   type AnthropicPricingCache,
@@ -204,6 +205,7 @@ export async function executePhase(
     provider: string;
     model: string;
     thinking: string;
+    agentType: "pi" | "claude-code";
     contextFiles?: string[];
   },
   agent: CodeAgent,
@@ -248,7 +250,9 @@ export async function executePhase(
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
-  const { text, usage } = extractUsageAndText(result.stdout, durationMs);
+  const { text, usage } = opts.agentType === "claude-code"
+    ? extractClaudeCodeUsageAndText(result.stdout, durationMs)
+    : extractUsageAndText(result.stdout, durationMs);
 
   await Deno.writeTextFile(join(opts.ticketDir, opts.outputFile), text);
 
@@ -271,7 +275,9 @@ export async function executePhase(
     );
   }
 
-  const sessionId = extractSessionId(result.stdout);
+  const sessionId = opts.agentType === "claude-code"
+    ? extractClaudeCodeSessionId(result.stdout)
+    : extractSessionId(result.stdout);
 
   await appendPhaseLog(opts.ticketDir, {
     event: "phase-end",
@@ -297,6 +303,7 @@ if (import.meta.main) {
       "model",
       "thinking",
       "context-files",
+      "agent",
     ],
   });
 
@@ -323,6 +330,9 @@ if (import.meta.main) {
     ? args["context-files"].split(",").filter(Boolean)
     : undefined;
 
+  const agentType = (args["agent"] as "pi" | "claude-code" | undefined) ??
+    "pi";
+
   const code = await executePhase(
     {
       ticketDir,
@@ -335,9 +345,10 @@ if (import.meta.main) {
       provider: args["provider"]!,
       model: args["model"]!,
       thinking: args["thinking"]!,
+      agentType,
       contextFiles,
     },
-    new PiCodeAgent(),
+    agentType === "claude-code" ? new ClaudeCodeAgent() : new PiCodeAgent(),
   );
   Deno.exit(code);
 }

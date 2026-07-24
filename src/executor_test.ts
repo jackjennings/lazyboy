@@ -15,6 +15,7 @@ function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
     provider: "anthropic",
     model: "claude-sonnet-4-6",
     thinking: "off",
+    agent: "pi",
     ...overrides,
   };
 }
@@ -125,4 +126,18 @@ Deno.test("isPhaseAlive: returns false when run.pid contains a dead PID", async 
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+Deno.test("buildPhaseArgs: includes --agent pi by default", () => {
+  const args = buildPhaseArgs(makeOpts());
+  const idx = args.indexOf("--agent");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "pi");
+});
+
+Deno.test("buildPhaseArgs: includes --agent claude-code when specified", () => {
+  const args = buildPhaseArgs(makeOpts({ agent: "claude-code" }));
+  const idx = args.indexOf("--agent");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "claude-code");
 });

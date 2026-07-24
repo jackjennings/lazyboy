@@ -105,9 +105,9 @@ credentials must be available in lazyboy's own environment (env vars, a shared
 profile, or an instance role) — lazyboy does not manage AWS auth itself. Every
 phase must be explicitly configured under `[phases.defaults]` when using Bedrock
 — any phase left unconfigured falls back to lazyboy's built-in default model
-IDs, which are unprefixed and will fail against Bedrock. The conflict-resolution
-phase (triggered by rebase conflicts) currently uses a hardcoded, unprefixed
-model with no config override, so it is not yet supported under Bedrock.
+IDs, which are unprefixed and will fail against Bedrock. This includes the
+conflict-resolution phase (triggered by rebase conflicts), configurable under
+`[phases.defaults."conflict-resolution"]` like any other phase.
 
 `codebase.roots` is a list of directories the intake phase can look through when
 proposing scope. A top-level directory listing of each root is passed to the

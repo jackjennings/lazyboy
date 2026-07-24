@@ -303,10 +303,12 @@ introduce a second git-shelling helper — use or inject `runGit`.
 
 When a rebase conflict is detected, `checkConflictsAction` writes a
 `conflict-context-<branch>.md` sentinel file to the ticket directory and spawns
-a conflict-resolution agent. The agent uses `--model claude-opus-4-7` and
-receives only `@meta.md` and `@conflict-context-<branch>.md` as context (not the
-full `buildContextFiles` set). The worktree is left in the mid-rebase state for
-the agent to resolve.
+a conflict-resolution agent. Its model and thinking level follow the same
+per-phase resolution as the five runner phases (`config.toml` defaults, ticket
+overrides, falling back to `claude-opus-4-7`/`high`) under the phase name
+`"conflict-resolution"`. The agent receives only `@meta.md` and
+`@conflict-context-<branch>.md` as context (not the full `buildContextFiles`
+set). The worktree is left in the mid-rebase state for the agent to resolve.
 
 `resolveConflictsAction` detects completed conflict-resolution runs by checking
 for `conflict-context-*.md` in the ticket directory when a running ticket's PID

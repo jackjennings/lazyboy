@@ -16,7 +16,7 @@ import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
-  ActivePhase,
+  ActivePhase | "conflict-resolution",
   { model: string; thinking: string }
 > = {
   intake: { model: "claude-haiku-4-5", thinking: "off" },
@@ -24,11 +24,12 @@ export const PHASE_MODEL_DEFAULTS: Record<
   spec: { model: "claude-sonnet-4-6", thinking: "high" },
   plan: { model: "claude-sonnet-4-6", thinking: "high" },
   implementation: { model: "claude-sonnet-4-6", thinking: "high" },
+  "conflict-resolution": { model: "claude-opus-4-7", thinking: "high" },
 };
 
 export function resolvePhaseModel(
   config: Config,
-  phase: ActivePhase,
+  phase: ActivePhase | "conflict-resolution",
   ticket: TicketState,
 ): { model: string; thinking: string } {
   const ticketOverride = ticket.phases?.[phase];

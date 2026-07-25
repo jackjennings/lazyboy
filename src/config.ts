@@ -29,6 +29,14 @@ export async function loadConfig(path?: string): Promise<Config> {
     throw new Error("config.toml: [pi].provider must be a string");
   }
   const piProvider = (piRaw?.provider as string | undefined) ?? "anthropic";
+  const agentRaw = parsed.agent as Record<string, unknown> | undefined;
+  if (
+    agentRaw?.type !== undefined && typeof agentRaw.type !== "string"
+  ) {
+    throw new Error("config.toml: [agent].type must be a string");
+  }
+  const agentType = (agentRaw?.type as "pi" | "claude-code" | undefined) ??
+    "pi";
   const phasesRaw = parsed.phases as
     | { defaults?: Record<string, unknown> }
     | undefined;
@@ -48,6 +56,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
     pi: { provider: piProvider },
+    agent: { type: agentType },
     jira,
     phases: phasesDefaults !== undefined
       ? { defaults: phasesDefaults }

@@ -92,9 +92,16 @@ enabled = ["agent-browser"]
 [codebase]
 roots = ["~/code"]
 
+[agent]
+type = "pi"
+
 [pi]
 provider = "anthropic"
 ```
+
+`[agent].type` selects which CLI runs every phase — `"pi"` (default) for the
+`pi` CLI, or `"claude-code"` to run the `claude` CLI instead. This is orthogonal
+to `[pi].provider` below, which only takes effect when `agent.type` is `"pi"`.
 
 `[pi].provider` selects which backend `pi` talks to for every phase —
 `"anthropic"` (default) for the direct Console API, or `"bedrock"` for Amazon

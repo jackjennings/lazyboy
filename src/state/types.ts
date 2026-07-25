@@ -89,6 +89,7 @@ export interface Config {
   codebase: { roots: string[] };
   packages: { enabled: string[] };
   pi: { provider: string };
+  agent: { type: "pi" | "claude-code" };
   jira?: { baseUrl: string; project: string };
   phases?: {
     defaults?: PhaseModelConfig;

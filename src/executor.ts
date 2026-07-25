@@ -11,6 +11,7 @@ export interface ExecutorOptions {
   provider: string;
   model: string;
   thinking: string;
+  agent: "pi" | "claude-code";
   contextFiles?: string[];
 }
 
@@ -50,6 +51,8 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
     opts.model,
     "--thinking",
     opts.thinking,
+    "--agent",
+    opts.agent,
   );
   if (opts.contextFiles) {
     args.push("--context-files", opts.contextFiles.join(","));

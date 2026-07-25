@@ -2,6 +2,7 @@ import { parseArgs } from "@std/cli/parse-args";
 import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
+import { ClaudeCodeAgent } from "./agents/claude-code.ts";
 import type { PhaseUsage } from "./state/types.ts";
 import {
   type AnthropicPricingCache,
@@ -148,6 +149,50 @@ export function extractUsageAndText(
   };
 }
 
+export function extractClaudeCodeSessionId(ndjson: string): string | null {
+  const lines = ndjson.split("\n").filter(Boolean);
+  for (const line of lines) {
+    const event = JSON.parse(line);
+    if (event.type === "system" && typeof event.session_id === "string") {
+      return event.session_id;
+    }
+  }
+  return null;
+}
+
+export function extractClaudeCodeUsageAndText(
+  ndjson: string,
+  durationMs: number,
+): { text: string; usage: PhaseUsage | null } {
+  const lines = ndjson.split("\n").filter(Boolean);
+  const events = lines.map((l) => JSON.parse(l));
+  const result = events.find((e) => e.type === "result");
+  if (!result) {
+    return { text: "", usage: null };
+  }
+  const usage = result.usage as {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  } | undefined;
+
+  return {
+    text: typeof result.result === "string" ? result.result : "",
+    usage: {
+      input: usage?.input_tokens ?? 0,
+      output: usage?.output_tokens ?? 0,
+      cacheRead: usage?.cache_read_input_tokens ?? 0,
+      cacheWrite: usage?.cache_creation_input_tokens ?? 0,
+      model: typeof result.model === "string" ? result.model : "",
+      durationMs,
+      turns: typeof result.num_turns === "number"
+        ? result.num_turns
+        : undefined,
+    },
+  };
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;
@@ -160,6 +205,7 @@ export async function executePhase(
     provider: string;
     model: string;
     thinking: string;
+    agentType: "pi" | "claude-code";
     contextFiles?: string[];
   },
   agent: CodeAgent,
@@ -204,7 +250,9 @@ export async function executePhase(
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
-  const { text, usage } = extractUsageAndText(result.stdout, durationMs);
+  const { text, usage } = opts.agentType === "claude-code"
+    ? extractClaudeCodeUsageAndText(result.stdout, durationMs)
+    : extractUsageAndText(result.stdout, durationMs);
 
   await Deno.writeTextFile(join(opts.ticketDir, opts.outputFile), text);
 
@@ -227,7 +275,9 @@ export async function executePhase(
     );
   }
 
-  const sessionId = extractSessionId(result.stdout);
+  const sessionId = opts.agentType === "claude-code"
+    ? extractClaudeCodeSessionId(result.stdout)
+    : extractSessionId(result.stdout);
 
   await appendPhaseLog(opts.ticketDir, {
     event: "phase-end",
@@ -253,6 +303,7 @@ if (import.meta.main) {
       "model",
       "thinking",
       "context-files",
+      "agent",
     ],
   });
 
@@ -279,6 +330,9 @@ if (import.meta.main) {
     ? args["context-files"].split(",").filter(Boolean)
     : undefined;
 
+  const agentType = (args["agent"] as "pi" | "claude-code" | undefined) ??
+    "pi";
+
   const code = await executePhase(
     {
       ticketDir,
@@ -291,9 +345,10 @@ if (import.meta.main) {
       provider: args["provider"]!,
       model: args["model"]!,
       thinking: args["thinking"]!,
+      agentType,
       contextFiles,
     },
-    new PiCodeAgent(),
+    agentType === "claude-code" ? new ClaudeCodeAgent() : new PiCodeAgent(),
   );
   Deno.exit(code);
 }

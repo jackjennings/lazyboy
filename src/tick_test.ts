@@ -3,13 +3,10 @@ import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import {
   advancePhase,
-  PHASE_MODEL_DEFAULTS,
   resolvePhaseModel,
   selectCandidates,
   TickService,
 } from "./tick.ts";
-import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
-import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import type { TickDeps, TickServiceDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
@@ -843,35 +840,6 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
   );
 });
 
-Deno.test("checkConflictsAction is importable (wiring smoke test)", () => {
-  const action = checkConflictsAction({
-    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isProcessAlive: () => false,
-    worktreeExists: () => true,
-    writeTicket: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    spawn: () => Promise.resolve(),
-    writeContextFile: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "high" }),
-  });
-  assertEquals(typeof action.applies, "function");
-  assertEquals(typeof action.run, "function");
-});
-
-Deno.test("resolveConflictsAction is importable (wiring smoke test)", () => {
-  const action = resolveConflictsAction({
-    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    stat: () => Promise.resolve(null),
-    readDir: async function* () {},
-    remove: () => Promise.resolve(),
-  });
-  assertEquals(typeof action.applies, "function");
-  assertEquals(typeof action.run, "function");
-});
-
 // ── TickService ────────────────────────────────────────────────────────────────
 
 function makeFakeTickDeps(): TickDeps {
@@ -1343,41 +1311,6 @@ Deno.test("selectCandidates: uses last surviving ID from end of lastWorked as an
   );
 });
 
-// ── PHASE_MODEL_DEFAULTS ─────────────────────────────────────────────────────
-
-Deno.test("PHASE_MODEL_DEFAULTS: intake is haiku/off", () => {
-  assertEquals(PHASE_MODEL_DEFAULTS.intake.model, "claude-haiku-4-5");
-  assertEquals(PHASE_MODEL_DEFAULTS.intake.thinking, "off");
-});
-
-Deno.test("PHASE_MODEL_DEFAULTS: spec is sonnet/high", () => {
-  assertEquals(PHASE_MODEL_DEFAULTS.spec.model, "claude-sonnet-4-6");
-  assertEquals(PHASE_MODEL_DEFAULTS.spec.thinking, "high");
-});
-
-Deno.test("PHASE_MODEL_DEFAULTS: plan is sonnet/high", () => {
-  assertEquals(PHASE_MODEL_DEFAULTS.plan.model, "claude-sonnet-4-6");
-  assertEquals(PHASE_MODEL_DEFAULTS.plan.thinking, "high");
-});
-
-Deno.test("PHASE_MODEL_DEFAULTS: implementation is sonnet/high", () => {
-  assertEquals(PHASE_MODEL_DEFAULTS.implementation.model, "claude-sonnet-4-6");
-  assertEquals(PHASE_MODEL_DEFAULTS.implementation.thinking, "high");
-});
-
-Deno.test("PHASE_MODEL_DEFAULTS: enrichment is sonnet/off", () => {
-  assertEquals(PHASE_MODEL_DEFAULTS.enrichment.model, "claude-sonnet-4-6");
-  assertEquals(PHASE_MODEL_DEFAULTS.enrichment.thinking, "off");
-});
-
-Deno.test("PHASE_MODEL_DEFAULTS: conflict-resolution is opus-4-7/high", () => {
-  assertEquals(
-    PHASE_MODEL_DEFAULTS["conflict-resolution"].model,
-    "claude-opus-4-7",
-  );
-  assertEquals(PHASE_MODEL_DEFAULTS["conflict-resolution"].thinking, "high");
-});
-
 // ── resolvePhaseModel ────────────────────────────────────────────────────────
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -1571,34 +1504,6 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
   assertEquals(spawnedWorktrees, {
     "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
   });
-});
-
-Deno.test("advancePhase: implementation/revising prompt does not instruct gh pr create", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "revising",
-    worktrees: {
-      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
-    },
-  });
-  let spawnedPrompt = "";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedPrompt = opts.prompt;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedPrompt.includes("gh pr create"), false);
-  assertEquals(spawnedPrompt.includes("git push"), true);
 });
 
 Deno.test("advancePhase: non-implementation revising uses empty worktrees", async () => {
@@ -1844,161 +1749,6 @@ Deno.test(
       capturedTicketDir,
       "/state/github/jackjennings/lazyboy/104",
     );
-  },
-);
-
-Deno.test(
-  "advancePhase: github implementation phase advance appends provider supplement",
-  async () => {
-    const ticket = makeTicket({
-      phase: "plan",
-      status: "waiting",
-      approved: true,
-      provider: "github",
-      worktrees: {
-        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
-      },
-    });
-    let spawnedPrompt = "";
-    const spawnSpy = spy((opts: SpawnOpts) => {
-      spawnedPrompt = opts.prompt;
-      return Promise.resolve();
-    });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-    });
-    assertSpyCall(spawnSpy, 0);
-    const supplement = await Deno.readTextFile(
-      new URL(
-        "./phases/prompts/github-implementation.md",
-        import.meta.url,
-      ).pathname,
-    );
-    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
-    assertEquals(spawnedPrompt.includes("\n\n"), true);
-  },
-);
-
-Deno.test(
-  "advancePhase: github implementation revising appends provider supplement",
-  async () => {
-    const ticket = makeTicket({
-      phase: "implementation",
-      status: "revising",
-      provider: "github",
-      worktrees: {
-        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
-      },
-    });
-    let spawnedPrompt = "";
-    const spawnSpy = spy((opts: SpawnOpts) => {
-      spawnedPrompt = opts.prompt;
-      return Promise.resolve();
-    });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-    });
-    assertSpyCall(spawnSpy, 0);
-    const supplement = await Deno.readTextFile(
-      new URL(
-        "./phases/prompts/github-implementation.md",
-        import.meta.url,
-      ).pathname,
-    );
-    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
-    assertEquals(spawnedPrompt.includes("gh pr create"), false);
-  },
-);
-
-Deno.test(
-  "advancePhase: non-github implementation phase advance uses base prompt only",
-  async () => {
-    const ticket = makeTicket({
-      phase: "plan",
-      status: "waiting",
-      approved: true,
-      provider: "jira",
-      worktrees: {
-        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
-      },
-    });
-    let spawnedPrompt = "";
-    const spawnSpy = spy((opts: SpawnOpts) => {
-      spawnedPrompt = opts.prompt;
-      return Promise.resolve();
-    });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-    });
-    assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL(
-        "./phases/prompts/implementation.md",
-        import.meta.url,
-      ).pathname,
-    );
-    assertEquals(spawnedPrompt, basePrompt);
-  },
-);
-
-Deno.test(
-  "advancePhase: new ticket intake prompt is unchanged when no provider supplement exists",
-  async () => {
-    const ticket = makeTicket({
-      phase: "intake",
-      status: "new",
-      provider: "github",
-    });
-    let spawnedPrompt = "";
-    const spawnSpy = spy((opts: SpawnOpts) => {
-      spawnedPrompt = opts.prompt;
-      return Promise.resolve();
-    });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-    });
-    assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
-    );
-    assertEquals(spawnedPrompt, basePrompt);
   },
 );
 

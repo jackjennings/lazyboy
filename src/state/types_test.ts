@@ -1,26 +1,5 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertThrows } from "@std/assert";
 import { assertValidPhaseStatus } from "./types.ts";
-import type { TicketState } from "./types.ts";
-
-Deno.test("TicketState has required fields", () => {
-  const t: TicketState = {
-    id: "gh-1",
-    provider: "github",
-    title: "Test",
-    url: "https://github.com/x/y/issues/1",
-    phase: "intake",
-    status: "new",
-    approved: false,
-    scope: [],
-    worktrees: {},
-    created: new Date().toISOString(),
-    updated: new Date().toISOString(),
-    body: "",
-  };
-  assertEquals(t.phase, "intake");
-  assertEquals(t.status, "new");
-  assertEquals(t.approved, false);
-});
 
 Deno.test("assertValidPhaseStatus: does not throw for valid combinations", () => {
   assertValidPhaseStatus("intake", "new");

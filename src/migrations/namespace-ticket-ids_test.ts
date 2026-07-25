@@ -11,7 +11,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/jackjennings/lazyboy/issues/1",
     phase: "intake",
     status: "new",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-01-01T00:00:00Z",

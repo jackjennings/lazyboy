@@ -1,5 +1,77 @@
-import { assertThrows } from "@std/assert";
-import { assertValidPhaseStatus } from "./types.ts";
+import { assertEquals, assertThrows } from "@std/assert";
+import { assertValidPhaseStatus, isApproved } from "./types.ts";
+import type { TicketState } from "./types.ts";
+
+function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
+  return {
+    id: "gh-1",
+    provider: "github",
+    title: "Test",
+    url: "https://github.com/x/y/issues/1",
+    phase: "intake",
+    status: "new",
+    approvals: [],
+    scope: [],
+    worktrees: {},
+    created: new Date().toISOString(),
+    updated: new Date().toISOString(),
+    body: "",
+    ...overrides,
+  };
+}
+
+Deno.test("TicketState has required fields", () => {
+  const t: TicketState = makeTicket();
+  assertEquals(t.phase, "intake");
+  assertEquals(t.status, "new");
+  assertEquals(t.approvals, []);
+});
+
+Deno.test("isApproved: empty approvals returns false", () => {
+  assertEquals(
+    isApproved(makeTicket({ phase: "intake", approvals: [] })),
+    false,
+  );
+});
+
+Deno.test("isApproved: last entry matches current phase returns true", () => {
+  assertEquals(
+    isApproved(
+      makeTicket({
+        phase: "intake",
+        approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+      }),
+    ),
+    true,
+  );
+});
+
+Deno.test("isApproved: last entry phase differs from current phase returns false", () => {
+  assertEquals(
+    isApproved(
+      makeTicket({
+        phase: "enrichment",
+        approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+      }),
+    ),
+    false,
+  );
+});
+
+Deno.test("isApproved: middle entry matches but last does not returns false", () => {
+  assertEquals(
+    isApproved(
+      makeTicket({
+        phase: "intake",
+        approvals: [
+          { timestamp: "t1", actor: "human", phase: "intake" },
+          { timestamp: "t2", actor: "human", phase: "enrichment" },
+        ],
+      }),
+    ),
+    false,
+  );
+});
 
 Deno.test("assertValidPhaseStatus: does not throw for valid combinations", () => {
   assertValidPhaseStatus("intake", "new");

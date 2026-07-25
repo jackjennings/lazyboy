@@ -472,7 +472,7 @@ Deno.test("status: shows APPROVED column header", async () => {
   }
 });
 
-Deno.test('status: shows "no" for unapproved ticket', async () => {
+Deno.test('status: shows "-" for unapproved ticket', async () => {
   const stateDir = await Deno.makeTempDir();
   const home = await makeTicketHome(stateDir, "gh-1", {
     "jackjennings/lazyboy": { path: "/tmp/gh-1", branch: "gh-1" },
@@ -481,7 +481,7 @@ Deno.test('status: shows "no" for unapproved ticket', async () => {
     const result = await runIndex(["status"], { HOME: home });
     assertStringIncludes(
       new TextDecoder().decode(result.stdout),
-      "no",
+      "-",
     );
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -489,7 +489,7 @@ Deno.test('status: shows "no" for unapproved ticket', async () => {
   }
 });
 
-Deno.test('status: shows "yes" for approved ticket', async () => {
+Deno.test("status: shows actor for approved ticket", async () => {
   const stateDir = await Deno.makeTempDir();
   const ticketDir = join(stateDir, "gh-2");
   await Deno.mkdir(ticketDir, { recursive: true });
@@ -502,7 +502,10 @@ title: Approved Ticket
 url: https://github.com/jackjennings/lazyboy/issues/2
 phase: plan
 status: waiting
-approved: true
+approvals:
+  - timestamp: "2026-06-01T00:00:00Z"
+    actor: human
+    phase: plan
 scope: []
 created: "2026-06-01T00:00:00Z"
 updated: "2026-06-01T00:00:00Z"
@@ -520,7 +523,7 @@ body
     const result = await runIndex(["status"], { HOME: home });
     assertStringIncludes(
       new TextDecoder().decode(result.stdout),
-      "yes",
+      "human",
     );
   } finally {
     await Deno.remove(stateDir, { recursive: true });

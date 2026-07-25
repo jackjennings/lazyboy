@@ -119,7 +119,7 @@ Deno.test("formatStatusRow: pads ID field to 36 characters", () => {
     "github/jackjennings/lazyboy/23",
     "intake",
     "running",
-    false,
+    [],
     "0",
     "My ticket",
   );

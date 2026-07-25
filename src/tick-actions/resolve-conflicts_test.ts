@@ -10,7 +10,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/myorg/myrepo/issues/7",
     phase: "implementation",
     status: "running",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {
       "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },

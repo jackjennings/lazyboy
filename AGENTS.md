@@ -74,6 +74,15 @@ through `implementation`); `merge` is handled explicitly in `advancePhase`. Any
 phase can transition to `needs-attention` on subprocess failure.
 `{ phase: "merge", status: "done" }` is the terminal state.
 
+**Approval log**: `TicketState.approvals` is an `ApprovalEntry[]` array (defined
+in `src/state/types.ts`). Each entry records `timestamp` (ISO 8601), `actor`
+(`"human"` | `"agent"` | `"unknown"`), and `phase`. The `isApproved` helper
+(exported from `src/state/types.ts`) gates phase advancement: it returns `true`
+iff the last entry's `phase` matches `ticket.phase`. Human approvals are written
+by `performApprove` in `src/commands/approve.ts`; agent approvals are appended
+by `advancePhase` in `src/tick.ts` after a successful self-review. There is no
+single boolean `approved` field — do not add one.
+
 **Executor** (`src/executor.ts`): `spawnPhase()` launches `src/run-phase.ts` as
 a detached Deno subprocess. The subprocess runs
 `pi --mode json --approve "<prompt>" @/ticket/meta.md` with the ticket directory
@@ -110,9 +119,10 @@ Currently only `github-implementation.md` exists.
 **Self-review prompts** (`src/phases/prompts/*-self-review.md`): one optional
 prompt per phase. When present, `selfReview` in `src/self-review.ts` calls the
 Anthropic API after a `running → waiting` transition and, if the response is
-`APPROVE`, writes the ticket a second time with `approved: true`. When absent
-for a phase, self-review is skipped and the ticket waits for human approval as
-before. Currently only `intake` has a self-review prompt.
+`APPROVE`, `advancePhase` appends an `ApprovalEntry` with `actor: "agent"` to
+`ticket.approvals`. When absent for a phase, self-review is skipped and the
+ticket waits for human approval as before. Currently only `intake` has a
+self-review prompt.
 
 ## Key constraints
 
@@ -437,12 +447,12 @@ Existing entries in `~/.lazyboy/repositories/` are reused without re-cloning. No
 snapshots.
 
 `createWorktreeAction` fires at
-`phase === "intake" && status === "waiting" &&
-approved === true` (after intake
-self-review or manual `approve`). It reads the latest `*-intake.md` file via the
-`readIntakeOutput` dep, resolves all GitHub scope entries to worktrees, and
-resolves local-path entries to `ticket.scope`. The three production deps wired
-in `tick.ts` are `readIntakeOutput`, `cloneRemoteRepo`, and `stat`.
+`phase === "intake" && status === "waiting" && isApproved(ticket) === true`
+(after intake self-review or manual `approve`). It reads the latest
+`*-intake.md` file via the `readIntakeOutput` dep, resolves all GitHub scope
+entries to worktrees, and resolves local-path entries to `ticket.scope`. The
+three production deps wired in `tick.ts` are `readIntakeOutput`,
+`cloneRemoteRepo`, and `stat`.
 
 Three utility functions exported from `src/worktree.ts`:
 

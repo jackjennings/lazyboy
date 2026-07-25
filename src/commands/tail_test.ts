@@ -12,7 +12,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/test/repo/issues/1",
     phase: "spec",
     status: "running",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-01-01T00:00:00Z",

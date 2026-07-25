@@ -22,7 +22,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "u",
     phase: "intake",
     status: "new",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-06-15T00:00:00Z",
@@ -122,7 +122,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
   });
   let spawnedPhase = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
@@ -147,7 +147,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: false,
+    approvals: [],
   });
   const spawnSpy = spy(() => Promise.resolve());
   await advancePhase(ticket, "/state", {
@@ -167,7 +167,7 @@ Deno.test("advancePhase: implementation/waiting + approved advances to merge/wai
   const ticket = makeTicket({
     phase: "implementation",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
   });
   let written = { phase: "", status: "" };
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
@@ -193,7 +193,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
   const ticket = makeTicket({
     phase: "plan",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
     worktrees: {
       "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
     },
@@ -223,7 +223,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
     worktrees: {
       "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
     },
@@ -278,7 +278,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
   const ticket = makeTicket({
     phase: "plan",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
     worktrees: {},
   });
   let written = { phase: "", status: "" };
@@ -400,7 +400,7 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
   const ticket = makeTicket({
     phase: "implementation",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
   });
   const logEntries: object[] = [];
   const appendLogSpy = spy(
@@ -433,7 +433,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      approved: true,
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
       prs: [
         {
           url: "https://github.com/o/r/pull/1",
@@ -472,7 +472,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      approved: true,
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
     await advancePhase(ticket, "/state", {
@@ -495,7 +495,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      approved: true,
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
       prs: [],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
@@ -519,7 +519,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      approved: true,
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
       prs: [
         {
           url: "https://github.com/o/r/pull/1",
@@ -550,7 +550,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      approved: true,
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
       prs: [
         {
           url: "https://github.com/o/r/pull/1",
@@ -610,7 +610,7 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
   });
   const logEntries: object[] = [];
   const appendLogSpy = spy(
@@ -641,7 +641,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
   const ticket = makeTicket({
     phase: "plan",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
     worktrees: {},
   });
   const logEntries: object[] = [];
@@ -713,11 +713,10 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
   assertEquals(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile), true);
 });
 
-Deno.test("advancePhase: revising status transitions to running and clears approved", async () => {
+Deno.test("advancePhase: revising status transitions to running", async () => {
   const ticket = makeTicket({
     phase: "plan",
     status: "revising",
-    approved: true,
   });
   const writtenTickets: TicketState[] = [];
   const writeTicketSpy = spy((_dir: string, t: TicketState) => {
@@ -736,7 +735,6 @@ Deno.test("advancePhase: revising status transitions to running and clears appro
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(writtenTickets[0].status, "running");
-  assertEquals(writtenTickets[0].approved, false);
 });
 
 Deno.test("advancePhase: revising status logs status-transition from revising to running", async () => {
@@ -816,7 +814,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
   });
   let spawnedOutputFile = "";
   const spawnSpy = spy((opts: SpawnOpts) => {
@@ -971,7 +969,7 @@ Deno.test(
     assertEquals(writtenTickets[0].id, "gh-2");
     assertEquals(writtenTickets[0].phase, "intake");
     assertEquals(writtenTickets[0].status, "new");
-    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[0].approvals, []);
     assertEquals(writtenTickets[0].body, "body");
   },
 );
@@ -1031,13 +1029,11 @@ Deno.test(
       id: "gh-1",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const t2 = makeTicket({
       id: "gh-2",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const store: Record<string, TicketState> = { "gh-1": t1, "gh-2": t2 };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
@@ -1059,19 +1055,16 @@ Deno.test(
       id: "gh-1",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const t2 = makeTicket({
       id: "gh-2",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const t3 = makeTicket({
       id: "gh-3",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const store: Record<string, TicketState> = {
       "gh-1": t1,
@@ -1103,7 +1096,6 @@ Deno.test(
       id: "gh-2",
       phase: "intake",
       status: "waiting",
-      approved: false,
     });
     const store: Record<string, TicketState> = {
       "gh-1": running,
@@ -1458,7 +1450,7 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
   const ticket = makeTicket({
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
   });
   let resolvedPhase = "";
   await advancePhase(ticket, "/state", {
@@ -1561,9 +1553,11 @@ Deno.test(
     });
     assertSpyCalls(writeTicketSpy, 2);
     assertEquals(writtenTickets[0].status, "waiting");
-    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[0].approvals, []);
     assertEquals(writtenTickets[1].status, "waiting");
-    assertEquals(writtenTickets[1].approved, true);
+    assertEquals(writtenTickets[1].approvals.length, 1);
+    assertEquals(writtenTickets[1].approvals[0].actor, "agent");
+    assertEquals(writtenTickets[1].approvals[0].phase, "intake");
     assertEquals(logEntries.length, 2);
     assertEquals(logEntries[0], {
       event: "status-transition",
@@ -1602,7 +1596,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
     });
     assertSpyCalls(writeTicketSpy, 1);
-    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[0].approvals, []);
     assertEquals(logEntries.length, 1);
     assertEquals(logEntries[0], {
       event: "status-transition",
@@ -1639,7 +1633,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview returning false leaves ticket waiting with approved false",
+  "advancePhase: selfReview returning false leaves ticket waiting with no approvals",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
@@ -1658,7 +1652,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
     });
     assertSpyCalls(writeTicketSpy, 1);
-    assertEquals(writtenTickets[0].approved, false);
+    assertEquals(writtenTickets[0].approvals, []);
   },
 );
 
@@ -1749,6 +1743,161 @@ Deno.test(
       capturedTicketDir,
       "/state/github/jackjennings/lazyboy/104",
     );
+  },
+);
+
+Deno.test(
+  "advancePhase: github implementation phase advance appends provider supplement",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      provider: "github",
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+      },
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const supplement = await Deno.readTextFile(
+      new URL(
+        "./phases/prompts/github-implementation.md",
+        import.meta.url,
+      ).pathname,
+    );
+    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
+    assertEquals(spawnedPrompt.includes("\n\n"), true);
+  },
+);
+
+Deno.test(
+  "advancePhase: github implementation revising appends provider supplement",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "revising",
+      provider: "github",
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+      },
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const supplement = await Deno.readTextFile(
+      new URL(
+        "./phases/prompts/github-implementation.md",
+        import.meta.url,
+      ).pathname,
+    );
+    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
+    assertEquals(spawnedPrompt.includes("gh pr create"), false);
+  },
+);
+
+Deno.test(
+  "advancePhase: non-github implementation phase advance uses base prompt only",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      provider: "jira",
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+      },
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const basePrompt = await Deno.readTextFile(
+      new URL(
+        "./phases/prompts/implementation.md",
+        import.meta.url,
+      ).pathname,
+    );
+    assertEquals(spawnedPrompt, basePrompt);
+  },
+);
+
+Deno.test(
+  "advancePhase: new ticket intake prompt is unchanged when no provider supplement exists",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "new",
+      provider: "github",
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const basePrompt = await Deno.readTextFile(
+      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
+    );
+    assertEquals(spawnedPrompt, basePrompt);
   },
 );
 

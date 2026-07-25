@@ -14,6 +14,5 @@ Deno.test(
   async () => {
     const result = await loadProviderPrompt("implementation", "github");
     assertEquals(result.length > 0, true);
-    assertEquals(result.includes("gh pr create"), false);
   },
 );

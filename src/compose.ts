@@ -283,6 +283,45 @@ export function composeTickDeps(
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
       selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
+      markPRsReady: async (prUrls: string[]) => {
+        for (const url of prUrls) {
+          const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+          if (!match) throw new Error(`Cannot parse PR URL: ${url}`);
+          const [, slug, number] = match;
+          const restRes = await fetch(
+            `https://api.github.com/repos/${slug}/pulls/${number}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+              },
+            },
+          );
+          if (!restRes.ok) {
+            throw new Error(
+              `GitHub API error ${restRes.status} fetching PR node_id for ${url}`,
+            );
+          }
+          const { node_id: nodeId } = await restRes.json();
+          const graphqlRes = await fetch("https://api.github.com/graphql", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query:
+                `mutation($input: MarkPullRequestReadyForReviewInput!) { markPullRequestReadyForReview(input: $input) { pullRequest { id } } }`,
+              variables: { input: { pullRequestId: nodeId } },
+            }),
+          });
+          if (!graphqlRes.ok) {
+            throw new Error(
+              `GitHub GraphQL error ${graphqlRes.status} promoting ${url} from draft`,
+            );
+          }
+        }
+      },
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),

@@ -17,7 +17,9 @@ feels missing, note the gap in the "Changes Made" section of your response
 rather than silently expanding scope.
 
 When done, commit all changes to the current branch with a descriptive commit
-message. Then push the branch and open a draft pull request using the `gh` CLI:
+message. Then push the branch and open a pull request using the `gh` CLI. Always
+create pull requests in draft mode — lazyboy automatically promotes them to
+ready-for-review when the implementation phase is approved.
 
 gh pr create --draft --title "<title>" --body "<body>"
 

@@ -70,6 +70,7 @@ export interface TickDeps {
     phase: string,
     ticketDir: string,
   ) => Promise<{ approved: boolean; reason: string | null }>;
+  markPRsReady: (prUrls: string[]) => Promise<void>;
   buildRepoCorpusText?: () => Promise<string>;
 }
 
@@ -257,6 +258,20 @@ export async function advancePhase(
     ticket.status === "waiting" &&
     ticket.approved
   ) {
+    const unmergedUrls = (ticket.prs ?? [])
+      .filter((pr) => !pr.merged)
+      .map((pr) => pr.url);
+    if (unmergedUrls.length > 0) {
+      try {
+        await deps.markPRsReady(unmergedUrls);
+      } catch (e) {
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "error",
+          context: "markPRsReady",
+          message: String(e),
+        });
+      }
+    }
     await deps.writeTicket(stateDir, {
       ...ticket,
       phase: "merge",

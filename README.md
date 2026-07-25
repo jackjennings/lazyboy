@@ -92,6 +92,9 @@ enabled = ["agent-browser"]
 [codebase]
 roots = ["~/code"]
 
+[agent]
+type = "pi"
+
 [pi]
 provider = "anthropic"
 ```

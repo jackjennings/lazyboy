@@ -208,22 +208,40 @@ wires the two together.
 ## CodeAgent adapters
 
 Code-agent runtimes (CLI tools or SDKs that execute phase prompts) implement the
-`CodeAgent` interface from `src/agents/types.ts`. The sole production adapter is
-`PiCodeAgent` in `src/agents/pi.ts`. The `pi` CLI must not be referenced by name
-outside `src/agents/pi.ts`.
+`CodeAgent` interface from `src/agents/types.ts`. Two production adapters exist:
+`PiCodeAgent` in `src/agents/pi.ts` (shells to `pi`) and `ClaudeCodeAgent` in
+`src/agents/claude-code.ts` (shells to `claude`, the Claude Code CLI). The `pi`
+CLI must not be referenced by name outside `src/agents/pi.ts`; the `claude` CLI
+must not be referenced by name outside `src/agents/claude-code.ts`.
 
-`runPhase` opts include `provider` and `model` — the adapter uses them in
-subprocess args but does not define them. Model selection is resolved per-phase
-by `resolvePhaseModel` (see below). Provider selection is a single global
-`config.toml` setting (`[pi].provider`, default `"anthropic"`) resolved once in
-`composeTickDeps` and threaded through `ExecutorOptions.provider` →
-`buildPhaseArgs`'s `--provider` flag → `run-phase.ts`'s CLI parsing → the
-`opts.provider` field `executePhase` passes to `agent.runPhase()`. There is no
-module-level `PI_PROVIDER` or `PI_MODEL` constant.
+Which adapter runs is a single global `config.toml` setting (`[agent].type`,
+default `"pi"`), orthogonal to `[pi].provider` (which only takes effect when
+`agent.type === "pi"`). It is resolved once in `composeTickDeps` and threaded
+through `ExecutorOptions.agent` → `buildPhaseArgs`'s `--agent` flag →
+`run-phase.ts`'s CLI parsing → the `import.meta.main` block, which is the only
+place either adapter is constructed. `executePhase` uses the same value to pick
+between the pi-specific and Claude-Code-specific NDJSON parsers
+(`extractUsageAndText`/`extractSessionId` vs
+`extractClaudeCodeUsageAndText`/`extractClaudeCodeSessionId`, both in
+`src/run-phase.ts`), since the two CLIs' `stream-json` schemas are structurally
+different.
+
+`ClaudeCodeAgent` is Anthropic-direct only — it does not support Bedrock, and
+ignores the `provider` field `runPhase` receives. Its `thinking` levels map to
+the `claude` CLI's `--effort` flag (`low`/`medium`/`high`/`xhigh`/`max` pass
+through unchanged; `off`/`minimal` omit the flag, since `--effort` has no
+equivalent choices). It has no `@file` context-file mechanism like `pi`, so
+`contextFiles` are instead listed in the prompt text and their parent
+directories are passed via `--add-dir`.
+
+Every invocation always passes `--setting-sources project,local`. Without it, a
+nested `claude` process loads the operator's full personal environment —
+user-level hooks, skills, plugins, and MCP servers — into whatever ticket phase
+is running, which `pi` never does (it isolates its own config dirs via
+`PI_CODING_AGENT_DIR`). It also always passes `--verbose`, which the CLI
+requires whenever `--print` and `--output-format stream-json` are combined.
 
 New adapters belong in `src/agents/<name>.ts` and must implement `CodeAgent`.
-The `if (import.meta.main)` block in `run-phase.ts` is the only place that
-constructs `PiCodeAgent`.
 
 ### Bedrock support
 

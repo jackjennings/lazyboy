@@ -55,8 +55,10 @@ tasks.
 This is the last thing you do. Write a step-by-step implementation plan
 following TDD principles.
 
-Do not write or edit any other files. Print your response directly. Begin your
-response directly with the first section heading. No preamble.
+Do not write or edit any other files except meta.md and the output file path
+shown in your context. Write your plan document to the output file path using
+the Write tool. Begin your response directly with the first section heading. No
+preamble.
 
 Each task must:
 

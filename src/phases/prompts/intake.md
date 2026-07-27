@@ -6,8 +6,9 @@ Only explore enough to confirm if a repository is in or out of scope. Do not
 make any implementation plan at this point, only consider the breadth of the
 request in the ticket.
 
-Do not write any files. Print your response directly. Begin your response
-directly with the first section heading. No preamble.
+Write your response directly to the output file path shown in your context using
+the Write tool. Begin your response directly with the first section heading. No
+preamble.
 
 Your response must contain exactly two sections:
 

@@ -59,6 +59,10 @@ export function formatStatusRow(
   } ${tokenStr.padStart(10)} ${title}`;
 }
 
+export function shouldHideTicket(phase: string, status: string): boolean {
+  return (phase === "merge" && status === "done") || phase === "wont-do";
+}
+
 export function formatStatusHeader(): string {
   return [
     `${"ID".padEnd(36)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
@@ -70,8 +74,8 @@ export function formatStatusHeader(): string {
 
 export const status: Command = {
   name: "status",
-  description: "show all active tickets",
-  async run(_args) {
+  description: "show active tickets",
+  async run(args) {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
     const ids = await listTickets(stateDir);
@@ -99,12 +103,20 @@ export const status: Command = {
       const toSortableB = toSortableMap[b.provider] ?? ((id: string) => [id]);
       return compareSortKeys(toSortableA(a.id), toSortableB(b.id));
     });
+    const showAll = args.includes("--all");
+    const visible = showAll
+      ? tickets
+      : tickets.filter((t) => !shouldHideTicket(t.phase, t.status));
+    if (visible.length === 0) {
+      console.log("No active tickets (run with --all to show completed).");
+      Deno.exit(0);
+    }
     const tokenTotals = await Promise.all(
-      tickets.map((t) => readTicketTokens(join(stateDir, t.id))),
+      visible.map((t) => readTicketTokens(join(stateDir, t.id))),
     );
     console.log(formatStatusHeader());
-    for (let i = 0; i < tickets.length; i++) {
-      const t = tickets[i];
+    for (let i = 0; i < visible.length; i++) {
+      const t = visible[i];
       console.log(
         formatStatusRow(
           t.id,

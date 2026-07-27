@@ -42,6 +42,8 @@ import {
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
+import { defaultCommandRunner } from "./apfel.ts";
+import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
@@ -388,5 +390,11 @@ export function composeTickDeps(
       log: appendTickLog,
     }),
     refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
+    notify: makeNotify(stateDir, {
+      readLog: (sd, id) =>
+        Deno.readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),
+      appendLog: appendTicketLog,
+      runCommand: defaultCommandRunner(),
+    }),
   };
 }

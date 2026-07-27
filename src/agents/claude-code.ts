@@ -32,19 +32,20 @@ export function deriveAddDirs(
   return [...dirs].sort();
 }
 
-export function buildClaudeCodeArgs(
-  prompt: string,
-  model: string,
-  thinking: string,
-  contextFiles: string[],
-  cwd: string,
-  settingsPath: string,
-): string[] {
-  const fileList = contextFiles.length > 0
+export function buildClaudeCodeArgs(opts: {
+  prompt: string;
+  model: string;
+  thinking: string;
+  contextFiles: string[];
+  cwd: string;
+  settingsPath: string;
+  sessionId?: string;
+}): string[] {
+  const fileList = opts.contextFiles.length > 0
     ? "\n\nRead these files first:\n" +
-      contextFiles.map((f) => `- ${stripAtPrefix(f)}`).join("\n")
+      opts.contextFiles.map((f) => `- ${stripAtPrefix(f)}`).join("\n")
     : "";
-  const fullPrompt = prompt + fileList;
+  const fullPrompt = opts.prompt + fileList;
 
   const args = [
     fullPrompt,
@@ -56,17 +57,21 @@ export function buildClaudeCodeArgs(
     "--setting-sources",
     "project,local",
     "--settings",
-    settingsPath,
+    opts.settingsPath,
     "--model",
-    model,
+    opts.model,
   ];
 
-  const effort = EFFORT_LEVELS[thinking];
+  const effort = EFFORT_LEVELS[opts.thinking];
   if (effort !== undefined) {
     args.push("--effort", effort);
   }
 
-  const addDirs = deriveAddDirs(contextFiles, cwd);
+  if (opts.sessionId !== undefined) {
+    args.push("--resume", opts.sessionId);
+  }
+
+  const addDirs = deriveAddDirs(opts.contextFiles, opts.cwd);
   if (addDirs.length > 0) {
     args.push("--add-dir", ...addDirs);
   }
@@ -85,16 +90,18 @@ export class ClaudeCodeAgent implements CodeAgent {
     provider: string;
     model: string;
     thinking: string;
+    sessionId?: string;
   }): Promise<{ stdout: string; stderr: string; code: number }> {
     const result = await new Deno.Command("claude", {
-      args: buildClaudeCodeArgs(
-        opts.prompt,
-        opts.model,
-        opts.thinking,
-        opts.contextFiles,
-        opts.cwd,
-        this.settingsPath,
-      ),
+      args: buildClaudeCodeArgs({
+        prompt: opts.prompt,
+        model: opts.model,
+        thinking: opts.thinking,
+        contextFiles: opts.contextFiles,
+        cwd: opts.cwd,
+        settingsPath: this.settingsPath,
+        sessionId: opts.sessionId,
+      }),
       cwd: opts.cwd,
       env: opts.env,
       stdout: "piped",

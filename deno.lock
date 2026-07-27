@@ -16,6 +16,7 @@
     "jsr:@std/toml@1": "1.0.11",
     "npm:@earendil-works/pi-tui@~0.80.2": "0.80.2",
     "npm:adf2markdown@^1.2.0": "1.2.0",
+    "npm:diff@^5.2.0": "5.2.2",
     "npm:gray-matter@4.0.3": "4.0.3"
   },
   "jsr": {
@@ -83,6 +84,9 @@
       "dependencies": [
         "sprintf-js"
       ]
+    },
+    "diff@5.2.2": {
+      "integrity": "sha512-vtcDfH3TOjP8UekytvnHH1o1P4FcUdt4eQ1Y+Abap1tk/OB2MWQvcwS2ClCd1zuIhc3JKOx6p3kod8Vfys3E+A=="
     },
     "esprima@4.0.1": {
       "integrity": "sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A==",

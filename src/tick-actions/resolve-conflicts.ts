@@ -38,7 +38,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         for await (const entry of deps.readDir(ticketDir)) {
           if (
             entry.isFile &&
-            entry.name.startsWith("conflict-context-") &&
+            entry.name.includes("-conflict-context-") &&
             entry.name.endsWith(".md")
           ) {
             contextFiles.push(join(ticketDir, entry.name));
@@ -51,13 +51,12 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
       if (contextFiles.length === 0) return null;
 
       const resolvingWorktrees = Object.values(ticket.worktrees).filter(
-        (wt) =>
-          contextFiles.includes(
-            join(
-              ticketDir,
-              `conflict-context-${sanitizeBranchForFilename(wt.branch)}.md`,
-            ),
-          ),
+        (wt) => {
+          const safeBranch = sanitizeBranchForFilename(wt.branch);
+          return contextFiles.some((p) =>
+            p.endsWith(`-conflict-context-${safeBranch}.md`)
+          );
+        },
       );
 
       const now = Temporal.Now.instant().toString();

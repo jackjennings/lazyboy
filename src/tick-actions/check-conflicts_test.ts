@@ -48,7 +48,7 @@ function makeAction(
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     spawn: () => Promise.resolve(),
-    writeContextFile: () => Promise.resolve(),
+    writeContextFile: () => Promise.resolve(""),
     resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "high" }),
     ...overrides,
   });
@@ -272,7 +272,7 @@ Deno.test(
       },
       writeContextFile: (_ticketDir, branch, content) => {
         contextFiles.push({ branch, content });
-        return Promise.resolve();
+        return Promise.resolve(`20260727T202535-conflict-context-${branch}.md`);
       },
       writeTicket: (_dir, t) => {
         written.push(t);
@@ -342,6 +342,36 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "checkConflictsAction: spawn receives contextFile returned by writeContextFile",
+  async () => {
+    const filename = "20260727T202535-conflict-context-gh-7.md";
+    const spawnCalls: Record<string, unknown>[] = [];
+
+    await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({ code: 1, stdout: "", stderr: "CONFLICT" });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({ code: 0, stdout: "foo.ts", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      writeContextFile: () => Promise.resolve(filename),
+      spawn: (opts) => {
+        spawnCalls.push(opts as Record<string, unknown>);
+        return Promise.resolve();
+      },
+      writeTicket: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+    }).run(makeTicket(), "/state");
+
+    assertEquals(spawnCalls.length, 1);
+    assertEquals(spawnCalls[0].contextFile, filename);
+  },
+);
+
 // ── multiple worktrees — all evaluated ───────────────────────────────────────
 
 Deno.test(
@@ -405,7 +435,7 @@ Deno.test(
         spawnCalls.push(opts);
         return Promise.resolve();
       },
-      writeContextFile: () => Promise.resolve(),
+      writeContextFile: () => Promise.resolve(""),
       writeTicket: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
     }).run(

@@ -28,10 +28,7 @@ import {
 } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
-import {
-  checkConflictsAction,
-  sanitizeBranchForFilename,
-} from "./tick-actions/check-conflicts.ts";
+import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import {
   installPackages,
@@ -45,6 +42,7 @@ import {
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
+import { compactTimestamp } from "./timestamp.ts";
 import { defaultCommandRunner } from "./apfel.ts";
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
@@ -197,18 +195,23 @@ export function composeTickDeps(
       writeTicket,
       appendLog: appendTicketLog,
       writeContextFile: async (ticketDir, branch, content) => {
-        await Deno.writeTextFile(
-          join(ticketDir, `conflict-context-${branch}.md`),
-          content,
+        const timestamp = compactTimestamp(
+          Temporal.Now.zonedDateTimeISO("UTC"),
         );
+        const filename = `${timestamp}-conflict-context-${branch}.md`;
+        await Deno.writeTextFile(join(ticketDir, filename), content);
+        return filename;
       },
       resolveModelConfig: (ticket) =>
         resolvePhaseModel(config, "conflict-resolution", ticket),
       spawn: (opts) => {
-        const safeBranch = sanitizeBranchForFilename(opts.branch);
+        const timestamp = opts.contextFile.slice(
+          0,
+          opts.contextFile.indexOf("-conflict-context-"),
+        );
         const contextFilePaths = [
           `@${opts.ticketDir}/meta.md`,
-          `@${opts.ticketDir}/conflict-context-${safeBranch}.md`,
+          `@${opts.ticketDir}/${opts.contextFile}`,
         ];
         const prompt = `You are resolving git rebase conflicts. ` +
           `Examine the conflicted files listed in the context, resolve all merge conflicts, ` +
@@ -218,7 +221,7 @@ export function composeTickDeps(
           ticketDir: opts.ticketDir,
           prompt,
           scopeDirs: [],
-          outputFile: "conflict-resolution.md",
+          outputFile: `${timestamp}-conflict-resolution.md`,
           githubToken: token,
           anthropicApiKey,
           worktrees: {

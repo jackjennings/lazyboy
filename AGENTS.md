@@ -144,6 +144,26 @@ are written only when `pi` exits with a complete `agent_end` event. Code that
 scans ticket directories (e.g. `lazyboy status`) identifies usage files by the
 `.usage.json` suffix.
 
+## Background analysis subprocesses
+
+Non-phase background agents (processes that run alongside a ticket's main phase
+agent without participating in the phase state machine) write a custom PID file
+instead of `run.pid`. The tick loop only reads `run.pid` to track phase agent
+liveness, so a subprocess writing a different PID file is invisible to ticket
+state management.
+
+The outlier analysis agent (`src/phases/prompts/outlier-analysis.md`) is the
+current example: it is spawned by `spawnOutlierAnalysis` in `TickDeps` and
+writes `outlier-analysis.pid` via the `pidFile` option on `ExecutorOptions`.
+
+To add a new background subprocess:
+
+- Give it a distinct `pidFile` name that does not conflict with `run.pid`.
+- Add an optional method to `TickDeps`; the call site in `advancePhase` guards
+  with `?.`.
+- Wire the concrete implementation in `composeTickDeps`.
+- Never write to `ticket.status` or `ticket.phase` from the subprocess.
+
 ## Provider-specific prompt supplements
 
 `loadProviderPrompt(phase, provider)` in `src/phases/runners.ts` loads

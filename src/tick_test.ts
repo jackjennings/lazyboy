@@ -2120,3 +2120,124 @@ Deno.test(
     assertSpyCalls(installPackagesSpy, 1);
   },
 );
+
+Deno.test(
+  "advancePhase: implementation/running with dead PID calls spawnOutlierAnalysis with ticket id, dir, and worktree path",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "running",
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/wt/path", branch: "gh-1" },
+      },
+    });
+    const calls: Array<[string, string, string]> = [];
+    const spawnOutlierAnalysisSpy = spy(
+      (ticketId: string, ticketDir: string, worktreePath: string) => {
+        calls.push([ticketId, ticketDir, worktreePath]);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+    });
+    assertSpyCalls(spawnOutlierAnalysisSpy, 1);
+    assertEquals(calls[0][0], "gh-1");
+    assertEquals(calls[0][1], "/state/gh-1");
+    assertEquals(calls[0][2], "/wt/path");
+  },
+);
+
+Deno.test(
+  "advancePhase: implementation/running with dead PID and no lazyboy worktree logs error and does not call spawnOutlierAnalysis",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "running",
+      worktrees: {},
+    });
+    const spawnOutlierAnalysisSpy = spy(() => Promise.resolve());
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+    });
+    assertSpyCalls(spawnOutlierAnalysisSpy, 0);
+    assertEquals(
+      logEntries.some(
+        (e) =>
+          (e as Record<string, unknown>).event === "error" &&
+          (e as Record<string, unknown>).context === "spawnOutlierAnalysis",
+      ),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "advancePhase: non-implementation/running with dead PID does not call spawnOutlierAnalysis",
+  async () => {
+    const ticket = makeTicket({ phase: "enrichment", status: "running" });
+    const spawnOutlierAnalysisSpy = spy(() => Promise.resolve());
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+    });
+    assertSpyCalls(spawnOutlierAnalysisSpy, 0);
+  },
+);
+
+Deno.test(
+  "advancePhase: implementation/running with dead PID and no spawnOutlierAnalysis dep does not throw",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "running",
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/wt/path", branch: "gh-1" },
+      },
+    });
+    const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
+      Promise.resolve()
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+    });
+    assertSpyCalls(writeTicketSpy, 1);
+  },
+);

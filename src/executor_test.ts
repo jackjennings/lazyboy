@@ -141,3 +141,9 @@ Deno.test("buildPhaseArgs: includes --agent claude-code when specified", () => {
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "claude-code");
 });
+
+Deno.test("buildPhaseArgs: pidFile option does not appear in args", () => {
+  const args = buildPhaseArgs(makeOpts({ pidFile: "outlier-analysis.pid" }));
+  assertEquals(args.includes("outlier-analysis.pid"), false);
+  assertEquals(args.includes("--pid-file"), false);
+});

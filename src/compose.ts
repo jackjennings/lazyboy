@@ -1,5 +1,8 @@
 import { existsSync } from "@std/fs";
 import { join } from "@std/path";
+import { detectImplementationOutlier } from "./outlier-detection.ts";
+import { compactTimestamp } from "./timestamp.ts";
+import { loadPromptFile } from "./phases/runners.ts";
 import {
   appendTicketLog,
   commitState,
@@ -330,6 +333,31 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
+      spawnOutlierAnalysis: async (ticketId, ticketDir, lazboyWorktreePath) => {
+        const result = await detectImplementationOutlier(ticketDir);
+        if (result === null) return;
+        const prompt = await loadPromptFile("outlier-analysis.md");
+        const outputFile = `${
+          compactTimestamp(Temporal.Now.zonedDateTimeISO("UTC"))
+        }-outlier-analysis.md`;
+        await spawnPhase({
+          ticketDir,
+          prompt:
+            `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}`,
+          scopeDirs: [],
+          outputFile,
+          githubToken: token,
+          anthropicApiKey,
+          worktrees: {
+            "jackjennings/lazyboy": { path: lazboyWorktreePath, branch: "" },
+          },
+          provider: piProvider,
+          agent: agentType,
+          model: "claude-sonnet-4-6",
+          thinking: "high",
+          pidFile: "outlier-analysis.pid",
+        });
+      },
     },
     runMigrations: createMigrationRunner({
       listMigrationFiles: async () => {

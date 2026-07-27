@@ -1,6 +1,5 @@
 import { assertEquals } from "@std/assert";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
-import { join } from "@std/path";
 import {
   advancePhase,
   resolvePhaseModel,
@@ -1229,22 +1228,20 @@ Deno.test("TickService: exit(1) called when workflow throws", async () => {
 });
 
 Deno.test(
-  "TickService: writes tick-failed to tick.ndjson when workflow throws",
+  "TickService: writes tick-failed entry via injected appendTickLog when workflow throws",
   async () => {
-    const tickLog = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
-    await Deno.mkdir(join(Deno.env.get("HOME")!, ".lazyboy"), {
-      recursive: true,
-    });
-    const logBefore = await Deno.readTextFile(tickLog).catch(() => "");
+    const captured: object[] = [];
     const deps = makeFakeServiceDeps({
       listTickets: () => Promise.reject(new Error("workflow error")),
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
       exit: () => {},
     });
     await new TickService(deps).run();
-    const logAfter = await Deno.readTextFile(tickLog);
-    const newLines = logAfter.slice(logBefore.length).trim().split("\n")
-      .filter(Boolean);
-    const entry = JSON.parse(newLines[newLines.length - 1]);
+    assertEquals(captured.length, 1);
+    const entry = captured[0] as Record<string, unknown>;
     assertEquals(entry.event, "tick-failed");
     assertEquals(entry.error, "workflow error");
     assertEquals(typeof entry.ts, "string");

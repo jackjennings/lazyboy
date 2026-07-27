@@ -41,6 +41,40 @@ Do not write any files outside the repository worktree and meta.md. Print your
 response directly. Begin your response directly with the first section heading.
 No preamble. Do not create any other files.
 
+## Stacked PRs
+
+Use a stack of PRs instead of a single PR only when **both** of the following
+are true:
+
+1. The spec or plan explicitly describes two or more logically independent
+   phases or layers (e.g., "add the data model, then build the feature on top of
+   it," "extract the abstraction, then migrate callers").
+2. Each phase produces a passing, independently-reviewable state of the codebase
+   — part 1 could be merged and used on its own before part 2 exists.
+
+If in doubt, use a single PR. A large diff is not sufficient justification. A
+single feature spanning many files is not a stack candidate.
+
+When stacking applies:
+
+1. Implement part 1 fully on the current ticket branch. All tests must pass
+   before continuing.
+2. Run `gh stack add -m "<description>"` to create and switch to the next
+   branch.
+3. Implement part 2. All tests (including part 1 tests) must pass.
+4. Repeat for additional parts if the plan calls for them.
+5. Run `gh stack submit --auto` to push all branches and create all PRs as
+   drafts.
+6. For each stacked branch in order, run `gh pr view <branch> --json url,title`
+   to retrieve the URL and title.
+7. Append one `PrEntry` per PR to the `prs` array in `meta.md`, forming a
+   dependency chain:
+   - PR1: `dependsOn: []`
+   - PR2: `dependsOn: [<PR1 url>]`
+   - PR3: `dependsOn: [<PR2 url>]`
+   - All entries: `merged: false`, `worktreeKey` set to the ticket's single
+     worktree key (the same value for every entry in the stack).
+
 Your response must contain:
 
 ## Changes Made

@@ -30,7 +30,9 @@ Edit efficiency: when a plan task lists multiple changes to the same file, read
 that file once, identify every change site, then apply all of them in as few
 Edit calls as possible. Do not make one Edit call per listed change — this
 multiplies turns without benefit and is the most common source of outlier
-session length.
+session length. After a successful Edit, never re-read the file before the next
+edit — the file contains exactly what you wrote; use that text as the anchor for
+subsequent edits.
 
 When done, commit all changes to the current branch with a descriptive commit
 message. Then push the branch and open a pull request using the `gh` CLI. Always

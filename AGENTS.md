@@ -372,17 +372,26 @@ introduce a second git-shelling helper — use or inject `runGit`.
 ## Conflict resolution
 
 When a rebase conflict is detected, `checkConflictsAction` writes a
-`conflict-context-<branch>.md` sentinel file to the ticket directory and spawns
-a conflict-resolution agent. Its model and thinking level follow the same
-per-phase resolution as the five runner phases (`config.toml` defaults, ticket
-overrides, falling back to `claude-opus-4-7`/`high`) under the phase name
-`"conflict-resolution"`. The agent receives only `@meta.md` and
-`@conflict-context-<branch>.md` as context (not the full `buildContextFiles`
-set). The worktree is left in the mid-rebase state for the agent to resolve.
+`${timestamp}-conflict-context-<branch>.md` sentinel file to the ticket
+directory and spawns a conflict-resolution agent. The timestamp is
+`YYYYMMDDTHHMMSS` (from `compactTimestamp`) captured at the moment
+`writeContextFile` is called; both the context file and the output file
+(`${timestamp}-conflict-resolution.md`) carry the same timestamp. Its model and
+thinking level follow the same per-phase resolution as the five runner phases
+(`config.toml` defaults, ticket overrides, falling back to
+`claude-opus-4-7`/`high`) under the phase name `"conflict-resolution"`. The
+agent receives only `@meta.md` and `@${timestamp}-conflict-context-<branch>.md`
+as context (not the full `buildContextFiles` set). The worktree is left in the
+mid-rebase state for the agent to resolve.
 
 `resolveConflictsAction` detects completed conflict-resolution runs by checking
-for `conflict-context-*.md` in the ticket directory when a running ticket's PID
-dies. It must be registered **before** `checkConflictsAction` in the
+for files matching `*-conflict-context-*.md`
+(`includes("-conflict-context-") &&
+endsWith(".md")`) in the ticket directory
+when a running ticket's PID dies. Worktree matching uses a suffix check
+(`path.endsWith("-conflict-context-<safeBranch>.md")`) rather than exact
+reconstruction, so the timestamp in the filename does not need to be known at
+match time. It must be registered **before** `checkConflictsAction` in the
 `tickActions` array so a just-finished resolution run is handled before the
 conflict check can re-fire.
 

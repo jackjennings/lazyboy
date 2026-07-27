@@ -42,6 +42,7 @@ export async function performDecline(
 export const decline: Command = {
   name: "decline",
   description: "permanently exclude a ticket from the queue",
+  usage: "lazyboy decline <ticket-id> [reason]",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];

@@ -29,6 +29,8 @@ export async function resolveTicketLogPath(
 
 export const tail: Command = {
   name: "tail",
+  description: "stream the tick log or a ticket's event log",
+  usage: "lazyboy tail [ticket-id]",
   async run(args) {
     const id = args[0];
     let logPath: string;

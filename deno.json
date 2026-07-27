@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "start": "deno run --allow-all src/index.ts",
+    "start": "bin/lazyboy",
     "test": "LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/ migrations/ bin/"
   },
   "imports": {

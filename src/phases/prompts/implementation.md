@@ -10,6 +10,11 @@ Implement the plan exactly as specified using TDD:
 3. Refactor if needed
 4. Confirm all tests pass
 
+Before editing any file, enumerate all changes that file requires across every
+task in the plan. Make all edits to a file together in as few Edit calls as
+possible — do not make a separate Edit call per plan section or task when
+multiple sections touch the same file.
+
 Scope discipline: implement exactly what the plan specifies. Do not add
 parameters, helpers, log/warn callbacks, or fallback paths the plan does not
 call for, even when they seem like obvious improvements. If something genuinely

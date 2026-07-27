@@ -5,6 +5,7 @@ import {
   formatStatusRow,
   formatTokens,
   readTicketTokens,
+  shouldHideTicket,
 } from "./status.ts";
 
 // ── formatTokens ─────────────────────────────────────────────────────────────
@@ -129,4 +130,23 @@ Deno.test("formatStatusRow: pads ID field to 36 characters", () => {
 Deno.test("formatStatusHeader: separator line is 117 characters", () => {
   const lines = formatStatusHeader().split("\n");
   assertEquals(lines[1].length, 117);
+});
+
+// ── shouldHideTicket ──────────────────────────────────────────────────────────
+
+Deno.test("shouldHideTicket: returns true for merge/done", () => {
+  assertEquals(shouldHideTicket("merge", "done"), true);
+});
+
+Deno.test("shouldHideTicket: returns true for wont-do (any status)", () => {
+  assertEquals(shouldHideTicket("wont-do", "done"), true);
+});
+
+Deno.test("shouldHideTicket: returns false for merge/running", () => {
+  assertEquals(shouldHideTicket("merge", "running"), false);
+});
+
+Deno.test("shouldHideTicket: returns false for active phases", () => {
+  assertEquals(shouldHideTicket("intake", "running"), false);
+  assertEquals(shouldHideTicket("implementation", "waiting"), false);
 });

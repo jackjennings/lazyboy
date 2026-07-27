@@ -283,6 +283,7 @@ export function composeTickDeps(
           agent: agentType,
           model: opts.model,
           thinking: opts.thinking,
+          sessionId: opts.sessionId,
         }),
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),
@@ -336,6 +337,8 @@ export function composeTickDeps(
           }
         }
       },
+      readTicketLog: (ticketDir) =>
+        Deno.readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),

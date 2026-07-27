@@ -4,6 +4,7 @@ import {
   loadPrompt,
   loadPromptFile,
   loadProviderPrompt,
+  loadStatePrompt,
   nextPhase,
 } from "./phases/runners.ts";
 import { compactTimestamp } from "./timestamp.ts";
@@ -154,9 +155,10 @@ export async function advancePhase(
       activePhase,
       ticket.provider,
     );
-    const prompt = revisingSupplement
-      ? basePrompt + "\n\n" + revisingSupplement
-      : basePrompt;
+    const revisingStatePrompt = await loadStatePrompt(activePhase, stateDir);
+    const prompt = [basePrompt, revisingSupplement, revisingStatePrompt]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
     await deps.spawn({
@@ -190,7 +192,8 @@ export async function advancePhase(
       ticket.provider,
     );
     const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
-    const prompt = [intakeBase, intakeSupplement, corpusText]
+    const intakeStatePrompt = await loadStatePrompt("intake", stateDir);
+    const prompt = [intakeBase, intakeSupplement, corpusText, intakeStatePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
     const { model: intakeModel, thinking: intakeThinking } = deps
@@ -385,7 +388,10 @@ export async function advancePhase(
     }
     const basePrompt = await loadPrompt(next);
     const supplement = await loadProviderPrompt(next, ticket.provider);
-    const prompt = supplement ? basePrompt + "\n\n" + supplement : basePrompt;
+    const statePrompt = await loadStatePrompt(next, stateDir);
+    const prompt = [basePrompt, supplement, statePrompt]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     const { model: nextModel, thinking: nextThinking } = deps
       .resolveModelConfig(next, ticket);
     await deps.spawn({

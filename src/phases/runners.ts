@@ -26,6 +26,18 @@ export async function loadProviderPrompt(
   }
 }
 
+export async function loadStatePrompt(
+  phase: string,
+  stateDir: string,
+): Promise<string> {
+  try {
+    return await Deno.readTextFile(join(stateDir, "prompts", `${phase}.md`));
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return "";
+    throw e;
+  }
+}
+
 export function nextPhase(current: ActivePhase): ActivePhase | "done" {
   const idx = PHASE_SEQUENCE.indexOf(current);
   if (idx === -1 || idx === PHASE_SEQUENCE.length - 1) return "done";

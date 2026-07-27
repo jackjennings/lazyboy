@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
 import {
   advancePhase,
@@ -2389,5 +2389,179 @@ Deno.test(
       readPhaseOutput: () => Promise.resolve("content"),
     });
     assertSpyCalls(writeTicketSpy, 1);
+  },
+);
+
+Deno.test(
+  "advancePhase: new ticket includes state prompt in spawned prompt",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${stateDir}/prompts`);
+      await Deno.writeTextFile(
+        `${stateDir}/prompts/intake.md`,
+        "STATE INTAKE CONTEXT",
+      );
+      const ticket = makeTicket({ phase: "intake", status: "new" });
+      let spawnedPrompt = "";
+      const spawnSpy = spy((opts: SpawnOpts) => {
+        spawnedPrompt = opts.prompt;
+        return Promise.resolve();
+      });
+      await advancePhase(ticket, stateDir, {
+        spawn: spawnSpy,
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      });
+      assertSpyCall(spawnSpy, 0);
+      assertEquals(spawnedPrompt.includes("STATE INTAKE CONTEXT"), true);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: phase transition includes state prompt in spawned prompt",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${stateDir}/prompts`);
+      await Deno.writeTextFile(
+        `${stateDir}/prompts/enrichment.md`,
+        "STATE ENRICHMENT CONTEXT",
+      );
+      const ticket = makeTicket({
+        phase: "intake",
+        status: "waiting",
+        approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+      });
+      let spawnedPrompt = "";
+      const spawnSpy = spy((opts: SpawnOpts) => {
+        spawnedPrompt = opts.prompt;
+        return Promise.resolve();
+      });
+      await advancePhase(ticket, stateDir, {
+        spawn: spawnSpy,
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      });
+      assertSpyCall(spawnSpy, 0);
+      assertEquals(spawnedPrompt.includes("STATE ENRICHMENT CONTEXT"), true);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: revising includes state prompt in spawned prompt",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${stateDir}/prompts`);
+      await Deno.writeTextFile(
+        `${stateDir}/prompts/implementation.md`,
+        "STATE IMPL CONTEXT",
+      );
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "revising",
+        worktrees: {
+          "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+        },
+      });
+      let spawnedPrompt = "";
+      const spawnSpy = spy((opts: SpawnOpts) => {
+        spawnedPrompt = opts.prompt;
+        return Promise.resolve();
+      });
+      await advancePhase(ticket, stateDir, {
+        spawn: spawnSpy,
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      });
+      assertSpyCall(spawnSpy, 0);
+      assertEquals(spawnedPrompt.includes("STATE IMPL CONTEXT"), true);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: empty state prompt file does not inject blank separator",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${stateDir}/prompts`);
+      await Deno.writeTextFile(`${stateDir}/prompts/intake.md`, "");
+      const ticket = makeTicket({ phase: "intake", status: "new" });
+      let spawnedPrompt = "";
+      const spawnSpy = spy((opts: SpawnOpts) => {
+        spawnedPrompt = opts.prompt;
+        return Promise.resolve();
+      });
+      await advancePhase(ticket, stateDir, {
+        spawn: spawnSpy,
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      });
+      assertSpyCall(spawnSpy, 0);
+      assertEquals(spawnedPrompt.includes("\n\n\n"), false);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: state prompt error propagates",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${stateDir}/prompts`);
+      await Deno.mkdir(`${stateDir}/prompts/intake.md`);
+      const ticket = makeTicket({ phase: "intake", status: "new" });
+      await assertRejects(() =>
+        advancePhase(ticket, stateDir, {
+          spawn: () => Promise.resolve(),
+          isProcessAlive: () => false,
+          writeTicket: () => Promise.resolve(),
+          writePhaseOutput: () => Promise.resolve(),
+          appendLog: () => Promise.resolve(),
+          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+          selfReview: () => Promise.resolve({ approved: false, reason: null }),
+          markPRsReady: () => Promise.resolve(),
+          readPhaseOutput: () => Promise.resolve("content"),
+        })
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
   },
 );

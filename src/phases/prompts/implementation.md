@@ -42,9 +42,10 @@ project-wide convention not yet documented in `AGENTS.md`. If so, update
 `AGENTS.md` and include it in the same commit as the code that establishes the
 convention.
 
-Do not write any files outside the repository worktree and meta.md. Print your
-response directly. Begin your response directly with the first section heading.
-No preamble. Do not create any other files.
+Do not write any files outside the repository worktree, meta.md, and the output
+file path shown in your context. Write your response to the output file path
+using the Write tool. Begin your response directly with the first section
+heading. No preamble.
 
 ## Stacked PRs
 

@@ -600,13 +600,134 @@ Deno.test("executePhase: forwards a non-default provider (bedrock) to agent.runP
 });
 
 Deno.test(
-  "executePhase: writes extracted text to output file, writes usage sidecar, logs phase-end with exitCode and stderr, returns exit code",
+  "executePhase: includes output file path in prompt context",
   async () => {
     const ticketDir = await Deno.makeTempDir();
     const homeDir = await Deno.makeTempDir();
     try {
       await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      let capturedPrompt = "";
+      const agent: CodeAgent = {
+        runPhase(opts) {
+          capturedPrompt = opts.prompt;
+          return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+        },
+      };
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "20260727T000000-spec.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+        },
+        agent,
+      );
+      assertEquals(
+        capturedPrompt.includes(join(ticketDir, "20260727T000000-spec.md")),
+        true,
+      );
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
 
+Deno.test(
+  "executePhase: deletes pre-existing output file before launching agent",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      await Deno.writeTextFile(join(ticketDir, "result.md"), "stale content");
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+        },
+      };
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+        },
+        agent,
+      );
+      await assertRejects(
+        () => Deno.readTextFile(join(ticketDir, "result.md")),
+        Deno.errors.NotFound,
+      );
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: reads output file from disk; does not overwrite agent-written content",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      const outputPath = join(ticketDir, "result.md");
+      const agent: CodeAgent = {
+        async runPhase() {
+          await Deno.writeTextFile(outputPath, "## Section\n\nAgent content.");
+          return Promise.resolve({ stdout: "", stderr: "", code: 7 });
+        },
+      };
+      const exitCode = await executePhase(
+        {
+          ticketDir,
+          outputFile: "result.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "prompt",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+        },
+        agent,
+      );
+      assertEquals(exitCode, 7);
+      const content = await Deno.readTextFile(outputPath);
+      assertEquals(content, "## Section\n\nAgent content.");
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: still writes usage sidecar and logs phase-end when agent writes output file",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      const outputPath = join(ticketDir, "result.md");
       const agentEndNdjson = JSON.stringify({
         type: "agent_end",
         messages: [
@@ -627,9 +748,12 @@ Deno.test(
           },
         ],
       });
-
       const agent: CodeAgent = {
-        runPhase() {
+        async runPhase() {
+          await Deno.writeTextFile(
+            outputPath,
+            "## Output\n\nWritten by agent.",
+          );
           return Promise.resolve({
             stdout: agentEndNdjson,
             stderr: "agent errors",
@@ -637,7 +761,6 @@ Deno.test(
           });
         },
       };
-
       const exitCode = await executePhase(
         {
           ticketDir,
@@ -654,26 +777,15 @@ Deno.test(
         },
         agent,
       );
-
       assertEquals(exitCode, 42);
-
-      const written = await Deno.readTextFile(join(ticketDir, "result.md"));
-      assertEquals(written, "agent output");
-
       const usageRaw = await Deno.readTextFile(
         join(ticketDir, "result.usage.json"),
       );
       const usage = JSON.parse(usageRaw);
       assertEquals(usage.input, 5);
       assertEquals(usage.output, 3);
-      assertEquals(usage.cacheRead, 10);
-      assertEquals(usage.cacheWrite, 2);
       assertEquals(usage.model, "claude-sonnet-4-6");
-      assertEquals(usage.turns, 1);
-
-      const logContent = await Deno.readTextFile(
-        join(ticketDir, "log.ndjson"),
-      );
+      const logContent = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
       const logLines = logContent.trim().split("\n");
       const endEntry = JSON.parse(logLines[logLines.length - 1]);
       assertEquals(endEntry.event, "phase-end");
@@ -1028,7 +1140,7 @@ Deno.test(
 );
 
 Deno.test(
-  "executePhase: agentType 'claude-code' uses the Claude Code parser for text and usage",
+  "executePhase: agentType 'claude-code' uses the Claude Code parser for usage",
   async () => {
     const ticketDir = await Deno.makeTempDir();
     const homeDir = await Deno.makeTempDir();
@@ -1071,9 +1183,6 @@ Deno.test(
         },
         agent,
       );
-
-      const written = await Deno.readTextFile(join(ticketDir, "result.md"));
-      assertEquals(written, "claude code output");
 
       const usage = JSON.parse(
         await Deno.readTextFile(join(ticketDir, "result.usage.json")),

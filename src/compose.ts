@@ -49,6 +49,7 @@ import { defaultCommandRunner } from "./apfel.ts";
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
+import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
 
@@ -288,6 +289,11 @@ export function composeTickDeps(
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
       selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
+      readPhaseOutput: async (ticketDir, phase) => {
+        const found = await findLatestPhaseOutput(ticketDir);
+        if (!found || found.phaseName !== phase) return null;
+        return await Deno.readTextFile(join(ticketDir, found.filename));
+      },
       markPRsReady: async (prUrls: string[]) => {
         for (const url of prUrls) {
           const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);

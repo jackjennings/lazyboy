@@ -20,8 +20,9 @@ Make a concrete decision for each remaining ambiguous requirement. Do not
 present alternatives or options. Do not include implementation guidance, code
 examples, or algorithm options — those belong in the plan phase.
 
-Do not write any files. Print your response directly. Begin your response
-directly with the first section heading. No preamble.
+Write your response directly to the output file path shown in your context using
+the Write tool. Begin your response directly with the first section heading. No
+preamble.
 
 Your response must cover:
 

@@ -244,7 +244,9 @@ export async function executePhase(
     ...opts.scopeDirs,
     ...Object.values(opts.worktrees).map((w) => w.path),
   ];
-  const pathContext = `\n\nTicket directory: ${opts.ticketDir}` +
+  const outputFilePath = join(opts.ticketDir, opts.outputFile);
+  const pathContext = `\n\nOutput file: ${outputFilePath}` +
+    `\n\nTicket directory: ${opts.ticketDir}` +
     (allPaths.length > 0
       ? `\n\nAvailable directories:\n${
         allPaths.map((p) => `- ${p}`).join("\n")
@@ -259,6 +261,12 @@ export async function executePhase(
     phase: opts.phase,
   });
 
+  try {
+    await Deno.remove(outputFilePath);
+  } catch {
+    // file didn't exist; nothing to do
+  }
+
   const startMs = Temporal.Now.instant().epochMilliseconds;
   const result = await agent.runPhase({
     prompt: opts.prompt + pathContext,
@@ -271,11 +279,9 @@ export async function executePhase(
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
-  const { text, usage } = opts.agentType === "claude-code"
+  const { usage } = opts.agentType === "claude-code"
     ? extractClaudeCodeUsageAndText(result.stdout, durationMs)
     : extractUsageAndText(result.stdout, durationMs);
-
-  await Deno.writeTextFile(join(opts.ticketDir, opts.outputFile), text);
 
   if (usage !== null) {
     let costUsd: number | undefined;

@@ -77,6 +77,10 @@ export interface TickDeps {
     ticketDir: string,
   ) => Promise<{ approved: boolean; reason: string | null }>;
   markPRsReady: (prUrls: string[]) => Promise<void>;
+  readPhaseOutput: (
+    ticketDir: string,
+    phase: string,
+  ) => Promise<string | null>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
     ticketId: string,
@@ -231,6 +235,38 @@ export async function advancePhase(
         from: "running",
         to: "waiting",
       });
+
+      const outputContent = await deps.readPhaseOutput(
+        join(stateDir, ticket.id),
+        ticket.phase,
+      );
+      if (outputContent === null) {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-output-invalid",
+          phase: ticket.phase,
+          reason: "missing",
+        });
+        return;
+      }
+      if (outputContent.trim() === "") {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-output-invalid",
+          phase: ticket.phase,
+          reason: "empty",
+        });
+        return;
+      }
+
       let selfReviewResult: { approved: boolean; reason: string | null } = {
         approved: false,
         reason: null,

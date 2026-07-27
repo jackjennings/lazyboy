@@ -712,6 +712,130 @@ Deno.test("update: produces no stdout or stderr output", async () => {
   assertEquals(new TextDecoder().decode(result.stderr), "");
 });
 
+Deno.test("approve --help: exits 0", async () => {
+  const result = await runIndex(["approve", "--help"]);
+  assertEquals(result.code, 0);
+});
+
+Deno.test("approve --help: prints usage line to stdout", async () => {
+  const result = await runIndex(["approve", "--help"]);
+  assertStringIncludes(
+    new TextDecoder().decode(result.stdout),
+    "Usage: lazyboy approve <ticket-id>",
+  );
+});
+
+Deno.test("approve --help: prints description to stdout", async () => {
+  const result = await runIndex(["approve", "--help"]);
+  assertStringIncludes(
+    new TextDecoder().decode(result.stdout),
+    "approve the current phase gate",
+  );
+});
+
+Deno.test("approve --help: blank line separates usage and description", async () => {
+  const result = await runIndex(["approve", "--help"]);
+  assertStringIncludes(
+    new TextDecoder().decode(result.stdout),
+    "Usage: lazyboy approve <ticket-id>\n\napprove the current phase gate",
+  );
+});
+
+Deno.test("tail --help: exits 0", async () => {
+  const result = await runIndex(["tail", "--help"]);
+  assertEquals(result.code, 0);
+});
+
+Deno.test("tail --help: prints usage and description", async () => {
+  const result = await runIndex(["tail", "--help"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertStringIncludes(stdout, "Usage: lazyboy tail [ticket-id]");
+  assertStringIncludes(stdout, "stream the tick log or a ticket's event log");
+});
+
+Deno.test("tick --help: exits 0 and shows description without usage line", async () => {
+  const result = await runIndex(["tick", "--help"]);
+  assertEquals(result.code, 0);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertEquals(stdout.includes("Usage:"), false);
+});
+
+Deno.test("--help at position 2 does not trigger help", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await makeFakeHome(stateDir);
+  try {
+    const result = await runIndex(["approve", "nonexistent", "--help"], {
+      HOME: home,
+    });
+    assertEquals(result.code, 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("--help: exits 0", async () => {
+  const result = await runIndex(["--help"]);
+  assertEquals(result.code, 0);
+});
+
+Deno.test("--help: prints to stdout, not stderr", async () => {
+  const result = await runIndex(["--help"]);
+  assertEquals(new TextDecoder().decode(result.stderr), "");
+});
+
+Deno.test("--help: usage line lists sorted public commands", async () => {
+  const result = await runIndex(["--help"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertStringIncludes(stdout, "Usage: lazyboy <approve|");
+});
+
+Deno.test("--help: includes Commands: section header", async () => {
+  const result = await runIndex(["--help"]);
+  assertStringIncludes(new TextDecoder().decode(result.stdout), "Commands:");
+});
+
+Deno.test("--help: lists approve with description", async () => {
+  const result = await runIndex(["--help"]);
+  assertStringIncludes(
+    new TextDecoder().decode(result.stdout),
+    "approve the current phase gate",
+  );
+});
+
+Deno.test("--help: names padded to longest for alignment", async () => {
+  const result = await runIndex(["--help"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  const lines = stdout.split("\n");
+  const approveLine = lines.find((l) => /^\s+approve\s/.test(l))!;
+  const completionLine = lines.find((l) => /^\s+completion\s/.test(l))!;
+  const approveDescStart = approveLine.indexOf(
+    "approve the current phase gate",
+  );
+  const completionDescStart = completionLine.indexOf(
+    "print shell completion script",
+  );
+  assertEquals(approveDescStart, completionDescStart);
+});
+
+Deno.test("--help: excludes private commands", async () => {
+  const result = await runIndex(["--help"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  assertEquals(stdout.includes("_completions"), false);
+  assertEquals(stdout.includes("_ids"), false);
+});
+
+Deno.test("--help: commands are sorted alphabetically", async () => {
+  const result = await runIndex(["--help"]);
+  const stdout = new TextDecoder().decode(result.stdout);
+  const names = stdout
+    .split("\n")
+    .filter((l) => l.startsWith("  "))
+    .map((l) => l.trim().split(/\s+/)[0]);
+  const sorted = [...names].sort();
+  assertEquals(names, sorted);
+});
+
 Deno.test(
   "tick.sh: calls lazyboy update with || true guard before exec deno",
   async () => {

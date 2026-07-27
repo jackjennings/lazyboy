@@ -3,6 +3,7 @@ import type { Command } from "./types.ts";
 export const completion: Command = {
   name: "completion",
   description: "print shell completion script",
+  usage: "lazyboy completion <zsh>",
   completesWith: ["zsh"],
   async run(args) {
     const shell = args[0];

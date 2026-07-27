@@ -45,6 +45,7 @@ export async function performRetry(
 export const retry: Command = {
   name: "retry",
   description: "reset a needs-attention ticket",
+  usage: "lazyboy retry <ticket-id>",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];

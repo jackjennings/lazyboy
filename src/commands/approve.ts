@@ -25,6 +25,7 @@ export async function performApprove(
 export const approve: Command = {
   name: "approve",
   description: "approve the current phase gate",
+  usage: "lazyboy approve <ticket-id>",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];

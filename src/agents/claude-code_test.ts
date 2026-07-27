@@ -46,12 +46,20 @@ Deno.test("buildClaudeCodeArgs: prompt is the first argument", () => {
     "off",
     [],
     "/wt",
+    "/s.json",
   );
   assertEquals(args[0], "do the thing");
 });
 
 Deno.test("buildClaudeCodeArgs: always includes --print, --output-format stream-json, --dangerously-skip-permissions", () => {
-  const args = buildClaudeCodeArgs("p", "claude-sonnet-4-6", "off", [], "/wt");
+  const args = buildClaudeCodeArgs(
+    "p",
+    "claude-sonnet-4-6",
+    "off",
+    [],
+    "/wt",
+    "/s.json",
+  );
   assertEquals(args.includes("--print"), true);
   const idx = args.indexOf("--output-format");
   assertNotEquals(idx, -1);
@@ -61,40 +69,47 @@ Deno.test("buildClaudeCodeArgs: always includes --print, --output-format stream-
 });
 
 Deno.test("buildClaudeCodeArgs: scopes settings to project,local to exclude the operator's user-level hooks/skills/MCP servers", () => {
-  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt");
+  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt", "/s.json");
   const idx = args.indexOf("--setting-sources");
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "project,local");
 });
 
 Deno.test("buildClaudeCodeArgs: includes --model with provided value", () => {
-  const args = buildClaudeCodeArgs("p", "claude-opus-4-8", "off", [], "/wt");
+  const args = buildClaudeCodeArgs(
+    "p",
+    "claude-opus-4-8",
+    "off",
+    [],
+    "/wt",
+    "/s.json",
+  );
   const idx = args.indexOf("--model");
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "claude-opus-4-8");
 });
 
 Deno.test("buildClaudeCodeArgs: thinking 'high' maps to --effort high", () => {
-  const args = buildClaudeCodeArgs("p", "m", "high", [], "/wt");
+  const args = buildClaudeCodeArgs("p", "m", "high", [], "/wt", "/s.json");
   const idx = args.indexOf("--effort");
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "high");
 });
 
 Deno.test("buildClaudeCodeArgs: thinking 'xhigh' and 'max' pass through to --effort unchanged", () => {
-  const xhigh = buildClaudeCodeArgs("p", "m", "xhigh", [], "/wt");
+  const xhigh = buildClaudeCodeArgs("p", "m", "xhigh", [], "/wt", "/s.json");
   assertEquals(xhigh[xhigh.indexOf("--effort") + 1], "xhigh");
-  const max = buildClaudeCodeArgs("p", "m", "max", [], "/wt");
+  const max = buildClaudeCodeArgs("p", "m", "max", [], "/wt", "/s.json");
   assertEquals(max[max.indexOf("--effort") + 1], "max");
 });
 
 Deno.test("buildClaudeCodeArgs: thinking 'off' omits --effort", () => {
-  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt");
+  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt", "/s.json");
   assertEquals(args.includes("--effort"), false);
 });
 
 Deno.test("buildClaudeCodeArgs: thinking 'minimal' omits --effort", () => {
-  const args = buildClaudeCodeArgs("p", "m", "minimal", [], "/wt");
+  const args = buildClaudeCodeArgs("p", "m", "minimal", [], "/wt", "/s.json");
   assertEquals(args.includes("--effort"), false);
 });
 
@@ -105,6 +120,7 @@ Deno.test("buildClaudeCodeArgs: appends a 'Read these files first' list to the p
     "off",
     ["@/ticket/meta.md", "@/ticket/intake.md"],
     "/worktree",
+    "/s.json",
   );
   assertEquals(args[0].startsWith("base prompt"), true);
   assertEquals(args[0].includes("Read these files first:"), true);
@@ -113,7 +129,14 @@ Deno.test("buildClaudeCodeArgs: appends a 'Read these files first' list to the p
 });
 
 Deno.test("buildClaudeCodeArgs: does not append file list when contextFiles is empty", () => {
-  const args = buildClaudeCodeArgs("base prompt", "m", "off", [], "/wt");
+  const args = buildClaudeCodeArgs(
+    "base prompt",
+    "m",
+    "off",
+    [],
+    "/wt",
+    "/s.json",
+  );
   assertEquals(args[0], "base prompt");
 });
 
@@ -124,6 +147,7 @@ Deno.test("buildClaudeCodeArgs: --add-dir is the last flag and takes all dirs as
     "off",
     ["@/ticket/meta.md", "@/other/file.md"],
     "/worktree",
+    "/s.json",
   );
   const idx = args.indexOf("--add-dir");
   assertNotEquals(idx, -1);
@@ -131,13 +155,39 @@ Deno.test("buildClaudeCodeArgs: --add-dir is the last flag and takes all dirs as
 });
 
 Deno.test("buildClaudeCodeArgs: omits --add-dir entirely when there are no external dirs", () => {
-  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt");
+  const args = buildClaudeCodeArgs("p", "m", "off", [], "/wt", "/s.json");
   assertEquals(args.includes("--add-dir"), false);
 });
 
 // ── ClaudeCodeAgent ──────────────────────────────────────────────────────────
 
 Deno.test("ClaudeCodeAgent: implements CodeAgent's runPhase signature", () => {
-  const agent = new ClaudeCodeAgent();
+  const agent = new ClaudeCodeAgent("/settings.json");
+  assertEquals(typeof agent.runPhase, "function");
+});
+
+Deno.test("buildClaudeCodeArgs: includes --settings with the provided path between project,local and --model", () => {
+  const args = buildClaudeCodeArgs(
+    "p",
+    "claude-sonnet-4-6",
+    "off",
+    [],
+    "/wt",
+    "/home/user/.lazyboy/claude-code/settings.json",
+  );
+  const settingSourcesIdx = args.indexOf("--setting-sources");
+  const settingsIdx = args.indexOf("--settings");
+  const modelIdx = args.indexOf("--model");
+  assertNotEquals(settingsIdx, -1);
+  assertEquals(
+    args[settingsIdx + 1],
+    "/home/user/.lazyboy/claude-code/settings.json",
+  );
+  assertEquals(settingSourcesIdx < settingsIdx, true);
+  assertEquals(settingsIdx < modelIdx, true);
+});
+
+Deno.test("ClaudeCodeAgent: implements CodeAgent's runPhase signature with settingsPath constructor param", () => {
+  const agent = new ClaudeCodeAgent("/some/settings.json");
   assertEquals(typeof agent.runPhase, "function");
 });

@@ -38,6 +38,7 @@ export function buildClaudeCodeArgs(
   thinking: string,
   contextFiles: string[],
   cwd: string,
+  settingsPath: string,
 ): string[] {
   const fileList = contextFiles.length > 0
     ? "\n\nRead these files first:\n" +
@@ -54,6 +55,8 @@ export function buildClaudeCodeArgs(
     "--dangerously-skip-permissions",
     "--setting-sources",
     "project,local",
+    "--settings",
+    settingsPath,
     "--model",
     model,
   ];
@@ -72,6 +75,8 @@ export function buildClaudeCodeArgs(
 }
 
 export class ClaudeCodeAgent implements CodeAgent {
+  constructor(private settingsPath: string) {}
+
   async runPhase(opts: {
     prompt: string;
     contextFiles: string[];
@@ -88,6 +93,7 @@ export class ClaudeCodeAgent implements CodeAgent {
         opts.thinking,
         opts.contextFiles,
         opts.cwd,
+        this.settingsPath,
       ),
       cwd: opts.cwd,
       env: opts.env,

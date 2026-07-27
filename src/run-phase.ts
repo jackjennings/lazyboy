@@ -23,6 +23,20 @@ export async function setupPiDirectories(home: string): Promise<void> {
   await Deno.mkdir(sessionsDir, { recursive: true });
 }
 
+export async function setupClaudeCodeDirectories(home: string): Promise<void> {
+  const claudeCodeDir = join(home, ".lazyboy", "claude-code");
+  await Deno.mkdir(claudeCodeDir, { recursive: true });
+  const settingsPath = join(claudeCodeDir, "settings.json");
+  try {
+    await Deno.stat(settingsPath);
+  } catch {
+    await Deno.writeTextFile(
+      settingsPath,
+      JSON.stringify({ attribution: { commit: "", pr: "" } }),
+    );
+  }
+}
+
 function selectLatestPhaseFiles(
   sortedFiles: string[],
   phase: string,
@@ -210,8 +224,19 @@ export async function executePhase(
   },
   agent: CodeAgent,
 ): Promise<number> {
-  await setupPiDirectories(opts.homeDir);
-  const piEnv = getPiEnvironmentVariables(opts.homeDir);
+  let env: Record<string, string> = {
+    ...Deno.env.toObject(),
+    ANTHROPIC_API_KEY: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+  };
+
+  if (opts.agentType === "pi") {
+    await setupPiDirectories(opts.homeDir);
+    const piEnv = getPiEnvironmentVariables(opts.homeDir);
+    env = { ...env, ...piEnv };
+  } else {
+    await setupClaudeCodeDirectories(opts.homeDir);
+  }
+
   const contextFiles = opts.contextFiles ??
     await buildContextFiles(opts.ticketDir);
 
@@ -239,11 +264,7 @@ export async function executePhase(
     prompt: opts.prompt + pathContext,
     contextFiles,
     cwd,
-    env: {
-      ...Deno.env.toObject(),
-      ANTHROPIC_API_KEY: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-      ...piEnv,
-    },
+    env,
     provider: opts.provider,
     model: opts.model,
     thinking: opts.thinking,
@@ -348,7 +369,11 @@ if (import.meta.main) {
       agentType,
       contextFiles,
     },
-    agentType === "claude-code" ? new ClaudeCodeAgent() : new PiCodeAgent(),
+    agentType === "claude-code"
+      ? new ClaudeCodeAgent(
+        join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+      )
+      : new PiCodeAgent(),
   );
   Deno.exit(code);
 }

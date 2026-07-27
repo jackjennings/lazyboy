@@ -9,6 +9,7 @@ import {
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
+  setupClaudeCodeDirectories,
   setupPiDirectories,
 } from "./run-phase.ts";
 import type { CodeAgent } from "./agents/types.ts";
@@ -71,6 +72,61 @@ Deno.test("setupPiDirectories: succeeds when directories already exist", async (
 
     const piDir = await Deno.stat(join(tempHome, ".lazyboy", "pi"));
     assertEquals(piDir.isDirectory, true);
+  } finally {
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+// ── setupClaudeCodeDirectories ───────────────────────────────────────────────
+
+Deno.test("setupClaudeCodeDirectories: creates claude-code directory in temp home", async () => {
+  const tempHome = await Deno.makeTempDir();
+  try {
+    await setupClaudeCodeDirectories(tempHome);
+    const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
+    assertEquals(dir.isDirectory, true);
+  } finally {
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+Deno.test("setupClaudeCodeDirectories: writes default settings.json when absent", async () => {
+  const tempHome = await Deno.makeTempDir();
+  try {
+    await setupClaudeCodeDirectories(tempHome);
+    const raw = await Deno.readTextFile(
+      join(tempHome, ".lazyboy", "claude-code", "settings.json"),
+    );
+    const settings = JSON.parse(raw);
+    assertEquals(settings.attribution.commit, "");
+    assertEquals(settings.attribution.pr, "");
+  } finally {
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+Deno.test("setupClaudeCodeDirectories: does not overwrite existing settings.json", async () => {
+  const tempHome = await Deno.makeTempDir();
+  try {
+    const dir = join(tempHome, ".lazyboy", "claude-code");
+    await Deno.mkdir(dir, { recursive: true });
+    const settingsPath = join(dir, "settings.json");
+    await Deno.writeTextFile(settingsPath, '{"custom":true}');
+    await setupClaudeCodeDirectories(tempHome);
+    const raw = await Deno.readTextFile(settingsPath);
+    assertEquals(JSON.parse(raw).custom, true);
+  } finally {
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+Deno.test("setupClaudeCodeDirectories: succeeds when directory already exists", async () => {
+  const tempHome = await Deno.makeTempDir();
+  try {
+    await setupClaudeCodeDirectories(tempHome);
+    await setupClaudeCodeDirectories(tempHome);
+    const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
+    assertEquals(dir.isDirectory, true);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
   }
@@ -1226,6 +1282,112 @@ Deno.test(
 );
 
 Deno.test(
+  "executePhase: agentType 'claude-code' calls setupClaudeCodeDirectories, not setupPiDirectories",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const agent: CodeAgent = {
+        runPhase: () => Promise.resolve({ stdout: "", stderr: "", code: 0 }),
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "claude-code",
+        },
+        agent,
+      );
+
+      const claudeCodeDir = await Deno.stat(
+        join(homeDir, ".lazyboy", "claude-code"),
+      );
+      assertEquals(claudeCodeDir.isDirectory, true);
+
+      const settings = JSON.parse(
+        await Deno.readTextFile(
+          join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+        ),
+      );
+      assertEquals(settings.attribution.commit, "");
+      assertEquals(settings.attribution.pr, "");
+
+      let piDirExists = false;
+      try {
+        await Deno.stat(join(homeDir, ".lazyboy", "pi"));
+        piDirExists = true;
+      } catch { /* expected */ }
+      assertEquals(piDirExists, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: agentType 'pi' calls setupPiDirectories and injects pi env vars, does not create claude-code dir",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      let capturedEnv: Record<string, string> = {};
+      const agent: CodeAgent = {
+        runPhase(opts) {
+          capturedEnv = opts.env;
+          return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+        },
+        agent,
+      );
+
+      assertEquals(
+        capturedEnv.PI_CODING_AGENT_DIR,
+        join(homeDir, ".lazyboy", "pi"),
+      );
+
+      let claudeCodeDirExists = false;
+      try {
+        await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
+        claudeCodeDirExists = true;
+      } catch { /* expected */ }
+      assertEquals(claudeCodeDirExists, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
   "executePhase: omits costUsd from sidecar when model is not in pricing cache",
   async () => {
     const ticketDir = await Deno.makeTempDir();
@@ -1292,6 +1454,112 @@ Deno.test(
       );
       const usage = JSON.parse(usageRaw);
       assertEquals("costUsd" in usage, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: agentType 'claude-code' calls setupClaudeCodeDirectories, not setupPiDirectories",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      const agent: CodeAgent = {
+        runPhase: () => Promise.resolve({ stdout: "", stderr: "", code: 0 }),
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "claude-code",
+        },
+        agent,
+      );
+
+      const claudeCodeDir = await Deno.stat(
+        join(homeDir, ".lazyboy", "claude-code"),
+      );
+      assertEquals(claudeCodeDir.isDirectory, true);
+
+      const settings = JSON.parse(
+        await Deno.readTextFile(
+          join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+        ),
+      );
+      assertEquals(settings.attribution.commit, "");
+      assertEquals(settings.attribution.pr, "");
+
+      let piDirExists = false;
+      try {
+        await Deno.stat(join(homeDir, ".lazyboy", "pi"));
+        piDirExists = true;
+      } catch { /* expected */ }
+      assertEquals(piDirExists, false);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: agentType 'pi' calls setupPiDirectories and injects pi env vars, does not create claude-code dir",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+
+      let capturedEnv: Record<string, string> = {};
+      const agent: CodeAgent = {
+        runPhase(opts) {
+          capturedEnv = opts.env;
+          return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+        },
+      };
+
+      await executePhase(
+        {
+          ticketDir,
+          outputFile: "out.md",
+          phase: "spec",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+        },
+        agent,
+      );
+
+      assertEquals(
+        capturedEnv.PI_CODING_AGENT_DIR,
+        join(homeDir, ".lazyboy", "pi"),
+      );
+
+      let claudeCodeDirExists = false;
+      try {
+        await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
+        claudeCodeDirExists = true;
+      } catch { /* expected */ }
+      assertEquals(claudeCodeDirExists, false);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });

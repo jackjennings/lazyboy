@@ -1979,6 +1979,118 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: notify called for needs-attention ticket",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const notifySpy = spy((_t: TicketState) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      notify: notifySpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(notifySpy, 1);
+  },
+);
+
+Deno.test(
+  "TickService: notify called with the needs-attention ticket",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const capturedTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      notify: (t) => {
+        capturedTickets.push(t);
+        return Promise.resolve();
+      },
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertEquals(capturedTickets.length, 1);
+    assertEquals(capturedTickets[0].id, "gh-1");
+    assertEquals(capturedTickets[0].status, "needs-attention");
+  },
+);
+
+Deno.test(
+  "TickService: notify not called for non-needs-attention ticket",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "waiting",
+      approvals: [],
+    });
+    const notifySpy = spy((_t: TicketState) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      notify: notifySpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(notifySpy, 0);
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when notify is absent",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const commitSpy = spy(() => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      commitState: commitSpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(commitSpy, 1);
+  },
+);
+
+Deno.test(
+  "TickService: notify called once per needs-attention ticket per run",
+  async () => {
+    const t1 = makeTicket({
+      id: "gh-1",
+      phase: "plan",
+      status: "needs-attention",
+    });
+    const t2 = makeTicket({
+      id: "gh-2",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const store: Record<string, TicketState> = { "gh-1": t1, "gh-2": t2 };
+    const notifySpy = spy((_t: TicketState) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      notify: notifySpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(notifySpy, 2);
+  },
+);
+
+Deno.test(
   "TickService: refreshAnthropicPricing called before installPackages",
   async () => {
     const sequence: string[] = [];

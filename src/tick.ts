@@ -98,6 +98,7 @@ export interface TickServiceDeps {
   lock: Lock;
   exit?(code: number): void;
   refreshAnthropicPricing?(): Promise<void>;
+  notify?(ticket: TicketState): Promise<void>;
 }
 
 export function selectCandidates(
@@ -436,6 +437,12 @@ export class TickService {
           );
           if (updated !== null) processedTickets[i] = updated;
         }
+      }
+    }
+
+    for (const ticket of processedTickets) {
+      if (ticket.status === "needs-attention") {
+        await deps.notify?.(ticket);
       }
     }
 

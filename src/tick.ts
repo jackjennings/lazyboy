@@ -99,6 +99,7 @@ export interface TickServiceDeps {
   exit?(code: number): void;
   refreshAnthropicPricing?(): Promise<void>;
   notify?(ticket: TicketState): Promise<void>;
+  appendTickLog?(entry: object): Promise<void>;
 }
 
 export function selectCandidates(
@@ -380,7 +381,8 @@ export class TickService {
         try {
           await this.#runWorkflow(deps);
         } catch (e) {
-          await appendTickLog({
+          await (deps.appendTickLog ?? appendTickLog)({
+            ts: Temporal.Now.instant().toString(),
             event: "tick-failed",
             error: e instanceof Error ? e.message : String(e),
           });

@@ -42,7 +42,6 @@ import {
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
-import { compactTimestamp } from "./timestamp.ts";
 import { defaultCommandRunner } from "./apfel.ts";
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";

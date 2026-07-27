@@ -9,6 +9,7 @@ import {
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
+  resolveRevisionSessionId,
   setupClaudeCodeDirectories,
   setupPiDirectories,
 } from "./run-phase.ts";
@@ -1675,3 +1676,195 @@ Deno.test(
     }
   },
 );
+
+// ── resolveRevisionSessionId ─────────────────────────────────────────────────
+
+Deno.test("resolveRevisionSessionId: returns sessionId from a qualifying phase-end", () => {
+  const log = [
+    JSON.stringify({ ts: "t1", event: "phase-start", phase: "implementation" }),
+    JSON.stringify({
+      ts: "t2",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "abc123",
+    }),
+  ].join("\n");
+  assertEquals(resolveRevisionSessionId(log), "abc123");
+});
+
+Deno.test("resolveRevisionSessionId: returns null when no phase-end with sessionId exists", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-end",
+    phase: "implementation",
+    exitCode: 0,
+    output: "",
+  });
+  assertEquals(resolveRevisionSessionId(log), null);
+});
+
+Deno.test("resolveRevisionSessionId: returns null when phase-end is for a non-implementation phase", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-end",
+    phase: "spec",
+    exitCode: 0,
+    output: "",
+    sessionId: "abc",
+  });
+  assertEquals(resolveRevisionSessionId(log), null);
+});
+
+Deno.test("resolveRevisionSessionId: returns null when conflict-resolution-started follows the last qualifying phase-end", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "abc123",
+    }),
+    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
+  ].join("\n");
+  assertEquals(resolveRevisionSessionId(log), null);
+});
+
+Deno.test("resolveRevisionSessionId: returns sessionId from the last qualifying phase-end in a multi-cycle log", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "first",
+    }),
+    JSON.stringify({
+      ts: "t2",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "second",
+    }),
+  ].join("\n");
+  assertEquals(resolveRevisionSessionId(log), "second");
+});
+
+Deno.test("resolveRevisionSessionId: ignores conflict-resolution-started before the last qualifying phase-end", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "first",
+    }),
+    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
+    JSON.stringify({
+      ts: "t3",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "second",
+    }),
+  ].join("\n");
+  assertEquals(resolveRevisionSessionId(log), "second");
+});
+
+Deno.test("resolveRevisionSessionId: returns null for an empty log", () => {
+  assertEquals(resolveRevisionSessionId(""), null);
+});
+
+Deno.test("resolveRevisionSessionId: skips malformed NDJSON lines without throwing", () => {
+  const log = [
+    "not-json",
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "abc",
+    }),
+  ].join("\n");
+  assertEquals(resolveRevisionSessionId(log), "abc");
+});
+
+// ── executePhase: sessionId threading ────────────────────────────────────────
+
+Deno.test("executePhase: passes sessionId to agent.runPhase when provided", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    let capturedSessionId: string | undefined;
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedSessionId = opts.sessionId;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "implementation",
+        scopeDirs: [],
+        prompt: "do thing",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+        sessionId: "sess-42",
+      },
+      agent,
+    );
+    assertEquals(capturedSessionId, "sess-42");
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: passes undefined sessionId to agent when not provided", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    let capturedSessionId: string | undefined = "sentinel";
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedSessionId = opts.sessionId;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+    await executePhase(
+      {
+        ticketDir,
+        outputFile: "out.md",
+        phase: "implementation",
+        scopeDirs: [],
+        prompt: "do thing",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+      },
+      agent,
+    );
+    assertEquals(capturedSessionId, undefined);
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});

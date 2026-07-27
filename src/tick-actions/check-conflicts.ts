@@ -15,6 +15,7 @@ export interface CheckConflictsDeps {
     worktreePath: string;
     branch: string;
     ticketDir: string;
+    contextFile: string;
     conflictedFiles: string[];
     rebaseStderr: string;
     model: string;
@@ -24,7 +25,7 @@ export interface CheckConflictsDeps {
     ticketDir: string,
     branch: string,
     content: string,
-  ) => Promise<void>;
+  ) => Promise<string>;
   resolveModelConfig: (
     ticket: TicketState,
   ) => { model: string; thinking: string };
@@ -112,13 +113,18 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
         const contextContent = `# Conflict Context\n\n## Conflicted Files\n\n${
           conflictedFiles.map((f) => `- ${f}`).join("\n")
         }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
-        await deps.writeContextFile(ticketDir, safeBranch, contextContent);
+        const contextFilename = await deps.writeContextFile(
+          ticketDir,
+          safeBranch,
+          contextContent,
+        );
 
         const { model, thinking } = deps.resolveModelConfig(ticket);
         await deps.spawn({
           worktreePath: wt.path,
           branch: wt.branch,
           ticketDir,
+          contextFile: contextFilename,
           conflictedFiles,
           rebaseStderr: rebase.stderr,
           model,

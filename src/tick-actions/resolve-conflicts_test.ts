@@ -71,6 +71,20 @@ Deno.test(
   },
 );
 
+// ── old-format files are ignored ─────────────────────────────────────────────
+
+Deno.test(
+  "resolveConflictsAction: run returns null for old-format context files without timestamp prefix",
+  async () => {
+    const result = await makeAction({
+      readDir: async function* () {
+        yield { name: "conflict-context-gh-7.md", isFile: true };
+      },
+    }).run(makeTicket(), "/state");
+    assertEquals(result, null);
+  },
+);
+
 // ── success path ──────────────────────────────────────────────────────────────
 
 Deno.test(
@@ -94,7 +108,10 @@ Deno.test(
         return Promise.resolve({ isFile: true });
       },
       readDir: async function* () {
-        yield { name: "conflict-context-gh-7.md", isFile: true };
+        yield {
+          name: "20260101T000000-conflict-context-gh-7.md",
+          isFile: true,
+        };
       },
       remove: (path) => {
         removed.push(path);
@@ -141,7 +158,10 @@ Deno.test(
       },
       stat: () => Promise.resolve(null),
       readDir: async function* () {
-        yield { name: "conflict-context-a-repo.md", isFile: true };
+        yield {
+          name: "20260101T000000-conflict-context-a-repo.md",
+          isFile: true,
+        };
       },
       remove: () => Promise.resolve(),
       appendLog: (_dir, _id, entry) => {
@@ -197,7 +217,10 @@ Deno.test(
         return Promise.resolve(null);
       },
       readDir: async function* () {
-        yield { name: "conflict-context-gh-7.md", isFile: true };
+        yield {
+          name: "20260101T000000-conflict-context-gh-7.md",
+          isFile: true,
+        };
       },
       remove: (path) => {
         removed.push(path);
@@ -257,7 +280,10 @@ Deno.test(
         return Promise.resolve({ isFile: true });
       },
       readDir: async function* () {
-        yield { name: "conflict-context-gh-7.md", isFile: true };
+        yield {
+          name: "20260101T000000-conflict-context-gh-7.md",
+          isFile: true,
+        };
       },
       remove: () => Promise.resolve(),
       writeTicket: (_dir, t) => {

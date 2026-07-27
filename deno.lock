@@ -153,6 +153,7 @@
       "jsr:@std/toml@1",
       "npm:@earendil-works/pi-tui@~0.80.2",
       "npm:adf2markdown@^1.2.0",
+      "npm:diff@^5.2.0",
       "npm:gray-matter@4.0.3"
     ]
   }

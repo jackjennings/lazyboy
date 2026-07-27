@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { stripAnsiCode } from "@std/fmt/colors";
 import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   answerQuestion,
@@ -8,6 +9,7 @@ import {
   ErrorOverlay,
   findLatestPhaseOutput,
   formatTimestamp,
+  renderDiff,
   review,
 } from "./review.ts";
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
@@ -384,6 +386,63 @@ Deno.test("findLatestPhaseOutput: returns null when ticket directory is empty", 
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+Deno.test("findLatestPhaseOutput: returns null previousFilename when only one revision exists", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-spec.md"), "v1");
+    const result = await findLatestPhaseOutput(tempDir);
+    assertEquals(result?.previousFilename, null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestPhaseOutput: returns second-to-last file as previousFilename with two revisions", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-spec.md"), "v1");
+    await Deno.writeTextFile(join(tempDir, "20260629T225507-spec.md"), "v2");
+    const result = await findLatestPhaseOutput(tempDir);
+    assertEquals(result?.previousFilename, "20260629T154506-spec.md");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestPhaseOutput: returns second-to-last file as previousFilename with three revisions", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-spec.md"), "v1");
+    await Deno.writeTextFile(join(tempDir, "20260629T225507-spec.md"), "v2");
+    await Deno.writeTextFile(join(tempDir, "20260630T100000-spec.md"), "v3");
+    const result = await findLatestPhaseOutput(tempDir);
+    assertEquals(result?.filename, "20260630T100000-spec.md");
+    assertEquals(result?.previousFilename, "20260629T225507-spec.md");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+// ── renderDiff ────────────────────────────────────────────────────────────────
+
+Deno.test("renderDiff: prefixes added lines with green '+ ' and removed with red '- '", () => {
+  const lines = renderDiff("old\n", "new\n");
+  const stripped = lines.map((l) => stripAnsiCode(l));
+  assertEquals(stripped.some((l) => l === "- old"), true);
+  assertEquals(stripped.some((l) => l === "+ new"), true);
+});
+
+Deno.test("renderDiff: prefixes unchanged lines with two spaces dimmed", () => {
+  const lines = renderDiff("same\nold\n", "same\nnew\n");
+  const stripped = lines.map((l) => stripAnsiCode(l));
+  assertEquals(stripped.some((l) => l === "  same"), true);
+});
+
+Deno.test("renderDiff: does not emit trailing blank line from file-ending newline", () => {
+  const lines = renderDiff("a\n", "a\n");
+  assertEquals(lines.every((l) => stripAnsiCode(l) !== ""), true);
 });
 
 // ── buildQuestionSystemPrompt ────────────────────────────────────────────────

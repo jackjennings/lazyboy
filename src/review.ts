@@ -3,7 +3,9 @@ import {
   cyan,
   dim,
   gray,
+  green,
   italic,
+  red,
   strikethrough,
   underline,
   yellow,
@@ -42,6 +44,7 @@ import type { ApprovalEntry } from "./state/types.ts";
 import { buildContextFiles } from "./run-phase.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
+import { diffLines } from "diff";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -60,9 +63,31 @@ const markdownTheme: MarkdownTheme = {
   underline: (s) => underline(s),
 };
 
+export function renderDiff(oldStr: string, newStr: string): string[] {
+  const changes = diffLines(oldStr, newStr);
+  const lines: string[] = [];
+  for (const change of changes) {
+    const parts = change.value.split("\n");
+    if (parts[parts.length - 1] === "") parts.pop();
+    for (const part of parts) {
+      if (change.added) {
+        lines.push(green(`+ ${part}`));
+      } else if (change.removed) {
+        lines.push(red(`- ${part}`));
+      } else {
+        lines.push(dim(`  ${part}`));
+      }
+    }
+  }
+  return lines;
+}
+
 export async function findLatestPhaseOutput(
   ticketDir: string,
-): Promise<{ filename: string; phaseName: string } | null> {
+): Promise<
+  | { filename: string; phaseName: string; previousFilename: string | null }
+  | null
+> {
   for (const phase of [...PHASE_SEQUENCE].reverse()) {
     const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\.md$`);
     const matches: string[] = [];
@@ -77,7 +102,13 @@ export async function findLatestPhaseOutput(
     }
     if (matches.length > 0) {
       matches.sort();
-      return { filename: matches[matches.length - 1], phaseName: phase };
+      return {
+        filename: matches[matches.length - 1],
+        phaseName: phase,
+        previousFilename: matches.length >= 2
+          ? matches[matches.length - 2]
+          : null,
+      };
     }
   }
   return null;
@@ -358,14 +389,21 @@ export class ErrorOverlay implements Component, Focusable {
 }
 
 class ContentPane implements Component {
-  private md: Markdown;
+  private md: Markdown | null;
+  private preRenderedLines: string[] | null;
   private scrollOffset = 0;
   private tui: TUI;
   private title: string;
   private editor?: Editor;
 
-  constructor(content: string, tui: TUI, title: string) {
-    this.md = new Markdown(content, 1, 0, markdownTheme);
+  constructor(content: string | string[], tui: TUI, title: string) {
+    if (Array.isArray(content)) {
+      this.md = null;
+      this.preRenderedLines = content;
+    } else {
+      this.md = new Markdown(content, 1, 0, markdownTheme);
+      this.preRenderedLines = null;
+    }
     this.tui = tui;
     this.title = title;
   }
@@ -393,12 +431,17 @@ class ContentPane implements Component {
     return dim("─".repeat(left) + label + "─".repeat(right));
   }
 
+  private allLines(width: number): string[] {
+    if (this.preRenderedLines !== null) return this.preRenderedLines;
+    return this.md!.render(width);
+  }
+
   handleInput(data: string): void {
     const width = this.tui.terminal.columns;
     if (matchesKey(data, "space") || matchesKey(data, "f")) {
       const height = this.availableHeight(width);
-      const allLines = this.md.render(width);
-      const maxOffset = Math.max(0, allLines.length - height);
+      const lines = this.allLines(width);
+      const maxOffset = Math.max(0, lines.length - height);
       this.scrollOffset = Math.min(this.scrollOffset + height, maxOffset);
     }
     if (matchesKey(data, "b")) {
@@ -408,13 +451,13 @@ class ContentPane implements Component {
   }
 
   invalidate(): void {
-    this.md.invalidate();
+    this.md?.invalidate();
   }
 
   render(width: number): string[] {
-    const allLines = this.md.render(width);
+    const lines = this.allLines(width);
     const height = this.availableHeight(width);
-    const content = allLines.slice(
+    const content = lines.slice(
       this.scrollOffset,
       this.scrollOffset + height,
     );
@@ -441,6 +484,20 @@ export async function review(id: string): Promise<void> {
   }
 
   const content = await readPhaseOutput(stateDir, id, found.filename);
+  let paneContent: string | string[];
+  let paneTitle: string;
+  if (found.previousFilename !== null) {
+    const previousContent = await readPhaseOutput(
+      stateDir,
+      id,
+      found.previousFilename,
+    );
+    paneContent = renderDiff(previousContent, content);
+    paneTitle = `${found.phaseName} (diff)`;
+  } else {
+    paneContent = content;
+    paneTitle = found.phaseName;
+  }
 
   const available = await checkApfelAvailable(defaultCommandRunner());
   const server = available
@@ -465,7 +522,7 @@ export async function review(id: string): Promise<void> {
   const tui = new TUI(terminal);
   let focused: "content" | "editor" = "content";
 
-  const contentPane = new ContentPane(content, tui, found.phaseName);
+  const contentPane = new ContentPane(paneContent, tui, paneTitle);
   const editor = new Editor(tui, {
     borderColor: (s) => focused === "editor" ? s : gray(s),
     selectList: {

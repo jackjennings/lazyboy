@@ -161,6 +161,7 @@ export function composeTickDeps(
   config: Config,
 ): TickServiceDeps {
   const stateDir = expandHome(config.state.dir);
+  const expandedRoots = config.codebase.roots.map(expandHome);
   const home = Deno.env.get("HOME")!;
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
   const piProvider = config.pi.provider;
@@ -299,6 +300,7 @@ export function composeTickDeps(
           model: opts.model,
           thinking: opts.thinking,
           contextFiles: contextFilePaths,
+          codebaseRoots: expandedRoots,
         });
       },
     }),
@@ -586,6 +588,7 @@ export function composeTickDeps(
           thinking: opts.thinking,
           sessionId: opts.sessionId,
           includePrinciples: config.tick.principles,
+          codebaseRoots: expandedRoots,
         }),
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),
@@ -707,6 +710,7 @@ export function composeTickDeps(
           model: "claude-sonnet-4-6",
           thinking: "high",
           pidFile,
+          codebaseRoots: expandedRoots,
         });
       },
     },

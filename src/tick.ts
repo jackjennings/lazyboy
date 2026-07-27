@@ -78,6 +78,11 @@ export interface TickDeps {
   ) => Promise<{ approved: boolean; reason: string | null }>;
   markPRsReady: (prUrls: string[]) => Promise<void>;
   buildRepoCorpusText?: () => Promise<string>;
+  spawnOutlierAnalysis?: (
+    ticketId: string,
+    ticketDir: string,
+    lazboyWorktreePath: string,
+  ) => Promise<void>;
 }
 
 export interface TickServiceDeps {
@@ -262,6 +267,22 @@ export async function advancePhase(
           filename,
           selfReviewResult.reason,
         );
+      }
+      if (ticket.phase === "implementation" && deps.spawnOutlierAnalysis) {
+        const wt = ticket.worktrees["jackjennings/lazyboy"];
+        if (wt) {
+          deps.spawnOutlierAnalysis(
+            ticket.id,
+            join(stateDir, ticket.id),
+            wt.path,
+          ).catch(() => {});
+        } else {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "error",
+            context: "spawnOutlierAnalysis",
+            message: "no jackjennings/lazyboy worktree",
+          });
+        }
       }
     }
     return;

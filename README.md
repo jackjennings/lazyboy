@@ -40,22 +40,17 @@ lazyboy completion zsh # print zsh completion script
 The `plugin/lazyboy.plugin.zsh` file defines 12 three-character aliases and
 sources tab completions automatically. To install:
 
-**Manual (`.zshrc`):**
+**Oh My Zsh:**
 
 ```zsh
-source /path/to/lazyboy/plugin/lazyboy.plugin.zsh
+git clone https://github.com/jackjennings/lazyboy \
+  ~/.oh-my-zsh/custom/plugins/lazyboy
 ```
 
-**Zinit:**
+Then add `lazyboy` to the `plugins` array in `~/.zshrc`:
 
 ```zsh
-zinit light jackjennings/lazyboy
-```
-
-**Antidote / zsh-bundle:**
-
-```zsh
-jackjennings/lazyboy
+plugins=(... lazyboy)
 ```
 
 The plugin sources `lazyboy completion zsh` at shell startup, so no separate

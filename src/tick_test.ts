@@ -2293,6 +2293,7 @@ Deno.test(
       resolveModelConfig: () => ({ model: "m", thinking: "off" }),
       selfReview: () => Promise.resolve({ approved: false, reason: null }),
       markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
@@ -2327,6 +2328,7 @@ Deno.test(
       resolveModelConfig: () => ({ model: "m", thinking: "off" }),
       selfReview: () => Promise.resolve({ approved: false, reason: null }),
       markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
@@ -2355,6 +2357,7 @@ Deno.test(
       resolveModelConfig: () => ({ model: "m", thinking: "off" }),
       selfReview: () => Promise.resolve({ approved: false, reason: null }),
       markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
@@ -2383,6 +2386,7 @@ Deno.test(
       resolveModelConfig: () => ({ model: "m", thinking: "off" }),
       selfReview: () => Promise.resolve({ approved: false, reason: null }),
       markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
     });
     assertSpyCalls(writeTicketSpy, 1);
   },

@@ -35,6 +35,47 @@ lazyboy disable        # remove cron job
 lazyboy completion zsh # print zsh completion script
 ```
 
+### Zsh plugin
+
+The `plugin/lazyboy.plugin.zsh` file defines 12 three-character aliases and
+sources tab completions automatically. To install:
+
+**Manual (`.zshrc`):**
+
+```zsh
+source /path/to/lazyboy/plugin/lazyboy.plugin.zsh
+```
+
+**Zinit:**
+
+```zsh
+zinit light jackjennings/lazyboy
+```
+
+**Antidote / zsh-bundle:**
+
+```zsh
+jackjennings/lazyboy
+```
+
+The plugin sources `lazyboy completion zsh` at shell startup, so no separate
+completion setup is needed when using the plugin.
+
+| Alias | Command              |
+| ----- | -------------------- |
+| `ltk` | `lazyboy tick`       |
+| `lap` | `lazyboy approve`    |
+| `lst` | `lazyboy status`     |
+| `len` | `lazyboy enable`     |
+| `ldi` | `lazyboy disable`    |
+| `lco` | `lazyboy completion` |
+| `lrt` | `lazyboy retry`      |
+| `ldc` | `lazyboy decline`    |
+| `lrv` | `lazyboy review`     |
+| `lsh` | `lazyboy shell`      |
+| `lta` | `lazyboy tail`       |
+| `lup` | `lazyboy update`     |
+
 ### Shell completions
 
 **Inline (`.zshrc`):**

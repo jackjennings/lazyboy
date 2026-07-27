@@ -30,7 +30,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "u",
     phase: "spec",
     status: "waiting",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-06-29T00:00:00Z",
@@ -218,7 +218,28 @@ Deno.test("classifyApproval: sends the required system prompt", async () => {
 
 // ── applyApproval ─────────────────────────────────────────────────────────────
 
-Deno.test("applyApproval: sets approved to true on the ticket", async () => {
+Deno.test("applyApproval: appends entry with actor human and current phase", async () => {
+  const dir = await Deno.makeTempDir();
+  await initGitRepo(dir);
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+  try {
+    await writeTicket(dir, makeTicket({ phase: "spec", status: "waiting" }));
+    await run(["git", "add", "-A"]);
+    await run(["git", "commit", "-m", "initial"]);
+    const now = Temporal.ZonedDateTime.from("2026-06-29T12:00:00+00:00[UTC]");
+    await applyApproval(dir, "gh-1", now);
+    const ticket = await readTicket(dir, "gh-1");
+    assertEquals(ticket.approvals.length, 1);
+    assertEquals(ticket.approvals[0].actor, "human");
+    assertEquals(ticket.approvals[0].phase, "spec");
+    assertEquals(ticket.approvals[0].timestamp, now.toInstant().toString());
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("applyApproval: does not write approved key to frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   await initGitRepo(dir);
   const run = (cmd: string[]) =>
@@ -228,8 +249,8 @@ Deno.test("applyApproval: sets approved to true on the ticket", async () => {
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "initial"]);
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));
-    const ticket = await readTicket(dir, "gh-1");
-    assertEquals(ticket.approved, true);
+    const raw = await Deno.readTextFile(`${dir}/gh-1/meta.md`);
+    assertEquals(raw.includes("approved:"), false);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

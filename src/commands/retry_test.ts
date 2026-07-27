@@ -12,7 +12,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/test/repo/issues/1",
     phase: "spec",
     status: "needs-attention",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-01-01T00:00:00Z",
@@ -95,7 +95,6 @@ Deno.test(
       assertStringIncludes(meta, "status: waiting");
       assertStringIncludes(meta, "phase: spec");
       assertEquals(meta.includes("pid:"), false);
-      assertStringIncludes(meta, "approved: false");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -125,12 +124,18 @@ Deno.test(
 );
 
 Deno.test(
-  "performRetry: clears approved flag",
+  "performRetry: preserves approvals through retry",
   async () => {
     const ticket = makeTicket({
       phase: "implementation",
       status: "needs-attention",
-      approved: true,
+      approvals: [
+        {
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human",
+          phase: "implementation",
+        },
+      ],
     });
     const stateDir = await setupGitStateDir(ticket);
     try {
@@ -138,7 +143,8 @@ Deno.test(
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );
-      assertStringIncludes(meta, "approved: false");
+      assertEquals(meta.includes("approved:"), false);
+      assertStringIncludes(meta, "actor: human");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }

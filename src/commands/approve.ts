@@ -1,6 +1,26 @@
 import { commitTicket, readTicket, writeTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
+import type { ApprovalEntry } from "../state/types.ts";
 import type { Command } from "./types.ts";
+
+export async function performApprove(
+  stateDir: string,
+  id: string,
+): Promise<void> {
+  const ticket = await readTicket(stateDir, id);
+  const now = Temporal.Now.instant().toString();
+  const entry: ApprovalEntry = {
+    timestamp: now,
+    actor: "human",
+    phase: ticket.phase,
+  };
+  await writeTicket(stateDir, {
+    ...ticket,
+    approvals: [...ticket.approvals, entry],
+    updated: now,
+  });
+  await commitTicket(stateDir, id, `approve: ${id}`);
+}
 
 export const approve: Command = {
   name: "approve",
@@ -15,12 +35,7 @@ export const approve: Command = {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
     const ticket = await readTicket(stateDir, id);
-    await writeTicket(stateDir, {
-      ...ticket,
-      approved: true,
-      updated: Temporal.Now.instant().toString(),
-    });
-    await commitTicket(stateDir, id, `approve: ${id}`);
+    await performApprove(stateDir, id);
     console.log(`Approved ${id} (phase: ${ticket.phase}/${ticket.status})`);
   },
 };

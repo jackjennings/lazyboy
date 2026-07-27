@@ -2,7 +2,7 @@ import { join } from "@std/path";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-import type { PhaseUsage } from "../state/types.ts";
+import type { ApprovalEntry, PhaseUsage } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
 import { JiraProvider } from "../providers/jira.ts";
@@ -47,12 +47,15 @@ export function formatStatusRow(
   id: string,
   phase: string,
   status: string,
-  approved: boolean,
+  approvals: ApprovalEntry[],
   tokenStr: string,
   title: string,
 ): string {
+  const last = approvals.at(-1);
+  const approvedFor = last?.phase === phase ? last.actor : null;
+  const approvedStr = approvedFor ?? "-";
   return `${id.padEnd(36)} ${phase.padEnd(16)} ${status.padEnd(17)} ${
-    (approved ? "yes" : "no").padEnd(9)
+    approvedStr.padEnd(9)
   } ${tokenStr.padStart(10)} ${title}`;
 }
 
@@ -107,7 +110,7 @@ export const status: Command = {
           t.id,
           t.phase,
           t.status,
-          t.approved,
+          t.approvals,
           formatTokens(tokenTotals[i]),
           t.title,
         ),

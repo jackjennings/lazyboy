@@ -11,7 +11,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/myorg/myrepo/issues/42",
     phase: "merge",
     status: "waiting",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {
       "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },

@@ -12,7 +12,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/test/repo/issues/1",
     phase: "spec",
     status: "waiting",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-01-01T00:00:00Z",
@@ -58,11 +58,15 @@ Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   }
 });
 
-Deno.test("performDecline: sets approved false", async () => {
+Deno.test("performDecline: does not write approved key", async () => {
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
-    approved: true,
+    approvals: [{
+      timestamp: "2026-01-01T00:00:00Z",
+      actor: "human",
+      phase: "implementation",
+    }],
   });
   const stateDir = await setupGitStateDir(ticket);
   try {
@@ -70,7 +74,7 @@ Deno.test("performDecline: sets approved false", async () => {
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
-    assertStringIncludes(meta, "approved: false");
+    assertEquals(meta.includes("approved:"), false);
     assertEquals(meta.includes("pid:"), false);
   } finally {
     await Deno.remove(stateDir, { recursive: true });

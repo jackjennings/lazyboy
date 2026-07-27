@@ -38,6 +38,7 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
+import type { ApprovalEntry } from "./state/types.ts";
 import { buildContextFiles } from "./run-phase.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
@@ -147,9 +148,14 @@ export async function applyApproval(
   now: Temporal.ZonedDateTime,
 ): Promise<void> {
   const ticket = await readTicket(stateDir, id);
+  const entry: ApprovalEntry = {
+    timestamp: now.toInstant().toString(),
+    actor: "human",
+    phase: ticket.phase,
+  };
   await writeTicket(stateDir, {
     ...ticket,
-    approved: true,
+    approvals: [...ticket.approvals, entry],
     updated: now.toInstant().toString(),
   });
   await commitTicket(stateDir, id, `approve: ${id}`);

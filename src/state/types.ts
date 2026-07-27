@@ -49,6 +49,12 @@ export interface PrEntry {
   worktreeKey?: string;
 }
 
+export interface ApprovalEntry {
+  timestamp: string;
+  actor: "human" | "agent" | "unknown";
+  phase: TicketPhase;
+}
+
 export interface TicketState {
   id: string;
   provider: string;
@@ -56,7 +62,7 @@ export interface TicketState {
   url: string;
   phase: TicketPhase;
   status: TicketStatus;
-  approved: boolean;
+  approvals: ApprovalEntry[];
   scope: string[];
   worktrees: Record<string, WorktreeInfo>;
   prs?: PrEntry[];
@@ -65,6 +71,12 @@ export interface TicketState {
   updated: string;
   body: string;
   phases?: PhaseModelConfig;
+}
+
+export function isApproved(ticket: TicketState): boolean {
+  const last = ticket.approvals.at(-1);
+  if (!last) return false;
+  return last.phase === ticket.phase;
 }
 
 export type PhaseModelConfig = Partial<

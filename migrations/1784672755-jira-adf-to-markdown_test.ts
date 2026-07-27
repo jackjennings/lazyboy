@@ -10,7 +10,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://jira.example.com/browse/PROJ-1",
     phase: "intake",
     status: "waiting",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-07-01T00:00:00Z",

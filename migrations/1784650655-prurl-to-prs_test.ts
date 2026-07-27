@@ -11,7 +11,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/x/y/issues/1",
     phase: "merge",
     status: "waiting",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
     created: "2026-07-01T00:00:00Z",

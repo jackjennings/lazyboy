@@ -11,7 +11,11 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://github.com/myorg/myrepo/issues/1",
     phase: "intake",
     status: "waiting",
-    approved: true,
+    approvals: [{
+      timestamp: "2026-06-23T00:00:00Z",
+      actor: "human",
+      phase: "intake",
+    }],
     scope: [],
     worktrees: {},
     created: "2026-06-23T00:00:00Z",
@@ -51,14 +55,14 @@ Deno.test(
 
 Deno.test("createWorktreeAction: does not apply when status is new", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ status: "new", approved: false })),
+    makeAction().applies(makeTicket({ status: "new", approvals: [] })),
     false,
   );
 });
 
 Deno.test("createWorktreeAction: does not apply when not approved", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ approved: false })),
+    makeAction().applies(makeTicket({ approvals: [] })),
     false,
   );
 });
@@ -82,7 +86,7 @@ Deno.test(
   () => {
     assertEquals(
       makeAction().applies(
-        makeTicket({ phase: "enrichment", status: "waiting", approved: true }),
+        makeTicket({ phase: "enrichment", status: "waiting" }),
       ),
       false,
     );
@@ -108,7 +112,7 @@ Deno.test(
     });
     assertEquals(result?.scope, []);
     assertEquals(result?.status, "waiting");
-    assertEquals(result?.approved, true);
+    assertEquals(result?.approvals.length, 1);
     assertEquals(written.length, 1);
     assertEquals(written[0].worktrees["myorg/myrepo"].path, "/wt/myorg/myrepo");
   },

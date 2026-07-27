@@ -1,6 +1,7 @@
 import matter from "gray-matter";
 import { join } from "@std/path";
 import {
+  type ApprovalEntry,
   assertValidPhaseStatus,
   type PrEntry,
   type TicketPhase,
@@ -71,7 +72,7 @@ export async function readTicket(
     url: data.url,
     phase,
     status,
-    approved: data.approved ?? false,
+    approvals: (data.approvals as ApprovalEntry[] | undefined) ?? [],
     scope: data.scope ?? [],
     worktrees,
     prs,
@@ -102,7 +103,7 @@ export async function writeTicket(
     url: ticket.url,
     phase: ticket.phase,
     status: ticket.status,
-    approved: ticket.approved,
+    approvals: ticket.approvals,
     scope: ticket.scope,
     worktrees: ticket.worktrees,
     created: ticket.created,

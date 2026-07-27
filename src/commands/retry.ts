@@ -27,7 +27,6 @@ export async function performRetry(
   await writeTicket(stateDir, {
     ...ticket,
     status: targetStatus,
-    approved: false,
     updated: Temporal.Now.instant().toString(),
   });
 

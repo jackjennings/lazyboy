@@ -12,7 +12,13 @@ import type { Provider } from "./providers/types.ts";
 import type { TickAction } from "./tick-actions/types.ts";
 import type { MigrationFn } from "./migrations/runner.ts";
 import type { InstallResult } from "./packages.ts";
-import type { Config, TicketState, WorktreeInfo } from "./state/types.ts";
+import {
+  type ApprovalEntry,
+  type Config,
+  isApproved,
+  type TicketState,
+  type WorktreeInfo,
+} from "./state/types.ts";
 import type { ActivePhase } from "./phases/types.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
@@ -155,7 +161,6 @@ export async function advancePhase(
     await deps.writeTicket(stateDir, {
       ...ticket,
       status: "running",
-      approved: false,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -193,7 +198,6 @@ export async function advancePhase(
       ...ticket,
       phase: "intake",
       status: "running",
-      approved: false,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -233,7 +237,15 @@ export async function advancePhase(
         // treated as { approved: false, reason: null }
       }
       if (selfReviewResult.approved) {
-        await deps.writeTicket(stateDir, { ...waitingTicket, approved: true });
+        const agentEntry: ApprovalEntry = {
+          timestamp: Temporal.Now.instant().toString(),
+          actor: "agent",
+          phase: ticket.phase,
+        };
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          approvals: [...waitingTicket.approvals, agentEntry],
+        });
         await deps.appendLog(stateDir, ticket.id, {
           event: "self-approved",
           phase: ticket.phase,
@@ -256,7 +268,7 @@ export async function advancePhase(
   if (
     ticket.phase === "implementation" &&
     ticket.status === "waiting" &&
-    ticket.approved
+    isApproved(ticket)
   ) {
     const unmergedUrls = (ticket.prs ?? [])
       .filter((pr) => !pr.merged)
@@ -276,7 +288,6 @@ export async function advancePhase(
       ...ticket,
       phase: "merge",
       status: "waiting",
-      approved: false,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -290,7 +301,7 @@ export async function advancePhase(
   const activePhases: ActivePhase[] = ["intake", "enrichment", "spec", "plan"];
   if (
     ticket.status === "waiting" &&
-    ticket.approved &&
+    isApproved(ticket) &&
     (activePhases as string[]).includes(ticket.phase)
   ) {
     const activePhase = ticket.phase as ActivePhase;
@@ -304,7 +315,6 @@ export async function advancePhase(
         ...ticket,
         phase: "implementation",
         status: "needs-attention",
-        approved: false,
         updated: now,
       });
       await deps.appendLog(stateDir, ticket.id, {
@@ -333,7 +343,6 @@ export async function advancePhase(
       ...ticket,
       phase: next,
       status: "running",
-      approved: false,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -398,7 +407,7 @@ export class TickService {
           url: item.url,
           phase: "intake",
           status: "new",
-          approved: false,
+          approvals: [],
           scope: [],
           worktrees: {},
           created: Temporal.Now.instant().toString(),
@@ -459,7 +468,7 @@ export class TickService {
       if (!selectedSet.has(ticket.id)) continue;
       const willSpawn = ticket.status === "new" ||
         ticket.status === "revising" ||
-        (ticket.status === "waiting" && ticket.approved);
+        (ticket.status === "waiting" && isApproved(ticket));
       if (willSpawn && running >= deps.concurrency) continue;
       if (willSpawn) running++;
       await advancePhase(ticket, deps.stateDir, deps.tickDeps);

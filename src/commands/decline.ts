@@ -24,7 +24,6 @@ export async function performDecline(
     ...ticket,
     phase: "wont-do",
     status: "done",
-    approved: false,
     updated: Temporal.Now.instant().toString(),
     body,
   });

@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
+import { isApproved } from "../state/types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
 import {
   extractGitHubSlug,
@@ -27,7 +28,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       return (
         ticket.phase === "intake" &&
         ticket.status === "waiting" &&
-        ticket.approved === true &&
+        isApproved(ticket) &&
         Object.keys(ticket.worktrees).length === 0
       );
     },

@@ -10,7 +10,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     url: "https://myorg.atlassian.net/browse/PROJ-42",
     phase: "merge",
     status: "done",
-    approved: false,
+    approvals: [],
     scope: [],
     worktrees: {},
     created: "2026-07-01T00:00:00Z",

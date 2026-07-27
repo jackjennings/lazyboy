@@ -1,0 +1,106 @@
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { join } from "@std/path";
+import { writeTicket } from "../state/store.ts";
+import type { TicketState } from "../state/types.ts";
+import { performApprove } from "./approve.ts";
+
+function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
+  return {
+    id: "github/test/repo/1",
+    provider: "github",
+    title: "Test ticket",
+    url: "https://github.com/test/repo/issues/1",
+    phase: "intake",
+    status: "waiting",
+    approvals: [],
+    scope: [],
+    worktrees: {},
+    created: "2026-01-01T00:00:00Z",
+    updated: "2026-01-01T00:00:00Z",
+    body: "Body",
+    ...overrides,
+  };
+}
+
+async function setupGitStateDir(ticket: TicketState): Promise<string> {
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  await new Deno.Command("git", { args: ["init"], cwd: stateDir }).output();
+  await new Deno.Command("git", {
+    args: ["config", "user.email", "test@test.com"],
+    cwd: stateDir,
+  }).output();
+  await new Deno.Command("git", {
+    args: ["config", "user.name", "Test"],
+    cwd: stateDir,
+  }).output();
+  await new Deno.Command("git", { args: ["add", "-A"], cwd: stateDir })
+    .output();
+  await new Deno.Command("git", {
+    args: ["commit", "-m", "initial"],
+    cwd: stateDir,
+  }).output();
+  return stateDir;
+}
+
+Deno.test("performApprove: appends entry with actor human and current phase", async () => {
+  const ticket = makeTicket({ phase: "enrichment", status: "waiting" });
+  const stateDir = await setupGitStateDir(ticket);
+  try {
+    await performApprove(stateDir, ticket.id);
+    const meta = await Deno.readTextFile(join(stateDir, ticket.id, "meta.md"));
+    assertStringIncludes(meta, "actor: human");
+    assertStringIncludes(meta, "phase: enrichment");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApprove: does not write approved key", async () => {
+  const ticket = makeTicket({ phase: "intake", status: "waiting" });
+  const stateDir = await setupGitStateDir(ticket);
+  try {
+    await performApprove(stateDir, ticket.id);
+    const meta = await Deno.readTextFile(join(stateDir, ticket.id, "meta.md"));
+    assertEquals(meta.includes("approved:"), false);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApprove: accumulates multiple approvals", async () => {
+  const ticket = makeTicket({
+    phase: "spec",
+    status: "waiting",
+    approvals: [{
+      timestamp: "2026-01-01T00:00:00Z",
+      actor: "agent",
+      phase: "intake",
+    }],
+  });
+  const stateDir = await setupGitStateDir(ticket);
+  try {
+    await performApprove(stateDir, ticket.id);
+    const meta = await Deno.readTextFile(join(stateDir, ticket.id, "meta.md"));
+    assertStringIncludes(meta, "actor: agent");
+    assertStringIncludes(meta, "actor: human");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApprove: makes a git commit", async () => {
+  const ticket = makeTicket({ phase: "plan", status: "waiting" });
+  const stateDir = await setupGitStateDir(ticket);
+  try {
+    await performApprove(stateDir, ticket.id);
+    const result = await new Deno.Command("git", {
+      args: ["log", "--oneline", "-1"],
+      cwd: stateDir,
+    }).output();
+    const log = new TextDecoder().decode(result.stdout);
+    assertStringIncludes(log, `approve: ${ticket.id}`);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});

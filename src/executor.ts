@@ -13,6 +13,7 @@ export interface ExecutorOptions {
   thinking: string;
   agent: "pi" | "claude-code";
   contextFiles?: string[];
+  pidFile?: string;
 }
 
 export function isProcessAlive(pid: number): boolean {
@@ -74,7 +75,10 @@ export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
   });
   const child = cmd.spawn();
   child.unref();
-  await Deno.writeTextFile(`${opts.ticketDir}/run.pid`, child.pid.toString());
+  await Deno.writeTextFile(
+    `${opts.ticketDir}/${opts.pidFile ?? "run.pid"}`,
+    child.pid.toString(),
+  );
 }
 
 export function isPhaseAlive(ticketDir: string): boolean {

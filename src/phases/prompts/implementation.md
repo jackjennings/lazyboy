@@ -16,6 +16,12 @@ call for, even when they seem like obvious improvements. If something genuinely
 feels missing, note the gap in the "Changes Made" section of your response
 rather than silently expanding scope.
 
+Edit efficiency: when a plan task lists multiple changes to the same file, read
+that file once, identify every change site, then apply all of them in as few
+Edit calls as possible. Do not make one Edit call per listed change — this
+multiplies turns without benefit and is the most common source of outlier
+session length.
+
 When done, commit all changes to the current branch with a descriptive commit
 message. Then push the branch and open a pull request using the `gh` CLI. Always
 create pull requests in draft mode — lazyboy automatically promotes them to

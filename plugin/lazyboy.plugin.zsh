@@ -1,3 +1,8 @@
+0=${(%):-%N}
+lazyboy_bin_dir="${0:A:h}/../bin"
+[[ ":$PATH:" == *":$lazyboy_bin_dir:"* ]] || export PATH="$lazyboy_bin_dir:$PATH"
+unset lazyboy_bin_dir
+
 alias ltk='lazyboy tick'
 alias lap='lazyboy approve'
 alias lst='lazyboy status'

@@ -1,14 +1,16 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   answerQuestion,
   applyApproval,
   buildQuestionSystemPrompt,
   classifyApproval,
+  ErrorOverlay,
   findLatestPhaseOutput,
   formatTimestamp,
   review,
 } from "./review.ts";
+import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { join } from "@std/path";
 import { readTicket, writeTicket } from "./state/store.ts";
 import type { TicketState } from "./state/types.ts";
@@ -123,7 +125,7 @@ Deno.test(
   },
 );
 
-Deno.test("classifyApproval: returns false on non-2xx status", async () => {
+Deno.test("classifyApproval: throws on non-2xx status", async () => {
   const fetcher = spy(
     (_url: string | URL | Request, _init?: RequestInit) =>
       Promise.resolve(
@@ -133,16 +135,24 @@ Deno.test("classifyApproval: returns false on non-2xx status", async () => {
         ),
       ),
   );
-  assertEquals(await classifyApproval("approved", fetcher), false);
+  await assertRejects(
+    () => classifyApproval("approved", fetcher),
+    Error,
+    "401",
+  );
   assertSpyCalls(fetcher, 1);
 });
 
-Deno.test("classifyApproval: returns false when fetch throws", async () => {
+Deno.test("classifyApproval: throws when fetch throws", async () => {
   const fetcher = spy(
     (_url: string | URL | Request, _init?: RequestInit) =>
       Promise.reject(new Error("network error")),
   );
-  assertEquals(await classifyApproval("approved", fetcher), false);
+  await assertRejects(
+    () => classifyApproval("approved", fetcher),
+    Error,
+    "network error",
+  );
   assertSpyCalls(fetcher, 1);
 });
 
@@ -648,7 +658,7 @@ Deno.test(
 );
 
 Deno.test(
-  "classifyApproval: with apfelUrl, returns false on non-2xx status",
+  "classifyApproval: with apfelUrl, throws on non-2xx status",
   async () => {
     const fetcher = spy(
       (_url: string | URL | Request, _init?: RequestInit) =>
@@ -659,18 +669,26 @@ Deno.test(
           ),
         ),
     );
-    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), false);
+    await assertRejects(
+      () => classifyApproval("ok", fetcher, APFEL_URL),
+      Error,
+      "500",
+    );
   },
 );
 
 Deno.test(
-  "classifyApproval: with apfelUrl, returns false when fetch throws",
+  "classifyApproval: with apfelUrl, throws when fetch throws",
   async () => {
     const fetcher = spy(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.reject(new Error("network error")),
     );
-    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), false);
+    await assertRejects(
+      () => classifyApproval("ok", fetcher, APFEL_URL),
+      Error,
+      "network error",
+    );
   },
 );
 
@@ -751,6 +769,52 @@ Deno.test(
     assertEquals(body.messages[1].content, "ship it");
   },
 );
+
+// ── ErrorOverlay ──────────────────────────────────────────────────────────────
+
+Deno.test("ErrorOverlay: render includes the message set via setMessage", () => {
+  const mockTui = {
+    requestRender: spy((_full: boolean) => {}),
+  } as unknown as TUI;
+  const overlay = new ErrorOverlay(mockTui);
+  overlay.setMessage("Approval detection failed: 401 Unauthorized");
+  const lines = overlay.render(80);
+  assertEquals(
+    lines.some((l) =>
+      l.includes("Approval detection failed: 401 Unauthorized")
+    ),
+    true,
+  );
+});
+
+Deno.test(
+  "ErrorOverlay: handleInput with any key calls setHidden(true) on the handle",
+  () => {
+    const mockTui = {
+      requestRender: spy((_full: boolean) => {}),
+    } as unknown as TUI;
+    const overlay = new ErrorOverlay(mockTui);
+    const setHidden = spy((_hidden: boolean) => {});
+    const mockHandle = { setHidden } as unknown as OverlayHandle;
+    overlay.setHandle(mockHandle, () => {});
+    overlay.handleInput("a");
+    assertSpyCalls(setHidden, 1);
+    assertEquals(setHidden.calls[0].args[0], true);
+  },
+);
+
+Deno.test("ErrorOverlay: handleInput calls the onDismiss callback", () => {
+  const mockTui = {
+    requestRender: spy((_full: boolean) => {}),
+  } as unknown as TUI;
+  const overlay = new ErrorOverlay(mockTui);
+  const setHidden = spy((_hidden: boolean) => {});
+  const mockHandle = { setHidden } as unknown as OverlayHandle;
+  const onDismiss = spy(() => {});
+  overlay.setHandle(mockHandle, onDismiss);
+  overlay.handleInput("\x1b");
+  assertSpyCalls(onDismiss, 1);
+});
 
 // ── review ───────────────────────────────────────────────────────────────────
 

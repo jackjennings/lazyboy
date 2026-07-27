@@ -107,14 +107,18 @@ export async function classifyApproval(
           ],
         }),
       });
-      if (!response.ok) return false;
+      if (!response.ok) {
+        throw new Error(
+          `Approval detection failed: ${response.status} ${response.statusText}`,
+        );
+      }
       const data = await response.json();
       const result = (data?.choices?.[0]?.message?.content ?? "")
         .trim()
         .toUpperCase();
       return result === "APPROVE";
-    } catch {
-      return false;
+    } catch (e) {
+      throw e;
     }
   }
   try {
@@ -133,12 +137,16 @@ export async function classifyApproval(
         messages: [{ role: "user", content: text }],
       }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      throw new Error(
+        `Approval detection failed: ${response.status} ${response.statusText}`,
+      );
+    }
     const data = await response.json();
     const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
     return result === "APPROVE";
-  } catch {
-    return false;
+  } catch (e) {
+    throw e;
   }
 }
 
@@ -311,6 +319,44 @@ class QuestionOverlay implements Component, Focusable {
   }
 }
 
+export class ErrorOverlay implements Component, Focusable {
+  private _focused = false;
+  private message = "";
+  private handle: OverlayHandle | null = null;
+  private onDismiss: (() => void) | null = null;
+
+  constructor(private tui: TUI) {}
+
+  get focused(): boolean {
+    return this._focused;
+  }
+
+  set focused(value: boolean) {
+    this._focused = value;
+  }
+
+  setMessage(message: string): void {
+    this.message = message;
+  }
+
+  setHandle(handle: OverlayHandle, onDismiss: () => void): void {
+    this.handle = handle;
+    this.onDismiss = onDismiss;
+  }
+
+  handleInput(_data: string): void {
+    this.handle?.setHidden(true);
+    this.onDismiss?.();
+    this.tui.requestRender(true);
+  }
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    return wrapTextWithAnsi(this.message, width);
+  }
+}
+
 class ContentPane implements Component {
   private md: Markdown;
   private scrollOffset = 0;
@@ -452,6 +498,19 @@ export async function review(id: string): Promise<void> {
     tui.requestRender(true);
   });
 
+  const errorOverlay = new ErrorOverlay(tui);
+  const errorOverlayHandle = tui.showOverlay(errorOverlay, {
+    width: "80%",
+    minWidth: 60,
+    maxHeight: "80%",
+    margin: 1,
+  });
+  errorOverlayHandle.setHidden(true);
+  errorOverlay.setHandle(errorOverlayHandle, () => {
+    tui.setFocus(editor);
+    tui.requestRender(true);
+  });
+
   const sigtermHandler = () => {
     killServer();
     tui.stop();
@@ -462,7 +521,16 @@ export async function review(id: string): Promise<void> {
   async function handleSubmit(text: string): Promise<void> {
     if (!text.trim()) return;
     const now = Temporal.Now.zonedDateTimeISO("UTC");
-    if (await classifyApproval(text, fetch, server?.url ?? null)) {
+    let isApproval: boolean;
+    try {
+      isApproval = await classifyApproval(text, fetch, server?.url ?? null);
+    } catch (e) {
+      errorOverlay.setMessage(e instanceof Error ? e.message : String(e));
+      errorOverlayHandle.setHidden(false);
+      errorOverlayHandle.focus();
+      return;
+    }
+    if (isApproval) {
       await applyApproval(stateDir, id, now);
       killServer();
       Deno.removeSignalListener("SIGTERM", sigtermHandler);

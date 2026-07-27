@@ -453,15 +453,6 @@ Ideas worth exploring but not yet scheduled:
   The model selection config above makes this a per-phase swap rather than a
   system-wide change.
 
-- **Stacked PRs:** some tickets naturally decompose into a sequence of dependent
-  changes that are easier to review as separate PRs stacked on top of each
-  other. The plan phase is the right place to detect this — if the
-  implementation plan has clearly separable layers (e.g. schema migration → API
-  change → UI change), it could propose a stack rather than a single PR,
-  creating linked worktrees and branches accordingly. Intake could also flag
-  stacking candidates early when the ticket description itself implies layered
-  work.
-
 - **Work item creation:** any phase that identifies deferred work — a bug found
   during enrichment, a prerequisite surfaced during spec, a refactor noted
   during implementation — should be able to create a new ticket in the
@@ -471,24 +462,11 @@ Ideas worth exploring but not yet scheduled:
   on a future tick. This is the primary mechanism for keeping individual tickets
   focused and avoiding scope creep.
 
-- **Pi session storage:** pi sessions auto-save to `~/.pi/agent/sessions/` by
-  default. Setting `PI_CODING_AGENT_SESSION_DIR=~/.lazyboy/agent/sessions` in
-  the agent subprocess environment would centralise all lazyboy-spawned sessions
-  in one place, separate from interactive pi sessions, and make the full agent
-  trace available for review and meta-analysis alongside other ticket artifacts.
-
 - **`lazyboy ps` and real-time monitoring:** `ps` would scan all `meta.md` files
   for `phase: running-*` tickets and print the active agent processes with their
   PID, phase, and ticket title. A `top`-style TUI would extend this with live
   refresh, showing ticket progression, phase durations, and concurrency
   utilisation in real-time.
-
-- **OS-native notifications:** when a ticket enters `waiting-*` or
-  `needs-attention`, trigger a system notification so work surfaces without
-  polling `lazyboy status`. On macOS this is
-  `osascript -e 'display notification ...'` or the `terminal-notifier` CLI; on
-  Linux, `notify-send`. Could be extended to support Slack or other channels as
-  alternate delivery targets.
 
 - **Dynamic credentials:** `~/.config/lazyboy/env` is a static file, but some
   credentials have short lifespans and need refreshing on a cadence (e.g. AWS
@@ -513,24 +491,3 @@ Ideas worth exploring but not yet scheduled:
   to identify blocking relationships. Dependencies could also be sourced
   directly from the provider (GitHub Issues and Jira both support
   linked/blocked-by relationships).
-
-- **Related repository cloning:** some tickets require context from external
-  codebases — a plugin ticket for ESLint benefits from having the ESLint source
-  available locally, a Vim extension from having Neovim's runtime, a database
-  driver from having the upstream client library. The intake or enrichment phase
-  could detect these relationships and propose a list of repositories to clone
-  alongside the working directory. These would be approved at the same gate as
-  filesystem and network access.
-
-- **Auto-clone missing repos:** when `tick()` cannot find a local clone of a
-  ticket's repo by scanning `codebase.roots`, it currently moves the ticket to
-  `needs-attention`. A future extension could attempt `git clone` into the first
-  configured root, making the pipeline fully hands-off for first-time repos.
-
-- **Hooks system for pre-advance lifecycle:** worktree creation is currently an
-  inline conditional in `tick()`. As more pre-advance concerns accumulate
-  (ceremonies, conflict checks, cleanup), a `runPreAdvance(ticket, config)`
-  runner in `tick.ts` with registered hook functions would let each concern
-  declare itself independently rather than growing the loop body. Pi's own hooks
-  system (`tool_call`, `tool_result`, `before_agent_start`) is a reference point
-  for this design.

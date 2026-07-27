@@ -2566,3 +2566,157 @@ Deno.test(
     }
   },
 );
+
+// ── advancePhase: implementation revision session ID ─────────────────────────
+
+function makeRevisionLog(sessionId: string): string {
+  return JSON.stringify({
+    ts: "t1",
+    event: "phase-end",
+    phase: "implementation",
+    exitCode: 0,
+    output: "",
+    sessionId,
+  });
+}
+
+Deno.test("advancePhase: implementation revision passes sessionId from log to spawn", async () => {
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-abc")),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, "sess-abc");
+});
+
+Deno.test("advancePhase: implementation revision with no qualifying log entry spawns without sessionId", async () => {
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined = "sentinel";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    readTicketLog: () => Promise.resolve(""),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, undefined);
+});
+
+Deno.test("advancePhase: implementation revision with conflict-resolution-started after phase-end spawns without sessionId", async () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "implementation",
+      exitCode: 0,
+      output: "",
+      sessionId: "sess-stale",
+    }),
+    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
+  ].join("\n");
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined = "sentinel";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    readTicketLog: () => Promise.resolve(log),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, undefined);
+});
+
+Deno.test("advancePhase: non-implementation revision spawns without sessionId regardless of log", async () => {
+  const ticket = makeTicket({ phase: "spec", status: "revising" });
+  let spawnedSessionId: string | undefined = "sentinel";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-abc")),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, undefined);
+});
+
+Deno.test("advancePhase: implementation revision with absent readTicketLog dep spawns without sessionId", async () => {
+  const ticket = makeTicket({
+    phase: "implementation",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined = "sentinel";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, undefined);
+});

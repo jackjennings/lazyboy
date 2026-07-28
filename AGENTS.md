@@ -121,8 +121,8 @@ prompt per phase. When present, `selfReview` in `src/self-review.ts` calls the
 Anthropic API after a `running → waiting` transition and, if the response is
 `APPROVE`, `advancePhase` appends an `ApprovalEntry` with `actor: "agent"` to
 `ticket.approvals`. When absent for a phase, self-review is skipped and the
-ticket waits for human approval as before. Currently only `intake` has a
-self-review prompt.
+ticket waits for human approval as before. Self-review prompts currently exist
+for `intake`, `enrichment`, and `spec`.
 
 ## Key constraints
 

@@ -40,7 +40,6 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
     applies(ticket: TicketState): boolean {
       return (
         ticket.status !== "needs-attention" &&
-        ticket.phase !== "merge" &&
         Object.values(ticket.worktrees).some((wt) =>
           deps.worktreeExists(wt.path)
         ) &&

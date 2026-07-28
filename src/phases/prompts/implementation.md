@@ -79,8 +79,9 @@ have `url` (the PR URL), `title` (the PR title, obtainable via
 `gh pr view --json title`), `dependsOn` (an array of PR URLs that must merge
 before this one — empty for the first PR or independent PRs), `merged` (always
 `false` when first written), and `worktreeKey` (the key used in the `worktrees`
-map for the worktree this PR was created from). Use the write tool to update
-`meta.md`.
+map for the worktree this PR was created from). Use the Edit tool to update
+`meta.md`. Do not re-read meta.md before editing — it is already in your session
+context from the initial read; use that content as the anchor for your edit.
 
 Before committing, check whether any change introduces or formalises a
 project-wide convention not yet documented in `AGENTS.md`. If so, update

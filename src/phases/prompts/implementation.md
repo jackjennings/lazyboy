@@ -26,6 +26,8 @@ Implement the plan exactly as specified using TDD:
 2. Implement the minimal code to make them pass
 3. Refactor if needed
 4. Confirm all tests pass
+5. Run `deno fmt && deno lint`. Required even when only `.md` files changed —
+   `deno fmt` formats Markdown.
 
 Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
 same file, write all failing tests for that file across all tasks first, then

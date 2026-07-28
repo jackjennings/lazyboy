@@ -212,6 +212,30 @@ ticket subdirectory:
     ...
 ```
 
+## Principles file
+
+`{stateDir}/principles.md` is a persistent scratchpad that accumulates learnings
+across all tickets. Every phase prompt includes an optional `## Principles`
+section: if the agent writes content there, `advancePhase` in `src/tick.ts`
+calls `deps.appendPrinciples`, which appends the extracted text to
+`principles.md` and commits it immediately with `commitPrinciples` from
+`src/state/store.ts` (stages only `principles.md`, not the full state dir).
+
+`buildContextFiles` in `src/run-phase.ts` prepends `@{stateDir}/principles.md`
+to every phase's context file list when the file exists. This is how accumulated
+learnings feed back into subsequent phases without any agent having to
+explicitly reference it.
+
+`extractPrinciples(content)` is the pure parsing function (also in
+`src/run-phase.ts`). It extracts the body of the first `## Principles` section,
+returning `null` when the section is absent or empty. `advancePhase` gates the
+`appendPrinciples` call on this check, so no disk I/O or git commit fires when
+the phase output lacks a `## Principles` section.
+
+`stateDir` is now threaded from `ExecutorOptions` through `buildPhaseArgs` as
+the `--state-dir` CLI flag into the `run-phase.ts` subprocess. This is the only
+way the subprocess knows where to find `principles.md` at context-file time.
+
 ## `tick.ndjson` format
 
 `~/.lazyboy/tick.ndjson` uses NDJSON format — one JSON object per line, each

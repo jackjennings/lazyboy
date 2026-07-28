@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { deleteRunPid } from "./executor.ts";
-import { resolveRevisionSessionId } from "./run-phase.ts";
+import { extractPrinciples, resolveRevisionSessionId } from "./run-phase.ts";
 import {
   loadPrompt,
   loadPromptFile,
@@ -84,6 +84,12 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<string | null>;
+  appendPrinciples: (
+    stateDir: string,
+    ticketId: string,
+    phase: string,
+    outputContent: string,
+  ) => Promise<void>;
   readTicketLog?: (ticketDir: string) => Promise<string>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
@@ -278,6 +284,16 @@ export async function advancePhase(
           reason: "empty",
         });
         return;
+      }
+
+      const principles = extractPrinciples(outputContent);
+      if (principles) {
+        await deps.appendPrinciples(
+          stateDir,
+          ticket.id,
+          ticket.phase,
+          outputContent,
+        );
       }
 
       let selfReviewResult: { approved: boolean; reason: string | null } = {

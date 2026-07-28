@@ -5,12 +5,14 @@ import { compactTimestamp } from "./timestamp.ts";
 import { loadPromptFile } from "./phases/runners.ts";
 import {
   appendTicketLog,
+  commitPrinciples,
   commitState,
   listTickets,
   readTicket,
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
+import { extractPrinciples } from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
@@ -200,6 +202,7 @@ export function composeTickDeps(
           `After a successful rebase, run \`git push --force-with-lease origin ${opts.branch}\`.`;
         return spawnPhase({
           ticketDir: opts.ticketDir,
+          stateDir,
           prompt,
           scopeDirs: [],
           outputFile: `${timestamp}-conflict-resolution.md`,
@@ -256,6 +259,7 @@ export function composeTickDeps(
       spawn: (opts) =>
         spawnPhase({
           ticketDir: opts.ticketDir,
+          stateDir,
           prompt: opts.prompt,
           scopeDirs: opts.scope.map(expandHome),
           outputFile: opts.outputFile,
@@ -283,6 +287,22 @@ export function composeTickDeps(
         const found = await findLatestPhaseOutput(ticketDir);
         if (!found || found.phaseName !== phase) return null;
         return await readTextFile(join(ticketDir, found.filename));
+      },
+      appendPrinciples: async (sd, ticketId, phase, outputContent) => {
+        const extracted = extractPrinciples(outputContent);
+        if (!extracted) return;
+        const principlesPath = join(sd, "principles.md");
+        let existing = "";
+        try {
+          existing = await Deno.readTextFile(principlesPath);
+        } catch {
+          // file does not exist yet
+        }
+        const newContent = existing.length > 0
+          ? `${existing}\n\n${extracted}`
+          : extracted;
+        await Deno.writeTextFile(principlesPath, newContent);
+        await commitPrinciples(sd, `principles: ${ticketId} ${phase}`);
       },
       markPRsReady: async (prUrls: string[]) => {
         for (const url of prUrls) {
@@ -341,6 +361,7 @@ export function composeTickDeps(
         }-outlier-analysis.md`;
         await spawnPhase({
           ticketDir,
+          stateDir,
           prompt:
             `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}`,
           scopeDirs: [],

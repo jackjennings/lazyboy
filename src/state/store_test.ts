@@ -3,6 +3,7 @@ import { join } from "@std/path";
 import matter from "gray-matter";
 import {
   appendTicketLog,
+  commitPrinciples,
   commitTicket,
   listTickets,
   readTicket,
@@ -622,6 +623,43 @@ body
   try {
     const ticket = await readTicket(dir, "gh-1");
     assertEquals(ticket.approvals, []);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("commitPrinciples: commits principles.md to git", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await initGitRepo(dir);
+    await Deno.writeTextFile(join(dir, "principles.md"), "- learn A");
+    const run = (cmd: string[]) =>
+      new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+    await run(["git", "add", "-A"]);
+    await run(["git", "commit", "-m", "init"]);
+    await Deno.writeTextFile(
+      join(dir, "principles.md"),
+      "- learn A\n- learn B",
+    );
+    await commitPrinciples(dir, "principles: test");
+    const log = await run(["git", "log", "--oneline"]);
+    const logText = new TextDecoder().decode(log.stdout);
+    assertEquals(logText.includes("principles: test"), true);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("commitPrinciples: succeeds silently when nothing to commit", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await initGitRepo(dir);
+    await Deno.writeTextFile(join(dir, "principles.md"), "- learn A");
+    const run = (cmd: string[]) =>
+      new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+    await run(["git", "add", "-A"]);
+    await run(["git", "commit", "-m", "init"]);
+    await commitPrinciples(dir, "principles: noop");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

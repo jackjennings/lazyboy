@@ -1,11 +1,12 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { join } from "@std/path";
+import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
   buildContextFiles,
   executePhase,
   extractClaudeCodeSessionId,
   extractClaudeCodeUsageAndText,
+  extractPrinciples,
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
@@ -139,7 +140,10 @@ Deno.test("buildContextFiles: always includes meta.md", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     assertEquals(files[0], `@${tempDir}/meta.md`);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
@@ -158,7 +162,10 @@ Deno.test("buildContextFiles: includes prefix-timestamped phase output files", a
       join(tempDir, "20260629T154506-spec.md"),
       "spec",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     assertEquals(
       files.includes(`@${tempDir}/20260629T154506-intake.md`),
       true,
@@ -185,7 +192,10 @@ Deno.test("buildContextFiles: includes prefixed output and feedback files in chr
       join(tempDir, "20260629T160000-intake-feedback.md"),
       "feedback",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     const outIdx = files.indexOf(`@${tempDir}/20260629T154506-intake.md`);
     const fbIdx = files.indexOf(
       `@${tempDir}/20260629T160000-intake-feedback.md`,
@@ -206,7 +216,10 @@ Deno.test("buildContextFiles: does not include files for phases not in context l
       join(tempDir, "20260629T154506-diff.md"),
       "diff",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     assertEquals(
       files.includes(`@${tempDir}/20260629T154506-diff.md`),
       false,
@@ -224,7 +237,10 @@ Deno.test("buildContextFiles: includes implementation output files", async () =>
       join(tempDir, "20260630T100000-implementation.md"),
       "output",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     assertEquals(
       files.includes(`@${tempDir}/20260630T100000-implementation.md`),
       true,
@@ -246,7 +262,10 @@ Deno.test("buildContextFiles: includes implementation feedback files after imple
       join(tempDir, "20260630T120000-implementation-feedback.md"),
       "feedback",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     const outIdx = files.indexOf(
       `@${tempDir}/20260630T100000-implementation.md`,
     );
@@ -273,7 +292,10 @@ Deno.test("buildContextFiles: implementation files appear after plan files", asy
       join(tempDir, "20260630T100000-implementation.md"),
       "implementation output",
     );
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
     const planIdx = files.indexOf(`@${tempDir}/20260629T090000-plan.md`);
     const implIdx = files.indexOf(
       `@${tempDir}/20260630T100000-implementation.md`,
@@ -311,7 +333,10 @@ Deno.test("buildContextFiles: prunes superseded drafts, keeping only the latest 
       "draft 3",
     );
 
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
 
     assertEquals(
       files.includes(`@${tempDir}/20260629T090000-spec.md`),
@@ -356,7 +381,10 @@ Deno.test("buildContextFiles: keeps latest doc and pending feedback when a revis
       "feedback 2 (latest, revision pending)",
     );
 
-    const files = await buildContextFiles(tempDir);
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
 
     assertEquals(
       files.includes(`@${tempDir}/20260629T090000-plan.md`),
@@ -374,6 +402,63 @@ Deno.test("buildContextFiles: keeps latest doc and pending feedback when a revis
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+Deno.test("buildContextFiles: prepends principles.md when it exists in stateDir", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const ticketDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(stateDir, "principles.md"), "- learn A");
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    assertEquals(files[0], `@${stateDir}/principles.md`);
+    assertEquals(files[1], `@${ticketDir}/meta.md`);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(ticketDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: omits principles.md when it does not exist in stateDir", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const ticketDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    assertEquals(files[0], `@${ticketDir}/meta.md`);
+    assertEquals(files.some((f) => f.includes("principles.md")), false);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(ticketDir, { recursive: true });
+  }
+});
+
+// ── extractPrinciples ────────────────────────────────────────────────────────
+
+Deno.test("extractPrinciples: returns body of ## Principles section", () => {
+  const output =
+    `## What to Build\n\nsome content\n\n## Principles\n\n- learn A\n- learn B\n\n## Next Steps\n\nmore stuff`;
+  assertEquals(extractPrinciples(output), "- learn A\n- learn B");
+});
+
+Deno.test("extractPrinciples: returns null when section is absent", () => {
+  const output = `## What to Build\n\nsome content`;
+  assertEquals(extractPrinciples(output), null);
+});
+
+Deno.test("extractPrinciples: returns null when section is empty", () => {
+  const output = `## What to Build\n\nsome\n\n## Principles\n\n## Next Steps`;
+  assertEquals(extractPrinciples(output), null);
+});
+
+Deno.test("extractPrinciples: captures content to end of string when no following heading", () => {
+  const output = `## Principles\n\n- only learning`;
+  assertEquals(extractPrinciples(output), "- only learning");
+});
+
+Deno.test("extractPrinciples: trims surrounding whitespace from body", () => {
+  const output = `## Principles\n\n\n  trimmed  \n\n`;
+  assertEquals(extractPrinciples(output), "trimmed");
 });
 
 // ── appendPhaseLog ───────────────────────────────────────────────────────────
@@ -450,6 +535,7 @@ Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", a
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "intake",
         scopeDirs: [],
@@ -494,6 +580,7 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "intake",
         scopeDirs: ["/some/scope"],
@@ -539,6 +626,7 @@ Deno.test("executePhase: passes provider, model, and thinking to agent.runPhase"
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "intake",
         scopeDirs: [],
@@ -579,6 +667,7 @@ Deno.test("executePhase: forwards a non-default provider (bedrock) to agent.runP
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "intake",
         scopeDirs: [],
@@ -617,6 +706,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "20260727T000000-spec.md",
           phase: "spec",
           scopeDirs: [],
@@ -657,6 +747,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -698,6 +789,7 @@ Deno.test(
       const exitCode = await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -765,6 +857,7 @@ Deno.test(
       const exitCode = await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -1126,6 +1219,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "intake",
           scopeDirs: [],
@@ -1185,6 +1279,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -1237,6 +1332,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "intake",
           scopeDirs: [],
@@ -1319,6 +1415,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -1379,6 +1476,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -1420,6 +1518,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "spec",
           scopeDirs: [],
@@ -1479,6 +1578,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "spec",
           scopeDirs: [],
@@ -1559,6 +1659,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "result.md",
           phase: "spec",
           scopeDirs: [],
@@ -1600,6 +1701,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "spec",
           scopeDirs: [],
@@ -1659,6 +1761,7 @@ Deno.test(
       await executePhase(
         {
           ticketDir,
+          stateDir: dirname(ticketDir),
           outputFile: "out.md",
           phase: "spec",
           scopeDirs: [],
@@ -1827,6 +1930,7 @@ Deno.test("executePhase: passes sessionId to agent.runPhase when provided", asyn
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "implementation",
         scopeDirs: [],
@@ -1863,6 +1967,7 @@ Deno.test("executePhase: passes undefined sessionId to agent when not provided",
     await executePhase(
       {
         ticketDir,
+        stateDir: dirname(ticketDir),
         outputFile: "out.md",
         phase: "implementation",
         scopeDirs: [],

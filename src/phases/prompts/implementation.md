@@ -140,6 +140,13 @@ When stacking applies:
 
 Your response must contain:
 
+## Principles
+
+If you observed anything during this phase worth recording as a standing
+principle — a non-obvious constraint, a recurring pattern, or a decision rule
+that would help future phases — write it here as one or more bullet points. Omit
+this section if you have nothing to add.
+
 ## Changes Made
 
 List each file created or modified with a one-line description.

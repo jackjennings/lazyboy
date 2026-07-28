@@ -219,3 +219,23 @@ export async function commitTicket(
     }
   }
 }
+
+export async function commitPrinciples(
+  stateDir: string,
+  message: string,
+): Promise<void> {
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
+  await run(["git", "add", "--", "principles.md"]);
+  const result = await run(["git", "commit", "-m", message]);
+  if (result.code !== 0) {
+    const stderr = new TextDecoder().decode(result.stderr);
+    const stdout = new TextDecoder().decode(result.stdout);
+    if (
+      !stderr.includes("nothing to commit") &&
+      !stdout.includes("nothing to commit")
+    ) {
+      throw new Error(`git commit failed: ${stderr}`);
+    }
+  }
+}

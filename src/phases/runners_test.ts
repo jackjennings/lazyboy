@@ -85,6 +85,18 @@ Deno.test(
   },
 );
 
+Deno.test("phase prompts: all five phase prompts include ## Principles instruction", async () => {
+  const phases = ["intake", "enrichment", "spec", "plan", "implementation"];
+  for (const phase of phases) {
+    const content = await loadPromptFile(`${phase}.md`);
+    assertEquals(
+      content.includes("## Principles"),
+      true,
+      `${phase}.md does not include ## Principles instruction`,
+    );
+  }
+});
+
 Deno.test("phase prompts: every prompt instructs the agent to write to the output file", async () => {
   const phases = [
     "intake",

@@ -547,7 +547,7 @@ export async function review(id: string): Promise<void> {
   tui.addChild(editor);
   tui.setFocus(contentPane);
 
-  const contextFiles = await buildContextFiles(ticketDir);
+  const contextFiles = await buildContextFiles({ ticketDir, stateDir });
   const systemPrompt = await buildQuestionSystemPrompt(contextFiles);
   const overlay = new QuestionOverlay(systemPrompt, fetch, tui);
   const overlayHandle = tui.showOverlay(overlay, {

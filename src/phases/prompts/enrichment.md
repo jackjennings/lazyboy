@@ -26,3 +26,10 @@ actual output or help text rather than assuming.
 
 Anything ambiguous in the ticket that will need to be resolved during spec or
 planning.
+
+## Principles
+
+If you observed anything during this phase worth recording as a standing
+principle — a non-obvious constraint, a recurring pattern, or a decision rule
+that would help future phases — write it here as one or more bullet points. Omit
+this section if you have nothing to add.

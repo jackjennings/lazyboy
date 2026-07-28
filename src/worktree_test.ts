@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import type { RepoCandidate } from "./worktree.ts";
@@ -11,6 +11,7 @@ import {
   listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
+  removeWorktree,
   resolveGitHubSlug,
   runGit,
 } from "./worktree.ts";
@@ -460,6 +461,71 @@ Deno.test(
     }
   },
 );
+
+// ── removeWorktree ───────────────────────────────────────────────────────────
+
+Deno.test("removeWorktree: removes the worktree directory and its branch", async () => {
+  const repoDir = await Deno.makeTempDir();
+  const wtParent = await Deno.makeTempDir();
+  const wtPath = join(wtParent, "my-branch");
+
+  try {
+    await new Deno.Command("git", { args: ["init"], cwd: repoDir }).output();
+    await new Deno.Command("git", {
+      args: ["config", "user.email", "test@test.com"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["config", "user.name", "Test"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["config", "commit.gpgsign", "false"],
+      cwd: repoDir,
+    }).output();
+    await Deno.writeTextFile(join(repoDir, "README.md"), "test");
+    await new Deno.Command("git", { args: ["add", "."], cwd: repoDir })
+      .output();
+    await new Deno.Command("git", {
+      args: ["commit", "-m", "init"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["branch", "-m", "main"],
+      cwd: repoDir,
+    }).output();
+    await new Deno.Command("git", {
+      args: ["worktree", "add", "-b", "my-branch", wtPath, "main"],
+      cwd: repoDir,
+    }).output();
+
+    await removeWorktree({ path: wtPath, branch: "my-branch" });
+
+    let exists = true;
+    try {
+      await Deno.stat(wtPath);
+    } catch {
+      exists = false;
+    }
+    assertEquals(exists, false);
+
+    const { stdout } = await runGit(
+      ["branch", "--list", "my-branch"],
+      repoDir,
+    );
+    assertEquals(stdout, "");
+  } finally {
+    await Deno.remove(repoDir, { recursive: true });
+    await Deno.remove(wtParent, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("removeWorktree: throws when worktree path does not exist", async () => {
+  await assertRejects(
+    () => removeWorktree({ path: "/nonexistent/path", branch: "any" }),
+    Error,
+  );
+});
 
 // ── runGit ───────────────────────────────────────────────────────────────────
 

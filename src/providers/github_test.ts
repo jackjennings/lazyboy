@@ -180,6 +180,90 @@ Deno.test("toSortable: issue 3 sorts before issue 12 via compareSortKeys", () =>
   );
 });
 
+Deno.test("GitHubProvider.isPRMerged: returns true for HTTP 204", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _mergeCheck: (_url, _token) => Promise.resolve({ status: 204 }),
+  });
+  assertEquals(
+    await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
+    true,
+  );
+});
+
+Deno.test("GitHubProvider.isPRMerged: returns false for HTTP 404", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _mergeCheck: (_url, _token) => Promise.resolve({ status: 404 }),
+  });
+  assertEquals(
+    await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
+    false,
+  );
+});
+
+Deno.test("GitHubProvider.isPRMerged: throws on unexpected status code", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _mergeCheck: (_url, _token) => Promise.resolve({ status: 500 }),
+  });
+  await assertRejects(
+    () => provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
+    Error,
+    "Unexpected GitHub API status",
+  );
+});
+
+Deno.test("GitHubProvider.isPRMerged: throws on unrecognized PR URL", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _mergeCheck: (_url, _token) => Promise.resolve({ status: 204 }),
+  });
+  await assertRejects(
+    () => provider.isPRMerged("https://example.com/not-a-pr"),
+    Error,
+    "Cannot parse PR URL",
+  );
+});
+
+Deno.test("GitHubProvider.isPRMerged: calls the correct merge-check endpoint", async () => {
+  let calledUrl = "";
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _mergeCheck: (url, _token) => {
+      calledUrl = url;
+      return Promise.resolve({ status: 204 });
+    },
+  });
+  await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42");
+  assertEquals(
+    calledUrl,
+    "https://api.github.com/repos/myorg/myrepo/pulls/42/merge",
+  );
+});
+
+Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to _mergeCheck", async () => {
+  let receivedToken = "";
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: (org) => ({
+      token: org === "myorg" ? "tok_org" : "tok_default",
+      login: "user",
+    }),
+    _mergeCheck: (_url, token) => {
+      receivedToken = token;
+      return Promise.resolve({ status: 204 });
+    },
+  });
+  await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42");
+  assertEquals(receivedToken, "tok_org");
+});
+
 Deno.test("toSortable: non-numeric suffix falls back to [id]", () => {
   assertEquals(
     GitHubProvider.toSortable("github/jackjennings/lazyboy/abc"),

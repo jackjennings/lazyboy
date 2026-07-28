@@ -407,7 +407,14 @@ tasks that only run verification commands without making changes.
 New per-tick behaviors are added as `TickAction` implementations in
 `src/tick-actions/`. Each action exports a `*Deps` interface, a factory
 function, and a corresponding `*_test.ts` file following the pattern in
-`check-merged-pr.ts`. Actions are registered in `src/tick.ts`.
+`check-merged-pr.ts`. Actions are registered in `src/compose.ts` (not
+`src/tick.ts` — `TickService` receives them via `TickServiceDeps`).
+
+`TicketState.ciHandledRunIds?: string[]` records the set of GitHub check-suite
+IDs for which `resolveCIFailuresAction` has already attempted a fix. Ids are
+never removed; the set only grows. This prevents re-attempting the same CI run
+after a transient failure where the fix commit did not trigger a new run. Do not
+use this field for any purpose other than CI-failure deduplication.
 
 The applies predicate for actions that operate on worktrees must exclude tickets
 where `isPhaseAlive(ticketDir)` returns true (i.e.

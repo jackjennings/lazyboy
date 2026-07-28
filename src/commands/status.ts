@@ -1,6 +1,8 @@
 import { join } from "@std/path";
+import { bgGreen, bgRed, white } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
+import { isCronEnabled } from "../cron.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type { ApprovalEntry, PhaseUsage, TicketState } from "../state/types.ts";
 import { STATUS_SEQUENCE } from "../state/types.ts";
@@ -104,6 +106,13 @@ export const status: Command = {
   name: "status",
   description: "show active tickets",
   async run(args) {
+    const enabled = await isCronEnabled();
+    const label = enabled
+      ? bgGreen(white(" enabled "))
+      : bgRed(white(" disabled "));
+    console.log(label);
+    console.log();
+
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
     const ids = await listTickets(stateDir);

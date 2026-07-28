@@ -11,6 +11,7 @@ import {
   formatTimestamp,
   renderDiff,
   review,
+  truncateDiffLines,
 } from "./review.ts";
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { join } from "@std/path";
@@ -443,6 +444,30 @@ Deno.test("renderDiff: prefixes unchanged lines with two spaces dimmed", () => {
 Deno.test("renderDiff: does not emit trailing blank line from file-ending newline", () => {
   const lines = renderDiff("a\n", "a\n");
   assertEquals(lines.every((l) => stripAnsiCode(l) !== ""), true);
+});
+
+// ── truncateDiffLines ─────────────────────────────────────────────────────────
+
+Deno.test("truncateDiffLines: truncates a plain line longer than width to fit with ellipsis", () => {
+  const long = "a".repeat(200);
+  const result = truncateDiffLines([long], 80);
+  assertEquals(result.length, 1);
+  assertEquals(stripAnsiCode(result[0]).length <= 80, true);
+  assertEquals(stripAnsiCode(result[0]).endsWith("..."), true);
+});
+
+Deno.test("truncateDiffLines: returns a plain line shorter than width unchanged", () => {
+  const short = "hello world";
+  const result = truncateDiffLines([short], 80);
+  assertEquals(result[0], short);
+});
+
+Deno.test("truncateDiffLines: truncates ANSI-colored diff lines to visible width", () => {
+  const diffLines = renderDiff("", "a".repeat(200) + "\n");
+  const result = truncateDiffLines(diffLines, 80);
+  for (const line of result) {
+    assertEquals(stripAnsiCode(line).length <= 80, true);
+  }
 });
 
 // ── buildQuestionSystemPrompt ────────────────────────────────────────────────

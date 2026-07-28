@@ -27,11 +27,45 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
   "2026-07-27T10:00:00[America/New_York]",
 );
 
+function makeRunner(
+  stateDir: string,
+  opts: {
+    appendTickLog?: (entry: object) => Promise<void>;
+    now?: () => Temporal.ZonedDateTime;
+    ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
+  } = {},
+): CeremonyRunner {
+  return new CeremonyRunner(
+    {
+      stateDir,
+      appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
+      now: opts.now,
+    },
+    opts.ceremonies ?? [],
+  );
+}
+
+function makeStandup(
+  opts: {
+    listTickets?: () => Promise<string[]>;
+    readTicket?: (id: string) => Promise<TicketState>;
+    commitState?: () => Promise<void>;
+    notify?: (title: string, message: string) => Promise<void>;
+  } = {},
+): StandupCeremony {
+  return new StandupCeremony({
+    listTickets: opts.listTickets ?? (() => Promise.resolve([])),
+    readTicket: opts.readTicket ??
+      (() => Promise.reject(new Error("not called"))),
+    commitState: opts.commitState ?? (() => Promise.resolve()),
+    notify: opts.notify,
+  });
+}
+
 Deno.test("CeremonyRunner: no ceremonies dir does not throw", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
-    const runner = new CeremonyRunner({ stateDir }, []);
-    await runner.run();
+    await makeRunner(stateDir).run();
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -44,16 +78,9 @@ Deno.test("CeremonyRunner: unknown ceremony directory silently skipped", async (
       recursive: true,
     });
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState,
-      appendTickLog: () => Promise.resolve(),
-      now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    const standup = makeStandup({ commitState });
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -67,16 +94,9 @@ Deno.test("CeremonyRunner: standup skipped when no config.toml", async () => {
       recursive: true,
     });
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState,
-      appendTickLog: () => Promise.resolve(),
-      now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    const standup = makeStandup({ commitState });
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -95,19 +115,15 @@ Deno.test("CeremonyRunner: invalid time appends warning and skips ceremony", asy
     );
     const warnings: object[] = [];
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState,
+    const standup = makeStandup({ commitState });
+    await makeRunner(stateDir, {
       appendTickLog: (entry) => {
         warnings.push(entry);
         return Promise.resolve();
       },
       now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+      ceremonies: [standup],
+    }).run();
     assertSpyCalls(commitState, 0);
     assertEquals(warnings.length, 1);
     assertEquals(
@@ -130,19 +146,15 @@ Deno.test("CeremonyRunner: invalid time 25:00 appends warning and skips ceremony
       'time = "25:00"',
     );
     const warnings: object[] = [];
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState: () => Promise.resolve(),
+    const standup = makeStandup();
+    await makeRunner(stateDir, {
       appendTickLog: (entry) => {
         warnings.push(entry);
         return Promise.resolve();
       },
       now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+      ceremonies: [standup],
+    }).run();
     assertEquals(warnings.length, 1);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -160,16 +172,9 @@ Deno.test("CeremonyRunner: standup does not fire before configured time", async 
       'time = "23:00"',
     );
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState,
-      appendTickLog: () => Promise.resolve(),
-      now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    const standup = makeStandup({ commitState });
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -188,20 +193,15 @@ Deno.test("CeremonyRunner: standup fires when time has passed", async () => {
     );
     const commitState = spy(() => Promise.resolve());
     const notifyCalls: [string, string][] = [];
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
+    const standup = makeStandup({
       commitState,
-      appendTickLog: () => Promise.resolve(),
       notify: (title, message) => {
         notifyCalls.push([title, message]);
         return Promise.resolve();
       },
-      now: () => TEST_NOW,
     });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 1);
     assertEquals(notifyCalls, [["lazyboy", "Standup ready"]]);
     const outputDir = join(stateDir, "ceremonies", "standup", "output");
@@ -231,16 +231,9 @@ Deno.test("CeremonyRunner: standup does not rerun if output file exists for toda
       "existing",
     );
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState,
-      appendTickLog: () => Promise.resolve(),
-      now: () => TEST_NOW,
-    });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    const standup = makeStandup({ commitState });
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -258,17 +251,12 @@ Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion",
       'time = "09:00"',
     );
     const commitState = spy(() => Promise.resolve());
-    const standup = new StandupCeremony({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
+    const standup = makeStandup({
       commitState,
-      appendTickLog: () => Promise.resolve(),
       notify: () => Promise.reject(new Error("osascript failed")),
-      now: () => TEST_NOW,
     });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     assertSpyCalls(commitState, 1);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -322,16 +310,12 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
       makeTicket({ id: "github/org/repo/2", phase: "intake", status: "new" }),
     ];
     let written = "";
-    const standup = new StandupCeremony({
-      stateDir,
+    const standup = makeStandup({
       listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
       readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
-      commitState: () => Promise.resolve(),
-      appendTickLog: () => Promise.resolve(),
-      now: () => TEST_NOW,
     });
-    const runner = new CeremonyRunner({ stateDir }, [standup]);
-    await runner.run();
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+      .run();
     const outputDir = join(stateDir, "ceremonies", "standup", "output");
     for await (const entry of Deno.readDir(outputDir)) {
       written = await Deno.readTextFile(join(outputDir, entry.name));

@@ -417,16 +417,14 @@ export function composeTickDeps(
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
 
-  const ceremonies = new CeremonyRunner({ stateDir }, [
+  const ceremonies = new CeremonyRunner({ stateDir, appendTickLog }, [
     new StandupCeremony({
-      stateDir,
       listTickets: () => listTickets(stateDir),
       readTicket: (id) => readTicket(stateDir, id),
       commitState: async () => {
         await ensureRunPidGitignored(stateDir);
         await commitState(stateDir, "ceremony: standup");
       },
-      appendTickLog,
       notify: async (title, message) => {
         await defaultCommandRunner()([
           "osascript",

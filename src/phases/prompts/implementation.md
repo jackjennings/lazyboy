@@ -59,6 +59,13 @@ disjoint Edit calls cost more turns than one Write and are harder to anchor
 correctly when insertion points are close together or when the plan lists
 multiple additions to the same function or block.
 
+When the plan specifies an explicit count of call sites to update (e.g. "all 21
+`buildContextFiles` calls"), assert that count inside the script — for example
+`assert n_replaced == 21, f'expected 21, got {n_replaced}'`. A failed assertion
+surfaces the miss immediately; a silent under-count leads to a re-verify →
+re-fix → re-verify cycle that is the third most common source of outlier session
+length.
+
 Turn efficiency: never output a response that contains only reasoning text when
 you intend to use a tool next. Combine your plan with the tool call in the same
 response. The pattern "Now I'll do X." (one turn, no tool) followed by the

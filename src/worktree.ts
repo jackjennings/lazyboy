@@ -205,3 +205,30 @@ export async function createWorktree(
 
   return { path: worktreePath, branch: ticketId };
 }
+
+export async function removeWorktree(wt: WorktreeInfo): Promise<void> {
+  const { code: revParseCode, stdout: gitDir } = await runGit(
+    ["rev-parse", "--git-common-dir"],
+    wt.path,
+  );
+  if (revParseCode !== 0) {
+    throw new Error(`git rev-parse --git-common-dir failed for ${wt.path}`);
+  }
+  const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
+
+  const { code: removeCode, stderr: removeErr } = await runGit(
+    ["worktree", "remove", wt.path],
+    mainRepoPath,
+  );
+  if (removeCode !== 0) {
+    throw new Error(`git worktree remove failed: ${removeErr}`);
+  }
+
+  const { code: branchCode, stderr: branchErr } = await runGit(
+    ["branch", "-D", wt.branch],
+    mainRepoPath,
+  );
+  if (branchCode !== 0) {
+    throw new Error(`git branch -D failed: ${branchErr}`);
+  }
+}

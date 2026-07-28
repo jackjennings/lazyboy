@@ -24,6 +24,7 @@ import {
   findLocalRepo,
   formatRepoCorpus,
   listRepoCorpus,
+  removeWorktree,
   runGit,
 } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
@@ -157,42 +158,8 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
     }),
     checkMergedPRAction({
-      isPRMerged: async (prUrl: string) => {
-        const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-        if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-        const [, slug, number] = match;
-        const { token } = resolveGitHubAccount(slug.split("/")[0], config);
-        const res = await fetch(
-          `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github+json",
-            },
-          },
-        );
-        if (res.status === 204) return true;
-        if (res.status === 404) return false;
-        throw new Error(
-          `Unexpected GitHub API status: ${res.status} for ${prUrl}`,
-        );
-      },
-      cleanupWorktree: async (wt) => {
-        const result = await new Deno.Command("git", {
-          args: ["rev-parse", "--git-common-dir"],
-          cwd: wt.path,
-        }).output();
-        const gitDir = new TextDecoder().decode(result.stdout).trim();
-        const mainRepoPath = gitDir.replace(/[/\\]\.git$/, "");
-        await new Deno.Command("git", {
-          args: ["worktree", "remove", wt.path],
-          cwd: mainRepoPath,
-        }).output();
-        await new Deno.Command("git", {
-          args: ["branch", "-D", wt.branch],
-          cwd: mainRepoPath,
-        }).output();
-      },
+      isPRMerged: (url) => githubProvider.isPRMerged(url),
+      cleanupWorktree: removeWorktree,
       closeWorkItem: (url: string) => githubProvider.close(url),
       writeTicket,
       appendLog: appendTicketLog,

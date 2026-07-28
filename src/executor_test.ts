@@ -11,6 +11,7 @@ import type { ExecutorOptions } from "./executor.ts";
 function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
   return {
     ticketDir: "/state/gh-1",
+    stateDir: "/state",
     prompt: "do the thing",
     scopeDirs: [],
     outputFile: "intake.md",
@@ -163,6 +164,13 @@ Deno.test("buildPhaseArgs: includes --session-id when sessionId is provided", ()
 Deno.test("buildPhaseArgs: omits --session-id when sessionId is absent", () => {
   const args = buildPhaseArgs(makeOpts());
   assertEquals(args.includes("--session-id"), false);
+});
+
+Deno.test("buildPhaseArgs: includes --state-dir", () => {
+  const args = buildPhaseArgs(makeOpts({ stateDir: "/my/state" }));
+  const idx = args.indexOf("--state-dir");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "/my/state");
 });
 
 Deno.test("buildPhaseEnvOverrides: sets GITHUB_TOKEN and GH_TOKEN to githubToken", () => {

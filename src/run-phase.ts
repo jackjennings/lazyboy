@@ -55,8 +55,18 @@ function selectLatestPhaseFiles(
   return [latest];
 }
 
-export async function buildContextFiles(ticketDir: string): Promise<string[]> {
-  const contextFiles = [`@${ticketDir}/meta.md`];
+export async function buildContextFiles(
+  { ticketDir, stateDir }: { ticketDir: string; stateDir: string },
+): Promise<string[]> {
+  const principlesPath = join(stateDir, "principles.md");
+  const contextFiles: string[] = [];
+  try {
+    await Deno.stat(principlesPath);
+    contextFiles.push(`@${principlesPath}`);
+  } catch {
+    /* principles.md doesn't exist yet */
+  }
+  contextFiles.push(`@${ticketDir}/meta.md`);
   for (
     const phase of ["intake", "enrichment", "spec", "plan", "implementation"]
   ) {
@@ -246,9 +256,19 @@ export function resolveRevisionSessionId(logContent: string): string | null {
   return lastSessionId;
 }
 
+export function extractPrinciples(content: string): string | null {
+  const match = content.match(
+    /(?:^|\n)## Principles\n([\s\S]*?)(?=\n## |\n*$)/,
+  );
+  if (!match) return null;
+  const body = match[1].trim();
+  return body.length > 0 ? body : null;
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;
+    stateDir: string;
     outputFile: string;
     phase: string;
     scopeDirs: string[];
@@ -278,7 +298,10 @@ export async function executePhase(
   }
 
   const contextFiles = opts.contextFiles ??
-    await buildContextFiles(opts.ticketDir);
+    await buildContextFiles({
+      ticketDir: opts.ticketDir,
+      stateDir: opts.stateDir,
+    });
 
   const allPaths = [
     ...opts.scopeDirs,
@@ -373,6 +396,7 @@ if (import.meta.main) {
       "context-files",
       "agent",
       "session-id",
+      "state-dir",
     ],
   });
 
@@ -402,9 +426,12 @@ if (import.meta.main) {
   const agentType = (args["agent"] as "pi" | "claude-code" | undefined) ??
     "pi";
 
+  const stateDir = args["state-dir"] ?? "";
+
   const code = await executePhase(
     {
       ticketDir,
+      stateDir,
       outputFile,
       phase,
       scopeDirs,

@@ -2,6 +2,7 @@ import type { WorktreeInfo } from "./state/types.ts";
 
 export interface ExecutorOptions {
   ticketDir: string;
+  stateDir: string;
   prompt: string;
   scopeDirs: string[];
   outputFile: string;
@@ -56,6 +57,7 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
     "--agent",
     opts.agent,
   );
+  args.push("--state-dir", opts.stateDir);
   if (opts.contextFiles) {
     args.push("--context-files", opts.contextFiles.join(","));
   }

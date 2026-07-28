@@ -46,7 +46,10 @@ Edit calls as possible. Do not make one Edit call per listed change — this
 multiplies turns without benefit and is the most common source of outlier
 session length. After a successful Edit, never re-read the file before the next
 edit — the file contains exactly what you wrote; use that text as the anchor for
-subsequent edits.
+subsequent edits. The same no-re-read rule applies before the first edit: if you
+already read a file at any point in this session — in the initial batch or any
+later turn — do not read it again before editing it. Any read you performed
+remains valid regardless of how many turns have elapsed since.
 
 When a file needs changes at three or more separate locations, use Write instead
 of sequential Edit calls: read the file once, incorporate every change into the

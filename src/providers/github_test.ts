@@ -2,12 +2,15 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { GitHubProvider } from "./github.ts";
 import { compareSortKeys } from "./types.ts";
 
+function fixedResolver(token: string, login: string) {
+  return (_org: string) => ({ token, login });
+}
+
 Deno.test("fetchNew filters out known IDs", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
-    token: "fake",
-    login: "jackjennings",
-    _fetch: (_url: string) =>
+    accountResolver: fixedResolver("fake", "jackjennings"),
+    _fetch: (_url, _token) =>
       Promise.resolve([
         {
           number: 1,
@@ -35,9 +38,8 @@ Deno.test("fetchNew filters out known IDs", async () => {
 Deno.test("fetchNew does not re-create an issue tracked under its legacy gh-<n> id", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
-    token: "fake",
-    login: "jackjennings",
-    _fetch: (_url: string) =>
+    accountResolver: fixedResolver("fake", "jackjennings"),
+    _fetch: (_url, _token) =>
       Promise.resolve([
         {
           number: 18,
@@ -54,9 +56,8 @@ Deno.test("fetchNew does not re-create an issue tracked under its legacy gh-<n> 
 Deno.test("fetchNew returns all when knownIds is empty", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
-    token: "fake",
-    login: "jackjennings",
-    _fetch: (_url: string) =>
+    accountResolver: fixedResolver("fake", "jackjennings"),
+    _fetch: (_url, _token) =>
       Promise.resolve([
         {
           number: 1,
@@ -71,14 +72,37 @@ Deno.test("fetchNew returns all when knownIds is empty", async () => {
   assertEquals(items[0].id, "github/jackjennings/lazyboy/1");
 });
 
+Deno.test("fetchNew passes org-resolved token and login to _fetch", async () => {
+  const receivedArgs: Array<{ url: string; token: string }> = [];
+  const provider = new GitHubProvider({
+    repos: ["jackjennings/lazyboy", "workorg/app"],
+    accountResolver: (org) => {
+      if (org === "jackjennings") {
+        return { token: "tok_personal", login: "jack" };
+      }
+      if (org === "workorg") return { token: "tok_work", login: "work-user" };
+      return { token: "tok_default", login: "default" };
+    },
+    _fetch: (url, token) => {
+      receivedArgs.push({ url, token });
+      return Promise.resolve([]);
+    },
+  });
+  await provider.fetchNew(new Set());
+  assertEquals(receivedArgs.length, 2);
+  assertEquals(receivedArgs[0].token, "tok_personal");
+  assertEquals(receivedArgs[0].url.includes("assignee=jack"), true);
+  assertEquals(receivedArgs[1].token, "tok_work");
+  assertEquals(receivedArgs[1].url.includes("assignee=work-user"), true);
+});
+
 Deno.test("GitHubProvider.close calls _patch with correct API URL and body", async () => {
   let patchedUrl = "";
   let patchedBody: unknown;
   const provider = new GitHubProvider({
     repos: [],
-    token: "fake",
-    login: "user",
-    _patch: async (url, body) => {
+    accountResolver: fixedResolver("fake", "user"),
+    _patch: async (url, body, _token) => {
       patchedUrl = url;
       patchedBody = body;
       await Promise.resolve();
@@ -92,11 +116,27 @@ Deno.test("GitHubProvider.close calls _patch with correct API URL and body", asy
   assertEquals(patchedBody, { state: "closed", state_reason: "completed" });
 });
 
+Deno.test("GitHubProvider.close passes org-resolved token to _patch", async () => {
+  let receivedToken = "";
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: (org) => ({
+      token: org === "myorg" ? "tok_org" : "tok_default",
+      login: "user",
+    }),
+    _patch: async (_url, _body, token) => {
+      receivedToken = token;
+      await Promise.resolve();
+    },
+  });
+  await provider.close("https://github.com/myorg/myrepo/issues/42");
+  assertEquals(receivedToken, "tok_org");
+});
+
 Deno.test("GitHubProvider.close throws on unrecognized URL", async () => {
   const provider = new GitHubProvider({
     repos: [],
-    token: "fake",
-    login: "user",
+    accountResolver: fixedResolver("fake", "user"),
     _patch: async () => {},
   });
   await assertRejects(
@@ -108,8 +148,7 @@ Deno.test("GitHubProvider.close throws on unrecognized URL", async () => {
 Deno.test("GitHubProvider.close propagates _patch error", async () => {
   const provider = new GitHubProvider({
     repos: [],
-    token: "fake",
-    login: "user",
+    accountResolver: fixedResolver("fake", "user"),
     _patch: async () => {
       return await Promise.reject(new Error("network failure"));
     },
@@ -122,9 +161,7 @@ Deno.test("GitHubProvider.close propagates _patch error", async () => {
 });
 
 Deno.test("toSortable: github/org/repo/3 returns [3]", () => {
-  assertEquals(GitHubProvider.toSortable("github/jackjennings/lazyboy/3"), [
-    3,
-  ]);
+  assertEquals(GitHubProvider.toSortable("github/jackjennings/lazyboy/3"), [3]);
 });
 
 Deno.test("toSortable: github/org/repo/12 returns [12]", () => {

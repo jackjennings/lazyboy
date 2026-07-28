@@ -40,24 +40,42 @@ Follow these steps:
      rather than re-reading it on each edit. Make the instruction concrete and
      actionable; avoid vague directives.
 
-6. From the lazyboy worktree, commit the change:
+6. The lazyboy worktree given to you is checked out on the triggering ticket's
+   own branch, which may carry that ticket's unrelated commits — do not commit
+   there. Instead, create a separate worktree based on up-to-date `origin/main`
+   and apply the edit inside it:
    ```
+   git -C <lazyboy worktree path> fetch origin main
+   git -C <lazyboy worktree path> worktree add /tmp/outlier-fix-<ticketId> -b prompt-fix/outlier-<ticketId> origin/main
+   ```
+   Make the edit identified in step 5 inside
+   `/tmp/outlier-fix-<ticketId>/src/phases/prompts/<changed-file>`, then commit
+   and push from there:
+   ```
+   cd /tmp/outlier-fix-<ticketId>
    git add src/phases/prompts/<changed-file>
    git commit -m "improve prompt to prevent outlier pattern observed in <ticketId>"
+   git push -u origin prompt-fix/outlier-<ticketId>
    ```
 
 7. Write your findings to `<YYYYMMDDTHHMMSS>-outlier-analysis.md` in the ticket
    directory. Include: the turns/task_count ratio, the identified pattern, the
    root cause, and the exact prompt change made (full diff or before/after).
 
-8. Open a draft PR against `jackjennings/lazyboy`:
+8. From `/tmp/outlier-fix-<ticketId>`, open a draft PR against
+   `jackjennings/lazyboy`:
    ```
    gh pr create --draft \
      --title "Improve prompt to prevent edit fragmentation observed in <ticketId>" \
      --body "..."
    ```
    The body must cite the triggering ticket ID, the turns/task_count ratio, and
-   the root cause identified in step 3 or 4.
+   the root cause identified in step 3 or 4. Confirm with `gh pr view` that the
+   PR's base branch is `main` and it contains exactly one commit before
+   finishing. Then remove the temporary worktree:
+   ```
+   git -C <lazyboy worktree path> worktree remove /tmp/outlier-fix-<ticketId>
+   ```
 
 If the transcript was unavailable, base your analysis on the turns/task_count
 ratio and the plan structure alone. You may propose a general improvement (e.g.
@@ -65,4 +83,5 @@ requiring explicit enumeration of all call sites for any rename task) rather
 than a specific diagnosis. Still commit the change and open the PR.
 
 Do not modify `meta.md`, `log.ndjson`, or any file outside `src/phases/prompts/`
-in the lazyboy worktree.
+in the temporary worktree. Never commit, check out a branch, or run
+`git worktree add` inside the ticket's own lazyboy worktree — only read from it.

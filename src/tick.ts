@@ -383,6 +383,7 @@ export async function advancePhase(
         event: "phase-transition",
         from: ticket.phase,
         to: "needs-attention",
+        reason: "no-worktrees",
       });
       return;
     }

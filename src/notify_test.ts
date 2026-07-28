@@ -36,7 +36,7 @@ Deno.test("makeNotify: calls osascript with ticket title and phase", async () =>
   assertEquals(commandArgs[0][0], "osascript");
   assertEquals(
     commandArgs[0][2],
-    'display notification "Fix login (implementation)" with title "lazyboy"',
+    'display notification "Fix login (implementation)" with title "github/jackjennings/lazyboy/8"',
   );
 });
 
@@ -148,6 +148,89 @@ Deno.test(
     });
     await notify(makeTicket());
     assertSpyCalls(runCommandSpy, 1);
+  },
+);
+
+Deno.test(
+  "makeNotify: appends reason from log entry to notification message",
+  async () => {
+    const commandArgs: string[][] = [];
+    const logEntry = JSON.stringify({
+      ts: "2026-07-25T00:00:00Z",
+      event: "needs-attention",
+      reason: "clone-failed",
+    });
+    const notify = makeNotify("/state", {
+      readLog: () => Promise.resolve(logEntry + "\n"),
+      appendLog: () => Promise.resolve(),
+      runCommand: (args) => {
+        commandArgs.push(args);
+        return Promise.resolve({ code: 0 });
+      },
+    });
+    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    assertEquals(
+      commandArgs[0][2],
+      'display notification "Fix login (implementation): clone-failed" with title "github/jackjennings/lazyboy/8"',
+    );
+  },
+);
+
+Deno.test(
+  "makeNotify: does not append reason when no log entry has a reason field",
+  async () => {
+    const commandArgs: string[][] = [];
+    const logEntry = JSON.stringify({
+      ts: "2026-07-25T00:00:00Z",
+      event: "phase-transition",
+      from: "plan",
+      to: "needs-attention",
+    });
+    const notify = makeNotify("/state", {
+      readLog: () => Promise.resolve(logEntry + "\n"),
+      appendLog: () => Promise.resolve(),
+      runCommand: (args) => {
+        commandArgs.push(args);
+        return Promise.resolve({ code: 0 });
+      },
+    });
+    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    assertEquals(
+      commandArgs[0][2],
+      'display notification "Fix login (implementation)" with title "github/jackjennings/lazyboy/8"',
+    );
+  },
+);
+
+Deno.test(
+  "makeNotify: uses most recent reason entry when multiple log entries have reason",
+  async () => {
+    const commandArgs: string[][] = [];
+    const log = [
+      JSON.stringify({
+        ts: "2026-07-25T00:00:00Z",
+        event: "needs-attention",
+        reason: "clone-failed",
+      }),
+      JSON.stringify({
+        ts: "2026-07-25T00:00:01Z",
+        event: "needs-attention",
+        reason: "worktree-creation-failed",
+      }),
+    ].join("\n") + "\n";
+    const notify = makeNotify("/state", {
+      readLog: () => Promise.resolve(log),
+      appendLog: () => Promise.resolve(),
+      runCommand: (args) => {
+        commandArgs.push(args);
+        return Promise.resolve({ code: 0 });
+      },
+    });
+    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    assertEquals(
+      commandArgs[0][2],
+      'display notification "Fix login (implementation): worktree-creation-failed" with title "github/jackjennings/lazyboy/8"',
+    );
   },
 );
 

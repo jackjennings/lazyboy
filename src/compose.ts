@@ -129,6 +129,7 @@ export function composeTickDeps(
           return false;
         }
       },
+      appendLog: appendTicketLog,
     }),
     checkMergedPRAction({
       isPRMerged: async (prUrl: string) => {

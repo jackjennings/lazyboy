@@ -7,6 +7,11 @@ every file listed in "Read these files first:" below with every source file the
 plan specifies — all files in one turn. Do not read files one per turn; each
 sequential read adds a full turn to session length for zero benefit.
 
+meta.md, spec.md, and plan.md are already loaded in your context — do not Read
+them again as part of the initial batch. Identify the source files the plan
+mentions from the plan.md content already in your context, then open only those
+files in your first parallel Read call.
+
 Implement the plan exactly as specified using TDD:
 
 1. Write failing tests first

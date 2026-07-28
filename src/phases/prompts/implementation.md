@@ -25,10 +25,11 @@ call for, even when they seem like obvious improvements. If something genuinely
 feels missing, note the gap in the "Changes Made" section of your response
 rather than silently expanding scope.
 
-Read efficiency: when a plan enumerates multiple files to modify, read all of
-them in a single parallel batch (one turn, multiple Read calls) before making
-any edits. Reading one file per turn for a known file list is the second most
-common source of outlier session length.
+Read efficiency: before reading any source file, scan the complete plan and
+enumerate every file it mentions. Then read all of them in a single parallel
+batch (one turn, multiple Read calls). Do not read source files incrementally —
+identify the full list first, then batch all reads into one turn. Reading one
+file per turn is the second most common source of outlier session length.
 
 Edit efficiency: when a plan task lists multiple changes to the same file, read
 that file once, identify every change site, then apply all of them in as few

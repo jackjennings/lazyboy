@@ -22,6 +22,7 @@ import {
   type OverlayHandle,
   ProcessTerminal,
   setKeybindings,
+  truncateToWidth,
   TUI,
   TUI_KEYBINDINGS,
   wrapTextWithAnsi,
@@ -80,6 +81,10 @@ export function renderDiff(oldStr: string, newStr: string): string[] {
     }
   }
   return lines;
+}
+
+export function truncateDiffLines(lines: string[], width: number): string[] {
+  return lines.map((line) => truncateToWidth(line, width));
 }
 
 export async function findLatestPhaseOutput(
@@ -432,7 +437,9 @@ class ContentPane implements Component {
   }
 
   private allLines(width: number): string[] {
-    if (this.preRenderedLines !== null) return this.preRenderedLines;
+    if (this.preRenderedLines !== null) {
+      return truncateDiffLines(this.preRenderedLines, width);
+    }
     return this.md!.render(width);
   }
 

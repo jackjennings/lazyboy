@@ -4,7 +4,12 @@ import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { isCronEnabled } from "../cron.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-import type { ApprovalEntry, PhaseUsage, TicketState } from "../state/types.ts";
+import type {
+  ApprovalEntry,
+  PhaseUsage,
+  PrEntry,
+  TicketState,
+} from "../state/types.ts";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
@@ -49,20 +54,14 @@ export function formatTokens(total: number | null): string {
   return `${(Math.round(total / 100) / 10).toFixed(1)}k`;
 }
 
-export async function readTicketTokens(
-  ticketDir: string,
-): Promise<number | null> {
-  let total = 0;
-  let found = false;
+async function readUsageFiles(ticketDir: string): Promise<PhaseUsage[] | null> {
+  const files: PhaseUsage[] = [];
   try {
     for await (const entry of Deno.readDir(ticketDir)) {
       if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
       try {
         const raw = await Deno.readTextFile(join(ticketDir, entry.name));
-        const usage = JSON.parse(raw) as PhaseUsage;
-        total += usage.input + usage.output + usage.cacheRead +
-          usage.cacheWrite;
-        found = true;
+        files.push(JSON.parse(raw) as PhaseUsage);
       } catch {
         return null;
       }
@@ -70,7 +69,58 @@ export async function readTicketTokens(
   } catch {
     return null;
   }
-  return found ? total : null;
+  return files;
+}
+
+export async function readTicketTokens(
+  ticketDir: string,
+): Promise<number | null> {
+  const files = await readUsageFiles(ticketDir);
+  if (!files || files.length === 0) return null;
+  return files.reduce(
+    (sum, u) => sum + u.input + u.output + u.cacheRead + u.cacheWrite,
+    0,
+  );
+}
+
+export async function readTicketCost(
+  ticketDir: string,
+): Promise<{ cost: number | null; partial: boolean }> {
+  const files = await readUsageFiles(ticketDir);
+  if (!files || files.length === 0) return { cost: null, partial: false };
+  const withCost = files.filter((u) => u.costUsd !== undefined);
+  if (withCost.length === 0) return { cost: null, partial: false };
+  const cost = withCost.reduce((sum, u) => sum + u.costUsd!, 0);
+  return { cost, partial: withCost.length < files.length };
+}
+
+function formatCost(
+  { cost, partial }: { cost: number | null; partial: boolean },
+): string {
+  if (cost === null) return "—";
+  const formatted = `$${cost.toFixed(2)}`;
+  return partial ? `~${formatted}` : formatted;
+}
+
+function formatPrs(prs: PrEntry[] | undefined): string {
+  if (!prs || prs.length === 0) return "—";
+  const [first, ...rest] = prs;
+  if (rest.length === 0) return first.url;
+  return [first.url, ...rest.map((p) => " ".repeat(9) + p.url)].join("\n");
+}
+
+export function formatDetailView(
+  ticket: TicketState,
+  tokens: number | null,
+  costResult: { cost: number | null; partial: boolean },
+): string {
+  return [
+    `${"Phase".padEnd(8)} ${ticket.phase}`,
+    `${"Status".padEnd(8)} ${ticket.status}`,
+    `${"Tokens".padEnd(8)} ${formatTokens(tokens)}`,
+    `${"Cost".padEnd(8)} ${formatCost(costResult)}`,
+    `${"PRs".padEnd(8)} ${formatPrs(ticket.prs)}`,
+  ].join("\n");
 }
 
 export function formatStatusRow(
@@ -105,7 +155,31 @@ export function formatStatusHeader(): string {
 export const status: Command = {
   name: "status",
   description: "show active tickets",
+  completesWith: "_ids",
   async run(args) {
+    const id = args[0];
+    if (id && !id.startsWith("--")) {
+      const config = await loadConfig();
+      const stateDir = expandHome(config.state.dir);
+      let ticket: TicketState;
+      try {
+        ticket = await readTicket(stateDir, id);
+      } catch (e) {
+        if (e instanceof Deno.errors.NotFound) {
+          console.error(`No such ticket: ${id}`);
+          Deno.exit(1);
+        }
+        throw e;
+      }
+      const ticketDir = join(stateDir, id);
+      const [tokens, costResult] = await Promise.all([
+        readTicketTokens(ticketDir),
+        readTicketCost(ticketDir),
+      ]);
+      console.log(formatDetailView(ticket, tokens, costResult));
+      return;
+    }
+
     const enabled = await isCronEnabled();
     const label = enabled
       ? bgGreen(white(" enabled "))

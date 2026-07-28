@@ -836,6 +836,81 @@ Deno.test("--help: commands are sorted alphabetically", async () => {
   assertEquals(names, sorted);
 });
 
+Deno.test("env file: var from file is visible to running command", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await Deno.makeTempDir();
+  const configDir = join(home, ".config", "lazyboy");
+  await Deno.mkdir(configDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(configDir, "config.toml"),
+    `[github]\nrepos = ["jackjennings/lazyboy"]\n[github.accounts.x]\ntoken_env = "LAZYBOY_ENV_FILE_TOKEN"\nlogin = "x"\n[state]\ndir = "${stateDir}"\n[tick]\nconcurrency = 1\n`,
+  );
+  await Deno.writeTextFile(
+    join(configDir, "env"),
+    "LAZYBOY_ENV_FILE_TOKEN=tokenvalue\n",
+  );
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertEquals(result.code, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("env file: shell env var takes precedence over file", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await Deno.makeTempDir();
+  const configDir = join(home, ".config", "lazyboy");
+  await Deno.mkdir(configDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(configDir, "config.toml"),
+    `[github]\nrepos = ["jackjennings/lazyboy"]\n[state]\ndir = "${stateDir}"\n[tick]\nconcurrency = 1\n`,
+  );
+  await Deno.writeTextFile(join(configDir, "env"), "HOME=/nonexistent\n");
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertEquals(result.code, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("env file: absent env file does not cause an error", async () => {
+  const home = await Deno.makeTempDir();
+  const configDir = join(home, ".config", "lazyboy");
+  await Deno.mkdir(configDir, { recursive: true });
+  try {
+    const result = await runIndex(["--help"], { HOME: home });
+    assertEquals(result.code, 0);
+  } finally {
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("env file: value containing = is not truncated at second =", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const home = await Deno.makeTempDir();
+  const configDir = join(home, ".config", "lazyboy");
+  await Deno.mkdir(configDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(configDir, "config.toml"),
+    `[github]\nrepos = ["jackjennings/lazyboy"]\n[github.accounts.x]\ntoken_env = "LAZYBOY_ENV_FILE_TOKEN"\nlogin = "x"\n[state]\ndir = "${stateDir}"\n[tick]\nconcurrency = 1\n`,
+  );
+  await Deno.writeTextFile(
+    join(configDir, "env"),
+    "LAZYBOY_ENV_FILE_TOKEN==base64=padded==\n",
+  );
+  try {
+    const result = await runIndex(["status"], { HOME: home });
+    assertEquals(result.code, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
 Deno.test(
   "tick.sh: calls lazyboy update with || true guard before exec deno",
   async () => {

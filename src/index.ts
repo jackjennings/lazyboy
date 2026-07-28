@@ -1,5 +1,26 @@
 import { commands } from "./commands/registry.ts";
 
+try {
+  const content = await Deno.readTextFile(
+    `${Deno.env.get("HOME")}/.config/lazyboy/env`,
+  );
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx);
+    const value = trimmed.slice(eqIdx + 1);
+    if (Deno.env.get(key) === undefined) {
+      Deno.env.set(key, value);
+    }
+  }
+} catch (err) {
+  if (!(err instanceof Deno.errors.NotFound)) {
+    throw err;
+  }
+}
+
 const publicCommands = commands
   .filter((c) => !c.name.startsWith("_"))
   .sort((a, b) => a.name.localeCompare(b.name));

@@ -24,6 +24,14 @@ Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
 same file, write all failing tests for that file across all tasks first, then
 implement all changes to that file in the same pass.
 
+Before writing the first line of implementation, trace the critical test inputs
+through the plan's implementation logic. For regex patterns: manually match each
+test input string against the pattern and verify it produces the expected
+capture group or match. If any test input fails the planned regex or boundary
+condition, adjust the implementation (not the test) to make it pass — the tests
+define the correct behavior. Resolving plan inconsistencies before coding avoids
+a test-fail-fix-retest cycle that costs three or more turns per discrepancy.
+
 Before editing any file, enumerate all changes that file requires across every
 task in the plan. Make all edits to a file together in as few Edit calls as
 possible — do not make a separate Edit call per plan section or task when

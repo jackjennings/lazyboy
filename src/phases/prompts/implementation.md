@@ -20,6 +20,14 @@ Implement the plan exactly as specified using TDD:
 3. Refactor if needed
 4. Confirm all tests pass
 
+Before writing test assertions that check the exact string output of an external
+library function — suffixes, specific characters, ANSI sequences, exact lengths —
+verify the actual return value with a quick `deno eval` before writing the
+assertion. Do not assume the plan's sample output matches what the installed
+package returns; library versions differ and ANSI formatting details change
+between releases. An unverified assertion produces a fail→investigate→fix loop
+that adds 3–5 turns.
+
 Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
 same file, write all failing tests for that file across all tasks first, then
 implement all changes to that file in the same pass.

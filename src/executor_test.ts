@@ -1,6 +1,11 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
 import { join } from "@std/path";
-import { buildPhaseArgs, isPhaseAlive, isProcessAlive } from "./executor.ts";
+import {
+  buildPhaseArgs,
+  buildPhaseEnvOverrides,
+  isPhaseAlive,
+  isProcessAlive,
+} from "./executor.ts";
 import type { ExecutorOptions } from "./executor.ts";
 
 function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
@@ -158,4 +163,26 @@ Deno.test("buildPhaseArgs: includes --session-id when sessionId is provided", ()
 Deno.test("buildPhaseArgs: omits --session-id when sessionId is absent", () => {
   const args = buildPhaseArgs(makeOpts());
   assertEquals(args.includes("--session-id"), false);
+});
+
+Deno.test("buildPhaseEnvOverrides: sets GITHUB_TOKEN and GH_TOKEN to githubToken", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ githubToken: "tok_abc" }),
+  );
+  assertEquals(overrides["GITHUB_TOKEN"], "tok_abc");
+  assertEquals(overrides["GH_TOKEN"], "tok_abc");
+});
+
+Deno.test("buildPhaseEnvOverrides: sets ANTHROPIC_API_KEY", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ anthropicApiKey: "sk_test" }),
+  );
+  assertEquals(overrides["ANTHROPIC_API_KEY"], "sk_test");
+});
+
+Deno.test("buildPhaseEnvOverrides: GH_TOKEN matches GITHUB_TOKEN (no divergence)", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ githubToken: "tok_xyz" }),
+  );
+  assertEquals(overrides["GH_TOKEN"], overrides["GITHUB_TOKEN"]);
 });

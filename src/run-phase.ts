@@ -191,6 +191,11 @@ export function extractClaudeCodeUsageAndText(
     cache_creation_input_tokens?: number;
   } | undefined;
 
+  const modelUsage = result.modelUsage as Record<string, unknown> | undefined;
+  const model = modelUsage
+    ? (Object.keys(modelUsage)[0] ?? "").replace(/\[[^\]]*\]$/, "")
+    : "";
+
   return {
     text: typeof result.result === "string" ? result.result : "",
     usage: {
@@ -198,7 +203,7 @@ export function extractClaudeCodeUsageAndText(
       output: usage?.output_tokens ?? 0,
       cacheRead: usage?.cache_read_input_tokens ?? 0,
       cacheWrite: usage?.cache_creation_input_tokens ?? 0,
-      model: typeof result.model === "string" ? result.model : "",
+      model,
       durationMs,
       turns: typeof result.num_turns === "number"
         ? result.num_turns

@@ -1031,7 +1031,7 @@ const claudeCodeResultNdjson = [
       cache_creation_input_tokens: 5,
     },
     result: "final assistant text",
-    model: "claude-sonnet-4-6",
+    modelUsage: { "claude-sonnet-4-6": { inputTokens: 100, outputTokens: 50 } },
   }),
 ].join("\n");
 
@@ -1047,6 +1047,20 @@ Deno.test(
     assertEquals(result.usage?.model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 999);
     assertEquals(result.usage?.turns, 2);
+  },
+);
+
+Deno.test(
+  "extractClaudeCodeUsageAndText: strips context-window suffix from modelUsage key",
+  () => {
+    const ndjson = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: "text",
+      modelUsage: { "claude-opus-4-8[1m]": { inputTokens: 1 } },
+    });
+    const result = extractClaudeCodeUsageAndText(ndjson, 100);
+    assertEquals(result.usage?.model, "claude-opus-4-8");
   },
 );
 

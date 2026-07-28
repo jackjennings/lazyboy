@@ -1,0 +1,625 @@
+import { assert, assertEquals } from "@std/assert";
+import {
+  blockToMarkdown,
+  databaseToMarkdown,
+  parseNotionId,
+  propertyToString,
+  richTextToMarkdown,
+  runDatabase,
+  runPage,
+  runSearch,
+  searchResultsToMarkdown,
+} from "./notion-fetch";
+import type { Client } from "@notionhq/client";
+import type {
+  BlockObjectResponse,
+  RichTextItemResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+const scriptPath = new URL("./notion-fetch", import.meta.url).pathname;
+
+// ── parseNotionId ─────────────────────────────────────────────────────────────
+
+Deno.test("parseNotionId — slug URL with 32-hex suffix", () => {
+  assertEquals(
+    parseNotionId(
+      "https://www.notion.so/workspace/My-Page-abc1234567890abcdef1234567890ab",
+    ),
+    "abc1234567890abcdef1234567890ab",
+  );
+});
+
+Deno.test("parseNotionId — bare 32-hex URL", () => {
+  assertEquals(
+    parseNotionId("https://www.notion.so/abc1234567890abcdef1234567890ab"),
+    "abc1234567890abcdef1234567890ab",
+  );
+});
+
+Deno.test("parseNotionId — UUID-with-dashes URL", () => {
+  assertEquals(
+    parseNotionId(
+      "https://www.notion.so/abc12345-6789-0abc-def1-234567890abc",
+    ),
+    "abc12345-6789-0abc-def1-234567890abc",
+  );
+});
+
+Deno.test("parseNotionId — returns null for segment with no hex ID", () => {
+  assertEquals(parseNotionId("https://www.notion.so/not-a-valid-page"), null);
+});
+
+Deno.test("parseNotionId — returns null for non-URL input", () => {
+  assertEquals(parseNotionId("just-a-string"), null);
+});
+
+// ── CLI subprocess tests ──────────────────────────────────────────────────────
+
+Deno.test("CLI exits 1 with error when NOTION_TOKEN is unset", async () => {
+  const { NOTION_TOKEN: _removed, ...envWithout } = Deno.env.toObject();
+  const result = await new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-env=NOTION_TOKEN",
+      "--allow-net=api.notion.com",
+      scriptPath,
+      "page",
+      "https://www.notion.so/abc1234567890abcdef1234567890ab",
+    ],
+    env: envWithout,
+  }).output();
+  assertEquals(result.code, 1);
+  assertEquals(
+    new TextDecoder().decode(result.stderr).trim(),
+    "error: NOTION_TOKEN is not set",
+  );
+});
+
+Deno.test("CLI exits 1 with usage on no arguments", async () => {
+  const result = await new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-env=NOTION_TOKEN",
+      "--allow-net=api.notion.com",
+      scriptPath,
+    ],
+    env: { ...Deno.env.toObject(), NOTION_TOKEN: "secret_test" },
+  }).output();
+  assertEquals(result.code, 1);
+  assert(new TextDecoder().decode(result.stderr).includes("usage:"));
+});
+
+Deno.test("CLI exits 1 with usage on unrecognized subcommand", async () => {
+  const result = await new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-env=NOTION_TOKEN",
+      "--allow-net=api.notion.com",
+      scriptPath,
+      "unknown",
+      "arg",
+    ],
+    env: { ...Deno.env.toObject(), NOTION_TOKEN: "secret_test" },
+  }).output();
+  assertEquals(result.code, 1);
+  assert(new TextDecoder().decode(result.stderr).includes("usage:"));
+});
+
+Deno.test("CLI exits 1 with error for unparseable URL", async () => {
+  const result = await new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-env=NOTION_TOKEN",
+      "--allow-net=api.notion.com",
+      scriptPath,
+      "page",
+      "https://www.notion.so/no-hex-here",
+    ],
+    env: { ...Deno.env.toObject(), NOTION_TOKEN: "secret_test" },
+  }).output();
+  assertEquals(result.code, 1);
+  assertEquals(
+    new TextDecoder().decode(result.stderr).trim(),
+    "error: could not parse Notion ID from URL: https://www.notion.so/no-hex-here",
+  );
+});
+
+// ── richTextToMarkdown ────────────────────────────────────────────────────────
+
+function makeRichText(
+  text: string,
+  bold = false,
+  italic = false,
+): RichTextItemResponse {
+  return {
+    type: "text",
+    text: { content: text, link: null },
+    annotations: {
+      bold,
+      italic,
+      strikethrough: false,
+      underline: false,
+      code: false,
+      color: "default",
+    },
+    plain_text: text,
+    href: null,
+  };
+}
+
+Deno.test("richTextToMarkdown — plain text", () => {
+  assertEquals(richTextToMarkdown([makeRichText("hello")]), "hello");
+});
+
+Deno.test("richTextToMarkdown — bold wraps in **", () => {
+  assertEquals(
+    richTextToMarkdown([makeRichText("world", true)]),
+    "**world**",
+  );
+});
+
+Deno.test("richTextToMarkdown — italic wraps in _", () => {
+  assertEquals(
+    richTextToMarkdown([makeRichText("hi", false, true)]),
+    "_hi_",
+  );
+});
+
+Deno.test("richTextToMarkdown — multiple segments concatenated", () => {
+  assertEquals(
+    richTextToMarkdown([makeRichText("Hello "), makeRichText("world", true)]),
+    "Hello **world**",
+  );
+});
+
+// ── blockToMarkdown ───────────────────────────────────────────────────────────
+
+Deno.test("blockToMarkdown — paragraph", () => {
+  const block = {
+    type: "paragraph",
+    paragraph: { rich_text: [makeRichText("Content")], color: "default" },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "Content");
+});
+
+Deno.test("blockToMarkdown — heading_1", () => {
+  const block = {
+    type: "heading_1",
+    heading_1: {
+      rich_text: [makeRichText("Title")],
+      color: "default",
+      is_toggleable: false,
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "# Title");
+});
+
+Deno.test("blockToMarkdown — heading_2", () => {
+  const block = {
+    type: "heading_2",
+    heading_2: {
+      rich_text: [makeRichText("Sub")],
+      color: "default",
+      is_toggleable: false,
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "## Sub");
+});
+
+Deno.test("blockToMarkdown — heading_3", () => {
+  const block = {
+    type: "heading_3",
+    heading_3: {
+      rich_text: [makeRichText("Sub")],
+      color: "default",
+      is_toggleable: false,
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "### Sub");
+});
+
+Deno.test("blockToMarkdown — bulleted_list_item", () => {
+  const block = {
+    type: "bulleted_list_item",
+    bulleted_list_item: {
+      rich_text: [makeRichText("item")],
+      color: "default",
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "- item");
+});
+
+Deno.test("blockToMarkdown — numbered_list_item", () => {
+  const block = {
+    type: "numbered_list_item",
+    numbered_list_item: {
+      rich_text: [makeRichText("item")],
+      color: "default",
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "1. item");
+});
+
+Deno.test("blockToMarkdown — code with language", () => {
+  const block = {
+    type: "code",
+    code: {
+      rich_text: [makeRichText("const x = 1;")],
+      language: "typescript",
+      caption: [],
+    },
+  } as unknown as BlockObjectResponse;
+  assertEquals(
+    blockToMarkdown(block),
+    "```typescript\nconst x = 1;\n```",
+  );
+});
+
+Deno.test("blockToMarkdown — quote", () => {
+  const block = {
+    type: "quote",
+    quote: { rich_text: [makeRichText("quoted")], color: "default" },
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "> quoted");
+});
+
+Deno.test("blockToMarkdown — divider", () => {
+  const block = {
+    type: "divider",
+    divider: {},
+  } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "---");
+});
+
+Deno.test("blockToMarkdown — child_page emits link with page title", () => {
+  const block = {
+    type: "child_page",
+    id: "abc12345-6789-0abc-def1-234567890abc",
+    child_page: { title: "Child Page" },
+  } as unknown as BlockObjectResponse;
+  assertEquals(
+    blockToMarkdown(block),
+    "[Child Page](https://www.notion.so/abc12345-6789-0abc-def1-234567890abc)",
+  );
+});
+
+Deno.test("blockToMarkdown — unknown type returns empty string", () => {
+  const block = { type: "unsupported_xyz" } as unknown as BlockObjectResponse;
+  assertEquals(blockToMarkdown(block), "");
+});
+
+// ── runPage ───────────────────────────────────────────────────────────────────
+
+function makeRich(text: string) {
+  return makeRichText(text);
+}
+
+function makeParagraphBlock(text: string, hasChildren = false) {
+  return {
+    type: "paragraph",
+    id: `block-${text}`,
+    has_children: hasChildren,
+    paragraph: { rich_text: [makeRich(text)], color: "default" },
+  };
+}
+
+function makePageResponse(title: string) {
+  return {
+    properties: {
+      Title: {
+        type: "title",
+        title: [makeRich(title)],
+      },
+    },
+  };
+}
+
+Deno.test("runPage — outputs title as H1 followed by block content", async () => {
+  const client = {
+    pages: { retrieve: () => Promise.resolve(makePageResponse("My Page")) },
+    blocks: {
+      children: {
+        list: () =>
+          Promise.resolve({
+            results: [makeParagraphBlock("First paragraph")],
+            has_more: false,
+            next_cursor: null,
+          }),
+      },
+    },
+  } as unknown as Client;
+
+  const output = await runPage(client, "some-id");
+  assert(output.startsWith("# My Page"));
+  assert(output.includes("First paragraph"));
+});
+
+Deno.test("runPage — paginates blocks across multiple API responses", async () => {
+  let calls = 0;
+  const client = {
+    pages: { retrieve: () => Promise.resolve(makePageResponse("Paged")) },
+    blocks: {
+      children: {
+        list: () => {
+          calls++;
+          return Promise.resolve({
+            results: calls === 1
+              ? [makeParagraphBlock("page1")]
+              : [makeParagraphBlock("page2")],
+            has_more: calls === 1,
+            next_cursor: calls === 1 ? "cursor" : null,
+          });
+        },
+      },
+    },
+  } as unknown as Client;
+
+  const output = await runPage(client, "some-id");
+  assert(output.includes("page1"));
+  assert(output.includes("page2"));
+  assertEquals(calls, 2);
+});
+
+Deno.test("runPage — appends truncation comment when blocks exceed 500", async () => {
+  const client = {
+    pages: { retrieve: () => Promise.resolve(makePageResponse("Big Page")) },
+    blocks: {
+      children: {
+        list: () =>
+          Promise.resolve({
+            results: Array(100).fill(null).map((_, i) =>
+              makeParagraphBlock(`block-${i}`)
+            ),
+            has_more: true,
+            next_cursor: "cursor",
+          }),
+      },
+    },
+  } as unknown as Client;
+
+  const output = await runPage(client, "some-id");
+  assert(output.includes("<!-- truncated: block limit reached -->"));
+});
+
+Deno.test("runPage — propagates API errors for caller to handle", async () => {
+  const client = {
+    pages: {
+      retrieve: () => Promise.reject({ status: 404, message: "Not found" }),
+    },
+    blocks: { children: { list: () => Promise.resolve({}) } },
+  } as unknown as Client;
+
+  let threw = false;
+  try {
+    await runPage(client, "bad-id");
+  } catch {
+    threw = true;
+  }
+  assert(threw);
+});
+
+// ── propertyToString ──────────────────────────────────────────────────────────
+
+Deno.test("propertyToString — title", () => {
+  assertEquals(
+    propertyToString({ type: "title", title: [makeRich("My Title")] }),
+    "My Title",
+  );
+});
+
+Deno.test("propertyToString — rich_text", () => {
+  assertEquals(
+    propertyToString({
+      type: "rich_text",
+      rich_text: [makeRich("some text")],
+    }),
+    "some text",
+  );
+});
+
+Deno.test("propertyToString — number", () => {
+  assertEquals(propertyToString({ type: "number", number: 42 }), "42");
+});
+
+Deno.test("propertyToString — number null", () => {
+  assertEquals(propertyToString({ type: "number", number: null }), "");
+});
+
+Deno.test("propertyToString — select", () => {
+  assertEquals(
+    propertyToString({ type: "select", select: { name: "Option A" } }),
+    "Option A",
+  );
+});
+
+Deno.test("propertyToString — select null", () => {
+  assertEquals(propertyToString({ type: "select", select: null }), "");
+});
+
+Deno.test("propertyToString — multi_select", () => {
+  assertEquals(
+    propertyToString({
+      type: "multi_select",
+      multi_select: [{ name: "A" }, { name: "B" }],
+    }),
+    "A, B",
+  );
+});
+
+Deno.test("propertyToString — date", () => {
+  assertEquals(
+    propertyToString({
+      type: "date",
+      date: { start: "2026-01-01", end: null },
+    }),
+    "2026-01-01",
+  );
+});
+
+Deno.test("propertyToString — checkbox true", () => {
+  assertEquals(propertyToString({ type: "checkbox", checkbox: true }), "true");
+});
+
+Deno.test("propertyToString — unsupported type returns empty string", () => {
+  assertEquals(propertyToString({ type: "formula" }), "");
+});
+
+// ── databaseToMarkdown ────────────────────────────────────────────────────────
+
+Deno.test("databaseToMarkdown — renders header row and data row", () => {
+  const headers = ["Name", "Status"];
+  const rows = [["Alpha", "Done"], ["Beta", ""]];
+  const md = databaseToMarkdown(headers, rows);
+  const lines = md.split("\n");
+  assert(lines[0].includes("Name"));
+  assert(lines[0].includes("Status"));
+  assert(lines[2].includes("Alpha"));
+  assert(lines[3].includes("Beta"));
+});
+
+// ── runDatabase ───────────────────────────────────────────────────────────────
+
+Deno.test("runDatabase — renders title H1 and property table", async () => {
+  const client = {
+    databases: {
+      retrieve: () =>
+        Promise.resolve({
+          title: [makeRich("My DB")],
+          properties: { Name: { type: "title" }, Status: { type: "select" } },
+        }),
+      query: () =>
+        Promise.resolve({
+          results: [
+            {
+              properties: {
+                Name: { type: "title", title: [makeRich("Row 1")] },
+                Status: { type: "select", select: { name: "Active" } },
+              },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        }),
+    },
+  } as unknown as Client;
+
+  const output = await runDatabase(client, "db-id");
+  assert(output.startsWith("# My DB"));
+  assert(output.includes("Row 1"));
+});
+
+Deno.test("runDatabase — appends truncation comment when rows exceed 500", async () => {
+  const client = {
+    databases: {
+      retrieve: () =>
+        Promise.resolve({
+          title: [makeRich("Big DB")],
+          properties: { Name: { type: "title" } },
+        }),
+      query: () =>
+        Promise.resolve({
+          results: Array(100).fill({
+            properties: {
+              Name: { type: "title", title: [makeRich("r")] },
+            },
+          }),
+          has_more: true,
+          next_cursor: "cursor",
+        }),
+    },
+  } as unknown as Client;
+
+  const output = await runDatabase(client, "db-id");
+  assert(output.includes("<!-- truncated: row limit reached -->"));
+});
+
+// ── searchResultsToMarkdown ───────────────────────────────────────────────────
+
+Deno.test("searchResultsToMarkdown — formats each result as a list item", () => {
+  const results = [
+    {
+      object: "page",
+      id: "abc12345-6789-0abc-def1-234567890abc",
+      properties: { title: { type: "title", title: [makeRich("My Page")] } },
+    },
+    {
+      object: "database",
+      id: "def12345-6789-0abc-def1-234567890abc",
+      title: [makeRich("My DB")],
+    },
+  ];
+  const md = searchResultsToMarkdown(results);
+  assert(
+    md.includes(
+      "[My Page](https://www.notion.so/abc12345-6789-0abc-def1-234567890abc) (page)",
+    ),
+  );
+  assert(
+    md.includes(
+      "[My DB](https://www.notion.so/def12345-6789-0abc-def1-234567890abc) (database)",
+    ),
+  );
+});
+
+// ── runSearch ─────────────────────────────────────────────────────────────────
+
+Deno.test("runSearch — returns empty message when no results", async () => {
+  const client = {
+    search: () =>
+      Promise.resolve({
+        results: [],
+        has_more: false,
+        next_cursor: null,
+      }),
+  } as unknown as Client;
+
+  const output = await runSearch(client, "nothing");
+  assertEquals(output, "No results found for query: nothing");
+});
+
+Deno.test("runSearch — paginates until has_more is false", async () => {
+  let calls = 0;
+  const client = {
+    search: () => {
+      calls++;
+      return Promise.resolve({
+        results: [
+          {
+            object: "page",
+            id: "abc12345-6789-0abc-def1-234567890abc",
+            properties: {
+              title: { type: "title", title: [makeRich(`result-${calls}`)] },
+            },
+          },
+        ],
+        has_more: calls < 2,
+        next_cursor: calls < 2 ? "cursor" : null,
+      });
+    },
+  } as unknown as Client;
+
+  const output = await runSearch(client, "query");
+  assert(output.includes("result-1"));
+  assert(output.includes("result-2"));
+  assertEquals(calls, 2);
+});
+
+Deno.test("runSearch — appends truncation comment when results exceed 20", async () => {
+  const client = {
+    search: () =>
+      Promise.resolve({
+        results: Array(20).fill({
+          object: "page",
+          id: "abc12345-6789-0abc-def1-234567890abc",
+          properties: {
+            title: { type: "title", title: [makeRich("r")] },
+          },
+        }),
+        has_more: true,
+        next_cursor: "cursor",
+      }),
+  } as unknown as Client;
+
+  const output = await runSearch(client, "query");
+  assert(output.includes("<!-- truncated: result limit reached -->"));
+});

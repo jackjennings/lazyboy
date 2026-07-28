@@ -119,6 +119,7 @@ export interface TickServiceDeps {
   refreshAnthropicPricing?(): Promise<void>;
   notify?(ticket: TicketState): Promise<void>;
   appendTickLog?(entry: object): Promise<void>;
+  runCeremonies?(): Promise<void>;
 }
 
 export function selectCandidates(
@@ -575,5 +576,6 @@ export class TickService {
 
     await deps.writeLastWorked(selectedIds);
     await deps.commitState();
+    await deps.runCeremonies?.();
   }
 }

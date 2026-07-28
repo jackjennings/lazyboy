@@ -2998,3 +2998,33 @@ Deno.test("advancePhase: implementation revision with absent readTicketLog dep s
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedSessionId, undefined);
 });
+
+Deno.test(
+  "TickService: runCeremonies called after commitState",
+  async () => {
+    const sequence: string[] = [];
+    const deps = makeFakeServiceDeps({
+      commitState: spy(() => {
+        sequence.push("commitState");
+        return Promise.resolve();
+      }),
+      runCeremonies: spy(() => {
+        sequence.push("runCeremonies");
+        return Promise.resolve();
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("commitState") < sequence.indexOf("runCeremonies"),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when runCeremonies is absent",
+  async () => {
+    const deps = makeFakeServiceDeps();
+    await new TickService(deps).run();
+  },
+);

@@ -50,6 +50,7 @@ import { selfReview } from "./self-review.ts";
 import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
+import { readDir, readTextFile, remove, stat } from "./fs.ts";
 
 async function ensureRunPidGitignored(stateDir: string): Promise<void> {
   const gitignorePath = join(stateDir, ".gitignore");
@@ -127,7 +128,7 @@ export function composeTickDeps(
       readIntakeOutput: async (ticketDir: string) => {
         const files: string[] = [];
         try {
-          for await (const entry of Deno.readDir(ticketDir)) {
+          for await (const entry of readDir(ticketDir)) {
             if (
               entry.isFile &&
               /^\d{8}T\d{6}-intake\.md$/.test(entry.name)
@@ -140,21 +141,14 @@ export function composeTickDeps(
         }
         if (files.length === 0) return null;
         files.sort();
-        return Deno.readTextFile(join(ticketDir, files[files.length - 1]));
+        return readTextFile(join(ticketDir, files[files.length - 1]));
       },
       cloneRemoteRepo: (slug: string) =>
         cloneRemoteRepo(
           slug,
           resolveGitHubAccount(slug.split("/")[0], config).token,
         ),
-      stat: async (path: string) => {
-        try {
-          await Deno.stat(path);
-          return true;
-        } catch {
-          return false;
-        }
-      },
+      stat,
       appendLog: appendTicketLog,
     }),
     checkMergedPRAction({
@@ -170,16 +164,9 @@ export function composeTickDeps(
         isPhaseAlive(join(stateDir, ticketId)),
       writeTicket,
       appendLog: appendTicketLog,
-      stat: async (path) => {
-        try {
-          const info = await Deno.stat(path);
-          return { isFile: info.isFile };
-        } catch {
-          return null;
-        }
-      },
-      readDir: (path) => Deno.readDir(path),
-      remove: (path) => Deno.remove(path),
+      stat,
+      readDir,
+      remove,
     }),
     checkConflictsAction({
       runGit,
@@ -295,7 +282,7 @@ export function composeTickDeps(
       readPhaseOutput: async (ticketDir, phase) => {
         const found = await findLatestPhaseOutput(ticketDir);
         if (!found || found.phaseName !== phase) return null;
-        return await Deno.readTextFile(join(ticketDir, found.filename));
+        return await readTextFile(join(ticketDir, found.filename));
       },
       markPRsReady: async (prUrls: string[]) => {
         for (const url of prUrls) {
@@ -338,7 +325,7 @@ export function composeTickDeps(
         }
       },
       readTicketLog: (ticketDir) =>
-        Deno.readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
+        readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),
@@ -375,7 +362,7 @@ export function composeTickDeps(
       listMigrationFiles: async () => {
         const files: string[] = [];
         try {
-          for await (const entry of Deno.readDir(migrationsDir)) {
+          for await (const entry of readDir(migrationsDir)) {
             if (entry.isFile && /^\d+-[a-z0-9-]+\.ts$/.test(entry.name)) {
               files.push(entry.name);
             }
@@ -391,7 +378,7 @@ export function composeTickDeps(
       },
       readApplied: async (dir: string) => {
         try {
-          const content = await Deno.readTextFile(join(dir, ".migrations"));
+          const content = await readTextFile(join(dir, ".migrations"));
           return content.split("\n").filter((l) => l.length > 0);
         } catch (e) {
           if (e instanceof Deno.errors.NotFound) return [];
@@ -404,7 +391,7 @@ export function composeTickDeps(
     }),
     readLastWorked: async () => {
       try {
-        const raw = await Deno.readTextFile(lastWorkedPath);
+        const raw = await readTextFile(lastWorkedPath);
         const parsed = JSON.parse(raw);
         if (
           !Array.isArray(parsed) ||
@@ -432,7 +419,7 @@ export function composeTickDeps(
     refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
     notify: makeNotify(stateDir, {
       readLog: (sd, id) =>
-        Deno.readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),
+        readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),
       appendLog: appendTicketLog,
       runCommand: defaultCommandRunner(),
     }),

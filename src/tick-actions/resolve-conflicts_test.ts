@@ -30,7 +30,7 @@ function makeAction(
     isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
-    stat: () => Promise.resolve(null),
+    stat: () => Promise.resolve(false),
     readDir: async function* () {},
     remove: () => Promise.resolve(),
     ...overrides,
@@ -104,8 +104,8 @@ Deno.test(
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
       stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(null);
-        return Promise.resolve({ isFile: true });
+        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(false);
+        return Promise.resolve(true);
       },
       readDir: async function* () {
         yield {
@@ -156,7 +156,7 @@ Deno.test(
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      stat: () => Promise.resolve(null),
+      stat: () => Promise.resolve(false),
       readDir: async function* () {
         yield {
           name: "20260101T000000-conflict-context-a-repo.md",
@@ -212,9 +212,9 @@ Deno.test(
       },
       stat: (path) => {
         if (path.endsWith("REBASE_HEAD")) {
-          return Promise.resolve({ isFile: true });
+          return Promise.resolve(true);
         }
-        return Promise.resolve(null);
+        return Promise.resolve(false);
       },
       readDir: async function* () {
         yield {
@@ -276,8 +276,8 @@ Deno.test(
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
       stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(null);
-        return Promise.resolve({ isFile: true });
+        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(false);
+        return Promise.resolve(true);
       },
       readDir: async function* () {
         yield {

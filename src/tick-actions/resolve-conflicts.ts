@@ -12,7 +12,7 @@ export interface ResolveConflictsDeps {
   isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
-  stat: (path: string) => Promise<{ isFile: boolean } | null>;
+  stat: (path: string) => Promise<boolean>;
   readDir: (
     path: string,
   ) => AsyncIterable<{ name: string; isFile: boolean }>;
@@ -71,9 +71,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         const gitDir = gitDirRaw.startsWith("/")
           ? gitDirRaw
           : join(wt.path, gitDirRaw);
-        const rebaseHeadPath = join(gitDir, "REBASE_HEAD");
-        const rebaseHeadStat = await deps.stat(rebaseHeadPath);
-        if (rebaseHeadStat !== null) {
+        if (await deps.stat(join(gitDir, "REBASE_HEAD"))) {
           agentFailed = true;
           break;
         }

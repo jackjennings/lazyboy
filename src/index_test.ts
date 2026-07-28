@@ -582,7 +582,7 @@ body
       const result = await runIndex(["status"], { HOME: home });
       assertEquals(result.code, 0);
       const lines = new TextDecoder().decode(result.stdout).trim().split("\n");
-      const dataLines = lines.slice(2);
+      const dataLines = lines.slice(4);
       assertEquals(dataLines.length, 3);
       // spec before plan
       assertEquals(dataLines[0].startsWith("gh-2"), true);

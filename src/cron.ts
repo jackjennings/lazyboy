@@ -1,5 +1,15 @@
 const MARKER = "# lazyboy";
 
+export function detectCronEnabled(content: string): boolean {
+  const lines = content.split("\n").filter(Boolean);
+  const idx = lines.findIndex((l) => l.includes(MARKER));
+  return idx !== -1 && !lines[idx].startsWith("#");
+}
+
+export async function isCronEnabled(): Promise<boolean> {
+  return detectCronEnabled(await readCrontab());
+}
+
 export function cronLine(lazboyDir: string): string {
   return `*/5 * * * * ${lazboyDir}/scripts/tick.sh ${MARKER}`;
 }

@@ -2,7 +2,8 @@ import { join } from "@std/path";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-import type { ApprovalEntry, PhaseUsage } from "../state/types.ts";
+import type { ApprovalEntry, PhaseUsage, TicketState } from "../state/types.ts";
+import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
 import { JiraProvider } from "../providers/jira.ts";
@@ -12,6 +13,33 @@ const toSortableMap: Record<string, (id: string) => Array<string | number>> = {
   github: GitHubProvider.toSortable,
   jira: JiraProvider.toSortable,
 };
+
+export function compareTickets(a: TicketState, b: TicketState): number {
+  const aPhaseIdx = FULL_PHASE_SEQUENCE.indexOf(
+    a.phase as typeof FULL_PHASE_SEQUENCE[number],
+  );
+  const bPhaseIdx = FULL_PHASE_SEQUENCE.indexOf(
+    b.phase as typeof FULL_PHASE_SEQUENCE[number],
+  );
+  const ai = aPhaseIdx === -1 ? FULL_PHASE_SEQUENCE.length : aPhaseIdx;
+  const bi = bPhaseIdx === -1 ? FULL_PHASE_SEQUENCE.length : bPhaseIdx;
+  if (ai !== bi) return ai - bi;
+  const aStatusIdx = STATUS_SEQUENCE.indexOf(
+    a.status as typeof STATUS_SEQUENCE[number],
+  );
+  const bStatusIdx = STATUS_SEQUENCE.indexOf(
+    b.status as typeof STATUS_SEQUENCE[number],
+  );
+  const asi = aStatusIdx === -1 ? STATUS_SEQUENCE.length : aStatusIdx;
+  const bsi = bStatusIdx === -1 ? STATUS_SEQUENCE.length : bStatusIdx;
+  if (asi !== bsi) return asi - bsi;
+  if (a.provider !== b.provider) {
+    return a.provider < b.provider ? -1 : 1;
+  }
+  const toSortableA = toSortableMap[a.provider] ?? ((id: string) => [id]);
+  const toSortableB = toSortableMap[b.provider] ?? ((id: string) => [id]);
+  return compareSortKeys(toSortableA(a.id), toSortableB(b.id));
+}
 
 export function formatTokens(total: number | null): string {
   if (total === null) return "—";
@@ -86,23 +114,7 @@ export const status: Command = {
     const tickets = await Promise.all(
       ids.map((id) => readTicket(stateDir, id)),
     );
-    tickets.sort((a, b) => {
-      const aIdx = FULL_PHASE_SEQUENCE.indexOf(
-        a.phase as typeof FULL_PHASE_SEQUENCE[number],
-      );
-      const bIdx = FULL_PHASE_SEQUENCE.indexOf(
-        b.phase as typeof FULL_PHASE_SEQUENCE[number],
-      );
-      const ai = aIdx === -1 ? FULL_PHASE_SEQUENCE.length : aIdx;
-      const bi = bIdx === -1 ? FULL_PHASE_SEQUENCE.length : bIdx;
-      if (ai !== bi) return ai - bi;
-      if (a.provider !== b.provider) {
-        return a.provider < b.provider ? -1 : 1;
-      }
-      const toSortableA = toSortableMap[a.provider] ?? ((id: string) => [id]);
-      const toSortableB = toSortableMap[b.provider] ?? ((id: string) => [id]);
-      return compareSortKeys(toSortableA(a.id), toSortableB(b.id));
-    });
+    tickets.sort(compareTickets);
     const showAll = args.includes("--all");
     const visible = showAll
       ? tickets

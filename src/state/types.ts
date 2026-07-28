@@ -15,6 +15,15 @@ export type TicketStatus =
   | "needs-attention"
   | "done";
 
+export const STATUS_SEQUENCE = [
+  "new",
+  "running",
+  "waiting",
+  "revising",
+  "needs-attention",
+  "done",
+] as const;
+
 const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
   intake: ["new", "running", "waiting", "revising", "needs-attention"],
   enrichment: ["running", "waiting", "revising", "needs-attention"],

@@ -1,12 +1,98 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import { STATUS_SEQUENCE } from "../state/types.ts";
+import type { TicketState, TicketStatus } from "../state/types.ts";
 import {
+  compareTickets,
   formatStatusHeader,
   formatStatusRow,
   formatTokens,
   readTicketTokens,
   shouldHideTicket,
 } from "./status.ts";
+
+function makeTicket(overrides: Partial<TicketState>): TicketState {
+  return {
+    id: "github/a/repo/1",
+    provider: "github",
+    title: "test",
+    url: "",
+    phase: "intake",
+    status: "running",
+    approvals: [],
+    scope: [],
+    worktrees: {},
+    created: "",
+    updated: "",
+    body: "",
+    ...overrides,
+  };
+}
+
+// ── compareTickets ────────────────────────────────────────────────────────────
+
+Deno.test("compareTickets: orders by status index within same phase", () => {
+  const a = makeTicket({ phase: "spec", status: "new" });
+  const b = makeTicket({ phase: "spec", status: "waiting" });
+  assertEquals(compareTickets(a, b) < 0, true);
+  assertEquals(compareTickets(b, a) > 0, true);
+});
+
+Deno.test("compareTickets: phase difference overrides status", () => {
+  const a = makeTicket({ phase: "intake", status: "needs-attention" });
+  const b = makeTicket({ phase: "spec", status: "new" });
+  assertEquals(compareTickets(a, b) < 0, true);
+});
+
+Deno.test("compareTickets: same phase and status orders by provider then id", () => {
+  const a = makeTicket({
+    phase: "spec",
+    status: "running",
+    provider: "github",
+    id: "github/a/repo/1",
+  });
+  const b = makeTicket({
+    phase: "spec",
+    status: "running",
+    provider: "github",
+    id: "github/a/repo/2",
+  });
+  assertEquals(compareTickets(a, b) < 0, true);
+});
+
+Deno.test("compareTickets: unknown status sorts last within phase", () => {
+  const a = makeTicket({ phase: "intake", status: "done" as TicketStatus });
+  const b = makeTicket({
+    phase: "intake",
+    status: "unrecognized" as TicketStatus,
+  });
+  assertEquals(compareTickets(a, b) < 0, true);
+});
+
+// ── STATUS_SEQUENCE ───────────────────────────────────────────────────────────
+
+Deno.test("STATUS_SEQUENCE is exported and ordered correctly", () => {
+  assertEquals(STATUS_SEQUENCE[0], "new");
+  assertEquals(STATUS_SEQUENCE[STATUS_SEQUENCE.length - 1], "done");
+  assertEquals(
+    STATUS_SEQUENCE.indexOf("running") < STATUS_SEQUENCE.indexOf("waiting"),
+    true,
+  );
+  assertEquals(
+    STATUS_SEQUENCE.indexOf("waiting") < STATUS_SEQUENCE.indexOf("revising"),
+    true,
+  );
+  assertEquals(
+    STATUS_SEQUENCE.indexOf("revising") <
+      STATUS_SEQUENCE.indexOf("needs-attention"),
+    true,
+  );
+  assertEquals(
+    STATUS_SEQUENCE.indexOf("needs-attention") <
+      STATUS_SEQUENCE.indexOf("done"),
+    true,
+  );
+});
 
 // ── formatTokens ─────────────────────────────────────────────────────────────
 

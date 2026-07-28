@@ -270,3 +270,40 @@ Deno.test("toSortable: non-numeric suffix falls back to [id]", () => {
     ["github/jackjennings/lazyboy/abc"],
   );
 });
+
+Deno.test("GitHubProvider.clone: calls _clone with slug, destDir, cwd, and resolved token", async () => {
+  let captured:
+    | { slug: string; destDir: string; cwd: string; token: string }
+    | undefined;
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: (org) => ({
+      token: org === "myorg" ? "tok_org" : "tok_default",
+      login: "user",
+    }),
+    _clone: (slug, destDir, cwd, token) => {
+      captured = { slug, destDir, cwd, token };
+      return Promise.resolve();
+    },
+  });
+  await provider.clone("myorg/myrepo", "myrepo", "/tmp/org");
+  assertEquals(captured, {
+    slug: "myorg/myrepo",
+    destDir: "myrepo",
+    cwd: "/tmp/org",
+    token: "tok_org",
+  });
+});
+
+Deno.test("GitHubProvider.clone: propagates _clone error", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _clone: () => Promise.reject(new Error("clone failed")),
+  });
+  await assertRejects(
+    () => provider.clone("myorg/myrepo", "myrepo", "/tmp"),
+    Error,
+    "clone failed",
+  );
+});

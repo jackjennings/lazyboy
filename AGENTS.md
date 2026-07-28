@@ -570,9 +570,13 @@ org-less paths.
 
 When a scope entry is a GitHub slug (`org/repo`) or GitHub URL and no local
 checkout is found, `cloneRemoteRepo` in `src/worktree.ts` clones the repository
-to `~/.lazyboy/repositories/<org>/<repo>` using
-`git clone --depth 1
---single-branch`. This path is hardcoded parallel to
+to `~/.lazyboy/repositories/<org>/<repo>`. The actual `gh repo clone` subprocess
+is delegated to `GitHubProvider.clone(slug, destDir, cwd)`, which resolves the
+per-org token via `accountResolver` and runs `gh` with only `PATH`, `HOME`, and
+`GH_TOKEN` in the subprocess env — no other parent-process vars are forwarded.
+`cloneRemoteRepo` accepts the clone function as a dependency injection (second
+argument), keeping the filesystem logic in `worktree.ts` and the credential and
+subprocess logic in `GitHubProvider`. This path is hardcoded parallel to
 `~/.lazyboy/worktrees/`.
 
 Existing entries in `~/.lazyboy/repositories/` are reused without re-cloning. No

@@ -443,7 +443,7 @@ Deno.test(
 // ── cloneRemoteRepo ──────────────────────────────────────────────────────────
 
 Deno.test(
-  "cloneRemoteRepo: returns existing path without re-cloning",
+  "cloneRemoteRepo: returns existing path without calling clone",
   async () => {
     const home = await Deno.makeTempDir();
     const orgDir = join(home, ".lazyboy", "repositories", "org");
@@ -453,7 +453,10 @@ Deno.test(
     const originalHome = Deno.env.get("HOME")!;
     Deno.env.set("HOME", home);
     try {
-      const result = await cloneRemoteRepo("org/repo", "");
+      const result = await cloneRemoteRepo(
+        "org/repo",
+        () => Promise.reject(new Error("clone should not be called")),
+      );
       assertEquals(result, repoDir);
     } finally {
       Deno.env.set("HOME", originalHome);
@@ -461,6 +464,33 @@ Deno.test(
     }
   },
 );
+
+Deno.test("cloneRemoteRepo: calls clone when repo does not exist", async () => {
+  const home = await Deno.makeTempDir();
+  const cloneCalls: Array<{ slug: string; destDir: string; cwd: string }> = [];
+
+  const originalHome = Deno.env.get("HOME")!;
+  Deno.env.set("HOME", home);
+  try {
+    const result = await cloneRemoteRepo(
+      "org/repo",
+      (slug, destDir, cwd) => {
+        cloneCalls.push({ slug, destDir, cwd });
+        return Promise.resolve();
+      },
+    );
+    assertEquals(cloneCalls.length, 1);
+    assertEquals(cloneCalls[0].slug, "org/repo");
+    assertEquals(cloneCalls[0].destDir, "repo");
+    assertEquals(
+      result,
+      join(home, ".lazyboy", "repositories", "org", "repo"),
+    );
+  } finally {
+    Deno.env.set("HOME", originalHome);
+    await Deno.remove(home, { recursive: true });
+  }
+});
 
 // ── removeWorktree ───────────────────────────────────────────────────────────
 

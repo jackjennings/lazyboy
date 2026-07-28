@@ -146,10 +146,7 @@ export function composeTickDeps(
         return readTextFile(join(ticketDir, files[files.length - 1]));
       },
       cloneRemoteRepo: (slug: string) =>
-        cloneRemoteRepo(
-          slug,
-          resolveGitHubAccount(slug.split("/")[0], config).token,
-        ),
+        cloneRemoteRepo(slug, (s, d, cwd) => githubProvider.clone(s, d, cwd)),
       stat,
       appendLog: appendTicketLog,
     }),

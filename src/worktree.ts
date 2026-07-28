@@ -157,7 +157,7 @@ export function resolveGitHubSlug(entry: string): string | null {
 
 export async function cloneRemoteRepo(
   slug: string,
-  token: string,
+  clone: (slug: string, destDir: string, cwd: string) => Promise<void>,
 ): Promise<string> {
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
@@ -170,14 +170,7 @@ export async function cloneRemoteRepo(
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
-  const url = token
-    ? `https://${token}@github.com/${slug}.git`
-    : `https://github.com/${slug}.git`;
-  const { code, stderr } = await runGit(
-    ["clone", "--depth", "1", "--single-branch", url, repo],
-    orgDir,
-  );
-  if (code !== 0) throw new Error(`git clone failed for ${slug}: ${stderr}`);
+  await clone(slug, repo, orgDir);
   return repoDir;
 }
 

@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { assertValidPhaseStatus, isApproved } from "./types.ts";
-import type { TicketState } from "./types.ts";
+import type { TicketPhase, TicketState, TicketStatus } from "./types.ts";
+import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -120,3 +121,21 @@ Deno.test("assertValidPhaseStatus: wont-do with non-done statuses throws", () =>
     Error,
   );
 });
+
+Deno.test(
+  "assertValidPhaseStatus accepts a valid status for every phase in FULL_PHASE_SEQUENCE",
+  () => {
+    const sample: Record<string, TicketStatus> = {
+      intake: "new",
+      enrichment: "running",
+      spec: "running",
+      plan: "running",
+      implementation: "running",
+      merge: "waiting",
+      "wont-do": "done",
+    };
+    for (const phase of FULL_PHASE_SEQUENCE) {
+      assertValidPhaseStatus(phase as TicketPhase, sample[phase]!);
+    }
+  },
+);

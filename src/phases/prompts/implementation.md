@@ -53,7 +53,10 @@ of sequential Edit calls: read the file once, incorporate every change into the
 full text, then write the complete modified file in a single Write call. Three
 disjoint Edit calls cost more turns than one Write and are harder to anchor
 correctly when insertion points are close together or when the plan lists
-multiple additions to the same function or block.
+multiple additions to the same function or block. Determine the location count
+from the plan before your first tool call — if a plan task lists three or more
+distinct changes to a single file, commit to Write immediately rather than
+starting with Edit calls and switching mid-file.
 
 Turn discipline: never emit a standalone text turn between tool calls. If you
 have a tool call to make, emit it in the current turn alongside any others — do

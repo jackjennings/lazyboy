@@ -1,0 +1,307 @@
+#!/usr/bin/env -S deno run --allow-env=NOTION_TOKEN --allow-net=api.notion.com
+
+import { Client } from "@notionhq/client";
+import type {
+  BlockObjectResponse,
+  RichTextItemResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+export function parseNotionId(input: string): string | null {
+  let segment: string;
+  try {
+    const { pathname } = new URL(input);
+    const parts = pathname.split("/").filter(Boolean);
+    segment = parts[parts.length - 1] ?? "";
+  } catch {
+    return null;
+  }
+  const uuidMatch = segment.match(
+    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  );
+  if (uuidMatch) return uuidMatch[1];
+  const hexMatch = segment.match(/([0-9a-f]{31,32})$/i);
+  return hexMatch ? hexMatch[1] : null;
+}
+
+export function richTextToMarkdown(richText: RichTextItemResponse[]): string {
+  return richText
+    .map((segment) => {
+      let text = segment.plain_text;
+      if (segment.annotations.bold) text = `**${text}**`;
+      if (segment.annotations.italic) text = `_${text}_`;
+      return text;
+    })
+    .join("");
+}
+
+export function blockToMarkdown(block: BlockObjectResponse): string {
+  switch (block.type) {
+    case "paragraph":
+      return richTextToMarkdown(block.paragraph.rich_text);
+    case "heading_1":
+      return `# ${richTextToMarkdown(block.heading_1.rich_text)}`;
+    case "heading_2":
+      return `## ${richTextToMarkdown(block.heading_2.rich_text)}`;
+    case "heading_3":
+      return `### ${richTextToMarkdown(block.heading_3.rich_text)}`;
+    case "bulleted_list_item":
+      return `- ${richTextToMarkdown(block.bulleted_list_item.rich_text)}`;
+    case "numbered_list_item":
+      return `1. ${richTextToMarkdown(block.numbered_list_item.rich_text)}`;
+    case "code":
+      return `\`\`\`${block.code.language}\n${
+        richTextToMarkdown(block.code.rich_text)
+      }\n\`\`\``;
+    case "quote":
+      return `> ${richTextToMarkdown(block.quote.rich_text)}`;
+    case "divider":
+      return "---";
+    case "child_page":
+      return `[${block.child_page.title}](https://www.notion.so/${block.id})`;
+    default:
+      return "";
+  }
+}
+
+async function fetchBlocks(
+  client: Client,
+  id: string,
+  count: { value: number },
+): Promise<{ lines: string[]; truncated: boolean }> {
+  const lines: string[] = [];
+  let cursor: string | undefined;
+
+  outer: while (true) {
+    const response = await client.blocks.children.list({
+      block_id: id,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+
+    for (const block of response.results as BlockObjectResponse[]) {
+      if (count.value >= 500) {
+        return { lines, truncated: true };
+      }
+      count.value++;
+      const line = blockToMarkdown(block);
+      if (line) lines.push(line);
+
+      if (block.has_children) {
+        const child = await fetchBlocks(client, block.id, count);
+        lines.push(...child.lines);
+        if (child.truncated) return { lines, truncated: true };
+      }
+    }
+
+    if (!response.has_more) break outer;
+    cursor = response.next_cursor ?? undefined;
+  }
+
+  return { lines, truncated: false };
+}
+
+export async function runPage(client: Client, id: string): Promise<string> {
+  const page = await client.pages.retrieve({ page_id: id });
+  const props = (page as { properties: Record<string, unknown> }).properties;
+  const titleProp = Object.values(props).find(
+    (p) => (p as { type: string }).type === "title",
+  ) as { title: RichTextItemResponse[] } | undefined;
+  const title = titleProp ? richTextToMarkdown(titleProp.title) : "";
+
+  const { lines, truncated } = await fetchBlocks(client, id, { value: 0 });
+  const parts = [`# ${title}`, ...lines];
+  if (truncated) parts.push("<!-- truncated: block limit reached -->");
+  return parts.join("\n\n");
+}
+
+export function propertyToString(prop: Record<string, unknown>): string {
+  const type = prop.type as string;
+  switch (type) {
+    case "title":
+      return richTextToMarkdown(
+        (prop.title as RichTextItemResponse[]) ?? [],
+      );
+    case "rich_text":
+      return richTextToMarkdown(
+        (prop.rich_text as RichTextItemResponse[]) ?? [],
+      );
+    case "number":
+      return prop.number == null ? "" : String(prop.number);
+    case "select": {
+      const s = prop.select as { name: string } | null;
+      return s?.name ?? "";
+    }
+    case "multi_select":
+      return (
+        (prop.multi_select as { name: string }[])?.map((o) => o.name).join(
+          ", ",
+        ) ?? ""
+      );
+    case "date": {
+      const d = prop.date as { start: string } | null;
+      return d?.start ?? "";
+    }
+    case "checkbox":
+      return String(prop.checkbox);
+    default:
+      return "";
+  }
+}
+
+export function databaseToMarkdown(
+  headers: string[],
+  rows: string[][],
+): string {
+  const sep = headers.map(() => "---");
+  const toRow = (cells: string[]) =>
+    `| ${cells.map((c) => c.replace(/\|/g, "\\|")).join(" | ")} |`;
+  return [toRow(headers), toRow(sep), ...rows.map(toRow)].join("\n");
+}
+
+export async function runDatabase(client: Client, id: string): Promise<string> {
+  const db = await client.databases.retrieve({ database_id: id });
+  const dbTyped = db as {
+    title: RichTextItemResponse[];
+    properties: Record<string, Record<string, unknown>>;
+  };
+  const title = richTextToMarkdown(dbTyped.title);
+  const headers = Object.keys(dbTyped.properties);
+
+  const rows: string[][] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+
+  while (true) {
+    const response = await client.databases.query({
+      database_id: id,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    const results = response.results as {
+      properties: Record<string, Record<string, unknown>>;
+    }[];
+
+    for (const row of results) {
+      if (rows.length >= 500) {
+        truncated = true;
+        break;
+      }
+      rows.push(headers.map((h) => propertyToString(row.properties[h] ?? {})));
+    }
+
+    if (truncated || !response.has_more) break;
+    cursor = response.next_cursor ?? undefined;
+  }
+
+  const parts = [`# ${title}`, databaseToMarkdown(headers, rows)];
+  if (truncated) parts.push("<!-- truncated: row limit reached -->");
+  return parts.join("\n\n");
+}
+
+export function searchResultsToMarkdown(results: unknown[]): string {
+  return results
+    .map((r) => {
+      const result = r as {
+        object: string;
+        id: string;
+        properties?: Record<string, Record<string, unknown>>;
+        title?: RichTextItemResponse[];
+      };
+      const url = `https://www.notion.so/${result.id}`;
+      let title: string;
+      if (result.object === "database" && result.title) {
+        title = richTextToMarkdown(result.title);
+      } else if (result.properties) {
+        const titleProp = Object.values(result.properties).find(
+          (p) => p.type === "title",
+        ) as { title: RichTextItemResponse[] } | undefined;
+        title = titleProp ? richTextToMarkdown(titleProp.title) : "(untitled)";
+      } else {
+        title = "(untitled)";
+      }
+      return `- [${title}](${url}) (${result.object})`;
+    })
+    .join("\n");
+}
+
+export async function runSearch(
+  client: Client,
+  query: string,
+): Promise<string> {
+  const items: unknown[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+
+  while (true) {
+    const response = await client.search({
+      query,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+
+    for (const result of response.results) {
+      if (items.length >= 20) {
+        truncated = true;
+        break;
+      }
+      items.push(result);
+    }
+
+    if (truncated || !response.has_more) break;
+    cursor = response.next_cursor ?? undefined;
+  }
+
+  if (items.length === 0) return `No results found for query: ${query}`;
+
+  const lines = [searchResultsToMarkdown(items)];
+  if (truncated) lines.push("<!-- truncated: result limit reached -->");
+  return lines.join("\n\n");
+}
+
+if (import.meta.main) {
+  const token = Deno.env.get("NOTION_TOKEN");
+  if (!token) {
+    console.error("error: NOTION_TOKEN is not set");
+    Deno.exit(1);
+  }
+
+  const [subcommand, arg] = Deno.args;
+  const known = ["page", "database", "search"];
+  if (!subcommand || !known.includes(subcommand) || !arg) {
+    console.error(
+      "usage: notion-fetch page <url>\n" +
+        "       notion-fetch database <url>\n" +
+        "       notion-fetch search <query>",
+    );
+    Deno.exit(1);
+  }
+
+  const client = new Client({ auth: token });
+
+  try {
+    let output: string;
+    if (subcommand === "page" || subcommand === "database") {
+      const id = parseNotionId(arg);
+      if (!id) {
+        console.error(`error: could not parse Notion ID from URL: ${arg}`);
+        Deno.exit(1);
+      }
+      output = subcommand === "page"
+        ? await runPage(client, id)
+        : await runDatabase(client, id);
+    } else {
+      output = await runSearch(client, arg);
+    }
+    console.log(output);
+  } catch (err) {
+    if (
+      err && typeof err === "object" && "status" in err &&
+      (err as { status: number }).status === 404
+    ) {
+      const id = subcommand !== "search" ? (parseNotionId(arg) ?? arg) : arg;
+      console.error(
+        `error: Notion returned 404 for ${id} — check that the integration has been granted access to this page`,
+      );
+    } else {
+      console.error(err instanceof Error ? err.message : String(err));
+    }
+    Deno.exit(1);
+  }
+}

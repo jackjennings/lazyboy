@@ -96,6 +96,10 @@ export interface TickDeps {
     phase: string,
     outputContent: string,
   ) => Promise<void>;
+  readPhaseExitCode: (
+    ticketDir: string,
+    phase: string,
+  ) => Promise<number | null>;
   readTicketLog?: (ticketDir: string) => Promise<string>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
@@ -285,6 +289,24 @@ export async function advancePhase(
         from: "running",
         to: "waiting",
       });
+
+      const exitCode = await deps.readPhaseExitCode(
+        join(stateDir, ticket.id),
+        ticket.phase,
+      );
+      if (exitCode !== null && exitCode !== 0) {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-output-invalid",
+          phase: ticket.phase,
+          reason: "non-zero-exit",
+        });
+        return;
+      }
 
       const outputContent = await deps.readPhaseOutput(
         join(stateDir, ticket.id),

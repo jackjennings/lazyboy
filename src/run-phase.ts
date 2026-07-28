@@ -481,6 +481,15 @@ export async function executePhase(
     ...(sessionId !== null ? { sessionId } : {}),
   });
 
+  try {
+    await Deno.writeTextFile(
+      join(opts.ticketDir, opts.outputFile + ".exit"),
+      String(result.code),
+    );
+  } catch {
+    // sidecar write failure does not affect the returned exit code
+  }
+
   return result.code;
 }
 

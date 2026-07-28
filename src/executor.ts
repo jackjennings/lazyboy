@@ -65,13 +65,22 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   return args;
 }
 
+export function buildPhaseEnvOverrides(
+  opts: ExecutorOptions,
+): Record<string, string> {
+  return {
+    GITHUB_TOKEN: opts.githubToken,
+    GH_TOKEN: opts.githubToken,
+    ANTHROPIC_API_KEY: opts.anthropicApiKey,
+  };
+}
+
 export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
   const cmd = new Deno.Command(Deno.execPath(), {
     args: buildPhaseArgs(opts),
     env: {
       ...Deno.env.toObject(),
-      GITHUB_TOKEN: opts.githubToken,
-      ANTHROPIC_API_KEY: opts.anthropicApiKey,
+      ...buildPhaseEnvOverrides(opts),
     },
     stdin: "null",
     stdout: "null",

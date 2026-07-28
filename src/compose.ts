@@ -66,21 +66,42 @@ async function ensureRunPidGitignored(stateDir: string): Promise<void> {
   );
 }
 
+export function resolveGitHubAccount(
+  org: string,
+  config: Config,
+): { token: string; login: string } {
+  if (!config.github.accounts) {
+    return {
+      token: Deno.env.get("GITHUB_TOKEN") ?? "",
+      login: Deno.env.get("GITHUB_LOGIN") ?? "",
+    };
+  }
+  const accountName = config.github.orgs?.[org];
+  if (!accountName) {
+    return {
+      token: Deno.env.get("GITHUB_TOKEN") ?? "",
+      login: Deno.env.get("GITHUB_LOGIN") ?? "",
+    };
+  }
+  const account = config.github.accounts[accountName];
+  return {
+    token: Deno.env.get(account.tokenEnv) ?? "",
+    login: account.login,
+  };
+}
+
 export function composeTickDeps(
   config: Config,
 ): TickServiceDeps {
   const stateDir = expandHome(config.state.dir);
   const home = Deno.env.get("HOME")!;
-  const token = Deno.env.get("GITHUB_TOKEN") ?? "";
-  const login = Deno.env.get("GITHUB_LOGIN") ?? "";
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
   const piProvider = config.pi.provider;
   const agentType = config.agent.type;
 
   const githubProvider = new GitHubProvider({
     repos: config.github.repos,
-    token,
-    login,
+    accountResolver: (org) => resolveGitHubAccount(org, config),
   });
 
   const providers: Provider[] = [githubProvider];
@@ -120,7 +141,11 @@ export function composeTickDeps(
         files.sort();
         return Deno.readTextFile(join(ticketDir, files[files.length - 1]));
       },
-      cloneRemoteRepo: (slug: string) => cloneRemoteRepo(slug, token),
+      cloneRemoteRepo: (slug: string) =>
+        cloneRemoteRepo(
+          slug,
+          resolveGitHubAccount(slug.split("/")[0], config).token,
+        ),
       stat: async (path: string) => {
         try {
           await Deno.stat(path);
@@ -136,6 +161,7 @@ export function composeTickDeps(
         const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
         if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
         const [, slug, number] = match;
+        const { token } = resolveGitHubAccount(slug.split("/")[0], config);
         const res = await fetch(
           `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
           {
@@ -223,7 +249,10 @@ export function composeTickDeps(
           prompt,
           scopeDirs: [],
           outputFile: `${timestamp}-conflict-resolution.md`,
-          githubToken: token,
+          githubToken: resolveGitHubAccount(
+            opts.branch.split("/")[1],
+            config,
+          ).token,
           anthropicApiKey,
           worktrees: {
             [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
@@ -276,7 +305,10 @@ export function composeTickDeps(
           prompt: opts.prompt,
           scopeDirs: opts.scope.map(expandHome),
           outputFile: opts.outputFile,
-          githubToken: token,
+          githubToken: resolveGitHubAccount(
+            Object.keys(opts.worktrees)[0]?.split("/")[0] ?? "",
+            config,
+          ).token,
           anthropicApiKey,
           worktrees: opts.worktrees,
           provider: piProvider,
@@ -303,6 +335,7 @@ export function composeTickDeps(
           const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
           if (!match) throw new Error(`Cannot parse PR URL: ${url}`);
           const [, slug, number] = match;
+          const { token } = resolveGitHubAccount(slug.split("/")[0], config);
           const restRes = await fetch(
             `https://api.github.com/repos/${slug}/pulls/${number}`,
             {
@@ -358,7 +391,7 @@ export function composeTickDeps(
             `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}`,
           scopeDirs: [],
           outputFile,
-          githubToken: token,
+          githubToken: resolveGitHubAccount("jackjennings", config).token,
           anthropicApiKey,
           worktrees: {
             "jackjennings/lazyboy": { path: lazboyWorktreePath, branch: "" },

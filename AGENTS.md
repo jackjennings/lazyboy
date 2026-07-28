@@ -15,8 +15,10 @@ These must be present on the host; they are not managed by Deno.
 | GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                 |
 | `apfel`                       | Runs local LLM server for approval classification in review mode (optional; falls back to Anthropic when absent or unavailable) |
 
-Environment variables required at runtime (tick only): `GITHUB_TOKEN`,
-`GITHUB_LOGIN`, `ANTHROPIC_API_KEY`.
+Environment variables required at runtime (tick only): `ANTHROPIC_API_KEY` plus
+either `GITHUB_TOKEN`/`GITHUB_LOGIN` (single-account setups) or the `token_env`
+variables named in `[github.accounts.*]` (multi-account setups). See
+`resolveGitHubAccount` in `src/compose.ts`.
 
 ## Commands
 
@@ -27,8 +29,10 @@ deno task start tick                    # run the tick loop once
 deno run --allow-all src/index.ts status
 ```
 
-Runtime env vars required for `tick`: `GITHUB_TOKEN`, `GITHUB_LOGIN`,
-`ANTHROPIC_API_KEY`. Config is read from `~/.config/lazyboy/config.toml`.
+Runtime env vars required for `tick`: `ANTHROPIC_API_KEY` plus either
+`GITHUB_TOKEN`/`GITHUB_LOGIN` (single-account) or the `token_env` variables from
+`[github.accounts.*]` (multi-account). Config is read from
+`~/.config/lazyboy/config.toml`.
 
 ## Architecture
 
@@ -45,11 +49,14 @@ advance pass → commit. No adapter construction happens inside `TickService`.
 without real filesystem or process access.
 
 **Composition root** (`src/compose.ts`): `composeTickDeps(config)` is the single
-site where all concrete adapters are constructed. It reads `GITHUB_TOKEN`,
-`GITHUB_LOGIN`, `ANTHROPIC_API_KEY`, `JIRA_EMAIL`, `JIRA_API_TOKEN` from
-`Deno.env` for adapter credentials, plus `HOME` to build `~/.lazyboy` paths. No
-other module reads adapter credentials from `Deno.env`; `appendTickLog` in
-`src/tick.ts` separately reads `HOME` to locate `~/.lazyboy/tick.ndjson`.
+site where all concrete adapters are constructed. It resolves GitHub credentials
+via `resolveGitHubAccount(org, config)` — which reads from `Deno.env` using the
+per-org account map in `config.github` when configured, or falls back to
+`GITHUB_TOKEN`/`GITHUB_LOGIN` — and reads `ANTHROPIC_API_KEY`, `JIRA_EMAIL`,
+`JIRA_API_TOKEN` directly from `Deno.env`, plus `HOME` to build `~/.lazyboy`
+paths. No other module reads adapter credentials from `Deno.env`;
+`appendTickLog` in `src/tick.ts` separately reads `HOME` to locate
+`~/.lazyboy/tick.ndjson`.
 
 **Lock** (`src/lock.ts`): the `Lock` interface (`withLock(fn)`) is satisfied by
 `PidFileLock`, which takes the pid-file path plus a `PidFileLockDeps` object
@@ -466,6 +473,47 @@ migration moved them. A migration test that only asserts the old directory is
 gone is not sufficient; it must also assert file contents exist at the new path
 (a prior migration deleted the old directory outright and passed review because
 its test never checked this, destroying history for every ticket it touched).
+
+## Per-org GitHub credentials
+
+`resolveGitHubAccount(org, config)` in `src/compose.ts` is the single function
+that maps a GitHub org slug to a `{ token, login }` pair.
+
+- If `config.github.accounts` is absent: returns `GITHUB_TOKEN` / `GITHUB_LOGIN`
+  from the environment (single-account fallback; existing behavior unchanged).
+- If `config.github.accounts` is present and the org appears in
+  `config.github.orgs`: returns the token from the env var named by
+  `account.tokenEnv` and the configured `login`.
+- If `config.github.accounts` is present but the org is not mapped: silently
+  falls back to `GITHUB_TOKEN` / `GITHUB_LOGIN`.
+
+All call sites in `composeTickDeps` that previously captured a single `token`
+closure now call `resolveGitHubAccount` per operation. `GitHubProvider`
+constructor takes `accountResolver: (org: string) => { token, login }` instead
+of a single `token` / `login`.
+
+`spawnPhase` sets both `GITHUB_TOKEN` and `GH_TOKEN` to the resolved token so
+the `gh` CLI (which prefers `GH_TOKEN`) uses the correct account even if a
+different value is inherited from the parent shell.
+
+To configure multi-account access, add to `config.toml`:
+
+```toml
+[github.accounts.personal]
+token_env = "GITHUB_TOKEN_PERSONAL"
+login     = "jackjennings"
+
+[github.accounts.work]
+token_env = "GITHUB_TOKEN_WORK"
+login     = "jack-jennings-sdx"
+
+[github.orgs]
+jackjennings = "personal"
+smarterdx    = "work"
+```
+
+`loadConfig` validates that every `token_env` value is set in the environment at
+startup and that every `[github.orgs]` entry references a known account name.
 
 ## Ticket ID format
 

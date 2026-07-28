@@ -74,9 +74,27 @@ Deno.test("checkConflictsAction: does not apply to needs-attention", () => {
   );
 });
 
-Deno.test("checkConflictsAction: does not apply to merge phase — work is already done", () => {
+Deno.test("checkConflictsAction: applies to merge/waiting ticket with existing worktree", () => {
   assertEquals(
     makeAction().applies(makeTicket({ phase: "merge", status: "waiting" })),
+    true,
+  );
+});
+
+Deno.test("checkConflictsAction: does not apply to merge/waiting when process is alive", () => {
+  assertEquals(
+    makeAction({ isProcessAlive: () => true }).applies(
+      makeTicket({ phase: "merge", status: "waiting" }),
+    ),
+    false,
+  );
+});
+
+Deno.test("checkConflictsAction: does not apply to merge/waiting when no worktrees exist on disk", () => {
+  assertEquals(
+    makeAction({ worktreeExists: () => false }).applies(
+      makeTicket({ phase: "merge", status: "waiting" }),
+    ),
     false,
   );
 });
@@ -413,6 +431,69 @@ Deno.test(
     assertEquals(rebaseClean !== undefined, true);
   },
 );
+
+// ── merge/waiting run paths ──────────────────────────────────────────────────
+
+Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs success", async () => {
+  const logged: object[] = [];
+  const calls: string[][] = [];
+  const result = await makeAction({
+    runGit: (args) => {
+      calls.push(args);
+      return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+    },
+    appendLog: (_dir, _id, entry) => {
+      logged.push(entry);
+      return Promise.resolve();
+    },
+  }).run(
+    makeTicket({
+      phase: "merge",
+      status: "waiting",
+      prs: [{
+        url: "https://github.com/myorg/myrepo/pull/7",
+        title: "",
+        dependsOn: [],
+        merged: false,
+      }],
+    }),
+    "/state",
+  );
+  assertEquals(result, null);
+  assertEquals(calls.some((a) => a[0] === "push"), true);
+  const successEntry = (logged as Record<string, unknown>[]).find(
+    (e) => e.event === "success",
+  );
+  assertEquals(successEntry !== undefined, true);
+  assertEquals(successEntry!.context, "checkConflicts");
+});
+
+Deno.test("checkConflictsAction: merge/waiting — rebase conflict spawns agent", async () => {
+  const spawnCalls: object[] = [];
+  const result = await makeAction({
+    runGit: (args) => {
+      if (args[0] === "rebase" && args[1] === "origin/main") {
+        return Promise.resolve({ code: 1, stdout: "", stderr: "CONFLICT" });
+      }
+      if (args[0] === "diff") {
+        return Promise.resolve({ code: 0, stdout: "foo.ts", stderr: "" });
+      }
+      return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+    },
+    spawn: (opts) => {
+      spawnCalls.push(opts);
+      return Promise.resolve();
+    },
+    writeContextFile: () => Promise.resolve("ctx.md"),
+    writeTicket: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+  }).run(
+    makeTicket({ phase: "merge", status: "waiting" }),
+    "/state",
+  );
+  assertEquals(spawnCalls.length, 1);
+  assertEquals(result?.status, "running");
+});
 
 Deno.test(
   "checkConflictsAction: multiple worktrees — loop stops after first conflict spawns agent",

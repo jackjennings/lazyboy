@@ -13,6 +13,13 @@ loaded — do not Read any of them. Identify the source files the plan mentions
 from the plan.md content already in your context, then open only those files in
 your first parallel Read call.
 
+Git context: the worktree is already on the correct branch with all prior
+commits applied. Do not run `git log`, `git branch`, `git status`, or
+`git worktree list` to orient yourself before you start coding — these calls
+cannot reveal anything that reading the source files cannot, and a
+git-inspection loop at session start is the primary source of outlier turn
+counts in revision runs. Start with source file reads, not git commands.
+
 Implement the plan exactly as specified using TDD:
 
 1. Write failing tests first

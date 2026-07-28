@@ -177,6 +177,34 @@ must not contain `gh pr create` — the implementation-revision path uses the sa
 supplement as the initial implementation, and the revising prompt already
 handles PR creation differently.
 
+## State directory prompt supplements
+
+`loadStatePrompt(phase, stateDir)` in `src/phases/runners.ts` reads
+`{stateDir}/prompts/{phase}.md` and returns `""` when absent. `advancePhase`
+calls it at every prompt-loading site and appends the result last — after the
+provider supplement — with `\n\n` when non-empty.
+
+To add a user-level supplement for any phase, create
+`{stateDir}/prompts/{phase}.md`. No code changes are required. The phase name
+must match an `ActivePhase` value (`intake`, `enrichment`, `spec`, `plan`,
+`implementation`). For `implementation`, the same file applies to both the
+normal implementation run and the implementation-revision run.
+
+The prompts directory lives at the root of the state directory, not inside any
+ticket subdirectory:
+
+```
+{stateDir}/
+  prompts/
+    intake.md
+    enrichment.md
+    spec.md
+    plan.md
+    implementation.md
+  {ticket.id}/
+    ...
+```
+
 ## `tick.ndjson` format
 
 `~/.lazyboy/tick.ndjson` uses NDJSON format — one JSON object per line, each

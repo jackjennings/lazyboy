@@ -36,7 +36,16 @@ Edit calls as possible. Do not make one Edit call per listed change — this
 multiplies turns without benefit and is the most common source of outlier
 session length. After a successful Edit, never re-read the file before the next
 edit — the file contains exactly what you wrote; use that text as the anchor for
-subsequent edits.
+subsequent edits. Do not re-read any file from the initial batch read later in
+the session — your read remains valid regardless of how many turns have passed.
+
+When changes are at multiple scattered locations in the same file (e.g., add
+import at the top, add constructor in the function body, add property in the
+return object), combine adjacent changes into one Edit by using an `old_string`
+that spans from the first to the last adjacent change site and replacing all of
+them at once. For wiring files like `compose.ts` where a plan adds an import, a
+constructor call, and a return-object property, two Edits are the maximum: one
+for the import line and one for the constructor-plus-return-property block.
 
 When done, commit all changes to the current branch with a descriptive commit
 message. Then push the branch and open a pull request using the `gh` CLI. Always

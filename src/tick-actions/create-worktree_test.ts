@@ -37,6 +37,7 @@ function makeAction(
     readIntakeOutput: () => Promise.resolve(null),
     cloneRemoteRepo: () => Promise.reject(new Error("no clone")),
     stat: () => Promise.resolve(false),
+    appendLog: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -277,6 +278,99 @@ Deno.test(
 
     assertEquals(result?.status, "needs-attention");
     assertEquals(written[0].worktrees, {});
+  },
+);
+
+// ── run: appendLog on error paths ────────────────────────────────────────────
+
+Deno.test(
+  "createWorktreeAction: GitHub ticket, extractGitHubSlug throws → logs github-slug-extraction-failed",
+  async () => {
+    const logged: object[] = [];
+    await makeAction({
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(
+      makeTicket({ url: "https://github.com/not-a-valid-issue-url" }),
+      "/state",
+    );
+    assertEquals(logged.length, 1);
+    assertEquals(
+      (logged[0] as Record<string, unknown>).event,
+      "needs-attention",
+    );
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "github-slug-extraction-failed",
+    );
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: non-GitHub ticket with no GitHub repos → logs no-github-repos",
+  async () => {
+    const logged: object[] = [];
+    await makeAction({
+      readIntakeOutput: () => Promise.resolve(null),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(
+      makeTicket({
+        id: "jira/PROJ-1",
+        provider: "jira",
+        url: "https://myco.atlassian.net/browse/PROJ-1",
+      }),
+      "/state",
+    );
+    assertEquals(logged.length, 1);
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "no-github-repos",
+    );
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: clone fails → logs clone-failed",
+  async () => {
+    const logged: object[] = [];
+    await makeAction({
+      findLocalRepo: () => Promise.resolve(null),
+      cloneRemoteRepo: () => Promise.reject(new Error("clone failed")),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(), "/state");
+    assertEquals(logged.length, 1);
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "clone-failed",
+    );
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: createWorktree throws → logs worktree-creation-failed",
+  async () => {
+    const logged: object[] = [];
+    await makeAction({
+      findLocalRepo: () => Promise.resolve("/code/myorg/myrepo"),
+      createWorktree: () => Promise.reject(new Error("worktree add failed")),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(), "/state");
+    assertEquals(logged.length, 1);
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "worktree-creation-failed",
+    );
   },
 );
 

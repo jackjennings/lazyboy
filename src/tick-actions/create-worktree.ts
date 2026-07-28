@@ -20,6 +20,7 @@ export interface CreateWorktreeDeps {
   readIntakeOutput: (ticketDir: string) => Promise<string | null>;
   cloneRemoteRepo: (slug: string) => Promise<string>;
   stat: (path: string) => Promise<boolean>;
+  appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
 }
 
 export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
@@ -57,6 +58,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
             updated: now,
           };
           await deps.writeTicket(stateDir, updated);
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "needs-attention",
+            reason: "github-slug-extraction-failed",
+          });
           return updated;
         }
       }
@@ -80,6 +85,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "needs-attention",
+          reason: "no-github-repos",
+        });
         return updated;
       }
 
@@ -99,6 +108,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
               updated: now,
             };
             await deps.writeTicket(stateDir, updated);
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "needs-attention",
+              reason: "clone-failed",
+            });
             return updated;
           }
         }
@@ -120,6 +133,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
           updated: now,
         };
         await deps.writeTicket(stateDir, updated);
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "needs-attention",
+          reason: "worktree-creation-failed",
+        });
         return updated;
       }
 

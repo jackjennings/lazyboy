@@ -688,6 +688,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     event: "phase-transition",
     from: "plan",
     to: "needs-attention",
+    reason: "no-worktrees",
   });
 });
 

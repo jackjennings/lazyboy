@@ -451,6 +451,8 @@ export class TickService {
   async run(): Promise<void> {
     const deps = this.#deps;
     try {
+      await deps.refreshAnthropicPricing?.();
+      await deps.installPackages(deps.packageSources);
       await deps.lock.withLock(async () => {
         try {
           await this.#runWorkflow(deps);
@@ -470,9 +472,6 @@ export class TickService {
   }
 
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
-    await deps.refreshAnthropicPricing?.();
-    await deps.installPackages(deps.packageSources);
-
     const existingIds = new Set(await deps.listTickets());
     for (const provider of deps.providers) {
       const newItems = await provider.fetchNew(existingIds);
@@ -546,7 +545,8 @@ export class TickService {
       await advancePhase(ticket, deps.stateDir, deps.tickDeps);
     }
 
-    let running = runningTickets.length;
+    let running =
+      runningTickets.filter((t) => deps.tickDeps.isProcessAlive(t.id)).length;
     for (const ticket of candidateTickets) {
       if (!selectedSet.has(ticket.id)) continue;
       const willSpawn = ticket.status === "new" ||

@@ -1378,6 +1378,174 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "TickService: installPackages called before lock fn is invoked",
+  async () => {
+    const sequence: string[] = [];
+    const lock: Lock = {
+      withLock: async (fn) => {
+        sequence.push("lockFn");
+        await fn();
+      },
+    };
+    const deps = makeFakeServiceDeps({
+      lock,
+      installPackages: spy(() => {
+        sequence.push("install");
+        return Promise.resolve([]);
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("install") < sequence.indexOf("lockFn"),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "TickService: lock fn not called when installPackages throws",
+  async () => {
+    let lockFnCalled = false;
+    const lock: Lock = {
+      withLock: async (fn) => {
+        lockFnCalled = true;
+        await fn();
+      },
+    };
+    const deps = makeFakeServiceDeps({
+      lock,
+      installPackages: () => Promise.reject(new Error("install failed")),
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertEquals(lockFnCalled, false);
+  },
+);
+
+Deno.test(
+  "TickService: lock fn not called when refreshAnthropicPricing throws",
+  async () => {
+    let lockFnCalled = false;
+    const lock: Lock = {
+      withLock: async (fn) => {
+        lockFnCalled = true;
+        await fn();
+      },
+    };
+    const deps = makeFakeServiceDeps({
+      lock,
+      refreshAnthropicPricing: () =>
+        Promise.reject(new Error("pricing failed")),
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertEquals(lockFnCalled, false);
+  },
+);
+
+Deno.test(
+  "TickService: fills both concurrency slots when all running tickets have dead PIDs",
+  async () => {
+    const running1 = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
+    const running2 = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "running",
+    });
+    const candidate1 = makeTicket({
+      id: "gh-3",
+      phase: "intake",
+      status: "new",
+    });
+    const candidate2 = makeTicket({
+      id: "gh-4",
+      phase: "intake",
+      status: "new",
+    });
+    const store: Record<string, TicketState> = {
+      "gh-1": running1,
+      "gh-2": running2,
+      "gh-3": candidate1,
+      "gh-4": candidate2,
+    };
+    const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3", "gh-4"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      concurrency: 2,
+      tickDeps: {
+        spawn: spawnSpy,
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      },
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(spawnSpy, 2);
+  },
+);
+
+Deno.test(
+  "TickService: fills one concurrency slot when one running ticket is alive and one is dead",
+  async () => {
+    const running1 = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
+    const running2 = makeTicket({
+      id: "gh-2",
+      phase: "intake",
+      status: "running",
+    });
+    const candidate1 = makeTicket({
+      id: "gh-3",
+      phase: "intake",
+      status: "new",
+    });
+    const candidate2 = makeTicket({
+      id: "gh-4",
+      phase: "intake",
+      status: "new",
+    });
+    const store: Record<string, TicketState> = {
+      "gh-1": running1,
+      "gh-2": running2,
+      "gh-3": candidate1,
+      "gh-4": candidate2,
+    };
+    const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3", "gh-4"]),
+      readTicket: (id) => Promise.resolve(store[id]),
+      concurrency: 2,
+      tickDeps: {
+        spawn: spawnSpy,
+        isProcessAlive: (id) => id === "gh-1",
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+      },
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(spawnSpy, 1);
+  },
+);
+
 // ── selectCandidates ──────────────────────────────────────────────────────────
 
 Deno.test("selectCandidates: empty candidates returns empty", () => {

@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import type { RepoCandidate } from "./worktree.ts";
@@ -13,6 +13,7 @@ import {
   parseRemoteSlug,
   removeWorktree,
   resolveGitHubSlug,
+  runGh,
   runGit,
 } from "./worktree.ts";
 
@@ -461,6 +462,19 @@ Deno.test(
     }
   },
 );
+
+// ── runGh ────────────────────────────────────────────────────────────────────
+
+Deno.test("runGh: returns code, stdout, and stderr", async () => {
+  const tmp = await Deno.makeTempDir();
+  try {
+    const result = await runGh(["--version"], tmp);
+    assertEquals(result.code, 0);
+    assert(result.stdout.startsWith("gh version"));
+  } finally {
+    await Deno.remove(tmp, { recursive: true });
+  }
+});
 
 // ── removeWorktree ───────────────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 import { existsSync } from "@std/fs";
 import { CeremonyRunner } from "./ceremonies.ts";
+import { StandupCeremony } from "./ceremonies/standup.ts";
 import { join } from "@std/path";
 import { detectImplementationOutlier } from "./outlier-detection.ts";
 import { compactTimestamp } from "./timestamp.ts";
@@ -416,23 +417,25 @@ export function composeTickDeps(
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
 
-  const ceremonies = new CeremonyRunner({
-    stateDir,
-    listTickets: () => listTickets(stateDir),
-    readTicket: (id) => readTicket(stateDir, id),
-    commitState: async () => {
-      await ensureRunPidGitignored(stateDir);
-      await commitState(stateDir, "ceremony: standup");
-    },
-    appendTickLog,
-    notify: async (title, message) => {
-      await defaultCommandRunner()([
-        "osascript",
-        "-e",
-        `display notification "${message}" with title "${title}"`,
-      ]);
-    },
-  });
+  const ceremonies = new CeremonyRunner({ stateDir }, [
+    new StandupCeremony({
+      stateDir,
+      listTickets: () => listTickets(stateDir),
+      readTicket: (id) => readTicket(stateDir, id),
+      commitState: async () => {
+        await ensureRunPidGitignored(stateDir);
+        await commitState(stateDir, "ceremony: standup");
+      },
+      appendTickLog,
+      notify: async (title, message) => {
+        await defaultCommandRunner()([
+          "osascript",
+          "-e",
+          `display notification "${message}" with title "${title}"`,
+        ]);
+      },
+    }),
+  ]);
 
   return {
     stateDir,

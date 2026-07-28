@@ -1,7 +1,8 @@
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
-import { CeremonyRunner, renderStandup } from "./ceremonies.ts";
+import { CeremonyRunner } from "./ceremonies.ts";
+import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import type { TicketState } from "./state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -29,13 +30,7 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
 Deno.test("CeremonyRunner: no ceremonies dir does not throw", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
-    const runner = new CeremonyRunner({
-      stateDir,
-      listTickets: () => Promise.resolve([]),
-      readTicket: () => Promise.reject(new Error("not called")),
-      commitState: () => Promise.resolve(),
-      appendTickLog: () => Promise.resolve(),
-    });
+    const runner = new CeremonyRunner({ stateDir }, []);
     await runner.run();
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -49,7 +44,7 @@ Deno.test("CeremonyRunner: unknown ceremony directory silently skipped", async (
       recursive: true,
     });
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -57,6 +52,7 @@ Deno.test("CeremonyRunner: unknown ceremony directory silently skipped", async (
       appendTickLog: () => Promise.resolve(),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 0);
   } finally {
@@ -71,7 +67,7 @@ Deno.test("CeremonyRunner: standup skipped when no config.toml", async () => {
       recursive: true,
     });
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -79,6 +75,7 @@ Deno.test("CeremonyRunner: standup skipped when no config.toml", async () => {
       appendTickLog: () => Promise.resolve(),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 0);
   } finally {
@@ -98,7 +95,7 @@ Deno.test("CeremonyRunner: invalid time appends warning and skips ceremony", asy
     );
     const warnings: object[] = [];
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -109,6 +106,7 @@ Deno.test("CeremonyRunner: invalid time appends warning and skips ceremony", asy
       },
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 0);
     assertEquals(warnings.length, 1);
@@ -132,7 +130,7 @@ Deno.test("CeremonyRunner: invalid time 25:00 appends warning and skips ceremony
       'time = "25:00"',
     );
     const warnings: object[] = [];
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -143,6 +141,7 @@ Deno.test("CeremonyRunner: invalid time 25:00 appends warning and skips ceremony
       },
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertEquals(warnings.length, 1);
   } finally {
@@ -161,7 +160,7 @@ Deno.test("CeremonyRunner: standup does not fire before configured time", async 
       'time = "23:00"',
     );
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -169,6 +168,7 @@ Deno.test("CeremonyRunner: standup does not fire before configured time", async 
       appendTickLog: () => Promise.resolve(),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 0);
   } finally {
@@ -188,7 +188,7 @@ Deno.test("CeremonyRunner: standup fires when time has passed", async () => {
     );
     const commitState = spy(() => Promise.resolve());
     const notifyCalls: [string, string][] = [];
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -200,6 +200,7 @@ Deno.test("CeremonyRunner: standup fires when time has passed", async () => {
       },
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 1);
     assertEquals(notifyCalls, [["lazyboy", "Standup ready"]]);
@@ -230,7 +231,7 @@ Deno.test("CeremonyRunner: standup does not rerun if output file exists for toda
       "existing",
     );
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -238,6 +239,7 @@ Deno.test("CeremonyRunner: standup does not rerun if output file exists for toda
       appendTickLog: () => Promise.resolve(),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 0);
   } finally {
@@ -256,7 +258,7 @@ Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion",
       'time = "09:00"',
     );
     const commitState = spy(() => Promise.resolve());
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve([]),
       readTicket: () => Promise.reject(new Error("not called")),
@@ -265,6 +267,7 @@ Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion",
       notify: () => Promise.reject(new Error("osascript failed")),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     assertSpyCalls(commitState, 1);
   } finally {
@@ -319,7 +322,7 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
       makeTicket({ id: "github/org/repo/2", phase: "intake", status: "new" }),
     ];
     let written = "";
-    const runner = new CeremonyRunner({
+    const standup = new StandupCeremony({
       stateDir,
       listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
       readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
@@ -327,6 +330,7 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
       appendTickLog: () => Promise.resolve(),
       now: () => TEST_NOW,
     });
+    const runner = new CeremonyRunner({ stateDir }, [standup]);
     await runner.run();
     const outputDir = join(stateDir, "ceremonies", "standup", "output");
     for await (const entry of Deno.readDir(outputDir)) {

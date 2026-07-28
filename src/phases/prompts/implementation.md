@@ -38,6 +38,13 @@ session length. After a successful Edit, never re-read the file before the next
 edit — the file contains exactly what you wrote; use that text as the anchor for
 subsequent edits.
 
+When a file needs changes at three or more separate locations, use Write instead
+of sequential Edit calls: read the file once, incorporate every change into the
+full text, then write the complete modified file in a single Write call. Three
+disjoint Edit calls cost more turns than one Write and are harder to anchor
+correctly when insertion points are close together or when the plan lists
+multiple additions to the same function or block.
+
 When done, commit all changes to the current branch with a descriptive commit
 message. Then push the branch and open a pull request using the `gh` CLI. Always
 create pull requests in draft mode — lazyboy automatically promotes them to

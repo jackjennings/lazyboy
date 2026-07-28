@@ -56,6 +56,12 @@ already read a file at any point in this session — in the initial batch or any
 later turn — do not read it again before editing it. Any read you performed
 remains valid regardless of how many turns have elapsed since.
 
+When multiple files each require the same type of independent change (e.g., the
+same import added to `tick.ts` and `run-phase.ts`), issue all such edits as
+parallel calls in a single turn. Only serialize when edit B's `old_string`
+references text that edit A will write. Failing to batch cross-file independent
+edits costs one extra turn per file after the first.
+
 When a file needs changes at three or more separate locations, use Write instead
 of sequential Edit calls: read the file once, incorporate every change into the
 full text, then write the complete modified file in a single Write call. Three

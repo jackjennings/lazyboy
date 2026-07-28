@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import { deleteRunPid } from "./executor.ts";
+import { resolveRevisionSessionId } from "./run-phase.ts";
 import {
   loadPrompt,
   loadPromptFile,
@@ -59,6 +60,7 @@ export interface TickDeps {
     outputFile: string;
     model: string;
     thinking: string;
+    sessionId?: string;
   }) => Promise<void>;
   isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
@@ -82,6 +84,7 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<string | null>;
+  readTicketLog?: (ticketDir: string) => Promise<string>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
     ticketId: string,
@@ -161,6 +164,12 @@ export async function advancePhase(
       .join("\n\n");
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
+    let sessionId: string | undefined;
+    if (isImplementationRevision && deps.readTicketLog) {
+      const logContent = await deps.readTicketLog(join(stateDir, ticket.id));
+      const resolved = resolveRevisionSessionId(logContent);
+      if (resolved !== null) sessionId = resolved;
+    }
     await deps.spawn({
       phase: activePhase,
       ticketDir: join(stateDir, ticket.id),
@@ -170,6 +179,7 @@ export async function advancePhase(
       outputFile,
       model: revisingModel,
       thinking: revisingThinking,
+      sessionId,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,

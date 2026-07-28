@@ -207,6 +207,40 @@ export function extractClaudeCodeUsageAndText(
   };
 }
 
+export function resolveRevisionSessionId(logContent: string): string | null {
+  const parsed: { event: string; phase?: string; sessionId?: string }[] = [];
+  for (const line of logContent.split("\n").filter(Boolean)) {
+    try {
+      parsed.push(JSON.parse(line));
+    } catch {
+      // skip malformed lines
+    }
+  }
+
+  let lastIdx = -1;
+  let lastSessionId: string | null = null;
+  for (let i = 0; i < parsed.length; i++) {
+    const entry = parsed[i];
+    if (
+      entry.event === "phase-end" &&
+      entry.phase === "implementation" &&
+      typeof entry.sessionId === "string" &&
+      entry.sessionId.length > 0
+    ) {
+      lastIdx = i;
+      lastSessionId = entry.sessionId;
+    }
+  }
+
+  if (lastIdx === -1) return null;
+
+  for (let i = lastIdx + 1; i < parsed.length; i++) {
+    if (parsed[i].event === "conflict-resolution-started") return null;
+  }
+
+  return lastSessionId;
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;
@@ -221,6 +255,7 @@ export async function executePhase(
     thinking: string;
     agentType: "pi" | "claude-code";
     contextFiles?: string[];
+    sessionId?: string;
   },
   agent: CodeAgent,
 ): Promise<number> {
@@ -276,6 +311,7 @@ export async function executePhase(
     provider: opts.provider,
     model: opts.model,
     thinking: opts.thinking,
+    sessionId: opts.sessionId,
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
@@ -331,6 +367,7 @@ if (import.meta.main) {
       "thinking",
       "context-files",
       "agent",
+      "session-id",
     ],
   });
 
@@ -374,6 +411,7 @@ if (import.meta.main) {
       thinking: args["thinking"]!,
       agentType,
       contextFiles,
+      sessionId: args["session-id"] ?? undefined,
     },
     agentType === "claude-code"
       ? new ClaudeCodeAgent(

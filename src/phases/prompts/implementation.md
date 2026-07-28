@@ -19,6 +19,10 @@ Implement the plan exactly as specified using TDD:
 3. Refactor if needed
 4. Confirm all tests pass
 
+Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
+same file, write all failing tests for that file across all tasks first, then
+implement all changes to that file in the same pass.
+
 Before editing any file, enumerate all changes that file requires across every
 task in the plan. Make all edits to a file together in as few Edit calls as
 possible — do not make a separate Edit call per plan section or task when

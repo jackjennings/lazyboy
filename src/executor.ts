@@ -14,6 +14,7 @@ export interface ExecutorOptions {
   agent: "pi" | "claude-code";
   contextFiles?: string[];
   pidFile?: string;
+  sessionId?: string;
 }
 
 export function isProcessAlive(pid: number): boolean {
@@ -57,6 +58,9 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   );
   if (opts.contextFiles) {
     args.push("--context-files", opts.contextFiles.join(","));
+  }
+  if (opts.sessionId) {
+    args.push("--session-id", opts.sessionId);
   }
   return args;
 }

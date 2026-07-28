@@ -147,3 +147,15 @@ Deno.test("buildPhaseArgs: pidFile option does not appear in args", () => {
   assertEquals(args.includes("outlier-analysis.pid"), false);
   assertEquals(args.includes("--pid-file"), false);
 });
+
+Deno.test("buildPhaseArgs: includes --session-id when sessionId is provided", () => {
+  const args = buildPhaseArgs(makeOpts({ sessionId: "sess-99" }));
+  const idx = args.indexOf("--session-id");
+  assertNotEquals(idx, -1);
+  assertEquals(args[idx + 1], "sess-99");
+});
+
+Deno.test("buildPhaseArgs: omits --session-id when sessionId is absent", () => {
+  const args = buildPhaseArgs(makeOpts());
+  assertEquals(args.includes("--session-id"), false);
+});

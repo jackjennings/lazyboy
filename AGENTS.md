@@ -301,6 +301,10 @@ requires whenever `--print` and `--output-format stream-json` are combined.
 
 New adapters belong in `src/agents/<name>.ts` and must implement `CodeAgent`.
 
+Arg-builder functions (`buildPiArgs`, `buildClaudeCodeArgs`) take a single
+options object with named keys, not positional parameters. New adapters must
+follow the same signature style.
+
 ### Bedrock support
 
 Setting `[pi] provider = "bedrock"` in `config.toml` runs every phase through

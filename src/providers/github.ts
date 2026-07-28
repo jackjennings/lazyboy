@@ -4,6 +4,12 @@ type AccountResolver = (org: string) => { token: string; login: string };
 type FetchFn = (url: string, token: string) => Promise<unknown[]>;
 type PatchFn = (url: string, body: unknown, token: string) => Promise<void>;
 type MergeCheckFn = (url: string, token: string) => Promise<{ status: number }>;
+type CloneFn = (
+  slug: string,
+  destDir: string,
+  cwd: string,
+  token: string,
+) => Promise<void>;
 
 interface GitHubIssue {
   number: number;
@@ -18,6 +24,7 @@ export class GitHubProvider implements Provider {
   private _fetch: FetchFn;
   private _patch: PatchFn;
   private _mergeCheck: MergeCheckFn;
+  private _clone: CloneFn;
 
   constructor(
     opts: {
@@ -26,6 +33,7 @@ export class GitHubProvider implements Provider {
       _fetch?: FetchFn;
       _patch?: PatchFn;
       _mergeCheck?: MergeCheckFn;
+      _clone?: CloneFn;
     },
   ) {
     this.repos = opts.repos;
@@ -33,6 +41,7 @@ export class GitHubProvider implements Provider {
     this._fetch = opts._fetch ?? this.defaultFetch.bind(this);
     this._patch = opts._patch ?? this.defaultPatch.bind(this);
     this._mergeCheck = opts._mergeCheck ?? this.defaultMergeCheck.bind(this);
+    this._clone = opts._clone ?? this.defaultClone.bind(this);
   }
 
   private async defaultFetch(url: string, token: string): Promise<unknown[]> {
@@ -57,6 +66,44 @@ export class GitHubProvider implements Provider {
       },
     });
     return { status: res.status };
+  }
+
+  private async defaultClone(
+    slug: string,
+    destDir: string,
+    cwd: string,
+    token: string,
+  ): Promise<void> {
+    const env: Record<string, string> = {};
+    const path = Deno.env.get("PATH");
+    const home = Deno.env.get("HOME");
+    if (path) env.PATH = path;
+    if (home) env.HOME = home;
+    if (token) env.GH_TOKEN = token;
+    const result = await new Deno.Command("gh", {
+      args: [
+        "repo",
+        "clone",
+        `https://github.com/${slug}`,
+        destDir,
+        "--",
+        "--depth",
+        "1",
+        "--single-branch",
+      ],
+      cwd,
+      env,
+    }).output();
+    if (result.code !== 0) {
+      const stderr = new TextDecoder().decode(result.stderr).trim();
+      throw new Error(`gh repo clone failed for ${slug}: ${stderr}`);
+    }
+  }
+
+  async clone(slug: string, destDir: string, cwd: string): Promise<void> {
+    const org = slug.split("/")[0];
+    const { token } = this.accountResolver(org);
+    await this._clone(slug, destDir, cwd, token);
   }
 
   async isPRMerged(prUrl: string): Promise<boolean> {

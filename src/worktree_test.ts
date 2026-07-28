@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import type { RepoCandidate } from "./worktree.ts";
@@ -13,7 +13,6 @@ import {
   parseRemoteSlug,
   removeWorktree,
   resolveGitHubSlug,
-  runGh,
   runGit,
 } from "./worktree.ts";
 
@@ -444,7 +443,7 @@ Deno.test(
 // ── cloneRemoteRepo ──────────────────────────────────────────────────────────
 
 Deno.test(
-  "cloneRemoteRepo: returns existing path without re-cloning",
+  "cloneRemoteRepo: returns existing path without calling clone",
   async () => {
     const home = await Deno.makeTempDir();
     const orgDir = join(home, ".lazyboy", "repositories", "org");
@@ -454,7 +453,10 @@ Deno.test(
     const originalHome = Deno.env.get("HOME")!;
     Deno.env.set("HOME", home);
     try {
-      const result = await cloneRemoteRepo("org/repo", "");
+      const result = await cloneRemoteRepo(
+        "org/repo",
+        () => Promise.reject(new Error("clone should not be called")),
+      );
       assertEquals(result, repoDir);
     } finally {
       Deno.env.set("HOME", originalHome);
@@ -463,16 +465,30 @@ Deno.test(
   },
 );
 
-// ── runGh ────────────────────────────────────────────────────────────────────
+Deno.test("cloneRemoteRepo: calls clone when repo does not exist", async () => {
+  const home = await Deno.makeTempDir();
+  const cloneCalls: Array<{ slug: string; destDir: string; cwd: string }> = [];
 
-Deno.test("runGh: returns code, stdout, and stderr", async () => {
-  const tmp = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME")!;
+  Deno.env.set("HOME", home);
   try {
-    const result = await runGh(["--version"], tmp);
-    assertEquals(result.code, 0);
-    assert(result.stdout.startsWith("gh version"));
+    const result = await cloneRemoteRepo(
+      "org/repo",
+      (slug, destDir, cwd) => {
+        cloneCalls.push({ slug, destDir, cwd });
+        return Promise.resolve();
+      },
+    );
+    assertEquals(cloneCalls.length, 1);
+    assertEquals(cloneCalls[0].slug, "org/repo");
+    assertEquals(cloneCalls[0].destDir, "repo");
+    assertEquals(
+      result,
+      join(home, ".lazyboy", "repositories", "org", "repo"),
+    );
   } finally {
-    await Deno.remove(tmp, { recursive: true });
+    Deno.env.set("HOME", originalHome);
+    await Deno.remove(home, { recursive: true });
   }
 });
 

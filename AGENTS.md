@@ -432,14 +432,6 @@ Do not introduce a `prUrl` field or any other single-PR field on `TicketState`.
 return type is `{ code: number; stdout: string; stderr: string }`. Do not
 introduce a second git-shelling helper — use or inject `runGit`.
 
-## `runGh` in `src/worktree.ts`
-
-`runGh` is the shared helper for shelling out to the `gh` CLI. Signature:
-`runGh(args: string[], cwd: string, env?: Record<string, string>)`. The optional
-`env` parameter is merged over the current process env — pass
-`{ GH_TOKEN: token }` when a resolved token should override the ambient
-credential. Returns `{ code: number; stdout: string; stderr: string }`.
-
 ## Conflict resolution
 
 When a rebase conflict is detected, `checkConflictsAction` writes a
@@ -578,11 +570,14 @@ org-less paths.
 
 When a scope entry is a GitHub slug (`org/repo`) or GitHub URL and no local
 checkout is found, `cloneRemoteRepo` in `src/worktree.ts` clones the repository
-to `~/.lazyboy/repositories/<org>/<repo>` using
-`gh repo clone https://github.com/<slug> <repo> -- --depth 1 --single-branch`,
-passing the resolved token as `GH_TOKEN` in the subprocess env. When `token` is
-empty, `GH_TOKEN` is not set and `gh` falls back to its ambient configured
-credentials. This path is hardcoded parallel to `~/.lazyboy/worktrees/`.
+to `~/.lazyboy/repositories/<org>/<repo>`. The actual `gh repo clone` subprocess
+is delegated to `GitHubProvider.clone(slug, destDir, cwd)`, which resolves the
+per-org token via `accountResolver` and runs `gh` with only `PATH`, `HOME`, and
+`GH_TOKEN` in the subprocess env — no other parent-process vars are forwarded.
+`cloneRemoteRepo` accepts the clone function as a dependency injection (second
+argument), keeping the filesystem logic in `worktree.ts` and the credential and
+subprocess logic in `GitHubProvider`. This path is hardcoded parallel to
+`~/.lazyboy/worktrees/`.
 
 Existing entries in `~/.lazyboy/repositories/` are reused without re-cloning. No
 `git fetch` or `git pull` is run on cached clones — they are persistent

@@ -25,23 +25,6 @@ export async function runGit(
   };
 }
 
-export async function runGh(
-  args: string[],
-  cwd: string,
-  env?: Record<string, string>,
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  const result = await new Deno.Command("gh", {
-    args,
-    cwd,
-    env: env ? { ...Deno.env.toObject(), ...env } : undefined,
-  }).output();
-  return {
-    code: result.code,
-    stdout: new TextDecoder().decode(result.stdout).trim(),
-    stderr: new TextDecoder().decode(result.stderr).trim(),
-  };
-}
-
 export async function findLocalRepo(
   roots: string[],
   slug: string,
@@ -174,7 +157,7 @@ export function resolveGitHubSlug(entry: string): string | null {
 
 export async function cloneRemoteRepo(
   slug: string,
-  token: string,
+  clone: (slug: string, destDir: string, cwd: string) => Promise<void>,
 ): Promise<string> {
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
@@ -187,24 +170,7 @@ export async function cloneRemoteRepo(
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
-  const env = token ? { GH_TOKEN: token } : undefined;
-  const { code, stderr } = await runGh(
-    [
-      "repo",
-      "clone",
-      `https://github.com/${slug}`,
-      repo,
-      "--",
-      "--depth",
-      "1",
-      "--single-branch",
-    ],
-    orgDir,
-    env,
-  );
-  if (code !== 0) {
-    throw new Error(`gh repo clone failed for ${slug}: ${stderr}`);
-  }
+  await clone(slug, repo, orgDir);
   return repoDir;
 }
 

@@ -27,6 +27,10 @@ deno task test                          # run all tests
 deno test --allow-all src/foo_test.ts  # run a single test file
 deno task start tick                    # run the tick loop once
 deno run --allow-all src/index.ts status
+
+notion-fetch page <url>           # fetch a Notion page as Markdown (requires NOTION_TOKEN)
+notion-fetch database <url>       # fetch a Notion database as a Markdown table
+notion-fetch search <query>       # search the Notion workspace
 ```
 
 Runtime env vars required for `tick`: `ANTHROPIC_API_KEY` plus either

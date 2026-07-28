@@ -42,9 +42,52 @@ export async function loadConfig(path?: string): Promise<Config> {
     | undefined;
   const phasesDefaults = phasesRaw?.defaults as PhaseModelConfig | undefined;
 
+  const githubRaw = parsed.github as Record<string, unknown>;
+  const accountsRaw = githubRaw.accounts as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  let accounts: Config["github"]["accounts"];
+  if (accountsRaw !== undefined) {
+    accounts = {};
+    for (const [name, entry] of Object.entries(accountsRaw)) {
+      if (typeof entry.token_env !== "string") {
+        throw new Error(
+          `config.toml: [github.accounts.${name}].token_env must be a string`,
+        );
+      }
+      if (typeof entry.login !== "string") {
+        throw new Error(
+          `config.toml: [github.accounts.${name}].login must be a string`,
+        );
+      }
+      const envVal = Deno.env.get(entry.token_env);
+      if (!envVal) {
+        throw new Error(
+          `config.toml: [github.accounts.${name}].token_env "${entry.token_env}" is not set`,
+        );
+      }
+      accounts[name] = { tokenEnv: entry.token_env, login: entry.login };
+    }
+  }
+  const orgsRaw = githubRaw.orgs as Record<string, string> | undefined;
+  let orgs: Config["github"]["orgs"];
+  if (orgsRaw !== undefined) {
+    orgs = {};
+    for (const [org, accountName] of Object.entries(orgsRaw)) {
+      if (accounts && !accounts[accountName]) {
+        throw new Error(
+          `config.toml: [github.orgs] references unknown account "${accountName}"`,
+        );
+      }
+      orgs[org] = accountName;
+    }
+  }
+
   return {
     github: {
-      repos: (parsed.github as Record<string, unknown>).repos as string[],
+      repos: githubRaw.repos as string[],
+      accounts,
+      orgs,
     },
     state: {
       dir: expandHome((parsed.state as Record<string, unknown>).dir as string),

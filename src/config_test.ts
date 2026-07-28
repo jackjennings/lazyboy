@@ -447,3 +447,126 @@ type = 123
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig parses [github.accounts.*] and [github.orgs]", async () => {
+  const dir = await Deno.makeTempDir();
+  Deno.env.set("GITHUB_TOKEN_PERSONAL", "tok_personal");
+  Deno.env.set("GITHUB_TOKEN_WORK", "tok_work");
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[github.accounts.personal]
+token_env = "GITHUB_TOKEN_PERSONAL"
+login     = "jackjennings"
+
+[github.accounts.work]
+token_env = "GITHUB_TOKEN_WORK"
+login     = "jack-jennings-sdx"
+
+[github.orgs]
+jackjennings = "personal"
+smarterdx    = "work"
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.github.accounts?.personal, {
+    tokenEnv: "GITHUB_TOKEN_PERSONAL",
+    login: "jackjennings",
+  });
+  assertEquals(cfg.github.accounts?.work, {
+    tokenEnv: "GITHUB_TOKEN_WORK",
+    login: "jack-jennings-sdx",
+  });
+  assertEquals(cfg.github.orgs?.jackjennings, "personal");
+  assertEquals(cfg.github.orgs?.smarterdx, "work");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig: github.accounts absent leaves accounts/orgs undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.github.accounts, undefined);
+  assertEquals(cfg.github.orgs, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when token_env env var is not set", async () => {
+  const dir = await Deno.makeTempDir();
+  Deno.env.delete("GITHUB_TOKEN_MISSING");
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[github.accounts.personal]
+token_env = "GITHUB_TOKEN_MISSING"
+login     = "jackjennings"
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    `config.toml: [github.accounts.personal].token_env "GITHUB_TOKEN_MISSING" is not set`,
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [github.orgs] references unknown account", async () => {
+  const dir = await Deno.makeTempDir();
+  Deno.env.set("GITHUB_TOKEN_PERSONAL", "tok");
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[github.accounts.personal]
+token_env = "GITHUB_TOKEN_PERSONAL"
+login     = "jackjennings"
+
+[github.orgs]
+jackjennings = "nonexistent"
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    `config.toml: [github.orgs] references unknown account "nonexistent"`,
+  );
+  await Deno.remove(dir, { recursive: true });
+});

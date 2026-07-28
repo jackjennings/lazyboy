@@ -104,7 +104,11 @@ export interface PhaseUsage {
 }
 
 export interface Config {
-  github: { repos: string[] };
+  github: {
+    repos: string[];
+    accounts?: Record<string, { tokenEnv: string; login: string }>;
+    orgs?: Record<string, string>;
+  };
   state: { dir: string };
   tick: { concurrency: number };
   codebase: { roots: string[] };

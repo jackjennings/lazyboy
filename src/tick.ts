@@ -21,7 +21,7 @@ import {
   type TicketState,
   type WorktreeInfo,
 } from "./state/types.ts";
-import type { ActivePhase } from "./phases/types.ts";
+import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase | "conflict-resolution",
@@ -386,7 +386,7 @@ export async function advancePhase(
     return;
   }
 
-  const activePhases: ActivePhase[] = ["intake", "enrichment", "spec", "plan"];
+  const activePhases = PHASE_SEQUENCE.filter((p) => p !== "implementation");
   if (
     ticket.status === "waiting" &&
     isApproved(ticket) &&

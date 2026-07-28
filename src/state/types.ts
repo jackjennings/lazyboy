@@ -1,11 +1,6 @@
-export type TicketPhase =
-  | "intake"
-  | "enrichment"
-  | "spec"
-  | "plan"
-  | "implementation"
-  | "merge"
-  | "wont-do";
+import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
+
+export type TicketPhase = typeof FULL_PHASE_SEQUENCE[number];
 
 export type TicketStatus =
   | "new"

@@ -102,7 +102,9 @@ of sequential Edit calls: read the file once, incorporate every change into the
 full text, then write the complete modified file in a single Write call. Three
 disjoint Edit calls cost more turns than one Write and are harder to anchor
 correctly when insertion points are close together or when the plan lists
-multiple additions to the same function or block.
+multiple additions to the same function or block. This rule is unconditional —
+non-overlapping anchors are not an exception. Count your planned changes to a
+file before making any edits; if the count is three or more, switch to Write.
 
 When test failures reveal unplanned fixes (e.g., existing tests that break after
 your changes), run the complete failing test suite once — `deno task test` or

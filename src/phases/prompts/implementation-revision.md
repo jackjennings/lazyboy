@@ -28,10 +28,25 @@ git push origin HEAD
 Do not open a new pull request. The pull request already exists and will update
 automatically when you push. Do not modify the `prs` array in meta.md.
 
-Before committing, check whether any change introduces or formalises a
-project-wide convention not yet documented in `AGENTS.md`. If so, update
-`AGENTS.md` and include it in the same commit as the code that establishes the
-convention.
+Before committing, check whether any change establishes, replaces, or removes a
+project-wide convention not yet reflected in `AGENTS.md`. If so, update
+`AGENTS.md` in the same commit as the code that establishes it.
+
+`AGENTS.md` documents only what a reader cannot infer from the code itself:
+
+- Non-obvious constraints, invariants, and prohibitions ("do not add X", "Y must
+  be registered before Z").
+- Configuration and how-to that is not discoverable by reading a single file
+  (`config.toml` examples, "create this file, no code change needed").
+- Cross-module wiring that is surprising or easy to violate.
+
+Do not narrate what the code does. If a reader could learn it by reading the
+named file or function, link to that file instead of describing its behavior —
+implementation narration goes stale and duplicates the source.
+
+Edit the existing relevant section in place, and delete any statement this
+change makes false. Do not append a new section when an existing one covers the
+same topic.
 
 Do not write any files outside the repository worktree and the output file path
 shown in your context. Write your response to the output file path using the

@@ -88,6 +88,15 @@ established is as important as the individual code changes. Treat the
 `AGENTS.md` update as a named task with an exact diff and a commit, not a
 footnote.
 
+`AGENTS.md` documents only what a reader cannot infer from the code itself:
+non-obvious constraints, invariants, and prohibitions; configuration and how-to
+not discoverable from a single file; and surprising cross-module wiring. Do not
+narrate what the code does — if a reader could learn it by reading the named
+file or function, the task must link to that file, not describe its behavior.
+The task must edit the existing relevant section in place and delete any
+statement the change makes false, rather than appending a new section when one
+already covers the topic.
+
 If you include a summary at the end, it must list exactly the tasks above it.
 
 ## Principles

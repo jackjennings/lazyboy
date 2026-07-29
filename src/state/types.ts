@@ -96,6 +96,7 @@ export interface PhaseUsage {
   durationMs: number;
   turns?: number;
   costUsd?: number;
+  tools?: Record<string, number>;
 }
 
 export interface Config {

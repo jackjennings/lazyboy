@@ -473,6 +473,7 @@ export function composeTickDeps(
           model: opts.model,
           thinking: opts.thinking,
           sessionId: opts.sessionId,
+          includePrinciples: config.tick.principles,
         }),
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),
@@ -488,6 +489,7 @@ export function composeTickDeps(
         return await readTextFile(join(ticketDir, found.filename));
       },
       appendPrinciples: async (sd, ticketId, phase, outputContent) => {
+        if (!config.tick.principles) return;
         const extracted = extractPrinciples(outputContent);
         if (!extracted) return;
         const principlesPath = join(sd, "principles.md");

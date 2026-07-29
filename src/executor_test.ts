@@ -166,6 +166,21 @@ Deno.test("buildPhaseArgs: omits --session-id when sessionId is absent", () => {
   assertEquals(args.includes("--session-id"), false);
 });
 
+Deno.test("buildPhaseArgs: includes --skip-principles when includePrinciples is false", () => {
+  const args = buildPhaseArgs(makeOpts({ includePrinciples: false }));
+  assertEquals(args.includes("--skip-principles"), true);
+});
+
+Deno.test("buildPhaseArgs: omits --skip-principles when includePrinciples is true", () => {
+  const args = buildPhaseArgs(makeOpts({ includePrinciples: true }));
+  assertEquals(args.includes("--skip-principles"), false);
+});
+
+Deno.test("buildPhaseArgs: omits --skip-principles when includePrinciples is absent", () => {
+  const args = buildPhaseArgs(makeOpts());
+  assertEquals(args.includes("--skip-principles"), false);
+});
+
 Deno.test("buildPhaseArgs: includes --state-dir", () => {
   const args = buildPhaseArgs(makeOpts({ stateDir: "/my/state" }));
   const idx = args.indexOf("--state-dir");

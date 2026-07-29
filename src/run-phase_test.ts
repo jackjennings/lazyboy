@@ -420,6 +420,25 @@ Deno.test("buildContextFiles: prepends principles.md when it exists in stateDir"
   }
 });
 
+Deno.test("buildContextFiles: omits principles.md when includePrinciples is false", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const ticketDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(stateDir, "principles.md"), "- learn A");
+    const files = await buildContextFiles({
+      ticketDir,
+      stateDir,
+      includePrinciples: false,
+    });
+    assertEquals(files[0], `@${ticketDir}/meta.md`);
+    assertEquals(files.some((f) => f.includes("principles.md")), false);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(ticketDir, { recursive: true });
+  }
+});
+
 Deno.test("buildContextFiles: omits principles.md when it does not exist in stateDir", async () => {
   const stateDir = await Deno.makeTempDir();
   const ticketDir = await Deno.makeTempDir();

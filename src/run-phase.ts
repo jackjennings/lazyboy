@@ -57,15 +57,21 @@ function selectLatestPhaseFiles(
 }
 
 export async function buildContextFiles(
-  { ticketDir, stateDir }: { ticketDir: string; stateDir: string },
+  { ticketDir, stateDir, includePrinciples = true }: {
+    ticketDir: string;
+    stateDir: string;
+    includePrinciples?: boolean;
+  },
 ): Promise<string[]> {
   const principlesPath = join(stateDir, "principles.md");
   const contextFiles: string[] = [];
-  try {
-    await Deno.stat(principlesPath);
-    contextFiles.push(`@${principlesPath}`);
-  } catch {
-    /* principles.md doesn't exist yet */
+  if (includePrinciples) {
+    try {
+      await Deno.stat(principlesPath);
+      contextFiles.push(`@${principlesPath}`);
+    } catch {
+      /* principles.md doesn't exist yet */
+    }
   }
   contextFiles.push(`@${ticketDir}/meta.md`);
   for (const phase of PHASE_SEQUENCE) {
@@ -349,6 +355,7 @@ export async function executePhase(
     agentType: "pi" | "claude-code";
     contextFiles?: string[];
     sessionId?: string;
+    includePrinciples?: boolean;
   },
   agent: CodeAgent,
 ): Promise<number> {
@@ -369,6 +376,7 @@ export async function executePhase(
     await buildContextFiles({
       ticketDir: opts.ticketDir,
       stateDir: opts.stateDir,
+      includePrinciples: opts.includePrinciples,
     });
 
   const allPaths = [
@@ -466,6 +474,7 @@ if (import.meta.main) {
       "session-id",
       "state-dir",
     ],
+    boolean: ["skip-principles"],
   });
 
   const ticketDir = args["ticket-dir"]!;
@@ -512,6 +521,7 @@ if (import.meta.main) {
       agentType,
       contextFiles,
       sessionId: args["session-id"] ?? undefined,
+      includePrinciples: !args["skip-principles"],
     },
     agentType === "claude-code"
       ? new ClaudeCodeAgent(

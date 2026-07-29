@@ -16,6 +16,7 @@ export interface ExecutorOptions {
   contextFiles?: string[];
   pidFile?: string;
   sessionId?: string;
+  includePrinciples?: boolean;
 }
 
 export function isProcessAlive(pid: number): boolean {
@@ -63,6 +64,9 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   }
   if (opts.sessionId) {
     args.push("--session-id", opts.sessionId);
+  }
+  if (opts.includePrinciples === false) {
+    args.push("--skip-principles");
   }
   return args;
 }

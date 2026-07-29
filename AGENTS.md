@@ -221,6 +221,16 @@ ticket subdirectory:
 
 ## Principles file
 
+The whole principles mechanism is opt-out via `[tick] principles` in
+`config.toml` (boolean, default `true`). When `false`, both halves are disabled:
+`composeTickDeps` makes `appendPrinciples` a no-op (no write, no commit — the
+**write** side), and it passes `includePrinciples: false` through `spawnPhase` →
+`buildPhaseArgs`'s `--skip-principles` flag → `run-phase.ts`, so
+`buildContextFiles` skips prepending `@principles.md` to phase context (the
+**read** side). Spawns that supply an explicit `contextFiles` list (e.g.
+conflict resolution) never invoke `buildContextFiles`, so the flag is a no-op
+there regardless.
+
 `{stateDir}/principles.md` is a persistent scratchpad that accumulates learnings
 across all tickets. Every phase prompt includes an optional `## Principles`
 section: if the agent writes content there, `advancePhase` in `src/tick.ts`

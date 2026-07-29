@@ -107,7 +107,11 @@ export interface Config {
     orgs?: Record<string, string>;
   };
   state: { dir: string };
-  tick: { concurrency: number; resolveCIFailures: boolean };
+  tick: {
+    concurrency: number;
+    resolveCIFailures: boolean;
+    principles: boolean;
+  };
   codebase: { roots: string[] };
   packages: { enabled: string[] };
   pi: { provider: string };

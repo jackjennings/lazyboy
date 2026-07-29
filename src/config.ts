@@ -52,6 +52,10 @@ export async function loadConfig(path?: string): Promise<Config> {
       "config.toml: [tick].resolve_ci_failures must be a boolean",
     );
   }
+  const principlesRaw = tickRaw?.principles;
+  if (principlesRaw !== undefined && typeof principlesRaw !== "boolean") {
+    throw new Error("config.toml: [tick].principles must be a boolean");
+  }
 
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
@@ -106,6 +110,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     tick: {
       concurrency: (tickRaw?.concurrency as number) ?? 1,
       resolveCIFailures: (resolveCIFailuresRaw as boolean | undefined) ?? true,
+      principles: (principlesRaw as boolean | undefined) ?? true,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },

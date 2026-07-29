@@ -1683,7 +1683,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     github: { repos: [] },
     state: { dir: "" },
-    tick: { concurrency: 1, resolveCIFailures: true },
+    tick: { concurrency: 1, resolveCIFailures: true, principles: true },
     codebase: { roots: [] },
     packages: { enabled: [] },
     pi: { provider: "anthropic" },

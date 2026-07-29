@@ -87,6 +87,71 @@ resolve_ci_failures = "yes"
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("loadConfig defaults tick.principles to true when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.principles, true);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig parses tick.principles = false", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+principles = false
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.principles, false);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.principles is not a boolean", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+principles = "no"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [tick].principles must be a boolean",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("expandHome replaces ~/ with HOME", () => {
   const home = Deno.env.get("HOME")!;
   assertEquals(expandHome("~/foo/bar"), `${home}/foo/bar`);

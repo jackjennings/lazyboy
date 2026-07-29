@@ -377,10 +377,22 @@ To add one:
 
 `TicketState.prs?: PrEntry[]` (`src/state/types.ts`) tracks pull requests. Each
 `PrEntry` carries `url`, `title`, `dependsOn` (PR URLs that must merge first),
-`merged`, and `worktreeKey`. `checkMergedPRAction` checks each PR only once all
-its `dependsOn` are `merged: true`, cleans up the worktree on merge, and reaches
-`done` only when every entry is merged. Do not introduce a `prUrl` field or any
-other single-PR field.
+`merged`, and `worktreeKey`. When the implementation agent creates a PR, it
+appends a `PrEntry` to `prs` in `meta.md`.
+
+If the agent does not write `prs`, `reconcilePRsAction` fires on the next tick
+for any `implementation/waiting` ticket with an empty or absent `prs` array. It
+scans the latest `*-implementation.md` output file for GitHub PR URLs, calls
+`gh pr view --json url,title,baseRefName,headRefName` for each, derives
+`dependsOn` from `baseRefName`/`headRefName` chaining, and writes the populated
+`prs` array. If no PR URLs are found in the output file, the ticket transitions
+to `needs-attention` with reason `no-prs-in-output`. The action is idempotent:
+once `prs` is non-empty it never fires again.
+
+`checkMergedPRAction` checks each PR only once all its `dependsOn` are
+`merged: true`, cleans up the worktree on merge, and reaches `done` only when
+every entry is merged. Do not introduce a `prUrl` field or any other single-PR
+field.
 
 ## `runGit` in `src/worktree.ts`
 
@@ -635,6 +647,12 @@ agent's output must be exactly `VERDICT: PR_CAUSED` or `VERDICT: INFRA`.
 the `tickActions` array so a completed triage run is resolved before the spawn
 action can re-evaluate the same ticket. Both are gated on
 `config.tick.resolveCIFailures`.
+
+Actions that reconcile missing data (e.g. `reconcilePRsAction`) must guard their
+`applies` predicate so they fire only when the data is absent and never
+overwrite a non-empty field. The `prs.length === 0` guard in
+`reconcilePRsAction` follows the same discipline as `createWorktreeAction`'s
+`Object.keys(ticket.worktrees).length === 0` guard.
 
 ## `wont-do` phase
 

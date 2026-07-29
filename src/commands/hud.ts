@@ -117,19 +117,20 @@ export const hud: Command = {
     let currentStatusLines: string[] = [];
     let currentLogLines: string[] = [];
 
-    const statusPane = new ScrollPane(
-      (_w) => currentStatusLines,
+    const statusPane = new ScrollPane({
+      getLines: (_w) => currentStatusLines,
       tui,
-      "status",
-      () => Math.ceil((tui.terminal.rows - 1) / 2),
-    );
+      title: "status",
+      getHeight: () => Math.ceil((tui.terminal.rows - 1) / 2),
+    });
 
-    const logPane = new ScrollPane(
-      (_w) => currentLogLines,
+    const logPane = new ScrollPane({
+      getLines: (_w) => currentLogLines,
       tui,
-      "tick log",
-      () => tui.terminal.rows - 1 - Math.ceil((tui.terminal.rows - 1) / 2),
-    );
+      title: "tick log",
+      getHeight: () =>
+        tui.terminal.rows - 1 - Math.ceil((tui.terminal.rows - 1) / 2),
+    });
 
     let headerLine = "";
     const headerComponent = {

@@ -15,18 +15,18 @@ export class ScrollPane implements Component, Focusable {
   private title: string;
   private getHeight: () => number;
 
-  constructor(
-    getLines: (width: number) => string[],
-    tui: TUI,
-    title: string,
-    getHeight: () => number,
-    onInvalidate?: () => void,
-  ) {
-    this.getLinesFn = getLines;
-    this.tui = tui;
-    this.title = title;
-    this.getHeight = getHeight;
-    this.onInvalidateFn = onInvalidate;
+  constructor(options: {
+    getLines: (width: number) => string[];
+    tui: TUI;
+    title: string;
+    getHeight: () => number;
+    onInvalidate?: () => void;
+  }) {
+    this.getLinesFn = options.getLines;
+    this.tui = options.tui;
+    this.title = options.title;
+    this.getHeight = options.getHeight;
+    this.onInvalidateFn = options.onInvalidate;
   }
 
   setContent(getLines: (width: number) => string[]): void {

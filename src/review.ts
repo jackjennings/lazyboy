@@ -473,17 +473,17 @@ export async function review(id: string): Promise<void> {
     },
   });
 
-  const contentPane = new ScrollPane(
-    contentGetLines,
+  const contentPane = new ScrollPane({
+    getLines: contentGetLines,
     tui,
-    paneTitle,
-    () =>
+    title: paneTitle,
+    getHeight: () =>
       Math.max(
         1,
         tui.terminal.rows - editor.render(tui.terminal.columns).length - 1,
       ),
-    contentOnInvalidate,
-  );
+    onInvalidate: contentOnInvalidate,
+  });
 
   tui.addChild(contentPane);
   tui.addChild(editor);

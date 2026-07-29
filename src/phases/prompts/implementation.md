@@ -74,7 +74,10 @@ edit — the file contains exactly what you wrote; use that text as the anchor f
 subsequent edits. The same no-re-read rule applies before the first edit: if you
 already read a file at any point in this session — in the initial batch or any
 later turn — do not read it again before editing it. Any read you performed
-remains valid regardless of how many turns have elapsed since.
+remains valid regardless of how many turns have elapsed since. A grep or bash
+command does not invalidate a prior read — if grep confirms a file you already
+read contains the target pattern, use that read as the edit anchor without
+re-reading the file.
 
 When multiple files each require the same type of independent change (e.g., the
 same import added to `tick.ts` and `run-phase.ts`), issue all such edits as

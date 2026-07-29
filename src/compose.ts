@@ -12,7 +12,7 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
-import { extractPrinciples } from "./run-phase.ts";
+import { dedupePrinciples, extractPrinciples } from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
@@ -295,9 +295,11 @@ export function composeTickDeps(
         } catch {
           // file does not exist yet
         }
+        const novel = dedupePrinciples(existing, extracted);
+        if (!novel) return;
         const newContent = existing.length > 0
-          ? `${existing}\n\n${extracted}`
-          : extracted;
+          ? `${existing}\n\n${novel}`
+          : novel;
         await Deno.writeTextFile(principlesPath, newContent);
         await commitPrinciples(sd, `principles: ${ticketId} ${phase}`);
       },

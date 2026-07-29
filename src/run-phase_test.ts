@@ -3,6 +3,7 @@ import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
   buildContextFiles,
+  dedupePrinciples,
   executePhase,
   extractClaudeCodeSessionId,
   extractClaudeCodeUsageAndText,
@@ -459,6 +460,46 @@ Deno.test("extractPrinciples: captures content to end of string when no followin
 Deno.test("extractPrinciples: trims surrounding whitespace from body", () => {
   const output = `## Principles\n\n\n  trimmed  \n\n`;
   assertEquals(extractPrinciples(output), "trimmed");
+});
+
+// ── dedupePrinciples ─────────────────────────────────────────────────────────
+
+Deno.test("dedupePrinciples: appends a genuinely new bullet", () => {
+  const existing = "- learn A";
+  const extracted = "- learn B";
+  assertEquals(dedupePrinciples(existing, extracted), "- learn B");
+});
+
+Deno.test("dedupePrinciples: is a no-op when the bullet is already present", () => {
+  const existing = "- learn A\n\n- learn B";
+  assertEquals(dedupePrinciples(existing, "- learn B"), null);
+});
+
+Deno.test("dedupePrinciples: keeps only the novel bullets from a mixed block", () => {
+  const existing = "- learn A";
+  const extracted = "- learn A\n- learn B";
+  assertEquals(dedupePrinciples(existing, extracted), "- learn B");
+});
+
+Deno.test("dedupePrinciples: normalizes whitespace when comparing", () => {
+  const existing = "- learn A with   spaces";
+  const extracted = "- learn A with spaces";
+  assertEquals(dedupePrinciples(existing, extracted), null);
+});
+
+Deno.test("dedupePrinciples: matches a multi-line bullet against its wrapped duplicate", () => {
+  const existing = "- a long principle that\n  wraps across two lines";
+  const extracted = "- a long principle that wraps across two lines";
+  assertEquals(dedupePrinciples(existing, extracted), null);
+});
+
+Deno.test("dedupePrinciples: dedupes within the extracted block itself", () => {
+  assertEquals(dedupePrinciples("", "- learn A\n- learn A"), "- learn A");
+});
+
+Deno.test("dedupePrinciples: returns the block unchanged when existing is empty", () => {
+  const extracted = "- learn A\n- learn B";
+  assertEquals(dedupePrinciples("", extracted), extracted);
 });
 
 // ── appendPhaseLog ───────────────────────────────────────────────────────────

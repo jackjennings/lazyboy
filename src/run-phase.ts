@@ -268,6 +268,47 @@ export function extractPrinciples(content: string): string | null {
   return body.length > 0 ? body : null;
 }
 
+function parsePrincipleEntries(
+  content: string,
+): { raw: string; normalized: string }[] {
+  const entries: string[][] = [];
+  let current: string[] | null = null;
+  for (const line of content.split("\n")) {
+    if (/^\s*-\s/.test(line)) {
+      if (current) entries.push(current);
+      current = [line];
+    } else if (line.trim() === "") {
+      if (current) entries.push(current);
+      current = null;
+    } else if (current) {
+      current.push(line);
+    } else {
+      current = [line];
+    }
+  }
+  if (current) entries.push(current);
+  return entries.map((lines) => {
+    const raw = lines.join("\n");
+    return { raw, normalized: raw.replace(/\s+/g, " ").trim() };
+  });
+}
+
+export function dedupePrinciples(
+  existing: string,
+  extracted: string,
+): string | null {
+  const seen = new Set(
+    parsePrincipleEntries(existing).map((e) => e.normalized),
+  );
+  const novel: string[] = [];
+  for (const entry of parsePrincipleEntries(extracted)) {
+    if (seen.has(entry.normalized)) continue;
+    seen.add(entry.normalized);
+    novel.push(entry.raw);
+  }
+  return novel.length > 0 ? novel.join("\n") : null;
+}
+
 export async function executePhase(
   opts: {
     ticketDir: string;

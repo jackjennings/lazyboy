@@ -52,8 +52,8 @@ import {
   captureCommandRunner,
   checkApfelAvailable,
   defaultCommandRunner,
-  generateShortTitle as apfelGenerateShortTitle,
 } from "./apfel.ts";
+import { generateShortTitle as apfelGenerateShortTitle } from "./short-title.ts";
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";

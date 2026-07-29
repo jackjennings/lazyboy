@@ -6,7 +6,7 @@ function makeConfig(overrides: Partial<Config["github"]> = {}): Config {
   return {
     github: { repos: [], ...overrides },
     state: { dir: "/tmp" },
-    tick: { concurrency: 1 },
+    tick: { concurrency: 1, resolveCIFailures: true },
     codebase: { roots: [] },
     packages: { enabled: [] },
     pi: { provider: "anthropic" },

@@ -22,6 +22,71 @@ concurrency = 2
   assertEquals(cfg.tick.concurrency, 2);
 });
 
+Deno.test("loadConfig defaults tick.resolveCIFailures to true when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.resolveCIFailures, true);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig parses tick.resolve_ci_failures = false", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+resolve_ci_failures = false
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.resolveCIFailures, false);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.resolve_ci_failures is not a boolean", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+resolve_ci_failures = "yes"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [tick].resolve_ci_failures must be a boolean",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("expandHome replaces ~/ with HOME", () => {
   const home = Deno.env.get("HOME")!;
   assertEquals(expandHome("~/foo/bar"), `${home}/foo/bar`);

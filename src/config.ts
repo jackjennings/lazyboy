@@ -42,6 +42,17 @@ export async function loadConfig(path?: string): Promise<Config> {
     | undefined;
   const phasesDefaults = phasesRaw?.defaults as PhaseModelConfig | undefined;
 
+  const tickRaw = parsed.tick as Record<string, unknown> | undefined;
+  const resolveCIFailuresRaw = tickRaw?.resolve_ci_failures;
+  if (
+    resolveCIFailuresRaw !== undefined &&
+    typeof resolveCIFailuresRaw !== "boolean"
+  ) {
+    throw new Error(
+      "config.toml: [tick].resolve_ci_failures must be a boolean",
+    );
+  }
+
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
     | Record<string, Record<string, unknown>>
@@ -93,8 +104,8 @@ export async function loadConfig(path?: string): Promise<Config> {
       dir: expandHome((parsed.state as Record<string, unknown>).dir as string),
     },
     tick: {
-      concurrency:
-        ((parsed.tick as Record<string, unknown>).concurrency as number) ?? 1,
+      concurrency: (tickRaw?.concurrency as number) ?? 1,
+      resolveCIFailures: (resolveCIFailuresRaw as boolean | undefined) ?? true,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },

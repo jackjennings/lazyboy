@@ -419,6 +419,11 @@ never removed; the set only grows. This prevents re-attempting the same CI run
 after a transient failure where the fix commit did not trigger a new run. Do not
 use this field for any purpose other than CI-failure deduplication.
 
+`resolveCIFailuresAction` is opt-out via `[tick] resolve_ci_failures` in
+`config.toml` (boolean, default `true`). When `false`, `composeTickDeps` omits
+the action from `tickActions` entirely — the action itself is unchanged. Set it
+to `false` to pause automated CI-failure handling while fixing CI manually.
+
 The applies predicate for actions that operate on worktrees must exclude tickets
 where `isPhaseAlive(ticketDir)` returns true (i.e.
 `!deps.isProcessAlive(ticket.id)` is false) — rebasing or pushing while a live

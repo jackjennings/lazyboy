@@ -1,4 +1,6 @@
-export type CommandRunner = (args: string[]) => Promise<{ code: number }>;
+export type CommandRunner = (
+  args: string[],
+) => Promise<{ code: number; stdout: string }>;
 export type ProcessSpawner = (args: string[]) => { kill: () => void };
 
 export interface ApfelServer {
@@ -47,8 +49,44 @@ export function defaultCommandRunner(): CommandRunner {
       stdout: "null",
       stderr: "null",
     }).output();
-    return { code: out.code };
+    return { code: out.code, stdout: "" };
   };
+}
+
+export function captureCommandRunner(): CommandRunner {
+  return async (args) => {
+    const out = await new Deno.Command(args[0], {
+      args: args.slice(1),
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    return { code: out.code, stdout: new TextDecoder().decode(out.stdout) };
+  };
+}
+
+const SHORT_TITLE_SYSTEM_PROMPT =
+  "Compress this title to a short 2–5 word label that remains identifiable at a glance. Prefer noun phrases. Output only the short title.";
+
+export async function generateShortTitle(
+  run: CommandRunner,
+  title: string,
+): Promise<string | null> {
+  try {
+    const { code, stdout } = await run([
+      "apfel",
+      "--quiet",
+      "--max-tokens",
+      "40",
+      "-s",
+      SHORT_TITLE_SYSTEM_PROMPT,
+      title,
+    ]);
+    if (code !== 0) return null;
+    const trimmed = stdout.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function defaultProcessSpawner(): ProcessSpawner {

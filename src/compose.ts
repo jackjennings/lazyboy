@@ -48,7 +48,12 @@ import {
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
-import { defaultCommandRunner } from "./apfel.ts";
+import {
+  captureCommandRunner,
+  checkApfelAvailable,
+  defaultCommandRunner,
+  generateShortTitle as apfelGenerateShortTitle,
+} from "./apfel.ts";
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
@@ -648,5 +653,10 @@ export function composeTickDeps(
       runCommand: defaultCommandRunner(),
     }),
     runCeremonies: () => ceremonies.run(),
+    generateShortTitle: async (title) => {
+      const available = await checkApfelAvailable(defaultCommandRunner());
+      if (!available) return null;
+      return apfelGenerateShortTitle(captureCommandRunner(), title);
+    },
   };
 }

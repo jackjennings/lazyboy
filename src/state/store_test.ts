@@ -777,6 +777,31 @@ updated: "2026-01-01T00:00:00Z"
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("writeTicket/readTicket: outputRetries round-trips through YAML frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticket = makeTicket({ outputRetries: 1 });
+    await writeTicket(dir, ticket);
+    const read = await readTicket(dir, "gh-1");
+    assertEquals(read.outputRetries, 1);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("writeTicket/readTicket: outputRetries absent when undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await writeTicket(dir, makeTicket());
+    const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
+    assertEquals(raw.includes("outputRetries"), false);
+    const read = await readTicket(dir, "gh-1");
+    assertEquals(read.outputRetries, undefined);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
 Deno.test("commitPrinciples: commits principles.md to git", async () => {
   const dir = await Deno.makeTempDir();
   try {

@@ -1913,6 +1913,218 @@ Deno.test("resolveRevisionSessionId: skips malformed NDJSON lines without throwi
   assertEquals(resolveRevisionSessionId(log), "abc");
 });
 
+// ── extractUsageAndText: tool counting ───────────────────────────────────────
+
+Deno.test("extractUsageAndText: single tool_use item counted into usage.tools", () => {
+  const ndjson = JSON.stringify({
+    type: "agent_end",
+    messages: [
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [{ type: "tool_use", name: "read", input: {} }],
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+      },
+    ],
+  });
+  const result = extractUsageAndText(ndjson, 100);
+  assertEquals(result.usage?.tools, { read: 1 });
+});
+
+Deno.test("extractUsageAndText: tool_use items across multiple assistant messages are counted and aggregated", () => {
+  const ndjson = JSON.stringify({
+    type: "agent_end",
+    messages: [
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [
+          { type: "tool_use", name: "read", input: {} },
+          { type: "tool_use", name: "read", input: {} },
+        ],
+        usage: { input: 4, output: 2, cacheRead: 0, cacheWrite: 0 },
+      },
+      { role: "user", content: [{ type: "tool_result", text: "" }] },
+      {
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [
+          { type: "tool_use", name: "write", input: {} },
+          { type: "text", text: "done" },
+        ],
+        usage: { input: 2, output: 3, cacheRead: 0, cacheWrite: 0 },
+      },
+    ],
+  });
+  const result = extractUsageAndText(ndjson, 100);
+  assertEquals(result.usage?.tools, { read: 2, write: 1 });
+});
+
+Deno.test("extractUsageAndText: no tool_use items leaves usage.tools undefined", () => {
+  const result = extractUsageAndText(singleTurnNdjson, 100);
+  assertEquals(result.usage?.tools, undefined);
+});
+
+// ── extractClaudeCodeUsageAndText: tool counting ─────────────────────────────
+
+Deno.test("extractClaudeCodeUsageAndText: tool_use items from assistant events are counted and lowercased", () => {
+  const ndjson = [
+    JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", name: "Read", input: {} }] },
+    }),
+    JSON.stringify({
+      type: "result",
+      result: "text",
+      num_turns: 1,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    }),
+  ].join("\n");
+  const result = extractClaudeCodeUsageAndText(ndjson, 100);
+  assertEquals(result.usage?.tools, { read: 1 });
+});
+
+Deno.test("extractClaudeCodeUsageAndText: tool_use items across multiple assistant events are aggregated", () => {
+  const ndjson = [
+    JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [
+          { type: "tool_use", name: "Read", input: {} },
+          { type: "tool_use", name: "Bash", input: {} },
+        ],
+      },
+    }),
+    JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [{ type: "tool_use", name: "Read", input: {} }],
+      },
+    }),
+    JSON.stringify({
+      type: "result",
+      result: "text",
+      num_turns: 2,
+      usage: {
+        input_tokens: 20,
+        output_tokens: 10,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    }),
+  ].join("\n");
+  const result = extractClaudeCodeUsageAndText(ndjson, 100);
+  assertEquals(result.usage?.tools, { read: 2, bash: 1 });
+});
+
+Deno.test("extractClaudeCodeUsageAndText: no tool_use content leaves usage.tools undefined", () => {
+  const result = extractClaudeCodeUsageAndText(claudeCodeResultNdjson, 100);
+  assertEquals(result.usage?.tools, undefined);
+});
+
+// ── executePhase: tools in sidecar ───────────────────────────────────────────
+
+Deno.test("executePhase: usage sidecar includes tools when agent stdout contains tool_use items", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const stdout = JSON.stringify({
+      type: "agent_end",
+      messages: [
+        {
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [
+            { type: "tool_use", name: "read", input: {} },
+            { type: "tool_use", name: "read", input: {} },
+            { type: "tool_use", name: "bash", input: {} },
+          ],
+          usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 },
+        },
+      ],
+    });
+    const agent: CodeAgent = {
+      runPhase: () => Promise.resolve({ stdout, stderr: "", code: 0 }),
+    };
+    await executePhase(
+      {
+        ticketDir,
+        stateDir: dirname(ticketDir),
+        outputFile: "result.md",
+        phase: "spec",
+        scopeDirs: [],
+        prompt: "p",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+      },
+      agent,
+    );
+    const usage = JSON.parse(
+      await Deno.readTextFile(join(ticketDir, "result.usage.json")),
+    );
+    assertEquals(usage.tools, { read: 2, bash: 1 });
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: usage sidecar omits tools when agent stdout has no tool_use items", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const stdout = JSON.stringify({
+      type: "agent_end",
+      messages: [
+        {
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [{ type: "text", text: "output" }],
+          usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 },
+        },
+      ],
+    });
+    const agent: CodeAgent = {
+      runPhase: () => Promise.resolve({ stdout, stderr: "", code: 0 }),
+    };
+    await executePhase(
+      {
+        ticketDir,
+        stateDir: dirname(ticketDir),
+        outputFile: "result.md",
+        phase: "spec",
+        scopeDirs: [],
+        prompt: "p",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+      },
+      agent,
+    );
+    const usage = JSON.parse(
+      await Deno.readTextFile(join(ticketDir, "result.usage.json")),
+    );
+    assertEquals("tools" in usage, false);
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
 // ── executePhase: sessionId threading ────────────────────────────────────────
 
 Deno.test("executePhase: passes sessionId to agent.runPhase when provided", async () => {

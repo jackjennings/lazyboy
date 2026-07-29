@@ -127,7 +127,7 @@ export function extractUsageAndText(
   const assistantMessages = (agentEnd.messages as {
     role: string;
     model?: string;
-    content: { type: string; text?: string }[];
+    content: { type: string; text?: string; name?: string }[];
     usage?: {
       input: number;
       output: number;
@@ -142,6 +142,7 @@ export function extractUsageAndText(
   let cacheRead = 0;
   let cacheWrite = 0;
   let model = "";
+  const tools: Record<string, number> = {};
 
   for (const msg of assistantMessages) {
     const msgText = msg.content
@@ -156,6 +157,12 @@ export function extractUsageAndText(
       cacheWrite += msg.usage.cacheWrite;
     }
     if (msg.model) model = msg.model;
+    for (const item of msg.content) {
+      if (item.type === "tool_use" && item.name) {
+        const name = item.name.toLowerCase();
+        tools[name] = (tools[name] ?? 0) + 1;
+      }
+    }
   }
 
   return {
@@ -168,6 +175,7 @@ export function extractUsageAndText(
       model,
       durationMs,
       turns: assistantMessages.length,
+      ...(Object.keys(tools).length > 0 ? { tools } : {}),
     },
   };
 }
@@ -189,6 +197,21 @@ export function extractClaudeCodeUsageAndText(
 ): { text: string; usage: PhaseUsage | null } {
   const lines = ndjson.split("\n").filter(Boolean);
   const events = lines.map((l) => JSON.parse(l));
+  const tools: Record<string, number> = {};
+  for (const event of events) {
+    if (event.type === "assistant") {
+      const content = (event.message?.content ?? []) as {
+        type: string;
+        name?: string;
+      }[];
+      for (const item of content) {
+        if (item.type === "tool_use" && item.name) {
+          const name = item.name.toLowerCase();
+          tools[name] = (tools[name] ?? 0) + 1;
+        }
+      }
+    }
+  }
   const result = events.find((e) => e.type === "result");
   if (!result) {
     return { text: "", usage: null };
@@ -221,6 +244,7 @@ export function extractClaudeCodeUsageAndText(
       turns: typeof result.num_turns === "number"
         ? result.num_turns
         : undefined,
+      ...(Object.keys(tools).length > 0 ? { tools } : {}),
     },
   };
 }

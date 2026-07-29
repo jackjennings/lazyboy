@@ -193,6 +193,10 @@ export function extractClaudeCodeUsageAndText(
   if (!result) {
     return { text: "", usage: null };
   }
+  // `result.usage` is per-run, not cumulative across a `--resume`: a resumed
+  // turn reports only that invocation's tokens, so this is the phase's usage
+  // even for implementation-revision runs. Verified empirically against the
+  // claude CLI's stream-json output.
   const usage = result.usage as {
     input_tokens?: number;
     output_tokens?: number;

@@ -166,9 +166,12 @@ instead of `run.pid`. The tick loop only reads `run.pid` to track phase agent
 liveness, so a subprocess writing a different PID file is invisible to ticket
 state management.
 
-The outlier analysis agent (`src/phases/prompts/outlier-analysis.md`) is the
-current example: it is spawned by `spawnOutlierAnalysis` in `TickDeps` and
-writes `outlier-analysis.pid` via the `pidFile` option on `ExecutorOptions`.
+Two outlier analysis agents exist: `spawnOutlierAnalysis` in `TickDeps`
+dispatches on its `phase: "implementation" | "plan"` argument to select the
+detector, prompt file, and PID file. The implementation agent writes
+`outlier-analysis.pid` and uses `src/phases/prompts/outlier-analysis.md`; the
+plan agent writes `plan-outlier-analysis.pid` and uses
+`src/phases/prompts/plan-outlier-analysis.md`.
 
 To add a new background subprocess:
 

@@ -224,6 +224,11 @@ section: if the agent writes content there, `advancePhase` in `src/tick.ts`
 calls `deps.appendPrinciples`, which appends the extracted text to
 `principles.md` and commits it immediately with `commitPrinciples` from
 `src/state/store.ts` (stages only `principles.md`, not the full state dir).
+Before writing, `appendPrinciples` runs the extracted block through
+`dedupePrinciples(existing, extracted)` (pure, in `src/run-phase.ts`), which
+drops any bullet whose whitespace-normalized text already appears in the file
+(or earlier in the same block) and returns `null` when nothing is novel — in
+which case no write or commit happens.
 
 `buildContextFiles` in `src/run-phase.ts` prepends `@{stateDir}/principles.md`
 to every phase's context file list when the file exists. This is how accumulated

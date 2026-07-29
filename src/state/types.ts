@@ -101,6 +101,16 @@ export interface PhaseUsage {
   tools?: Record<string, number>;
 }
 
+export interface LearningEntry {
+  id: string;
+  ticketId: string;
+  repo: string;
+  targetFile: string;
+  content: string;
+  prTitle: string;
+  prBody: string;
+}
+
 export interface Config {
   github: {
     repos: string[];

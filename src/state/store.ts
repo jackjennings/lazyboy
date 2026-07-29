@@ -3,12 +3,14 @@ import { join } from "@std/path";
 import {
   type ApprovalEntry,
   assertValidPhaseStatus,
+  type LearningEntry,
   type PrEntry,
   type TicketPhase,
   type TicketState,
   type TicketStatus,
   type WorktreeInfo,
 } from "./types.ts";
+import { mkdir, readDir, readTextFile, remove, writeTextFile } from "../fs.ts";
 
 function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
   const table: Record<string, [TicketPhase, TicketStatus]> = {
@@ -241,5 +243,49 @@ export async function commitPrinciples(
     ) {
       throw new Error(`git commit failed: ${stderr}`);
     }
+  }
+}
+
+export async function appendLearning(
+  stateDir: string,
+  entry: LearningEntry,
+): Promise<void> {
+  const learningsDir = join(stateDir, "learnings");
+  await mkdir(learningsDir, { recursive: true });
+  await writeTextFile(
+    join(learningsDir, `${entry.id}.json`),
+    JSON.stringify(entry),
+  );
+}
+
+export async function listLearnings(
+  stateDir: string,
+): Promise<LearningEntry[]> {
+  const learningsDir = join(stateDir, "learnings");
+  const entries: LearningEntry[] = [];
+  try {
+    for await (const file of readDir(learningsDir)) {
+      if (!file.isFile || !file.name.endsWith(".json")) continue;
+      try {
+        const raw = await readTextFile(join(learningsDir, file.name));
+        entries.push(JSON.parse(raw) as LearningEntry);
+      } catch {
+        console.error(`listLearnings: skipping unparseable file ${file.name}`);
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return entries;
+}
+
+export async function removeLearning(
+  stateDir: string,
+  id: string,
+): Promise<void> {
+  try {
+    await remove(join(stateDir, "learnings", `${id}.json`));
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
 }

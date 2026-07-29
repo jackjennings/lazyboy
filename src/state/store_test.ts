@@ -2,14 +2,17 @@ import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import matter from "gray-matter";
 import {
+  appendLearning,
   appendTicketLog,
   commitPrinciples,
   commitTicket,
+  listLearnings,
   listTickets,
   readTicket,
+  removeLearning,
   writeTicket,
 } from "./store.ts";
-import type { TicketState } from "./types.ts";
+import type { LearningEntry, TicketState } from "./types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -738,6 +741,135 @@ Deno.test("commitPrinciples: succeeds silently when nothing to commit", async ()
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "init"]);
     await commitPrinciples(dir, "principles: noop");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+function makeLearning(overrides: Partial<LearningEntry> = {}): LearningEntry {
+  return {
+    id: "20260729T050000",
+    ticketId: "github/jackjennings/lazyboy/226",
+    repo: "jackjennings/lazyboy",
+    targetFile: "src/phases/prompts/implementation.md",
+    content: "updated content",
+    prTitle:
+      "Improve prompt to prevent edit fragmentation observed in github/jackjennings/lazyboy/226",
+    prBody: "Body text",
+    ...overrides,
+  };
+}
+
+Deno.test("appendLearning: writes JSON entry to learnings/<id>.json", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await appendLearning(dir, makeLearning());
+    const raw = await Deno.readTextFile(
+      join(dir, "learnings", "20260729T050000.json"),
+    );
+    const parsed = JSON.parse(raw);
+    assertEquals(parsed.id, "20260729T050000");
+    assertEquals(parsed.ticketId, "github/jackjennings/lazyboy/226");
+    assertEquals(parsed.repo, "jackjennings/lazyboy");
+    assertEquals(parsed.targetFile, "src/phases/prompts/implementation.md");
+    assertEquals(parsed.content, "updated content");
+    assertEquals(
+      parsed.prTitle,
+      "Improve prompt to prevent edit fragmentation observed in github/jackjennings/lazyboy/226",
+    );
+    assertEquals(parsed.prBody, "Body text");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test(
+  "appendLearning: creates learnings directory when absent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await appendLearning(dir, makeLearning());
+      const stat = await Deno.stat(join(dir, "learnings"));
+      assertEquals(stat.isDirectory, true);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: returns all entries from learnings directory",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const e1 = makeLearning({ id: "20260729T050000" });
+      const e2 = makeLearning({
+        id: "20260729T050001",
+        ticketId: "github/jackjennings/lazyboy/227",
+      });
+      await appendLearning(dir, e1);
+      await appendLearning(dir, e2);
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 2);
+      const ids = entries.map((e) => e.id).sort();
+      assertEquals(ids, ["20260729T050000", "20260729T050001"]);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: returns empty array when learnings directory absent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const entries = await listLearnings(dir);
+      assertEquals(entries, []);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: skips unparseable files and continues",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "learnings"));
+      await Deno.writeTextFile(join(dir, "learnings", "bad.json"), "not json");
+      await appendLearning(dir, makeLearning({ id: "20260729T050000" }));
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].id, "20260729T050000");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("removeLearning: deletes the entry file", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await appendLearning(dir, makeLearning({ id: "20260729T050000" }));
+    await removeLearning(dir, "20260729T050000");
+    let threw = false;
+    try {
+      await Deno.stat(join(dir, "learnings", "20260729T050000.json"));
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("removeLearning: is a no-op when file not found", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await removeLearning(dir, "nonexistent");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

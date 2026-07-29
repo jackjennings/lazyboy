@@ -12,8 +12,10 @@ import {
   appendTicketLog,
   commitPrinciples,
   commitState,
+  listLearnings,
   listTickets,
   readTicket,
+  removeLearning,
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
@@ -590,7 +592,7 @@ export function composeTickDeps(
           ticketDir,
           stateDir,
           prompt:
-            `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}`,
+            `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}\nState directory: ${stateDir}`,
           scopeDirs: [],
           outputFile,
           githubToken: resolveGitHubAccount("jackjennings", config).token,
@@ -665,6 +667,58 @@ export function composeTickDeps(
       log: appendTickLog,
     }),
     refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
+    processLearnings: async () => {
+      const entries = await listLearnings(stateDir);
+      for (const entry of entries) {
+        await removeLearning(stateDir, entry.id);
+        try {
+          const localRepoPath = await findLocalRepo(
+            config.codebase.roots.map(expandHome),
+            entry.repo,
+          );
+          if (localRepoPath === null) {
+            throw new Error(`local repo not found for ${entry.repo}`);
+          }
+          const wt = await createWorktree(
+            localRepoPath,
+            `learnings-${entry.id}`,
+            entry.repo.split("/")[1],
+          );
+          try {
+            const targetPath = join(wt.path, entry.targetFile);
+            await Deno.mkdir(
+              join(wt.path, ...entry.targetFile.split("/").slice(0, -1)),
+              { recursive: true },
+            );
+            await Deno.writeTextFile(targetPath, entry.content);
+            const run = (cmd: string[]) =>
+              new Deno.Command(cmd[0], {
+                args: cmd.slice(1),
+                cwd: wt.path,
+              }).output();
+            await run(["git", "add", entry.targetFile]);
+            await run(["git", "commit", "-m", entry.prTitle]);
+            await run([
+              "gh",
+              "pr",
+              "create",
+              "--draft",
+              "--title",
+              entry.prTitle,
+              "--body",
+              entry.prBody,
+            ]);
+          } finally {
+            await removeWorktree(wt);
+          }
+        } catch (e) {
+          console.error(
+            `processLearnings: failed to apply learning ${entry.id}:`,
+            e instanceof Error ? e.message : String(e),
+          );
+        }
+      }
+    },
     notify: makeNotify(stateDir, {
       readLog: (sd, id) =>
         readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),

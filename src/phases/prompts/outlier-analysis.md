@@ -7,6 +7,7 @@ You have been given:
   `*-implementation.usage.json`)
 - The ticket ID
 - The lazyboy worktree (containing `src/phases/prompts/`)
+- The state directory (where learnings are queued)
 
 Follow these steps:
 
@@ -40,29 +41,33 @@ Follow these steps:
      rather than re-reading it on each edit. Make the instruction concrete and
      actionable; avoid vague directives.
 
-6. From the lazyboy worktree, commit the change:
+6. Write a learning entry to
+   `<State directory>/learnings/<YYYYMMDDTHHMMSS>.json` using the current UTC
+   time for the filename slug. The JSON object must have exactly these fields:
+
+   ```json
+   {
+     "id": "<YYYYMMDDTHHMMSS>",
+     "ticketId": "<ticket ID from context>",
+     "repo": "jackjennings/lazyboy",
+     "targetFile": "<repo-relative path of the file changed in step 5, e.g. src/phases/prompts/implementation.md>",
+     "content": "<full new file content after the edit from step 5>",
+     "prTitle": "Improve prompt to prevent <short label for inefficient pattern> observed in <ticketId>",
+     "prBody": "<body text citing the triggering ticket ID, the turns/task_count ratio, and the root cause>"
+   }
    ```
-   git add src/phases/prompts/<changed-file>
-   git commit -m "improve prompt to prevent outlier pattern observed in <ticketId>"
-   ```
+
+   Do not run `git` or `gh` commands. The learning entry will be picked up by
+   the next tick and applied from a clean worktree.
 
 7. Write your findings to `<YYYYMMDDTHHMMSS>-outlier-analysis.md` in the ticket
    directory. Include: the turns/task_count ratio, the identified pattern, the
    root cause, and the exact prompt change made (full diff or before/after).
 
-8. Open a draft PR against `jackjennings/lazyboy`:
-   ```
-   gh pr create --draft \
-     --title "Improve prompt to prevent edit fragmentation observed in <ticketId>" \
-     --body "..."
-   ```
-   The body must cite the triggering ticket ID, the turns/task_count ratio, and
-   the root cause identified in step 3 or 4.
-
 If the transcript was unavailable, base your analysis on the turns/task_count
 ratio and the plan structure alone. You may propose a general improvement (e.g.
 requiring explicit enumeration of all call sites for any rename task) rather
-than a specific diagnosis. Still commit the change and open the PR.
+than a specific diagnosis. Still write the learning entry and the findings file.
 
 Do not modify `meta.md`, `log.ndjson`, or any file outside `src/phases/prompts/`
-in the lazyboy worktree.
+in the lazyboy worktree. Do not run any version control or `gh` CLI commands.

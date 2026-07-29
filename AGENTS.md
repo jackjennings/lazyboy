@@ -432,6 +432,46 @@ Do not manually adjust indentation or spacing — let the formatter handle it.
 Every task in a plan must produce a code change and a commit. Do not create
 tasks that only run verification commands without making changes.
 
+## CI triage
+
+When `resolveCIFailuresAction` encounters a `test` or `other` CI failure on an
+unmerged PR, it writes a context file and spawns a triage agent to classify the
+failure instead of filing an issue directly. This is an async two-tick pattern
+identical in structure to conflict resolution.
+
+**Tick 1 (spawn):** `resolveCIFailuresAction` writes
+`${timestamp}-ci-triage-context-${runId}.md` to the ticket directory containing
+the PR URL, repo, run ID, branch, worktree path, CI output, and PR diff (with
+patches). It calls `spawnPhase` with the context file, marks the run ID in
+`ciHandledRunIds`, writes the ticket, and returns. If `writeContextFile` or
+`spawn` throws, the run ID is removed from `ciHandledRunIds` and processing
+continues to the next PR.
+
+**Tick 2 (resolve):** `resolveCITriageAction` detects completed triage runs by
+checking for `*-ci-triage-context-*.md` files when no live process is present.
+For each context file it derives the output filename by replacing
+`-ci-triage-context-` with `-ci-triage-` (the same timestamp prefix is shared).
+It parses the verdict from the first line matching
+`/^VERDICT:\s*(PR_CAUSED|INFRA)/im` and creates a GitHub issue. Both the context
+and output files are deleted after resolution.
+
+**Phase key:** `"ci-triage"` in `PHASE_MODEL_DEFAULTS` (`src/tick.ts`). Default:
+`{ model: "claude-sonnet-4-6", thinking: "high" }`. Override via `config.toml`
+`[phases.defaults.ci-triage]` or `ticket.phases["ci-triage"]`. Bedrock users
+must override this phase the same way as `"conflict-resolution"`.
+
+**Agent prompt:** instructs the agent to default to `PR_CAUSED` unless there is
+positive evidence of infrastructure failure (network errors, rate limits, runner
+timeouts, package download failures, transient flakiness). The last line of the
+agent's output must be exactly `VERDICT: PR_CAUSED` or `VERDICT: INFRA`.
+
+`resolveCITriageAction` must be registered **before** `resolveCIFailuresAction`
+in the `tickActions` array so a completed triage run is resolved before the
+spawn action can re-evaluate the same ticket. Both are gated on
+`config.tick.resolveCIFailures`.
+
+The `fmt` and `lint` fast paths bypass the triage agent: they always apply when
+`firstFailingStep` is `fmt` or `lint` and do not call `getPRDiffFiles`.
 ## `wont-do` phase
 
 Terminal phase (alongside `merge/done`) that permanently excludes a ticket from

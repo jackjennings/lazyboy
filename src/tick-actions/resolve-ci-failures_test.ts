@@ -62,6 +62,12 @@ function makeDeps(
     isProcessAlive: () => false,
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    spawn: () => Promise.resolve(),
+    writeContextFile: () => Promise.resolve("context.md"),
+    resolveModelConfig: () => ({
+      model: "claude-sonnet-4-6",
+      thinking: "high",
+    }),
     ...overrides,
   };
 }
@@ -151,8 +157,6 @@ Deno.test(
     const result = await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(true),
         runGit: runGitSpy,
       }),
@@ -165,51 +169,6 @@ Deno.test(
   },
 );
 
-// ── attribution: infrastructure-caused ───────────────────────────────────────
-
-Deno.test(
-  "resolveCIFailuresAction: failing file absent from PR diff → creates infra issue",
-  async () => {
-    const issues: Array<{ repo: string; title: string; body: string }> = [];
-    await resolveCIFailuresAction(
-      makeDeps({
-        getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () => Promise.resolve(["src/tick.ts"]),
-        createGitHubIssue: (opts) => {
-          issues.push(opts);
-          return Promise.resolve();
-        },
-      }),
-    ).run(makeTicket(), "/state");
-    assertEquals(issues.length, 1);
-    assertEquals(issues[0].repo, "jackjennings/lazyboy");
-  },
-);
-
-Deno.test(
-  "resolveCIFailuresAction: empty failingFiles → infra-caused issue created",
-  async () => {
-    const issues: string[] = [];
-    await resolveCIFailuresAction(
-      makeDeps({
-        getPRChecks: () =>
-          Promise.resolve({
-            runId: "r1",
-            conclusion: "failure",
-            firstFailingStep: "fmt",
-            failingOutput: "error",
-            failingFiles: [],
-          }),
-        createGitHubIssue: (opts) => {
-          issues.push(opts.title);
-          return Promise.resolve();
-        },
-      }),
-    ).run(makeTicket(), "/state");
-    assertEquals(issues.length, 1);
-  },
-);
-
 // ── PR-caused fmt fix ─────────────────────────────────────────────────────────
 
 Deno.test(
@@ -219,8 +178,6 @@ Deno.test(
     const result = await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(true),
         runGit: (args) => {
           gitCalls.push(args);
@@ -246,8 +203,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(false),
         runGit: (args) => {
           gitCalls.push(args);
@@ -278,8 +233,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         createGitHubIssue: (opts) => {
           issues.push(opts.title);
           return Promise.resolve();
@@ -306,7 +259,6 @@ Deno.test(
             failingOutput: "error in src/tick.ts",
             failingFiles: ["src/tick.ts"],
           }),
-        getPRDiffFiles: () => Promise.resolve(["src/tick.ts"]),
         runLintFix: () =>
           Promise.resolve({ allFixed: true, remainingOutput: "" }),
         runGit: (args) => {
@@ -336,7 +288,6 @@ Deno.test(
             failingOutput: "error: no-explicit-any",
             failingFiles: ["src/tick.ts"],
           }),
-        getPRDiffFiles: () => Promise.resolve(["src/tick.ts"]),
         runLintFix: () =>
           Promise.resolve({
             allFixed: false,
@@ -352,34 +303,195 @@ Deno.test(
   },
 );
 
-// ── PR-caused test failure ────────────────────────────────────────────────────
+// ── test/other → spawn, not createGitHubIssue ────────────────────────────────
 
 Deno.test(
-  "resolveCIFailuresAction: PR-caused test failure → createGitHubIssue with Fix failing test title",
+  "resolveCIFailuresAction: test step → spawn called, createGitHubIssue not called",
   async () => {
-    const issues: Array<{ title: string; body: string }> = [];
-    await resolveCIFailuresAction(
+    let spawnCalled = false;
+    let issueCreated = false;
+    const result = await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () =>
           Promise.resolve({
             runId: "r4",
             conclusion: "failure",
             firstFailingStep: "test",
-            failingOutput: "FAILED tick_test.ts > advancePhase: new ticket",
-            failingFiles: ["src/tick_test.ts"],
+            failingOutput: "FAILED tick_test.ts > foo",
+            failingFiles: [],
           }),
-        getPRDiffFiles: () => Promise.resolve(["src/tick_test.ts"]),
-        createGitHubIssue: (opts) => {
-          issues.push(opts);
+        getPRDiffFiles: () => Promise.resolve([]),
+        spawn: () => {
+          spawnCalled = true;
+          return Promise.resolve();
+        },
+        createGitHubIssue: () => {
+          issueCreated = true;
           return Promise.resolve();
         },
       }),
     ).run(makeTicket(), "/state");
-    assertEquals(issues.length, 1);
-    assertEquals(
-      issues[0].title.startsWith("Fix failing test:"),
-      true,
-    );
+    assertEquals(spawnCalled, true);
+    assertEquals(issueCreated, false);
+    assertEquals(result?.ciHandledRunIds?.includes("r4"), true);
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: other step → spawn called",
+  async () => {
+    let spawnCalled = false;
+    await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r5",
+            conclusion: "failure",
+            firstFailingStep: "other",
+            failingOutput: "build error",
+            failingFiles: [],
+          }),
+        getPRDiffFiles: () => Promise.resolve([]),
+        spawn: () => {
+          spawnCalled = true;
+          return Promise.resolve();
+        },
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(spawnCalled, true);
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: spawn failure → handledIds rolled back, no ticket written",
+  async () => {
+    const written: unknown[] = [];
+    const result = await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r6",
+            conclusion: "failure",
+            firstFailingStep: "test",
+            failingOutput: "error",
+            failingFiles: [],
+          }),
+        getPRDiffFiles: () => Promise.resolve([]),
+        spawn: () => Promise.reject(new Error("spawn failed")),
+        writeTicket: (_sd, t) => {
+          written.push(t);
+          return Promise.resolve();
+        },
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(result, null);
+    assertEquals(written.length, 0);
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: writeContextFile failure → handledIds rolled back",
+  async () => {
+    let spawnCalled = false;
+    const result = await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r7",
+            conclusion: "failure",
+            firstFailingStep: "test",
+            failingOutput: "error",
+            failingFiles: [],
+          }),
+        getPRDiffFiles: () => Promise.resolve([]),
+        writeContextFile: () => Promise.reject(new Error("disk full")),
+        spawn: () => {
+          spawnCalled = true;
+          return Promise.resolve();
+        },
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(result, null);
+    assertEquals(spawnCalled, false);
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: fmt step → getPRDiffFiles not called",
+  async () => {
+    let diffCalled = false;
+    await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () => Promise.resolve(FMT_RESULT),
+        getPRDiffFiles: () => {
+          diffCalled = true;
+          return Promise.resolve([]);
+        },
+        runFmt: () => Promise.resolve(false),
+        readFile: () => Promise.resolve("5. Run `deno fmt && deno lint`."),
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(diffCalled, false);
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: spawn receives model and thinking from resolveModelConfig",
+  async () => {
+    const spawnOpts: Record<string, unknown>[] = [];
+    await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r8",
+            conclusion: "failure",
+            firstFailingStep: "test",
+            failingOutput: "error",
+            failingFiles: [],
+          }),
+        getPRDiffFiles: () => Promise.resolve([]),
+        resolveModelConfig: () => ({
+          model: "claude-haiku-4-5",
+          thinking: "off",
+        }),
+        spawn: (opts) => {
+          spawnOpts.push(opts as Record<string, unknown>);
+          return Promise.resolve();
+        },
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(spawnOpts.length, 1);
+    assertEquals(spawnOpts[0].model, "claude-haiku-4-5");
+    assertEquals(spawnOpts[0].thinking, "off");
+  },
+);
+
+Deno.test(
+  "resolveCIFailuresAction: context file content includes CI output and diff patch",
+  async () => {
+    const written: { runId: string; content: string }[] = [];
+    await resolveCIFailuresAction(
+      makeDeps({
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r9",
+            conclusion: "failure",
+            firstFailingStep: "test",
+            failingOutput: "TS2345: argument not assignable",
+            failingFiles: [],
+          }),
+        getPRDiffFiles: () =>
+          Promise.resolve([{ filename: "src/foo.ts", patch: "-old\n+new" }]),
+        writeContextFile: (_dir, runId, content) => {
+          written.push({ runId, content });
+          return Promise.resolve("ctx.md");
+        },
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(written.length, 1);
+    assertEquals(written[0].content.includes("TS2345"), true);
+    assertEquals(written[0].content.includes("src/foo.ts"), true);
+    assertEquals(written[0].content.includes("-old\n+new"), true);
   },
 );
 
@@ -393,8 +505,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(true),
         runGit: (args) => {
           gitCalls.push(args);
@@ -433,8 +543,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(true),
         runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
         readFile: () =>
@@ -458,8 +566,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(true),
         runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
         writeFile: (path) => {
@@ -501,25 +607,38 @@ Deno.test(
 );
 
 Deno.test(
-  "resolveCIFailuresAction: createGitHubIssue throws → logs error, does not crash",
+  "resolveCIFailuresAction: createGitHubIssue throws for no-worktree lint → logs error, does not crash",
   async () => {
     const logged: object[] = [];
     const result = await resolveCIFailuresAction(
       makeDeps({
-        getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () => Promise.resolve(["src/tick.ts"]),
+        getPRChecks: () =>
+          Promise.resolve({
+            runId: "r-err",
+            conclusion: "failure",
+            firstFailingStep: "lint",
+            failingOutput: "error",
+            failingFiles: [],
+          }),
         createGitHubIssue: () => Promise.reject(new Error("auth")),
         appendLog: (_sd, _id, entry) => {
           logged.push(entry);
           return Promise.resolve();
         },
       }),
-    ).run(makeTicket(), "/state");
-    assertEquals(result, null);
-    assertEquals(
-      (logged[0] as Record<string, string>).event,
-      "error",
+    ).run(
+      makeTicket({
+        prs: [{
+          url: "https://github.com/jackjennings/lazyboy/pull/99",
+          title: "feat",
+          dependsOn: [],
+          merged: false,
+        }],
+      }),
+      "/state",
     );
+    assertEquals(result, null);
+    assertEquals((logged[0] as Record<string, string>).event, "error");
   },
 );
 
@@ -532,8 +651,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve(FMT_RESULT),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(false),
         writeTicket: (_sd, t) => {
           written.push(t);
@@ -554,8 +671,6 @@ Deno.test(
     await resolveCIFailuresAction(
       makeDeps({
         getPRChecks: () => Promise.resolve({ ...FMT_RESULT, runId: "run-2" }),
-        getPRDiffFiles: () =>
-          Promise.resolve(["src/phases/prompts/implementation.md"]),
         runFmt: () => Promise.resolve(false),
         writeTicket: (_sd, t) => {
           written.push(t);

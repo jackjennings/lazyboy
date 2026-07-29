@@ -18,7 +18,9 @@ export interface CIRunResult {
 
 export interface ResolveCIFailuresDeps {
   getPRChecks: (prUrl: string) => Promise<CIRunResult | null>;
-  getPRDiffFiles: (prUrl: string) => Promise<string[]>;
+  getPRDiffFiles: (
+    prUrl: string,
+  ) => Promise<{ filename: string; patch?: string }[]>;
   runFmt: (worktreePath: string) => Promise<boolean>;
   runLintFix: (
     worktreePath: string,
@@ -37,6 +39,25 @@ export interface ResolveCIFailuresDeps {
   isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  spawn: (opts: {
+    worktreePath: string;
+    branch: string;
+    ticketDir: string;
+    contextFile: string;
+    prUrl: string;
+    repo: string;
+    runId: string;
+    model: string;
+    thinking: string;
+  }) => Promise<void>;
+  writeContextFile: (
+    ticketDir: string,
+    runId: string,
+    content: string,
+  ) => Promise<string>;
+  resolveModelConfig: (
+    ticket: TicketState,
+  ) => { model: string; thinking: string };
 }
 
 const IMPL_PROMPT_REL = "src/phases/prompts/implementation.md";
@@ -64,6 +85,7 @@ export function resolveCIFailuresAction(
     ): Promise<TicketState | null> {
       const handledIds = new Set(ticket.ciHandledRunIds ?? []);
       let anyHandled = false;
+      const ticketDir = join(stateDir, ticket.id);
 
       for (const pr of ticket.prs ?? []) {
         if (pr.merged) continue;
@@ -90,50 +112,10 @@ export function resolveCIFailuresAction(
 
         handledIds.add(ciResult.runId);
 
-        let diffFiles: string[];
-        try {
-          diffFiles = await deps.getPRDiffFiles(pr.url);
-        } catch (e) {
-          await deps.appendLog(stateDir, ticket.id, {
-            event: "error",
-            context: "resolveCIFailures",
-            message: String(e),
-          });
-          handledIds.delete(ciResult.runId);
-          continue;
-        }
-
-        const diffSet = new Set(diffFiles);
-        const isPRCaused = ciResult.failingFiles.length > 0 &&
-          ciResult.failingFiles.some((f) => diffSet.has(f));
-
         const repoMatch = pr.url.match(
           /github\.com\/([^/]+\/[^/]+)\/pull\//,
         );
         const repo = repoMatch ? repoMatch[1] : "unknown/unknown";
-
-        if (!isPRCaused) {
-          try {
-            await deps.createGitHubIssue({
-              repo,
-              title: `CI infrastructure failure in ${repo}`,
-              body:
-                `Observed in PR: ${pr.url}\n\nFailing step: ${ciResult.firstFailingStep}\n\n` +
-                `This failure was not caused by the PR's changes.\n\n${ciResult.failingOutput}`,
-            });
-            anyHandled = true;
-          } catch (e) {
-            await deps.appendLog(stateDir, ticket.id, {
-              event: "error",
-              context: "resolveCIFailures",
-              message: String(e),
-            });
-            handledIds.delete(ciResult.runId);
-          }
-          continue;
-        }
-
-        anyHandled = true;
 
         const worktree = pr.worktreeKey
           ? ticket.worktrees[pr.worktreeKey]
@@ -148,6 +130,7 @@ export function resolveCIFailuresAction(
                 body:
                   `PR: ${pr.url}\n\nAutomated fix not possible: no worktree.\n\n${ciResult.failingOutput}`,
               });
+              anyHandled = true;
             } catch (e) {
               await deps.appendLog(stateDir, ticket.id, {
                 event: "error",
@@ -184,6 +167,7 @@ export function resolveCIFailuresAction(
               });
             }
             await applySystemicImprovement(ticket, deps);
+            anyHandled = true;
           }
         } else if (ciResult.firstFailingStep === "lint") {
           if (!worktree) {
@@ -194,6 +178,7 @@ export function resolveCIFailuresAction(
                 body:
                   `PR: ${pr.url}\n\nAutomated fix not possible: no worktree.\n\n${ciResult.failingOutput}`,
               });
+              anyHandled = true;
             } catch (e) {
               await deps.appendLog(stateDir, ticket.id, {
                 event: "error",
@@ -240,33 +225,67 @@ export function resolveCIFailuresAction(
                 });
               }
             }
-          }
-        } else if (ciResult.firstFailingStep === "test") {
-          const testNameMatch = ciResult.failingOutput.match(
-            /FAILED ([^\n]+)/,
-          );
-          const testName = testNameMatch ? testNameMatch[1].trim() : "unknown";
-          try {
-            await deps.createGitHubIssue({
-              repo,
-              title: `Fix failing test: ${testName}`,
-              body: `PR branch: ${
-                worktree?.branch ?? pr.url
-              }\n\nCI output:\n${ciResult.failingOutput}`,
-            });
-          } catch (e) {
-            await deps.appendLog(stateDir, ticket.id, {
-              event: "error",
-              context: "resolveCIFailures",
-              message: String(e),
-            });
+            anyHandled = true;
           }
         } else {
+          let diffFiles: { filename: string; patch?: string }[];
           try {
-            await deps.createGitHubIssue({
+            diffFiles = await deps.getPRDiffFiles(pr.url);
+          } catch (e) {
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "error",
+              context: "resolveCIFailures",
+              message: String(e),
+            });
+            handledIds.delete(ciResult.runId);
+            continue;
+          }
+
+          const diffSection = diffFiles
+            .map((f) =>
+              f.patch
+                ? `### ${f.filename}\n\n\`\`\`diff\n${f.patch}\n\`\`\``
+                : `### ${f.filename}`
+            )
+            .join("\n\n");
+
+          const content = `PR-URL: ${pr.url}\n` +
+            `Repo: ${repo}\n` +
+            `Run-ID: ${ciResult.runId}\n` +
+            `Branch: ${worktree?.branch ?? ""}\n` +
+            `Worktree-Path: ${worktree?.path ?? ""}\n\n` +
+            `## CI Output\n\n${ciResult.failingOutput}\n\n` +
+            `## PR Diff\n\n${diffSection}`;
+
+          let contextFile: string;
+          try {
+            contextFile = await deps.writeContextFile(
+              ticketDir,
+              ciResult.runId,
+              content,
+            );
+          } catch (e) {
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "error",
+              context: "resolveCIFailures",
+              message: String(e),
+            });
+            handledIds.delete(ciResult.runId);
+            continue;
+          }
+
+          const { model, thinking } = deps.resolveModelConfig(ticket);
+          try {
+            await deps.spawn({
+              worktreePath: worktree?.path ?? "",
+              branch: worktree?.branch ?? "",
+              ticketDir,
+              contextFile,
+              prUrl: pr.url,
               repo,
-              title: `CI failure on ${pr.url}`,
-              body: `PR: ${pr.url}\n\n${ciResult.failingOutput}`,
+              runId: ciResult.runId,
+              model,
+              thinking,
             });
           } catch (e) {
             await deps.appendLog(stateDir, ticket.id, {
@@ -274,7 +293,18 @@ export function resolveCIFailuresAction(
               context: "resolveCIFailures",
               message: String(e),
             });
+            handledIds.delete(ciResult.runId);
+            continue;
           }
+
+          const now = Temporal.Now.instant().toString();
+          const updated: TicketState = {
+            ...ticket,
+            ciHandledRunIds: [...handledIds],
+            updated: now,
+          };
+          await deps.writeTicket(stateDir, updated);
+          return updated;
         }
       }
 

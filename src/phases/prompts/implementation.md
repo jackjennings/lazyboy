@@ -74,7 +74,10 @@ edit — the file contains exactly what you wrote; use that text as the anchor f
 subsequent edits. The same no-re-read rule applies before the first edit: if you
 already read a file at any point in this session — in the initial batch or any
 later turn — do not read it again before editing it. Any read you performed
-remains valid regardless of how many turns have elapsed since.
+remains valid regardless of how many turns have elapsed since. A grep or bash
+command does not invalidate a prior read — if grep confirms a file you already
+read contains the target pattern, use that read as the edit anchor without
+re-reading the file.
 
 When multiple files each require the same type of independent change (e.g., the
 same import added to `tick.ts` and `run-phase.ts`), issue all such edits as
@@ -148,15 +151,17 @@ When stacking applies:
 
 1. Implement part 1 fully on the current ticket branch. All tests must pass
    before continuing.
-2. Run `gh stack add -m "<description>"` to create and switch to the next
+2. Run `gh stack init $(git branch --show-current)` to register the current
+   branch as the base of the stack. This must be done before `gh stack add`.
+3. Run `gh stack add -m "<description>"` to create and switch to the next
    branch.
-3. Implement part 2. All tests (including part 1 tests) must pass.
-4. Repeat for additional parts if the plan calls for them.
-5. Run `gh stack submit --auto` to push all branches and create all PRs as
+4. Implement part 2. All tests (including part 1 tests) must pass.
+5. Repeat for additional parts if the plan calls for them.
+6. Run `gh stack submit --auto` to push all branches and create all PRs as
    drafts.
-6. For each stacked branch in order, run `gh pr view <branch> --json url,title`
+7. For each stacked branch in order, run `gh pr view <branch> --json url,title`
    to retrieve the URL and title.
-7. Append one `PrEntry` per PR to the `prs` array in `meta.md`, forming a
+8. Append one `PrEntry` per PR to the `prs` array in `meta.md`, forming a
    dependency chain:
    - PR1: `dependsOn: []`
    - PR2: `dependsOn: [<PR1 url>]`

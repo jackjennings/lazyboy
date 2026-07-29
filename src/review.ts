@@ -46,6 +46,7 @@ import { buildContextFiles } from "./run-phase.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { diffLines } from "diff";
+import { ScrollPane } from "./ui/scroll-pane.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -393,85 +394,6 @@ export class ErrorOverlay implements Component, Focusable {
   }
 }
 
-class ContentPane implements Component {
-  private md: Markdown | null;
-  private preRenderedLines: string[] | null;
-  private scrollOffset = 0;
-  private tui: TUI;
-  private title: string;
-  private editor?: Editor;
-
-  constructor(content: string | string[], tui: TUI, title: string) {
-    if (Array.isArray(content)) {
-      this.md = null;
-      this.preRenderedLines = content;
-    } else {
-      this.md = new Markdown(content, 1, 0, markdownTheme);
-      this.preRenderedLines = null;
-    }
-    this.tui = tui;
-    this.title = title;
-  }
-
-  setEditor(editor: Editor): void {
-    this.editor = editor;
-  }
-
-  private editorHeight(width: number): number {
-    if (this.editor) {
-      return this.editor.render(width).length;
-    }
-    return Math.max(5, Math.floor(this.tui.terminal.rows * 0.3)) + 2;
-  }
-
-  private availableHeight(width: number): number {
-    return Math.max(1, this.tui.terminal.rows - this.editorHeight(width) - 1);
-  }
-
-  private header(width: number): string {
-    const label = ` ${this.title} `;
-    const remaining = Math.max(0, width - label.length);
-    const left = Math.floor(remaining / 2);
-    const right = remaining - left;
-    return dim("─".repeat(left) + label + "─".repeat(right));
-  }
-
-  private allLines(width: number): string[] {
-    if (this.preRenderedLines !== null) {
-      return truncateDiffLines(this.preRenderedLines, width);
-    }
-    return this.md!.render(width);
-  }
-
-  handleInput(data: string): void {
-    const width = this.tui.terminal.columns;
-    if (matchesKey(data, "space") || matchesKey(data, "f")) {
-      const height = this.availableHeight(width);
-      const lines = this.allLines(width);
-      const maxOffset = Math.max(0, lines.length - height);
-      this.scrollOffset = Math.min(this.scrollOffset + height, maxOffset);
-    }
-    if (matchesKey(data, "b")) {
-      const height = this.availableHeight(width);
-      this.scrollOffset = Math.max(0, this.scrollOffset - height);
-    }
-  }
-
-  invalidate(): void {
-    this.md?.invalidate();
-  }
-
-  render(width: number): string[] {
-    const lines = this.allLines(width);
-    const height = this.availableHeight(width);
-    const content = lines.slice(
-      this.scrollOffset,
-      this.scrollOffset + height,
-    );
-    return [this.header(width), ...content];
-  }
-}
-
 export async function review(id: string): Promise<void> {
   const config = await loadConfig();
   const stateDir = expandHome(config.state.dir);
@@ -529,7 +451,17 @@ export async function review(id: string): Promise<void> {
   const tui = new TUI(terminal);
   let focused: "content" | "editor" = "content";
 
-  const contentPane = new ContentPane(paneContent, tui, paneTitle);
+  let contentGetLines: (width: number) => string[];
+  let contentOnInvalidate: (() => void) | undefined;
+  if (Array.isArray(paneContent)) {
+    contentGetLines = (w) => truncateDiffLines(paneContent, w);
+    contentOnInvalidate = undefined;
+  } else {
+    const md = new Markdown(paneContent, 1, 0, markdownTheme);
+    contentGetLines = (w) => md.render(w);
+    contentOnInvalidate = () => md.invalidate();
+  }
+
   const editor = new Editor(tui, {
     borderColor: (s) => focused === "editor" ? s : gray(s),
     selectList: {
@@ -541,7 +473,17 @@ export async function review(id: string): Promise<void> {
     },
   });
 
-  contentPane.setEditor(editor);
+  const contentPane = new ScrollPane({
+    getLines: contentGetLines,
+    tui,
+    title: paneTitle,
+    getHeight: () =>
+      Math.max(
+        1,
+        tui.terminal.rows - editor.render(tui.terminal.columns).length - 1,
+      ),
+    onInvalidate: contentOnInvalidate,
+  });
 
   tui.addChild(contentPane);
   tui.addChild(editor);

@@ -63,6 +63,7 @@ export interface TicketState {
   id: string;
   provider: string;
   title: string;
+  shortTitle?: string;
   url: string;
   phase: TicketPhase;
   status: TicketStatus;

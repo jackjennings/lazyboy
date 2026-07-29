@@ -12,6 +12,7 @@ import { review } from "./review.ts";
 import { shell } from "./shell.ts";
 import { tail } from "./tail.ts";
 import { update } from "./update.ts";
+import { hud } from "./hud.ts";
 import type { Command } from "./types.ts";
 
 export const commands: Command[] = [
@@ -29,4 +30,5 @@ export const commands: Command[] = [
   shell,
   tail,
   update,
+  hud,
 ];

@@ -70,6 +70,7 @@ export interface TicketState {
   scope: string[];
   worktrees: Record<string, WorktreeInfo>;
   prs?: PrEntry[];
+  ciHandledRunIds?: string[];
   providerDone?: boolean;
   created: string;
   updated: string;

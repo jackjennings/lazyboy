@@ -26,6 +26,8 @@ Implement the plan exactly as specified using TDD:
 2. Implement the minimal code to make them pass
 3. Refactor if needed
 4. Confirm all tests pass
+5. Run `deno fmt && deno lint`. Required even when only `.md` files changed —
+   `deno fmt` formats Markdown.
 
 Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
 same file, write all failing tests for that file across all tasks first, then
@@ -51,10 +53,13 @@ feels missing, note the gap in the "Changes Made" section of your response
 rather than silently expanding scope.
 
 Read efficiency: before reading any source file, scan the complete plan and
-enumerate every file it mentions. Then read all of them in a single parallel
-batch (one turn, multiple Read calls). Do not read source files incrementally —
-identify the full list first, then batch all reads into one turn. Reading one
-file per turn is the second most common source of outlier session length.
+enumerate every file it mentions. Then read all of them by issuing multiple Read
+tool calls in the same response message — not one Read per response. Separate
+messages execute sequentially; parallel means multiple tool_use blocks in a
+single response. Do not read one file, wait for its result, then read the next —
+identify the full list first, then include all Read calls in one response.
+Reading one file per response message is the second most common source of
+outlier session length.
 
 Do not read source files the plan does not name, even as convention or pattern
 reference — the plan is self-contained. Reading unreferenced files to understand

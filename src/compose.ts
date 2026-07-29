@@ -33,6 +33,7 @@ import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
+import { resolveCIFailuresAction } from "./tick-actions/resolve-ci-failures.ts";
 import {
   installPackages,
   isPackageInstalled,
@@ -218,6 +219,179 @@ export function composeTickDeps(
           contextFiles: contextFilePaths,
         });
       },
+    }),
+    resolveCIFailuresAction({
+      getPRChecks: async (prUrl) => {
+        const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+        if (!m) return null;
+        const [, repoSlug, prNumber] = m;
+        const { token } = resolveGitHubAccount(repoSlug.split("/")[0], config);
+        const prRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        );
+        if (!prRes.ok) throw new Error(`GitHub API ${prRes.status}`);
+        const prData = await prRes.json();
+        const headSha: string = prData.head.sha;
+        const suiteRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-suites`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        );
+        if (!suiteRes.ok) throw new Error(`GitHub API ${suiteRes.status}`);
+        const { check_suites: suites } = await suiteRes.json();
+        const suite = (
+          suites as Array<{ status: string; conclusion: string; id: number }>
+        ).find((s) => s.status === "completed");
+        if (!suite) return null;
+        if (
+          suite.conclusion !== "failure" &&
+          suite.conclusion !== "action_required"
+        ) {
+          return {
+            runId: String(suite.id),
+            conclusion: suite.conclusion as "success" | "pending",
+            firstFailingStep: "other" as const,
+            failingOutput: "",
+            failingFiles: [],
+          };
+        }
+        const runsRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-runs`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        );
+        if (!runsRes.ok) throw new Error(`GitHub API ${runsRes.status}`);
+        const { check_runs: runs } = await runsRes.json();
+        const failing = (
+          runs as Array<{
+            conclusion: string;
+            name: string;
+            id?: number;
+            output?: { text?: string };
+          }>
+        ).find((r) => r.conclusion === "failure");
+        const stepName = failing?.name ?? "";
+        const firstFailingStep = stepName.toLowerCase().includes("fmt")
+          ? "fmt"
+          : stepName.toLowerCase().includes("lint")
+          ? "lint"
+          : stepName.toLowerCase().includes("test")
+          ? "test"
+          : "other";
+        const annotationsRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/check-runs/${
+            failing?.id ?? 0
+          }/annotations`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        ).catch(() => null);
+        const failingFiles: string[] = [];
+        if (annotationsRes?.ok) {
+          const annotations = await annotationsRes.json();
+          for (const a of annotations as Array<{ path?: string }>) {
+            if (a.path) failingFiles.push(a.path);
+          }
+        }
+        return {
+          runId: String(suite.id),
+          conclusion: suite.conclusion as "failure" | "action_required",
+          firstFailingStep,
+          failingOutput: failing?.output?.text ?? stepName,
+          failingFiles,
+        };
+      },
+      getPRDiffFiles: async (prUrl) => {
+        const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+        if (!m) return [];
+        const [, repoSlug, prNumber] = m;
+        const { token } = resolveGitHubAccount(repoSlug.split("/")[0], config);
+        const res = await fetch(
+          `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}/files`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        );
+        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        const files = await res.json();
+        return (files as Array<{ filename: string }>).map((f) => f.filename);
+      },
+      runFmt: async (worktreePath) => {
+        await new Deno.Command("deno", {
+          args: ["fmt"],
+          cwd: worktreePath,
+        }).output();
+        const status = await runGit(["status", "--porcelain"], worktreePath);
+        return status.stdout.trim().length > 0;
+      },
+      runLintFix: async (worktreePath) => {
+        await new Deno.Command("deno", {
+          args: ["lint", "--fix"],
+          cwd: worktreePath,
+        }).output();
+        const check = await new Deno.Command("deno", {
+          args: ["lint"],
+          cwd: worktreePath,
+        }).output();
+        const ok = check.code === 0;
+        return {
+          allFixed: ok,
+          remainingOutput: ok ? "" : new TextDecoder().decode(check.stdout),
+        };
+      },
+      runGit,
+      createGitHubIssue: async ({ repo, title, body }) => {
+        const { token, login } = resolveGitHubAccount(
+          repo.split("/")[0],
+          config,
+        );
+        const res = await fetch(
+          `https://api.github.com/repos/${repo}/issues`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ title, body, assignees: [login] }),
+          },
+        );
+        if (!res.ok) {
+          throw new Error(`GitHub API ${res.status} creating issue`);
+        }
+      },
+      readFile: async (path) => {
+        try {
+          return await Deno.readTextFile(path);
+        } catch {
+          return null;
+        }
+      },
+      writeFile: (path, content) => Deno.writeTextFile(path, content),
+      isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
+      writeTicket,
+      appendLog: appendTicketLog,
     }),
     ...(config.jira
       ? [

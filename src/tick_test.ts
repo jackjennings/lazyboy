@@ -3028,3 +3028,89 @@ Deno.test(
     await new TickService(deps).run();
   },
 );
+
+Deno.test(
+  "TickService: shortTitle set from generateShortTitle when it returns a value",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-3",
+      provider: "github",
+      title: "Add feature for doing something useful",
+      url: "https://github.com/t/r/issues/3",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const writtenTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      writeTicket: spy((t: TicketState) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      }),
+      generateShortTitle: (_title) => Promise.resolve("Add feature"),
+    });
+    await new TickService(deps).run();
+    assertEquals(writtenTickets[0].shortTitle, "Add feature");
+  },
+);
+
+Deno.test(
+  "TickService: shortTitle is undefined when generateShortTitle returns null",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-3",
+      provider: "github",
+      title: "Title",
+      url: "https://example.com",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const writtenTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      writeTicket: spy((t: TicketState) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      }),
+      generateShortTitle: (_title) => Promise.resolve(null),
+    });
+    await new TickService(deps).run();
+    assertEquals(writtenTickets[0].shortTitle, undefined);
+  },
+);
+
+Deno.test(
+  "TickService: shortTitle is absent when generateShortTitle dep is not provided",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-3",
+      provider: "github",
+      title: "Title",
+      url: "https://example.com",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const writtenTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      writeTicket: spy((t: TicketState) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(writtenTickets[0].shortTitle, undefined);
+  },
+);

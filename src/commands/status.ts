@@ -219,7 +219,7 @@ export const status: Command = {
           t.status,
           t.approvals,
           formatTokens(tokenTotals[i]),
-          t.title,
+          t.shortTitle ?? t.title,
         ),
       );
     }

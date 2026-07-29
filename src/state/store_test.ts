@@ -628,6 +628,84 @@ body
   }
 });
 
+Deno.test("writeTicket: includes shortTitle in frontmatter when set", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticket = makeTicket({ shortTitle: "Short form" });
+    await writeTicket(dir, ticket);
+    const raw = await Deno.readTextFile(join(dir, ticket.id, "meta.md"));
+    const { data } = matter(raw);
+    assertEquals(data.shortTitle, "Short form");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("writeTicket: omits shortTitle from frontmatter when not set", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticket = makeTicket();
+    await writeTicket(dir, ticket);
+    const raw = await Deno.readTextFile(join(dir, ticket.id, "meta.md"));
+    assertEquals(raw.includes("shortTitle"), false);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("readTicket: reads shortTitle from frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-1
+provider: github
+title: A long title for this issue
+shortTitle: Short form
+url: https://github.com/x/y/issues/1
+phase: intake
+status: new
+approvals: []
+scope: []
+worktrees: {}
+created: "2026-01-01T00:00:00Z"
+updated: "2026-01-01T00:00:00Z"
+---
+`,
+  );
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.shortTitle, "Short form");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("readTicket: shortTitle is undefined when absent from frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-1
+provider: github
+title: A long title
+url: https://github.com/x/y/issues/1
+phase: intake
+status: new
+approvals: []
+scope: []
+worktrees: {}
+created: "2026-01-01T00:00:00Z"
+updated: "2026-01-01T00:00:00Z"
+---
+`,
+  );
+  const ticket = await readTicket(dir, "gh-1");
+  assertEquals(ticket.shortTitle, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("commitPrinciples: commits principles.md to git", async () => {
   const dir = await Deno.makeTempDir();
   try {

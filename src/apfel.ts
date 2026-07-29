@@ -1,4 +1,6 @@
-export type CommandRunner = (args: string[]) => Promise<{ code: number }>;
+export type CommandRunner = (
+  args: string[],
+) => Promise<{ code: number; stdout: string }>;
 export type ProcessSpawner = (args: string[]) => { kill: () => void };
 
 export interface ApfelServer {
@@ -47,7 +49,18 @@ export function defaultCommandRunner(): CommandRunner {
       stdout: "null",
       stderr: "null",
     }).output();
-    return { code: out.code };
+    return { code: out.code, stdout: "" };
+  };
+}
+
+export function captureCommandRunner(): CommandRunner {
+  return async (args) => {
+    const out = await new Deno.Command(args[0], {
+      args: args.slice(1),
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    return { code: out.code, stdout: new TextDecoder().decode(out.stdout) };
   };
 }
 

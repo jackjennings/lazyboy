@@ -120,6 +120,7 @@ export interface TickServiceDeps {
   notify?(ticket: TicketState): Promise<void>;
   appendTickLog?(entry: object): Promise<void>;
   runCeremonies?(): Promise<void>;
+  generateShortTitle?(title: string): Promise<string | null>;
 }
 
 export function selectCandidates(
@@ -493,10 +494,14 @@ export class TickService {
     for (const provider of deps.providers) {
       const newItems = await provider.fetchNew(existingIds);
       for (const item of newItems) {
+        const shortTitle = deps.generateShortTitle
+          ? (await deps.generateShortTitle(item.title)) ?? undefined
+          : undefined;
         await deps.writeTicket({
           id: item.id,
           provider: item.provider,
           title: item.title,
+          shortTitle,
           url: item.url,
           phase: "intake",
           status: "new",

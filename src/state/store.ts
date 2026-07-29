@@ -69,6 +69,7 @@ export async function readTicket(
     id: data.id,
     provider: data.provider,
     title: data.title,
+    shortTitle: data.shortTitle as string | undefined,
     url: data.url,
     phase,
     status,
@@ -110,6 +111,9 @@ export async function writeTicket(
     updated: ticket.updated,
   };
   if (ticket.prs !== undefined) frontmatter.prs = ticket.prs;
+  if (ticket.shortTitle !== undefined) {
+    frontmatter.shortTitle = ticket.shortTitle;
+  }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
   const raw = matter.stringify(ticket.body, frontmatter);
   await Deno.writeTextFile(join(dir, "meta.md"), raw);

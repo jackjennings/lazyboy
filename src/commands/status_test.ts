@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { TicketState, TicketStatus } from "../state/types.ts";
@@ -441,6 +441,42 @@ Deno.test(
       ),
       true,
     );
+  },
+);
+
+Deno.test(
+  "formatStatusRow: renders shortTitle when ticket has one",
+  () => {
+    const ticket = makeTicket({
+      title: "A very long full title for the issue",
+      shortTitle: "Short label",
+    });
+    const row = formatStatusRow(
+      ticket.id,
+      ticket.phase,
+      ticket.status,
+      ticket.approvals,
+      "0",
+      ticket.shortTitle ?? ticket.title,
+    );
+    assertStringIncludes(row, "Short label");
+    assertEquals(row.includes("A very long full title for the issue"), false);
+  },
+);
+
+Deno.test(
+  "formatStatusRow: falls back to title when shortTitle is absent",
+  () => {
+    const ticket = makeTicket({ title: "Full title only" });
+    const row = formatStatusRow(
+      ticket.id,
+      ticket.phase,
+      ticket.status,
+      ticket.approvals,
+      "0",
+      ticket.shortTitle ?? ticket.title,
+    );
+    assertStringIncludes(row, "Full title only");
   },
 );
 

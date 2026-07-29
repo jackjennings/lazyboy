@@ -2,7 +2,10 @@ import { existsSync } from "@std/fs";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { StandupCeremony } from "./ceremonies/standup.ts";
 import { join } from "@std/path";
-import { detectImplementationOutlier } from "./outlier-detection.ts";
+import {
+  detectImplementationOutlier,
+  detectPlanOutlier,
+} from "./outlier-detection.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { loadPromptFile } from "./phases/runners.ts";
 import {
@@ -560,13 +563,29 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
-      spawnOutlierAnalysis: async (ticketId, ticketDir, lazboyWorktreePath) => {
-        const result = await detectImplementationOutlier(ticketDir);
+      spawnOutlierAnalysis: async (
+        ticketId,
+        ticketDir,
+        lazboyWorktreePath,
+        phase,
+      ) => {
+        const result = phase === "plan"
+          ? await detectPlanOutlier(ticketDir)
+          : await detectImplementationOutlier(ticketDir);
         if (result === null) return;
-        const prompt = await loadPromptFile("outlier-analysis.md");
+        const promptFile = phase === "plan"
+          ? "plan-outlier-analysis.md"
+          : "outlier-analysis.md";
+        const pidFile = phase === "plan"
+          ? "plan-outlier-analysis.pid"
+          : "outlier-analysis.pid";
+        const outputSuffix = phase === "plan"
+          ? "plan-outlier-analysis"
+          : "outlier-analysis";
+        const prompt = await loadPromptFile(promptFile);
         const outputFile = `${
           compactTimestamp(Temporal.Now.zonedDateTimeISO("UTC"))
-        }-outlier-analysis.md`;
+        }-${outputSuffix}.md`;
         await spawnPhase({
           ticketDir,
           stateDir,
@@ -583,7 +602,7 @@ export function composeTickDeps(
           agent: agentType,
           model: "claude-sonnet-4-6",
           thinking: "high",
-          pidFile: "outlier-analysis.pid",
+          pidFile,
         });
       },
     },

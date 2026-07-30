@@ -79,32 +79,44 @@ Each task must:
 Every acceptance criterion in spec.md must be covered by at least one test that
 would fail if the criterion were violated.
 
-If the changes establish, replace, or remove a project-wide convention —
-including adopting a preferred API, banning a pattern, or changing a style rule
-— include a task to update `AGENTS.md` to document it. This applies especially
-to uniform refactors that replace one API or pattern across the codebase (e.g.
-migrating from one date library to another), where the convention being
-established is as important as the individual code changes. Treat the
-`AGENTS.md` update as a named task with an exact diff and a commit, not a
-footnote.
+Most tickets change no project-wide convention and must not touch `AGENTS.md`.
+Adding nothing is the common, correct outcome. Include a task to update
+`AGENTS.md` only when a change establishes, replaces, or removes a project-wide
+convention — adopting a preferred API, banning a pattern, changing a style rule
+— AND all of these hold:
 
-`AGENTS.md` documents only what a reader cannot infer from the code itself:
-non-obvious constraints, invariants, and prohibitions; configuration and how-to
-not discoverable from a single file; and surprising cross-module wiring. Do not
-narrate what the code does — if a reader could learn it by reading the named
-file or function, the task must link to that file, not describe its behavior.
-The task must edit the existing relevant section in place and delete any
-statement the change makes false, rather than appending a new section when one
-already covers the topic.
+- A reader could not learn it from a single named file or from the tests.
+- It stays true after the code that prompted it is refactored away.
+- It is not already documented in `AGENTS.md`.
+
+If any of these fails, link the relevant file rather than writing prose about
+it, and add no task.
+
+When the task does edit `AGENTS.md`, leave the section shorter: edit the
+existing relevant section in place, delete any statement the change makes false
+or that merely narrates what the code does, and do not append a new section when
+one already covers the topic. A net increase in lines should be rare.
 
 If you include a summary at the end, it must list exactly the tasks above it.
 
 ## Principles
 
-If you observed anything during this phase worth recording as a standing
-principle — a non-obvious constraint, a recurring pattern, or a decision rule
-that would help future phases — write it here as one or more bullet points. Omit
-this section if you have nothing to add.
+`principles.md` is injected into every future phase prompt, so it is expensive
+and must stay small (~10 bullets total). Record something here only if ALL of
+these hold:
+
+- It is a general engineering preference or idiom — a pattern to prefer or an
+  idiom to avoid — not a fact about this codebase. File paths, function
+  contracts, config values, org names, and regexes belong in AGENTS.md, a code
+  comment, or config, never here.
+- It would change how you approach an unrelated future ticket, not just this
+  one.
+- It is not already documented in AGENTS.md.
+- It stays true after the code that prompted it is refactored away.
+- It is non-obvious — a competent engineer would not already default to it.
+
+If nothing meets that bar, omit this section. Writing nothing is the common,
+correct outcome.
 
 ## Available tools
 

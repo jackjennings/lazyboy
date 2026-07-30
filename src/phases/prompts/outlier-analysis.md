@@ -43,12 +43,11 @@ Follow these steps:
 
    Make the instruction concrete and actionable; avoid vague directives.
 
-6. Write a learning entry to
-   `<State directory>/learnings/<YYYYMMDDTHHMMSS>.md` using the current UTC time
-   for the filename slug. The file is Markdown with YAML frontmatter. The
-   frontmatter must have exactly these fields, and the Markdown body is the
-   intent — the natural-language description of the instruction to add and why,
-   from step 5 (not file content):
+6. Write a learning entry to `<State directory>/learnings/<YYYYMMDDTHHMMSS>.md`
+   using the current UTC time for the filename slug. The file is Markdown with
+   YAML frontmatter. The frontmatter must have exactly these fields, and the
+   Markdown body is the intent — the natural-language description of the
+   instruction to add and why, from step 5 (not file content):
 
    ```markdown
    ---

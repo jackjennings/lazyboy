@@ -4,6 +4,10 @@ type AccountResolver = (org: string) => { token: string; login: string };
 type FetchFn = (url: string, token: string) => Promise<unknown[]>;
 type PatchFn = (url: string, body: unknown, token: string) => Promise<void>;
 type MergeCheckFn = (url: string, token: string) => Promise<{ status: number }>;
+type PrFetchFn = (
+  url: string,
+  token: string,
+) => Promise<{ merged: boolean; state: string }>;
 type CloneFn = (
   slug: string,
   destDir: string,
@@ -24,6 +28,7 @@ export class GitHubProvider implements Provider {
   private _fetch: FetchFn;
   private _patch: PatchFn;
   private _mergeCheck: MergeCheckFn;
+  private _prFetch: PrFetchFn;
   private _clone: CloneFn;
 
   constructor(
@@ -33,6 +38,7 @@ export class GitHubProvider implements Provider {
       _fetch?: FetchFn;
       _patch?: PatchFn;
       _mergeCheck?: MergeCheckFn;
+      _prFetch?: PrFetchFn;
       _clone?: CloneFn;
     },
   ) {
@@ -41,6 +47,7 @@ export class GitHubProvider implements Provider {
     this._fetch = opts._fetch ?? this.defaultFetch.bind(this);
     this._patch = opts._patch ?? this.defaultPatch.bind(this);
     this._mergeCheck = opts._mergeCheck ?? this.defaultMergeCheck.bind(this);
+    this._prFetch = opts._prFetch ?? this.defaultPrFetch.bind(this);
     this._clone = opts._clone ?? this.defaultClone.bind(this);
   }
 
@@ -118,6 +125,35 @@ export class GitHubProvider implements Provider {
     if (status === 204) return true;
     if (status === 404) return false;
     throw new Error(`Unexpected GitHub API status: ${status} for ${prUrl}`);
+  }
+
+  private async defaultPrFetch(
+    url: string,
+    token: string,
+  ): Promise<{ merged: boolean; state: string }> {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${url}`);
+    const data = await res.json();
+    return { merged: Boolean(data.merged), state: String(data.state) };
+  }
+
+  async prState(prUrl: string): Promise<"merged" | "closed" | "open"> {
+    const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+    if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+    const [, slug, number] = match;
+    const { token } = this.accountResolver(slug.split("/")[0]);
+    const { merged, state } = await this._prFetch(
+      `https://api.github.com/repos/${slug}/pulls/${number}`,
+      token,
+    );
+    if (merged) return "merged";
+    if (state === "closed") return "closed";
+    return "open";
   }
 
   private async defaultPatch(

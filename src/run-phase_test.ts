@@ -11,6 +11,7 @@ import {
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
+  resolvePhaseSessionId,
   resolveRevisionSessionId,
   setupClaudeCodeDirectories,
   setupPiDirectories,
@@ -1853,6 +1854,68 @@ Deno.test(
     }
   },
 );
+
+// ── resolvePhaseSessionId ────────────────────────────────────────────────────
+
+Deno.test("resolvePhaseSessionId: returns sessionId from last matching phase-end", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-end",
+    phase: "intake",
+    sessionId: "sess-abc",
+  });
+  assertEquals(resolvePhaseSessionId(log, "intake"), "sess-abc");
+});
+
+Deno.test("resolvePhaseSessionId: returns null when phase does not match", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-end",
+    phase: "enrichment",
+    sessionId: "sess-abc",
+  });
+  assertEquals(resolvePhaseSessionId(log, "intake"), null);
+});
+
+Deno.test("resolvePhaseSessionId: returns null when phase-end has no sessionId", () => {
+  const log = JSON.stringify({ ts: "t1", event: "phase-end", phase: "spec" });
+  assertEquals(resolvePhaseSessionId(log, "spec"), null);
+});
+
+Deno.test("resolvePhaseSessionId: returns null for empty log", () => {
+  assertEquals(resolvePhaseSessionId("", "intake"), null);
+});
+
+Deno.test("resolvePhaseSessionId: skips malformed lines", () => {
+  const log = [
+    "not-json",
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "plan",
+      sessionId: "sess-xyz",
+    }),
+  ].join("\n");
+  assertEquals(resolvePhaseSessionId(log, "plan"), "sess-xyz");
+});
+
+Deno.test("resolvePhaseSessionId: returns sessionId from the last qualifying entry", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "spec",
+      sessionId: "first",
+    }),
+    JSON.stringify({
+      ts: "t2",
+      event: "phase-end",
+      phase: "spec",
+      sessionId: "second",
+    }),
+  ].join("\n");
+  assertEquals(resolvePhaseSessionId(log, "spec"), "second");
+});
 
 // ── resolveRevisionSessionId ─────────────────────────────────────────────────
 

@@ -84,6 +84,7 @@ export async function readTicket(
     updated: data.updated,
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
+    outputRetries: data.outputRetries as number | undefined,
   };
 
   if (needsMigration) {
@@ -114,6 +115,9 @@ export async function writeTicket(
     updated: ticket.updated,
   };
   if (ticket.prs !== undefined) frontmatter.prs = ticket.prs;
+  if (ticket.outputRetries !== undefined) {
+    frontmatter.outputRetries = ticket.outputRetries;
+  }
   if (ticket.shortTitle !== undefined) {
     frontmatter.shortTitle = ticket.shortTitle;
   }

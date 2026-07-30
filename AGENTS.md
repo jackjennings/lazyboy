@@ -65,6 +65,16 @@ Tickets carry `phase: TicketPhase` and `status: TicketStatus`.
 - Any phase can transition to `needs-attention` on subprocess failure.
 - `{ phase: "merge", status: "done" }` is the terminal state.
 
+When a phase agent exits without creating its output file
+(`phase-output-invalid: missing`), `advancePhase` attempts one recovery before
+transitioning to `needs-attention`: it reads `log.ndjson` for the last
+`phase-end` entry whose `phase` matches the current phase, resumes that session
+with a corrective prompt, and writes `outputRetries: 1` on `TicketState`. On the
+next tick, if the file is now present, `outputRetries` is cleared to `undefined`
+when the ticket is written to `waiting`. If the file is still absent, the ticket
+transitions to `needs-attention` as normal. Recovery is skipped when
+`readTicketLog` is absent from `TickDeps` (unit-test degradation path).
+
 ## Approval log
 
 `TicketState.approvals` is an `ApprovalEntry[]` (`src/state/types.ts`); each

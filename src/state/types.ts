@@ -74,6 +74,7 @@ export interface TicketState {
   prs?: PrEntry[];
   ciHandledRunIds?: string[];
   providerDone?: boolean;
+  outputRetries?: number;
   created: string;
   updated: string;
   body: string;

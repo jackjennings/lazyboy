@@ -289,6 +289,33 @@ export function resolveRevisionSessionId(logContent: string): string | null {
   return lastSessionId;
 }
 
+export function resolvePhaseSessionId(
+  logContent: string,
+  phase: string,
+): string | null {
+  let last: string | null = null;
+  for (const line of logContent.split("\n").filter(Boolean)) {
+    try {
+      const entry = JSON.parse(line) as {
+        event?: string;
+        phase?: string;
+        sessionId?: string;
+      };
+      if (
+        entry.event === "phase-end" &&
+        entry.phase === phase &&
+        typeof entry.sessionId === "string" &&
+        entry.sessionId.length > 0
+      ) {
+        last = entry.sessionId;
+      }
+    } catch {
+      // skip malformed lines
+    }
+  }
+  return last;
+}
+
 export function extractPrinciples(content: string): string | null {
   const match = content.match(
     /(?:^|\n)## Principles\n([\s\S]*?)(?=\n## |\n*$)/,

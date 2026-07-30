@@ -937,6 +937,202 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: missing output with sessionId in log spawns recovery and stays running",
+  async () => {
+    const recoveryLog = JSON.stringify({
+      ts: "t1",
+      event: "phase-end",
+      phase: "spec",
+      sessionId: "sess-recover",
+    });
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const writtenTickets: TicketState[] = [];
+    const logs: object[] = [];
+    let spawnedSessionId: string | undefined;
+    let spawnedScope: string[] | undefined;
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnedSessionId = opts.sessionId;
+        spawnedScope = opts.scope;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logs.push(entry);
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readTicketLog: () => Promise.resolve(recoveryLog),
+    });
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "running");
+    assertEquals(final.outputRetries, 1);
+    assertEquals(spawnedSessionId, "sess-recover");
+    assertEquals(spawnedScope, []);
+    const retryLog = logs.find(
+      (e) => (e as Record<string, unknown>).event === "phase-output-retry",
+    );
+    assertEquals((retryLog as Record<string, unknown>).phase, "spec");
+    assertEquals((retryLog as Record<string, unknown>).attempt, 1);
+  },
+);
+
+Deno.test(
+  "advancePhase: missing output with outputRetries=1 goes to needs-attention without spawning",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "running",
+      outputRetries: 1,
+    });
+    const writtenTickets: TicketState[] = [];
+    const logs: object[] = [];
+    let spawned = false;
+    await advancePhase(ticket, "/state", {
+      spawn: () => {
+        spawned = true;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logs.push(entry);
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readTicketLog: () =>
+        Promise.resolve(
+          JSON.stringify({
+            ts: "t1",
+            event: "phase-end",
+            phase: "spec",
+            sessionId: "s",
+          }),
+        ),
+    });
+    assertEquals(spawned, false);
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "needs-attention");
+    const invalidLog = logs.find(
+      (e) => (e as Record<string, unknown>).event === "phase-output-invalid",
+    );
+    assertEquals((invalidLog as Record<string, unknown>).reason, "missing");
+  },
+);
+
+Deno.test(
+  "advancePhase: missing output without readTicketLog dep goes to needs-attention",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+    });
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "needs-attention");
+  },
+);
+
+Deno.test(
+  "advancePhase: missing output with no matching sessionId in log goes to needs-attention",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readTicketLog: () => Promise.resolve(""),
+    });
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "needs-attention");
+  },
+);
+
+Deno.test(
+  "advancePhase: valid output with outputRetries clears it on waiting ticket",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "running",
+      outputRetries: 1,
+    });
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
+      appendPrinciples: () => Promise.resolve(),
+    });
+    const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
+    assertEquals(waitingWrite?.outputRetries, undefined);
+  },
+);
+
+Deno.test(
   "advancePhase: running phase with dead PID and empty output transitions to needs-attention",
   async () => {
     const ticket = makeTicket({ phase: "spec", status: "running" });

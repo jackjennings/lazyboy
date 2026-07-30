@@ -1,6 +1,10 @@
 import { join } from "@std/path";
 import { deleteRunPid } from "./executor.ts";
-import { extractPrinciples, resolveRevisionSessionId } from "./run-phase.ts";
+import {
+  extractPrinciples,
+  resolvePhaseSessionId,
+  resolveRevisionSessionId,
+} from "./run-phase.ts";
 import {
   loadPrompt,
   loadPromptFile,
@@ -248,6 +252,7 @@ export async function advancePhase(
       await deleteRunPid(join(stateDir, ticket.id));
       const waitingTicket: TicketState = {
         ...ticket,
+        outputRetries: undefined,
         status: "waiting",
         updated: now,
       };
@@ -264,6 +269,46 @@ export async function advancePhase(
         ticket.phase,
       );
       if (outputContent === null) {
+        const retries = ticket.outputRetries ?? 0;
+        if (retries < 1 && deps.readTicketLog) {
+          const logContent = await deps.readTicketLog(
+            join(stateDir, ticket.id),
+          );
+          const sessionId = resolvePhaseSessionId(logContent, ticket.phase);
+          if (sessionId) {
+            const outputFile = `${
+              compactTimestamp(zonedNow)
+            }-${ticket.phase}.md`;
+            const { model: retryModel, thinking: retryThinking } = deps
+              .resolveModelConfig(ticket.phase as ActivePhase, ticket);
+            await deps.spawn({
+              phase: ticket.phase as ActivePhase,
+              ticketDir: join(stateDir, ticket.id),
+              prompt:
+                `You did not create the output file. Use the Write tool to write your previous response to ${outputFile} now. Output nothing else.`,
+              scope: [],
+              worktrees: ticket.phase === "implementation"
+                ? ticket.worktrees
+                : {},
+              outputFile,
+              model: retryModel,
+              thinking: retryThinking,
+              sessionId,
+            });
+            await deps.writeTicket(stateDir, {
+              ...ticket,
+              outputRetries: 1,
+              status: "running",
+              updated: now,
+            });
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "phase-output-retry",
+              phase: ticket.phase,
+              attempt: 1,
+            });
+            return;
+          }
+        }
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
           status: "needs-attention",

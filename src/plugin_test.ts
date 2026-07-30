@@ -17,11 +17,12 @@ const EXPECTED_ALIASES: [string, string][] = [
   ["lsh", "shell"],
   ["lta", "tail"],
   ["lup", "update"],
+  ["lhd", "hud"],
 ];
 
 const ID_ALIASES = ["lap", "lrt", "ldc", "lrv", "lsh", "lta"];
 
-Deno.test("all 12 aliases are declared", () => {
+Deno.test("all 13 aliases are declared", () => {
   for (const [alias, subcommand] of EXPECTED_ALIASES) {
     const line = `alias ${alias}='lazyboy ${subcommand}'`;
     assertEquals(plugin.includes(line), true, `missing: ${line}`);

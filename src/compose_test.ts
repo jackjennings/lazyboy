@@ -1,5 +1,9 @@
 import { assertEquals } from "@std/assert";
-import { ensureStatePrompts, resolveGitHubAccount } from "./compose.ts";
+import {
+  deriveOrgFromTicketDir,
+  ensureStatePrompts,
+  resolveGitHubAccount,
+} from "./compose.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { join } from "@std/path";
 import type { Config } from "./state/types.ts";
@@ -15,6 +19,27 @@ function makeConfig(overrides: Partial<Config["github"]> = {}): Config {
     agent: { type: "pi" },
   };
 }
+
+Deno.test("deriveOrgFromTicketDir: github ticket returns org segment", () => {
+  assertEquals(
+    deriveOrgFromTicketDir("/state/github/jackjennings/lazyboy/289", "/state"),
+    "jackjennings",
+  );
+});
+
+Deno.test("deriveOrgFromTicketDir: jira ticket returns empty string", () => {
+  assertEquals(
+    deriveOrgFromTicketDir("/state/jira/PROJ-123", "/state"),
+    "",
+  );
+});
+
+Deno.test("deriveOrgFromTicketDir: github ticket missing repo segment returns empty string", () => {
+  assertEquals(
+    deriveOrgFromTicketDir("/state/github", "/state"),
+    "",
+  );
+});
 
 Deno.test("resolveGitHubAccount: accounts absent falls back to GITHUB_TOKEN/GITHUB_LOGIN", () => {
   Deno.env.set("GITHUB_TOKEN", "tok_fallback");

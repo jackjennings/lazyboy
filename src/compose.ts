@@ -128,6 +128,15 @@ export function resolveGitHubAccount(
   };
 }
 
+export function deriveOrgFromTicketDir(
+  ticketDir: string,
+  stateDir: string,
+): string {
+  const parts = ticketDir.slice(stateDir.length + 1).split("/");
+  if (parts[0] !== "github") return "";
+  return parts[1] ?? "";
+}
+
 export function composeTickDeps(
   config: Config,
 ): TickServiceDeps {
@@ -525,7 +534,7 @@ export function composeTickDeps(
           scopeDirs: opts.scope.map(expandHome),
           outputFile: opts.outputFile,
           githubToken: resolveGitHubAccount(
-            Object.keys(opts.worktrees)[0]?.split("/")[0] ?? "",
+            deriveOrgFromTicketDir(opts.ticketDir, stateDir),
             config,
           ).token,
           anthropicApiKey,

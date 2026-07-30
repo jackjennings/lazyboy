@@ -125,6 +125,12 @@ ready-for-review when the implementation phase is approved.
 
 gh pr create --draft --title "<title>" --body "<body>"
 
+If this PR depends on any other pull request — including one in a different
+repository — the description body must state each dependency explicitly with its
+PR URL, so a reviewer knows what must merge first. These are the same URLs you
+will record in the entry's `dependsOn` array below; list every one of them in
+the body.
+
 After creating the PR, append an entry to the `prs` array in the `meta.md` YAML
 frontmatter (in the ticket directory shown in your context). Each entry must
 have `url` (the PR URL), `title` (the PR title, obtainable via

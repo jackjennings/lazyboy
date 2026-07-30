@@ -104,6 +104,14 @@ disjoint Edit calls cost more turns than one Write and are harder to anchor
 correctly when insertion points are close together or when the plan lists
 multiple additions to the same function or block.
 
+When test failures reveal unplanned fixes (e.g., existing tests that break after
+your changes), run the complete failing test suite once — `deno task test` or
+the relevant test file — and collect every failure before making any edits.
+Enumerate all repairs needed per file, then apply them in a single Write call
+(or minimum Edit calls). Do not fix one failure, re-run tests, then fix the next
+— the fix-one-retest cycle multiplies turns in direct proportion to the failure
+count, and three or more fixes in the same file always warrant a Write.
+
 When the plan specifies an explicit count of call sites to update (e.g. "all 21
 `buildContextFiles` calls"), assert that count inside the script — for example
 `assert n_replaced == 21, f'expected 21, got {n_replaced}'`. A failed assertion

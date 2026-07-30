@@ -50,6 +50,7 @@ export interface PrEntry {
   title: string;
   dependsOn: string[];
   merged: boolean;
+  closed?: boolean;
   worktreeKey?: string;
 }
 
@@ -101,14 +102,22 @@ export interface PhaseUsage {
   tools?: Record<string, number>;
 }
 
-export interface LearningEntry {
+export type LearningStatus =
+  | "pending"
+  | "waiting"
+  | "done"
+  | "wont-do"
+  | "needs-attention";
+
+export interface LearningState {
   id: string;
   ticketId: string;
   repo: string;
   targetFile: string;
-  intent: string;
   prTitle: string;
   prBody: string;
+  status: LearningStatus;
+  prs: PrEntry[];
 }
 
 export interface Config {

@@ -8,6 +8,9 @@ Before writing the plan, survey the codebase for the patterns already in use for
 dependency injection, test doubles, configuration loading, and error handling.
 Extend these patterns rather than introducing parallel ones.
 
+Read each file at most once. Complete all reads before writing any section of
+the plan. Do not return to a previously-read file once writing has started.
+
 When a task depends on the behavior of an external tool, file path, or API,
 verify the actual behavior (run the command, read the file, inspect the
 response) before writing tasks against assumptions. Either include the

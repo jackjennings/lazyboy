@@ -28,7 +28,7 @@ import {
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
-  ActivePhase | "conflict-resolution",
+  ActivePhase | "conflict-resolution" | "ci-triage",
   { model: string; thinking: string }
 > = {
   intake: { model: "claude-haiku-4-5", thinking: "off" },
@@ -37,11 +37,12 @@ export const PHASE_MODEL_DEFAULTS: Record<
   plan: { model: "claude-sonnet-4-6", thinking: "high" },
   implementation: { model: "claude-sonnet-4-6", thinking: "high" },
   "conflict-resolution": { model: "claude-opus-4-7", thinking: "high" },
+  "ci-triage": { model: "claude-sonnet-4-6", thinking: "high" },
 };
 
 export function resolvePhaseModel(
   config: Config,
-  phase: ActivePhase | "conflict-resolution",
+  phase: ActivePhase | "conflict-resolution" | "ci-triage",
   ticket: TicketState,
 ): { model: string; thinking: string } {
   const ticketOverride = ticket.phases?.[phase];

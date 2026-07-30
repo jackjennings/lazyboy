@@ -97,6 +97,50 @@ Deno.test("phase prompts: all five phase prompts include ## Principles instructi
   }
 });
 
+Deno.test(
+  "loadStatePrompt: expands {{principles}} to include ## Principles",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${dir}/prompts`);
+      await Deno.writeTextFile(`${dir}/prompts/intake.md`, "{{principles}}");
+      const result = await loadStatePrompt("intake", dir);
+      assertEquals(result.includes("## Principles"), true);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: rejects when prompt references unknown partial",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${dir}/prompts`);
+      await Deno.writeTextFile(`${dir}/prompts/intake.md`, "{{nonexistent}}");
+      await assertRejects(() => loadStatePrompt("intake", dir));
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: returns content unchanged when no markers present",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${dir}/prompts`);
+      await Deno.writeTextFile(`${dir}/prompts/intake.md`, "plain content");
+      const result = await loadStatePrompt("intake", dir);
+      assertEquals(result, "plain content");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
 Deno.test("phase prompts: every prompt instructs the agent to write to the output file", async () => {
   const phases = [
     "intake",

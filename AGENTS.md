@@ -103,7 +103,11 @@ Non-obvious rules:
 One template per phase in `src/phases/prompts/*.md`, loaded by
 `src/phases/runners.ts`. Prompt filenames must match the `ActivePhase` values in
 `src/phases/types.ts` (`intake`, `enrichment`, `spec`, `plan`,
-`implementation`).
+`implementation`). Prompt files may contain `{{partial-name}}` markers (double
+curly braces, kebab-case, no spaces); each is replaced with the contents of
+`src/phases/prompts/partials/<partial-name>.md` at load time. State-dir prompts
+may use the same markers — partials always resolve from the built-in
+`src/phases/prompts/partials/` directory, never from the state dir.
 
 `advancePhase` appends up to three optional supplements (in order) when present,
 each loader returning `""` when absent so no code change is needed to add one:

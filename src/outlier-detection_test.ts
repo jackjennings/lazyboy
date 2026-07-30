@@ -1,6 +1,9 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { detectImplementationOutlier } from "./outlier-detection.ts";
+import {
+  detectImplementationOutlier,
+  detectPlanOutlier,
+} from "./outlier-detection.ts";
 
 Deno.test("detectImplementationOutlier: returns null when no plan file", async () => {
   const dir = await Deno.makeTempDir();
@@ -163,4 +166,164 @@ Deno.test("detectImplementationOutlier: uses latest usage file by timestamp", as
 
 Deno.test("detectImplementationOutlier: returns null when ticketDir does not exist", async () => {
   assertEquals(await detectImplementationOutlier("/nonexistent/dir/xyz"), null);
+});
+
+Deno.test("detectPlanOutlier: returns null when no spec file", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 100 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns null when no plan usage file", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n",
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns null when turns is undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ input: 1000, output: 200 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns null when criterionCount is 0", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "No criterion headings here.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 100 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns null when turns <= 5 * criterionCount", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n\n### Criterion 2\n\nMore.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 10 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns result when turns > 5 * criterionCount", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n\n### Criterion 2\n\nMore.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 11 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), {
+      turns: 11,
+      criterionCount: 2,
+    });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: does not count ## headings, only ###", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "## What to Build\n\n### Criterion 1\n\nDetails.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 6 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), { turns: 6, criterionCount: 1 });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: uses latest spec file by timestamp", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260102T000000-spec.md"),
+      "No headings.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 100 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: uses latest plan usage file by timestamp", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-spec.md"),
+      "### Criterion 1\n\nDetails.\n",
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260101T000000-plan.usage.json"),
+      JSON.stringify({ turns: 100 }),
+    );
+    await Deno.writeTextFile(
+      join(dir, "20260102T000000-plan.usage.json"),
+      JSON.stringify({ turns: 4 }),
+    );
+    assertEquals(await detectPlanOutlier(dir), null);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("detectPlanOutlier: returns null when ticketDir does not exist", async () => {
+  assertEquals(await detectPlanOutlier("/nonexistent/dir/xyz"), null);
 });

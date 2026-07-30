@@ -96,6 +96,7 @@ export interface TickDeps {
     ticketId: string,
     ticketDir: string,
     lazboyWorktreePath: string,
+    phase: "implementation" | "plan",
   ) => Promise<void>;
 }
 
@@ -342,6 +343,24 @@ export async function advancePhase(
             ticket.id,
             join(stateDir, ticket.id),
             wt.path,
+            "implementation",
+          ).catch(() => {});
+        } else {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "error",
+            context: "spawnOutlierAnalysis",
+            message: "no jackjennings/lazyboy worktree",
+          });
+        }
+      }
+      if (ticket.phase === "plan" && deps.spawnOutlierAnalysis) {
+        const wt = ticket.worktrees["jackjennings/lazyboy"];
+        if (wt) {
+          deps.spawnOutlierAnalysis(
+            ticket.id,
+            join(stateDir, ticket.id),
+            wt.path,
+            "plan",
           ).catch(() => {});
         } else {
           await deps.appendLog(stateDir, ticket.id, {

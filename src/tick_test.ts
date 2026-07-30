@@ -11,6 +11,7 @@ import {
 import type { TickDeps, TickServiceDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
+import { loadPromptFile } from "./phases/runners.ts";
 import type { Provider, WorkItem } from "./providers/types.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
@@ -2514,12 +2515,7 @@ Deno.test(
       appendPrinciples: () => Promise.resolve(),
     });
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL(
-        "./phases/prompts/implementation.md",
-        import.meta.url,
-      ).pathname,
-    );
+    const basePrompt = await loadPromptFile("implementation.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
@@ -2553,9 +2549,7 @@ Deno.test(
       appendPrinciples: () => Promise.resolve(),
     });
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
-    );
+    const basePrompt = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
@@ -2593,9 +2587,7 @@ Deno.test(
         ),
     });
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
-    );
+    const basePrompt = await loadPromptFile("intake.md");
     assertEquals(
       spawnedPrompt,
       basePrompt +
@@ -2634,9 +2626,7 @@ Deno.test(
       appendPrinciples: () => Promise.resolve(),
     });
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await Deno.readTextFile(
-      new URL("./phases/prompts/intake.md", import.meta.url).pathname,
-    );
+    const basePrompt = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );

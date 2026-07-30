@@ -10,6 +10,7 @@ interface JiraIssue {
   fields: {
     summary: string;
     description: unknown;
+    parent?: { key: string; fields: { summary: string } };
   };
 }
 
@@ -49,6 +50,37 @@ export class JiraProvider implements Provider {
     });
   }
 
+  private async fetchAncestors(key: string, auth: string): Promise<string> {
+    const url =
+      `${this.baseUrl}/rest/api/3/issue/${key}?fields=summary,description,parent`;
+    const res = await this._fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return "";
+    const issue = (await res.json()) as {
+      fields: {
+        summary: string;
+        description: unknown;
+        parent?: { key: string };
+      };
+    };
+    const desc = issue.fields.description == null ||
+        typeof issue.fields.description !== "object"
+      ? ""
+      // deno-lint-ignore no-explicit-any
+      : adf2markdown(issue.fields.description as any).trim();
+    const block =
+      `## Parent context: ${key} — ${issue.fields.summary}\n\n${desc}`;
+    if (issue.fields.parent) {
+      const further = await this.fetchAncestors(issue.fields.parent.key, auth);
+      if (further) return `${block}\n\n${further}`;
+    }
+    return block;
+  }
+
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const jql =
       `assignee = currentUser() AND project = ${this.project} AND statusCategory != Done`;
@@ -64,7 +96,7 @@ export class JiraProvider implements Provider {
       body: JSON.stringify({
         jql,
         maxResults: 50,
-        fields: ["key", "summary", "description"],
+        fields: ["key", "summary", "description", "parent"],
       }),
     });
     if (!res.ok) throw new Error(`Jira API error: ${res.status} ${url}`);
@@ -82,15 +114,23 @@ export class JiraProvider implements Provider {
         continue;
       }
       if (!knownIds.has(id)) {
+        let description = issue.fields.description == null ||
+            typeof issue.fields.description !== "object"
+          ? ""
+          // deno-lint-ignore no-explicit-any
+          : adf2markdown(issue.fields.description as any).trim();
+        if (issue.fields.parent) {
+          const ancestors = await this.fetchAncestors(
+            issue.fields.parent.key,
+            auth,
+          );
+          if (ancestors) description = `${description}\n\n---\n\n${ancestors}`;
+        }
         items.push({
           id,
           provider: "jira",
           title: issue.fields.summary,
-          description: issue.fields.description == null ||
-              typeof issue.fields.description !== "object"
-            ? ""
-            // deno-lint-ignore no-explicit-any
-            : adf2markdown(issue.fields.description as any).trim(),
+          description,
           url: `${this.baseUrl}/browse/${issue.key}`,
         });
       }

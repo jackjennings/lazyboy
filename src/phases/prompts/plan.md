@@ -69,7 +69,10 @@ Each task must:
 - Name the files to create or modify with exact paths.
 - Show the failing test first, with code, that exercises real production code
   paths. Tests that only assert literals against literals, or that can only fail
-  at compile time, do not count as tests.
+  at compile time, do not count as tests. When the spec's "What NOT to Build"
+  section explicitly prohibits test changes, omit this step and state in the
+  task how the criterion is verified by inspection instead. Do not read test
+  files to understand test patterns when no test will be written.
 - Show the minimal implementation to make the test pass, with code that matches
   the project's style conventions. No inline annotation comments ("// NEW", "//
   ADD THIS", arrow markers).

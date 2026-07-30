@@ -118,6 +118,7 @@ export interface TickServiceDeps {
   lock: Lock;
   exit?(code: number): void;
   refreshAnthropicPricing?(): Promise<void>;
+  processLearnings?(): Promise<void>;
   notify?(ticket: TicketState): Promise<void>;
   appendTickLog?(entry: object): Promise<void>;
   runCeremonies?(): Promise<void>;
@@ -509,6 +510,7 @@ export class TickService {
   }
 
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
+    await deps.processLearnings?.();
     const existingIds = new Set(await deps.listTickets());
     for (const provider of deps.providers) {
       const newItems = await provider.fetchNew(existingIds);

@@ -7,6 +7,7 @@ You have been given:
   `*-implementation.usage.json`)
 - The ticket ID
 - The lazyboy worktree (containing `src/phases/prompts/`)
+- The state directory (where learnings are queued)
 
 Follow these steps:
 
@@ -30,39 +31,51 @@ Follow these steps:
    Identify the missing or imprecise instruction that allowed the inefficient
    pattern.
 
-5. Apply a single, minimal edit to one file in `src/phases/prompts/` that
-   prevents recurrence. Examples:
-   - Add an explicit instruction to enumerate all call sites before making edits
-     when changing a function signature.
-   - Add an instruction to use a scripted pass (`sed -i` or `deno eval`) for
-     repetitive same-file changes rather than repeated Edit calls.
-   - Add an instruction to read a file once and hold its content in memory
-     rather than re-reading it on each edit. Make the instruction concrete and
-     actionable; avoid vague directives.
+5. Decide on a single, minimal instruction that should be added to one file in
+   `src/phases/prompts/` to prevent recurrence. Do not edit the file — describe
+   the instruction in prose. Examples:
+   - Enumerate all call sites before making edits when changing a function
+     signature.
+   - Use a scripted pass (`sed -i` or `deno eval`) for repetitive same-file
+     changes rather than repeated Edit calls.
+   - Read a file once and hold its content in memory rather than re-reading it
+     on each edit.
 
-6. From the lazyboy worktree, commit the change:
+   Make the instruction concrete and actionable; avoid vague directives.
+
+6. Write a learning entry to `<State directory>/learnings/<YYYYMMDDTHHMMSS>.md`
+   using the current UTC time for the filename slug. The file is Markdown with
+   YAML frontmatter. The frontmatter must have exactly these fields, and the
+   Markdown body is the intent — the natural-language description of the
+   instruction to add and why, from step 5 (not file content):
+
+   ```markdown
+   ---
+   id: "<YYYYMMDDTHHMMSS>"
+   ticketId: "<ticket ID from context>"
+   repo: jackjennings/lazyboy
+   targetFile: "<repo-relative path of the prompt file the instruction belongs in, e.g. src/phases/prompts/implementation.md>"
+   prTitle: "Improve prompt to prevent <short label for inefficient pattern> observed in <ticketId>"
+   prBody: "<body text citing the triggering ticket ID, the turns/task_count ratio, and the root cause>"
+   ---
+
+   <natural-language description of the instruction to add and why, from step 5>
    ```
-   git add src/phases/prompts/<changed-file>
-   git commit -m "improve prompt to prevent outlier pattern observed in <ticketId>"
-   ```
+
+   The body is a description, not file content. The next tick applies it: an LLM
+   integrates the instruction into `targetFile` at the appropriate location and
+   opens the draft PR. Do not run `git` or `gh` commands and do not edit any
+   prompt file yourself.
 
 7. Write your findings to `<YYYYMMDDTHHMMSS>-outlier-analysis.md` in the ticket
    directory. Include: the turns/task_count ratio, the identified pattern, the
-   root cause, and the exact prompt change made (full diff or before/after).
-
-8. Open a draft PR against `jackjennings/lazyboy`:
-   ```
-   gh pr create --draft \
-     --title "Improve prompt to prevent edit fragmentation observed in <ticketId>" \
-     --body "..."
-   ```
-   The body must cite the triggering ticket ID, the turns/task_count ratio, and
-   the root cause identified in step 3 or 4.
+   root cause, and the intent of the instruction you recorded.
 
 If the transcript was unavailable, base your analysis on the turns/task_count
 ratio and the plan structure alone. You may propose a general improvement (e.g.
 requiring explicit enumeration of all call sites for any rename task) rather
-than a specific diagnosis. Still commit the change and open the PR.
+than a specific diagnosis. Still write the learning entry and the findings file.
 
-Do not modify `meta.md`, `log.ndjson`, or any file outside `src/phases/prompts/`
-in the lazyboy worktree.
+Write only the learning entry and the findings file. Do not edit any prompt file
+in the lazyboy worktree, and do not run any version control or `gh` CLI
+commands.

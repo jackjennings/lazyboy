@@ -247,6 +247,73 @@ Deno.test("GitHubProvider.isPRMerged: calls the correct merge-check endpoint", a
   );
 });
 
+Deno.test("GitHubProvider.prState: returns merged when the PR is merged", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _prFetch: (_url, _token) =>
+      Promise.resolve({ merged: true, state: "closed" }),
+  });
+  assertEquals(
+    await provider.prState("https://github.com/myorg/myrepo/pull/42"),
+    "merged",
+  );
+});
+
+Deno.test("GitHubProvider.prState: returns closed when the PR is closed unmerged", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _prFetch: (_url, _token) =>
+      Promise.resolve({ merged: false, state: "closed" }),
+  });
+  assertEquals(
+    await provider.prState("https://github.com/myorg/myrepo/pull/42"),
+    "closed",
+  );
+});
+
+Deno.test("GitHubProvider.prState: returns open when the PR is still open", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _prFetch: (_url, _token) =>
+      Promise.resolve({ merged: false, state: "open" }),
+  });
+  assertEquals(
+    await provider.prState("https://github.com/myorg/myrepo/pull/42"),
+    "open",
+  );
+});
+
+Deno.test("GitHubProvider.prState: calls the correct pulls endpoint", async () => {
+  let calledUrl = "";
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _prFetch: (url, _token) => {
+      calledUrl = url;
+      return Promise.resolve({ merged: true, state: "closed" });
+    },
+  });
+  await provider.prState("https://github.com/myorg/myrepo/pull/42");
+  assertEquals(calledUrl, "https://api.github.com/repos/myorg/myrepo/pulls/42");
+});
+
+Deno.test("GitHubProvider.prState: throws on unrecognized PR URL", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    _prFetch: (_url, _token) =>
+      Promise.resolve({ merged: false, state: "open" }),
+  });
+  await assertRejects(
+    () => provider.prState("https://example.com/not-a-pr"),
+    Error,
+    "Cannot parse PR URL",
+  );
+});
+
 Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to _mergeCheck", async () => {
   let receivedToken = "";
   const provider = new GitHubProvider({

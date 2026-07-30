@@ -36,10 +36,17 @@ implement all changes to that file in the same pass.
 Before writing the first line of implementation, trace the critical test inputs
 through the plan's implementation logic. For regex patterns: manually match each
 test input string against the pattern and verify it produces the expected
-capture group or match. If any test input fails the planned regex or boundary
-condition, adjust the implementation (not the test) to make it pass — the tests
-define the correct behavior. Resolving plan inconsistencies before coding avoids
-a test-fail-fix-retest cycle that costs three or more turns per discrepancy.
+capture group or match. For string-presence tests
+(`content.includes("x") ===
+true/false`): before writing any file whose content
+the plan specifies verbatim, scan every test assertion about that file's content
+and verify the proposed text satisfies it — especially `includes(...) === false`
+checks, which are easy to violate when the plan's proposed text and its own
+tests were written in separate sections. If any test input fails the planned
+regex or boundary condition, adjust the implementation (not the test) to make it
+pass — the tests define the correct behavior. Resolving plan inconsistencies
+before coding avoids a test-fail-fix-retest cycle that costs three or more turns
+per discrepancy.
 
 Before editing any file, enumerate all changes that file requires across every
 task in the plan. Make all edits to a file together in as few Edit calls as

@@ -12,8 +12,10 @@ import {
   appendTicketLog,
   commitPrinciples,
   commitState,
+  listLearnings,
   listTickets,
   readTicket,
+  writeLearning,
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
@@ -60,6 +62,8 @@ import { generateShortTitle as apfelGenerateShortTitle } from "./short-title.ts"
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
+import { applyLearning } from "./apply-learning.ts";
+import { processLearnings as runLearnings } from "./learnings.ts";
 import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
@@ -590,7 +594,7 @@ export function composeTickDeps(
           ticketDir,
           stateDir,
           prompt:
-            `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}`,
+            `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}\nState directory: ${stateDir}`,
           scopeDirs: [],
           outputFile,
           githubToken: resolveGitHubAccount("jackjennings", config).token,
@@ -665,6 +669,75 @@ export function composeTickDeps(
       log: appendTickLog,
     }),
     refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
+    processLearnings: () =>
+      runLearnings({
+        listLearnings: () => listLearnings(stateDir),
+        writeLearning: (learning, intent) =>
+          writeLearning(stateDir, learning, intent),
+        prState: (url) => githubProvider.prState(url),
+        log: (entry) => {
+          console.error("processLearnings:", entry);
+          return Promise.resolve();
+        },
+        applyToRepo: async (learning, intent) => {
+          const localRepoPath = await findLocalRepo(
+            config.codebase.roots.map(expandHome),
+            learning.repo,
+          );
+          if (localRepoPath === null) {
+            throw new Error(`local repo not found for ${learning.repo}`);
+          }
+          const wt = await createWorktree(
+            localRepoPath,
+            `learnings-${learning.id}`,
+            learning.repo.split("/")[1],
+          );
+          try {
+            const targetPath = join(wt.path, learning.targetFile);
+            const currentContent = await Deno.readTextFile(targetPath).catch(
+              () => "",
+            );
+            const applied = await applyLearning(currentContent, intent, fetch);
+            if (applied === null) {
+              throw new Error("applyLearning returned no content");
+            }
+            await Deno.mkdir(
+              join(wt.path, ...learning.targetFile.split("/").slice(0, -1)),
+              { recursive: true },
+            );
+            await Deno.writeTextFile(targetPath, applied);
+            const run = (cmd: string[]) =>
+              new Deno.Command(cmd[0], {
+                args: cmd.slice(1),
+                cwd: wt.path,
+              }).output();
+            await run(["git", "add", learning.targetFile]);
+            await run(["git", "commit", "-m", learning.prTitle]);
+            const created = await run([
+              "gh",
+              "pr",
+              "create",
+              "--draft",
+              "--title",
+              learning.prTitle,
+              "--body",
+              learning.prBody,
+            ]);
+            const url = new TextDecoder()
+              .decode(created.stdout)
+              .trim()
+              .split("\n")
+              .filter((line) => line.startsWith("http"))
+              .pop();
+            if (url === undefined) {
+              throw new Error("could not parse PR URL from gh output");
+            }
+            return url;
+          } finally {
+            await removeWorktree(wt);
+          }
+        },
+      }),
     notify: makeNotify(stateDir, {
       readLog: (sd, id) =>
         readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),

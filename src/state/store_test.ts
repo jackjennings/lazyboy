@@ -5,11 +5,14 @@ import {
   appendTicketLog,
   commitPrinciples,
   commitTicket,
+  listLearnings,
   listTickets,
   readTicket,
+  removeLearning,
+  writeLearning,
   writeTicket,
 } from "./store.ts";
-import type { TicketState } from "./types.ts";
+import type { LearningState, TicketState } from "./types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -738,6 +741,176 @@ Deno.test("commitPrinciples: succeeds silently when nothing to commit", async ()
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "init"]);
     await commitPrinciples(dir, "principles: noop");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+function makeLearning(overrides: Partial<LearningState> = {}): LearningState {
+  return {
+    id: "20260729T050000",
+    ticketId: "github/jackjennings/lazyboy/226",
+    repo: "jackjennings/lazyboy",
+    targetFile: "src/phases/prompts/implementation.md",
+    prTitle:
+      "Improve prompt to prevent edit fragmentation observed in github/jackjennings/lazyboy/226",
+    prBody: "Body text",
+    status: "pending",
+    prs: [],
+    ...overrides,
+  };
+}
+
+const INTENT = "Enumerate all call sites before renaming a function.";
+
+Deno.test("writeLearning: writes gray-matter .md with intent as body", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await writeLearning(dir, makeLearning(), INTENT);
+    const raw = await Deno.readTextFile(
+      join(dir, "learnings", "20260729T050000.md"),
+    );
+    const { data, content } = matter(raw);
+    assertEquals(data.id, "20260729T050000");
+    assertEquals(data.ticketId, "github/jackjennings/lazyboy/226");
+    assertEquals(data.repo, "jackjennings/lazyboy");
+    assertEquals(data.targetFile, "src/phases/prompts/implementation.md");
+    assertEquals(data.status, "pending");
+    assertEquals(data.prs, []);
+    assertEquals(data.prBody, "Body text");
+    assertEquals(content.trim(), INTENT);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test(
+  "writeLearning: creates learnings directory when absent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await writeLearning(dir, makeLearning(), INTENT);
+      const stat = await Deno.stat(join(dir, "learnings"));
+      assertEquals(stat.isDirectory, true);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: returns each learning paired with its intent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await writeLearning(dir, makeLearning({ id: "20260729T050000" }), INTENT);
+      await writeLearning(
+        dir,
+        makeLearning({
+          id: "20260729T050001",
+          ticketId: "github/jackjennings/lazyboy/227",
+        }),
+        "Read the file once and hold it in memory.",
+      );
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 2);
+      const byId = new Map(entries.map((e) => [e.learning.id, e]));
+      assertEquals(byId.get("20260729T050000")!.intent, INTENT);
+      assertEquals(
+        byId.get("20260729T050001")!.intent,
+        "Read the file once and hold it in memory.",
+      );
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: defaults status to pending and prs to [] when omitted",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "learnings"));
+      await Deno.writeTextFile(
+        join(dir, "learnings", "20260729T050000.md"),
+        `---
+id: "20260729T050000"
+ticketId: github/jackjennings/lazyboy/226
+repo: jackjennings/lazyboy
+targetFile: src/phases/prompts/implementation.md
+prTitle: Improve prompt
+prBody: Body text
+---
+
+Enumerate all call sites.
+`,
+      );
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].learning.status, "pending");
+      assertEquals(entries[0].learning.prs, []);
+      assertEquals(entries[0].intent, "Enumerate all call sites.");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: returns empty array when learnings directory absent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const entries = await listLearnings(dir);
+      assertEquals(entries, []);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: skips files without an id and continues",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "learnings"));
+      await Deno.writeTextFile(
+        join(dir, "learnings", "bad.md"),
+        "no frontmatter here",
+      );
+      await writeLearning(dir, makeLearning({ id: "20260729T050000" }), INTENT);
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].learning.id, "20260729T050000");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("removeLearning: deletes the entry file", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await writeLearning(dir, makeLearning({ id: "20260729T050000" }), INTENT);
+    await removeLearning(dir, "20260729T050000");
+    let threw = false;
+    try {
+      await Deno.stat(join(dir, "learnings", "20260729T050000.md"));
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("removeLearning: is a no-op when file not found", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await removeLearning(dir, "nonexistent");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

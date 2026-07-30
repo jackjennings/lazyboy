@@ -3089,6 +3089,45 @@ Deno.test("advancePhase: implementation revision with absent readTicketLog dep s
   assertEquals(spawnedSessionId, undefined);
 });
 
+Deno.test("TickService: processLearnings called once per run", async () => {
+  const processLearningsSpy = spy((): Promise<void> => Promise.resolve());
+  const deps = makeFakeServiceDeps({ processLearnings: processLearningsSpy });
+  await new TickService(deps).run();
+  assertSpyCalls(processLearningsSpy, 1);
+});
+
+Deno.test(
+  "TickService: processLearnings called before ticket processing",
+  async () => {
+    const sequence: string[] = [];
+    const deps = makeFakeServiceDeps({
+      processLearnings: spy((): Promise<void> => {
+        sequence.push("processLearnings");
+        return Promise.resolve();
+      }),
+      listTickets: spy((): Promise<string[]> => {
+        sequence.push("listTickets");
+        return Promise.resolve([]);
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("processLearnings") < sequence.indexOf("listTickets"),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when processLearnings is omitted",
+  async () => {
+    const commitStateSpy = spy((): Promise<void> => Promise.resolve());
+    const deps = makeFakeServiceDeps({ commitState: commitStateSpy });
+    await new TickService(deps).run();
+    assertSpyCalls(commitStateSpy, 1);
+  },
+);
+
 Deno.test(
   "TickService: runCeremonies called after commitState",
   async () => {

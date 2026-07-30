@@ -3,12 +3,15 @@ import { join } from "@std/path";
 import {
   type ApprovalEntry,
   assertValidPhaseStatus,
+  type LearningState,
+  type LearningStatus,
   type PrEntry,
   type TicketPhase,
   type TicketState,
   type TicketStatus,
   type WorktreeInfo,
 } from "./types.ts";
+import { mkdir, readDir, readTextFile, remove, writeTextFile } from "../fs.ts";
 
 function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
   const table: Record<string, [TicketPhase, TicketStatus]> = {
@@ -241,5 +244,74 @@ export async function commitPrinciples(
     ) {
       throw new Error(`git commit failed: ${stderr}`);
     }
+  }
+}
+
+export async function writeLearning(
+  stateDir: string,
+  learning: LearningState,
+  intent: string,
+): Promise<void> {
+  const learningsDir = join(stateDir, "learnings");
+  await mkdir(learningsDir, { recursive: true });
+  const raw = matter.stringify(`${intent.trim()}\n`, {
+    id: learning.id,
+    ticketId: learning.ticketId,
+    repo: learning.repo,
+    targetFile: learning.targetFile,
+    prTitle: learning.prTitle,
+    prBody: learning.prBody,
+    status: learning.status,
+    prs: learning.prs,
+  });
+  await writeTextFile(join(learningsDir, `${learning.id}.md`), raw);
+}
+
+export async function listLearnings(
+  stateDir: string,
+): Promise<Array<{ learning: LearningState; intent: string }>> {
+  const learningsDir = join(stateDir, "learnings");
+  const entries: Array<{ learning: LearningState; intent: string }> = [];
+  try {
+    for await (const file of readDir(learningsDir)) {
+      if (!file.isFile || !file.name.endsWith(".md")) continue;
+      try {
+        const raw = await readTextFile(join(learningsDir, file.name));
+        const { data, content } = matter(raw);
+        if (typeof data.id !== "string") {
+          console.error(`listLearnings: skipping file without id ${file.name}`);
+          continue;
+        }
+        entries.push({
+          learning: {
+            id: data.id,
+            ticketId: data.ticketId as string,
+            repo: data.repo as string,
+            targetFile: data.targetFile as string,
+            prTitle: data.prTitle as string,
+            prBody: data.prBody as string,
+            status: (data.status as LearningStatus) ?? "pending",
+            prs: (data.prs as PrEntry[]) ?? [],
+          },
+          intent: content.trim(),
+        });
+      } catch {
+        console.error(`listLearnings: skipping unparseable file ${file.name}`);
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return entries;
+}
+
+export async function removeLearning(
+  stateDir: string,
+  id: string,
+): Promise<void> {
+  try {
+    await remove(join(stateDir, "learnings", `${id}.md`));
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
 }

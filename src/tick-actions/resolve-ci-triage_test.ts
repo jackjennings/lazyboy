@@ -151,9 +151,11 @@ Deno.test(
 // ── INFRA verdict ─────────────────────────────────────────────────────────────
 
 Deno.test(
-  "resolveCITriageAction: INFRA verdict → createGitHubIssue with infrastructure title",
+  "resolveCITriageAction: INFRA verdict → no issue created, files cleaned up",
   async () => {
     const issues: Array<{ repo: string; title: string; body: string }> = [];
+    const removed: string[] = [];
+    const logged: object[] = [];
     await makeAction({
       hasCITriageContextFiles: () => true,
       readDir: async function* () {
@@ -172,12 +174,22 @@ Deno.test(
         issues.push(opts);
         return Promise.resolve();
       },
-      remove: () => Promise.resolve(),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+      remove: (path) => {
+        removed.push(path);
+        return Promise.resolve();
+      },
       writeTicket: () => Promise.resolve(),
     }).run(makeTicket(), "/state");
-    assertEquals(issues.length, 1);
-    assertEquals(issues[0].title, "CI infrastructure failure");
-    assertEquals(issues[0].body.includes("Network timeout"), true);
+    assertEquals(issues.length, 0);
+    assertEquals(removed.length, 2);
+    const resolved = (logged as Record<string, unknown>[]).find(
+      (e) => e.event === "ci-triage-resolved",
+    );
+    assertEquals(resolved?.verdict, "INFRA");
   },
 );
 

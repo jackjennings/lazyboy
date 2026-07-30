@@ -40,7 +40,7 @@ import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
-import { resolveCIFailuresAction } from "./tick-actions/resolve-ci-failures.ts";
+import { spawnCITriageAction } from "./tick-actions/spawn-ci-triage.ts";
 import { resolveCITriageAction } from "./tick-actions/resolve-ci-triage.ts";
 import {
   installPackages,
@@ -307,7 +307,7 @@ export function composeTickDeps(
           writeTicket,
           appendLog: appendTicketLog,
         }),
-        resolveCIFailuresAction({
+        spawnCITriageAction({
           getPRChecks: async (prUrl) => {
             const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
             if (!m) return null;
@@ -352,9 +352,7 @@ export function composeTickDeps(
               return {
                 runId: String(suite.id),
                 conclusion: suite.conclusion as "success" | "pending",
-                firstFailingStep: "other" as const,
                 failingOutput: "",
-                failingFiles: [],
               };
             }
             const runsRes = await fetch(
@@ -372,42 +370,14 @@ export function composeTickDeps(
               runs as Array<{
                 conclusion: string;
                 name: string;
-                id?: number;
                 output?: { text?: string };
               }>
             ).find((r) => r.conclusion === "failure");
             const stepName = failing?.name ?? "";
-            const firstFailingStep = stepName.toLowerCase().includes("fmt")
-              ? "fmt"
-              : stepName.toLowerCase().includes("lint")
-              ? "lint"
-              : stepName.toLowerCase().includes("test")
-              ? "test"
-              : "other";
-            const annotationsRes = await fetch(
-              `https://api.github.com/repos/${repoSlug}/check-runs/${
-                failing?.id ?? 0
-              }/annotations`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                },
-              },
-            ).catch(() => null);
-            const failingFiles: string[] = [];
-            if (annotationsRes?.ok) {
-              const annotations = await annotationsRes.json();
-              for (const a of annotations as Array<{ path?: string }>) {
-                if (a.path) failingFiles.push(a.path);
-              }
-            }
             return {
               runId: String(suite.id),
               conclusion: suite.conclusion as "failure" | "action_required",
-              firstFailingStep,
               failingOutput: failing?.output?.text ?? stepName,
-              failingFiles,
             };
           },
           getPRDiffFiles: async (prUrl) => {
@@ -436,62 +406,6 @@ export function composeTickDeps(
               patch: f.patch,
             }));
           },
-          runFmt: async (worktreePath) => {
-            await new Deno.Command("deno", {
-              args: ["fmt"],
-              cwd: worktreePath,
-            }).output();
-            const status = await runGit(
-              ["status", "--porcelain"],
-              worktreePath,
-            );
-            return status.stdout.trim().length > 0;
-          },
-          runLintFix: async (worktreePath) => {
-            await new Deno.Command("deno", {
-              args: ["lint", "--fix"],
-              cwd: worktreePath,
-            }).output();
-            const check = await new Deno.Command("deno", {
-              args: ["lint"],
-              cwd: worktreePath,
-            }).output();
-            const ok = check.code === 0;
-            return {
-              allFixed: ok,
-              remainingOutput: ok ? "" : new TextDecoder().decode(check.stdout),
-            };
-          },
-          runGit,
-          createGitHubIssue: async ({ repo, title, body }) => {
-            const { token, login } = resolveGitHubAccount(
-              repo.split("/")[0],
-              config,
-            );
-            const res = await fetch(
-              `https://api.github.com/repos/${repo}/issues`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ title, body, assignees: [login] }),
-              },
-            );
-            if (!res.ok) {
-              throw new Error(`GitHub API ${res.status} creating issue`);
-            }
-          },
-          readFile: async (path) => {
-            try {
-              return await Deno.readTextFile(path);
-            } catch {
-              return null;
-            }
-          },
-          writeFile: (path, content) => Deno.writeTextFile(path, content),
           isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
           writeTicket,
           appendLog: appendTicketLog,

@@ -116,12 +116,6 @@ export function resolveCITriageAction(
             title: `Fix CI failure on ${branch || prUrl}`,
             body: `${reasoning}\n\nPR: ${prUrl}`,
           });
-        } else {
-          await deps.createGitHubIssue({
-            repo,
-            title: `CI infrastructure failure`,
-            body: `${reasoning}\n\nObserved in PR: ${prUrl}`,
-          });
         }
 
         await deps.remove(contextPath);

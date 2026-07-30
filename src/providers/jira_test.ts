@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { JiraProvider } from "./jira.ts";
 import { compareSortKeys } from "./types.ts";
 
@@ -8,8 +8,15 @@ function makeIssue(
   key: string,
   summary: string,
   description: unknown = null,
+  parentKey?: string,
 ) {
-  return { id: "10001", key, fields: { summary, description } };
+  const fields: {
+    summary: string;
+    description: unknown;
+    parent?: { key: string; fields: { summary: string } };
+  } = { summary, description };
+  if (parentKey) fields.parent = { key: parentKey, fields: { summary: "" } };
+  return { id: "10001", key, fields };
 }
 
 Deno.test("fetchNew returns all items when knownIds is empty", async () => {
@@ -276,3 +283,173 @@ Deno.test("toSortable: different projects sort by key first", () => {
 Deno.test("toSortable: malformed id falls back to [id]", () => {
   assertEquals(JiraProvider.toSortable("jira/malformed"), ["jira/malformed"]);
 });
+
+Deno.test("fetchNew appends parent context when issue has one parent", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    _fetch: (url, _init) => {
+      if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              issues: [makeIssue("PROJ-1", "Sub-task", null, "STORY-10")],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            fields: { summary: "The Story", description: null },
+          }),
+          { status: 200 },
+        ),
+      );
+    },
+  });
+  const items = await provider.fetchNew(new Set());
+  assertEquals(items.length, 1);
+  assertStringIncludes(items[0].description, "\n\n---\n\n");
+  assertStringIncludes(
+    items[0].description,
+    "## Parent context: STORY-10 — The Story",
+  );
+});
+
+Deno.test(
+  "fetchNew appends parent and grandparent context for two-level ancestor chain",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      _fetch: (url, _init) => {
+        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                issues: [makeIssue("PROJ-1", "Sub-task", null, "STORY-10")],
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        if (url.includes("/issue/STORY-10")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                fields: {
+                  summary: "The Story",
+                  description: null,
+                  parent: { key: "EPIC-5" },
+                },
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              fields: { summary: "The Epic", description: null },
+            }),
+            { status: 200 },
+          ),
+        );
+      },
+    });
+    const items = await provider.fetchNew(new Set());
+    assertEquals(items.length, 1);
+    assertStringIncludes(
+      items[0].description,
+      "## Parent context: STORY-10 — The Story",
+    );
+    assertStringIncludes(
+      items[0].description,
+      "## Parent context: EPIC-5 — The Epic",
+    );
+    const separatorCount = (items[0].description.match(/\n---\n/g) ?? [])
+      .length;
+    assertEquals(separatorCount, 1);
+  },
+);
+
+Deno.test("fetchNew description is unchanged when issue has no parent", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    _fetch: (_url, _init) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue One")] }),
+          { status: 200 },
+        ),
+      ),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertEquals(items[0].description, "");
+});
+
+Deno.test(
+  "fetchNew ingests issue normally when parent fetch returns 404",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      _fetch: (url, _init) => {
+        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                issues: [makeIssue("PROJ-1", "Sub-task", null, "STORY-10")],
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(new Response("Not Found", { status: 404 }));
+      },
+    });
+    const items = await provider.fetchNew(new Set());
+    assertEquals(items.length, 1);
+    assertEquals(items[0].description.includes("Parent context"), false);
+    assertEquals(items[0].description.includes("---"), false);
+  },
+);
+
+Deno.test(
+  "fetchNew ingests issue normally when parent fetch returns 403",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      _fetch: (url, _init) => {
+        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                issues: [makeIssue("PROJ-1", "Sub-task", null, "STORY-10")],
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(new Response("Forbidden", { status: 403 }));
+      },
+    });
+    const items = await provider.fetchNew(new Set());
+    assertEquals(items.length, 1);
+    assertEquals(items[0].description.includes("Parent context"), false);
+  },
+);

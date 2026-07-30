@@ -25,7 +25,7 @@ const VALID_STATUSES: Record<TicketPhase, ReadonlyArray<TicketStatus>> = {
   spec: ["running", "waiting", "revising", "needs-attention"],
   plan: ["running", "waiting", "revising", "needs-attention"],
   implementation: ["running", "waiting", "revising", "needs-attention"],
-  merge: ["waiting", "done", "needs-attention"],
+  merge: ["waiting", "running", "revising", "done", "needs-attention"],
   "wont-do": ["done"],
 };
 

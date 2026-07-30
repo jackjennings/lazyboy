@@ -165,8 +165,13 @@ export async function advancePhase(
   const now = zonedNow.toInstant().toString();
 
   if (ticket.status === "revising") {
-    const activePhase = ticket.phase as ActivePhase;
-    const outputFile = `${compactTimestamp(zonedNow)}-${activePhase}.md`;
+    const isMergeRevision = ticket.phase === "merge";
+    const activePhase = isMergeRevision
+      ? "implementation"
+      : ticket.phase as ActivePhase;
+    const outputFile = `${compactTimestamp(zonedNow)}-${
+      isMergeRevision ? "merge" : activePhase
+    }.md`;
     const isImplementationRevision = activePhase === "implementation";
     const basePrompt = isImplementationRevision
       ? await loadPromptFile("implementation-revision.md")
@@ -282,15 +287,18 @@ export async function advancePhase(
             const outputFile = `${
               compactTimestamp(zonedNow)
             }-${ticket.phase}.md`;
+            const retryPhase: ActivePhase = ticket.phase === "merge"
+              ? "implementation"
+              : ticket.phase as ActivePhase;
             const { model: retryModel, thinking: retryThinking } = deps
-              .resolveModelConfig(ticket.phase as ActivePhase, ticket);
+              .resolveModelConfig(retryPhase, ticket);
             await deps.spawn({
-              phase: ticket.phase as ActivePhase,
+              phase: retryPhase,
               ticketDir: join(stateDir, ticket.id),
               prompt:
                 `You did not create the output file. Use the Write tool to write your previous response to ${outputFile} now. Output nothing else.`,
               scope: [],
-              worktrees: ticket.phase === "implementation"
+              worktrees: retryPhase === "implementation"
                 ? ticket.worktrees
                 : {},
               outputFile,

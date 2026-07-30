@@ -94,7 +94,7 @@ export async function findLatestPhaseOutput(
   | { filename: string; phaseName: string; previousFilename: string | null }
   | null
 > {
-  for (const phase of [...PHASE_SEQUENCE].reverse()) {
+  for (const phase of [...PHASE_SEQUENCE, "merge" as const].reverse()) {
     const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\.md$`);
     const matches: string[] = [];
     try {

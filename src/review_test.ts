@@ -426,6 +426,41 @@ Deno.test("findLatestPhaseOutput: returns second-to-last file as previousFilenam
   }
 });
 
+Deno.test("findLatestPhaseOutput: returns merge output file with phaseName merge", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-merge.md"),
+      "merge output",
+    );
+    const result = await findLatestPhaseOutput(tempDir);
+    assertEquals(result?.filename, "20260629T154506-merge.md");
+    assertEquals(result?.phaseName, "merge");
+    assertEquals(result?.previousFilename, null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestPhaseOutput: prefers merge output over earlier phase files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-implementation.md"),
+      "impl",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T225507-merge.md"),
+      "merge",
+    );
+    const result = await findLatestPhaseOutput(tempDir);
+    assertEquals(result?.filename, "20260629T225507-merge.md");
+    assertEquals(result?.phaseName, "merge");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 // ── renderDiff ────────────────────────────────────────────────────────────────
 
 Deno.test("renderDiff: prefixes added lines with green '+ ' and removed with red '- '", () => {

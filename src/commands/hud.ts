@@ -109,7 +109,7 @@ export const hud: Command = {
   async run(_args) {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
-    const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+    const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "log.ndjson");
 
     const terminal = new ProcessTerminal();
     const tui = new TUI(terminal);
@@ -127,7 +127,7 @@ export const hud: Command = {
     const logPane = new ScrollPane({
       getLines: (_w) => currentLogLines,
       tui,
-      title: "tick log",
+      title: "log",
       getHeight: () =>
         tui.terminal.rows - 1 - Math.ceil((tui.terminal.rows - 1) / 2),
     });

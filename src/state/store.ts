@@ -179,11 +179,24 @@ export async function appendTicketLog(
   id: string,
   entry: object,
 ): Promise<void> {
+  const ts = Temporal.Now.instant().toString();
   await Deno.writeTextFile(
     join(stateDir, id, "log.ndjson"),
-    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
+    JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
+  const home = Deno.env.get("HOME")!;
+  const lazyDir = join(home, ".lazyboy");
+  await Deno.mkdir(lazyDir, { recursive: true });
+  try {
+    await Deno.writeTextFile(
+      join(lazyDir, "log.ndjson"),
+      JSON.stringify({ ts, id, ...entry }) + "\n",
+      { append: true },
+    );
+  } catch {
+    // combined log failure must not interrupt per-ticket log writes
+  }
 }
 
 export async function commitState(

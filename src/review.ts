@@ -47,6 +47,7 @@ import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { diffLines } from "diff";
 import { ScrollPane } from "./ui/scroll-pane.ts";
+import { buildCompositedGetLines, extractHeadings } from "./ui/toc.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -462,7 +463,9 @@ export async function review(id: string): Promise<void> {
     contentOnInvalidate = undefined;
   } else {
     const md = new Markdown(paneContent, 1, 0, markdownTheme);
-    contentGetLines = (w) => md.render(w);
+    const baseGetLines = (w: number) => md.render(w);
+    const headings = extractHeadings(paneContent);
+    contentGetLines = buildCompositedGetLines(baseGetLines, headings, dim("│"));
     contentOnInvalidate = () => md.invalidate();
   }
 

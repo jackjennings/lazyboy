@@ -3405,6 +3405,147 @@ Deno.test("advancePhase: non-implementation revision spawns without sessionId re
   assertEquals(spawnedSessionId, undefined);
 });
 
+Deno.test("advancePhase: merge/revising spawns with ticket.worktrees", async () => {
+  const ticket = makeTicket({
+    phase: "merge",
+    status: "revising",
+    worktrees: {
+      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+    },
+  });
+  let spawnedWorktrees: Record<string, unknown> = {};
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedWorktrees = opts.worktrees;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: async () => {},
+    writePhaseOutput: async () => {},
+    appendLog: async () => {},
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    appendPrinciples: () => Promise.resolve(),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedWorktrees, {
+    "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
+  });
+});
+
+Deno.test("advancePhase: merge/revising spawns with phase implementation", async () => {
+  const ticket = makeTicket({
+    phase: "merge",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedPhase: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedPhase = opts.phase;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    appendPrinciples: () => Promise.resolve(),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedPhase, "implementation");
+});
+
+Deno.test("advancePhase: merge/revising outputFile has merge suffix", async () => {
+  const ticket = makeTicket({
+    phase: "merge",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedOutputFile: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedOutputFile = opts.outputFile;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    appendPrinciples: () => Promise.resolve(),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedOutputFile?.endsWith("-merge.md"), true);
+});
+
+Deno.test("advancePhase: merge revision passes sessionId from log to spawn", async () => {
+  const ticket = makeTicket({
+    phase: "merge",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined;
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    appendPrinciples: () => Promise.resolve(),
+    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-merge")),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, "sess-merge");
+});
+
+Deno.test("advancePhase: merge revision with no qualifying log entry spawns without sessionId", async () => {
+  const ticket = makeTicket({
+    phase: "merge",
+    status: "revising",
+    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+  });
+  let spawnedSessionId: string | undefined = "sentinel";
+  const spawnSpy = spy((opts: SpawnOpts) => {
+    spawnedSessionId = opts.sessionId;
+    return Promise.resolve();
+  });
+  await advancePhase(ticket, "/state", {
+    spawn: spawnSpy,
+    isProcessAlive: () => false,
+    writeTicket: () => Promise.resolve(),
+    writePhaseOutput: () => Promise.resolve(),
+    appendLog: () => Promise.resolve(),
+    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
+    selfReview: () => Promise.resolve({ approved: false, reason: null }),
+    markPRsReady: () => Promise.resolve(),
+    readPhaseOutput: () => Promise.resolve("content"),
+    appendPrinciples: () => Promise.resolve(),
+    readTicketLog: () => Promise.resolve(""),
+  });
+  assertSpyCall(spawnSpy, 0);
+  assertEquals(spawnedSessionId, undefined);
+});
+
 Deno.test("advancePhase: implementation revision with absent readTicketLog dep spawns without sessionId", async () => {
   const ticket = makeTicket({
     phase: "implementation",

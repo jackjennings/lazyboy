@@ -95,6 +95,8 @@ Deno.test("assertValidPhaseStatus: does not throw for valid combinations", () =>
   assertValidPhaseStatus("merge", "waiting");
   assertValidPhaseStatus("merge", "done");
   assertValidPhaseStatus("merge", "needs-attention");
+  assertValidPhaseStatus("merge", "revising");
+  assertValidPhaseStatus("merge", "running");
 });
 
 Deno.test("assertValidPhaseStatus: throws for invalid combinations", () => {
@@ -106,7 +108,6 @@ Deno.test("assertValidPhaseStatus: throws for invalid combinations", () => {
   assertThrows(() => assertValidPhaseStatus("implementation", "new"), Error);
   assertThrows(() => assertValidPhaseStatus("implementation", "done"), Error);
   assertThrows(() => assertValidPhaseStatus("merge", "new"), Error);
-  assertThrows(() => assertValidPhaseStatus("merge", "running"), Error);
 });
 
 Deno.test("assertValidPhaseStatus: wont-do/done is valid", () => {

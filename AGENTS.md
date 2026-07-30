@@ -36,16 +36,18 @@ notion-fetch search <query>       # search the Notion workspace
 
 ## Architecture
 
-`bin/lazyboy` → `src/index.ts` dispatches to `tick`, `approve`, `status` (plus
-`enable`/`disable` for cron via `src/cron.ts`). `TickService` (`src/tick.ts`)
-owns the tick workflow: acquire lock → install packages → fetch work → migrate →
-action pass → advance pass → commit.
+lazyboy is a cron-driven pipeline. `TickService` (`src/tick.ts`) owns the tick
+workflow: acquire lock → install packages → fetch work → migrate → action pass →
+advance pass → commit.
 
 - `composeTickDeps` (`src/compose.ts`) is the single site where concrete
   adapters are constructed. No adapter construction happens inside
   `TickService`, and no other module reads adapter credentials from `Deno.env`.
 - `advancePhase` is pure except for its injected `TickDeps` — keep it that way
   for testability.
+- `spawnPhase` (`src/executor.ts`) runs each phase as a detached subprocess; the
+  next tick detects completion via `isPhaseAlive(ticketDir)`. `run.pid` is
+  gitignored at the state-repo root and never committed.
 - The state dir is a separate git repo (`~/code/jackjennings/projects` by
   default). Each ticket is a directory in it; `meta.md` holds YAML frontmatter
   (via `gray-matter`) and phase output files (`intake.md`, …) live alongside.
@@ -53,11 +55,11 @@ action pass → advance pass → commit.
 
 ## Phase state machine
 
-Tickets carry `phase: TicketPhase` and `status: TicketStatus`, cycling
-`new → running → waiting → (approved) → running` through phases.
+Tickets carry `phase: TicketPhase` and `status: TicketStatus`.
 
 - `PHASE_SEQUENCE` covers only the five runner phases (`intake` →
-  `implementation`); `merge` is handled explicitly in `advancePhase`.
+  `implementation`), cycling `new → running → waiting → (approved) → running`;
+  `merge` is handled explicitly in `advancePhase`.
 - Implementation agents leave the ticket in `implementation/waiting` for review;
   once approved it moves to `merge/waiting`.
 - Any phase can transition to `needs-attention` on subprocess failure.
@@ -73,26 +75,18 @@ matches `ticket.phase`. Human approvals come from `performApprove`
 after a successful self-review. There is no single boolean `approved` field — do
 not add one.
 
-## Executor
-
-`spawnPhase()` (`src/executor.ts`) launches `src/run-phase.ts` as a detached
-subprocess and writes the child PID to `<ticketDir>/run.pid`. The next tick
-calls `isPhaseAlive(ticketDir)`; when the process is dead the pidfile is deleted
-and the ticket transitions to `waiting`. `run.pid` is gitignored at the
-state-repo root and never committed.
-
 ## Usage sidecar files
 
 Each phase run writes `<timestampedPhase>.usage.json` alongside the phase output
-`.md`, containing the fields of `PhaseUsage` (`input`, `output`, `cacheRead`,
-`cacheWrite`, `model`, `durationMs`, optionally `costUsd` and `tools`).
-`costUsd` is absent when pricing is unavailable or the model is not in the
-cache; `tools` maps lowercased tool names to call counts and is absent when no
-tool calls occurred. Optional fields are omitted when absent — never written as
-`null` or `{}`. `reasoning` tokens are excluded. The file is written only when
-the agent exits with a complete `agent_end` event. Directory scanners (e.g.
-`lazyboy
-status`) identify these by the `.usage.json` suffix.
+`.md`, holding the fields of the `PhaseUsage` type (`src/state/types.ts`).
+Non-obvious rules:
+
+- Optional fields (`costUsd`, `tools`, …) are omitted when absent — never
+  written as `null` or `{}`; `reasoning` tokens are excluded.
+- The file is written only when the agent exits with a complete `agent_end`
+  event.
+- Directory scanners (e.g. `lazyboy status`) identify these by the `.usage.json`
+  suffix.
 
 ## Phase prompts
 
@@ -247,9 +241,8 @@ exports a `*Deps` interface, a factory, and a `*_test.ts` (pattern:
 Non-phase background agents run alongside a ticket's phase agent without
 participating in the state machine. The tick loop tracks liveness only via
 `run.pid`, so a subprocess must write a **distinct** PID file to stay invisible
-to ticket state. Two exist: `spawnOutlierAnalysis` dispatches on
-`phase: "implementation" | "plan"` to pick the detector, prompt, and PID file
-(`outlier-analysis.pid` / `plan-outlier-analysis.pid`).
+to ticket state (see `spawnOutlierAnalysis` in `TickDeps` for the existing
+example).
 
 To add one:
 

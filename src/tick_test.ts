@@ -3488,3 +3488,34 @@ Deno.test(
     assertEquals(writtenTickets[0].shortTitle, undefined);
   },
 );
+
+Deno.test(
+  "TickService: scaffoldStatePrompts called before commitState",
+  async () => {
+    const sequence: string[] = [];
+    const deps = makeFakeServiceDeps({
+      scaffoldStatePrompts: spy(() => {
+        sequence.push("scaffoldStatePrompts");
+        return Promise.resolve();
+      }),
+      commitState: spy(() => {
+        sequence.push("commitState");
+        return Promise.resolve();
+      }),
+    });
+    await new TickService(deps).run();
+    assertEquals(
+      sequence.indexOf("scaffoldStatePrompts") <
+        sequence.indexOf("commitState"),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when scaffoldStatePrompts is absent",
+  async () => {
+    const deps = makeFakeServiceDeps();
+    await new TickService(deps).run();
+  },
+);

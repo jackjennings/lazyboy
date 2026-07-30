@@ -76,7 +76,11 @@ export async function processLearnings(deps: LearningDeps): Promise<void> {
         merged: false,
       };
       await deps.writeLearning(
-        { ...entry.learning, prs: [...entry.learning.prs, pr], status: "waiting" },
+        {
+          ...entry.learning,
+          prs: [...entry.learning.prs, pr],
+          status: "waiting",
+        },
         entry.intent,
       );
     } catch (e) {

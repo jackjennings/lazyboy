@@ -11,6 +11,7 @@ import type { Command } from "./types.ts";
 export async function performRetry(
   stateDir: string,
   id: string,
+  commitFn = commitTicket,
 ): Promise<{ phase: TicketPhase; targetStatus: TicketStatus }> {
   const ticket = await readTicket(stateDir, id);
 
@@ -37,7 +38,7 @@ export async function performRetry(
     to: targetStatus,
   });
 
-  await commitTicket(stateDir, id, `retry: ${id}`);
+  await commitFn(stateDir, id, `retry: ${id}`);
 
   return { phase: ticket.phase, targetStatus };
 }

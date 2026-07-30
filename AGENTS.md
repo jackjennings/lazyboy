@@ -319,6 +319,12 @@ not `src/lock.ts`, because `PidFileLock` must have zero knowledge of
 `tick.ndjson` or any other tick-specific concept — `composeTickDeps` is what
 wires the two together.
 
+Command functions that internally call `commitTicket` (`performApprove`,
+`performRetry`, `performDecline`) accept an optional `commitFn` parameter
+(defaulting to `commitTicket`). Tests pass a `spy(() => Promise.resolve())` from
+`@std/testing/mock` to avoid a real git repo. Do not use `setupGitStateDir` or
+real git processes in tests for these three commands.
+
 ## CodeAgent adapters
 
 Code-agent runtimes (CLI tools or SDKs that execute phase prompts) implement the
@@ -389,6 +395,12 @@ For test doubles (spies, stubs), use `spy` and `stub` from `@std/testing/mock`
 (bare specifier). Do not write hand-rolled stub functions for the same purpose.
 Access recorded calls via `spy.calls` and assert call counts with
 `assertSpyCalls`.
+
+CLI format functions (`formatGlobalHelp`, `formatCommandHelp`) live in
+`src/commands/help.ts` and are pure — no `Deno.args`, no `console.log`, no
+`Deno.exit`. Tests that assert on `--help` output import these functions
+directly. Tests that assert on `Deno.exit` behavior use subprocess via
+`runIndex`. Do not add `Deno.args`, `console.log`, or `Deno.exit` to `help.ts`.
 
 ## Date and time
 

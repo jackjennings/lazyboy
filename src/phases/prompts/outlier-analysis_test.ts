@@ -19,14 +19,15 @@ Deno.test(
       new URL("outlier-analysis.md", import.meta.url).pathname,
     );
     assertEquals(content.includes("learnings/"), true);
-    assertEquals(content.includes('"id"'), true);
-    assertEquals(content.includes('"ticketId"'), true);
-    assertEquals(content.includes('"repo"'), true);
-    assertEquals(content.includes('"targetFile"'), true);
-    assertEquals(content.includes('"intent"'), true);
+    assertEquals(content.includes("<YYYYMMDDTHHMMSS>.md"), true);
+    assertEquals(content.includes("id:"), true);
+    assertEquals(content.includes("ticketId:"), true);
+    assertEquals(content.includes("repo:"), true);
+    assertEquals(content.includes("targetFile:"), true);
+    assertEquals(content.includes("prTitle:"), true);
+    assertEquals(content.includes("prBody:"), true);
     assertEquals(content.includes('"content"'), false);
-    assertEquals(content.includes('"prTitle"'), true);
-    assertEquals(content.includes('"prBody"'), true);
+    assertEquals(content.includes('"intent"'), false);
   },
 );
 

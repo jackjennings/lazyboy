@@ -44,22 +44,26 @@ Follow these steps:
    Make the instruction concrete and actionable; avoid vague directives.
 
 6. Write a learning entry to
-   `<State directory>/learnings/<YYYYMMDDTHHMMSS>.json` using the current UTC
-   time for the filename slug. The JSON object must have exactly these fields:
+   `<State directory>/learnings/<YYYYMMDDTHHMMSS>.md` using the current UTC time
+   for the filename slug. The file is Markdown with YAML frontmatter. The
+   frontmatter must have exactly these fields, and the Markdown body is the
+   intent — the natural-language description of the instruction to add and why,
+   from step 5 (not file content):
 
-   ```json
-   {
-     "id": "<YYYYMMDDTHHMMSS>",
-     "ticketId": "<ticket ID from context>",
-     "repo": "jackjennings/lazyboy",
-     "targetFile": "<repo-relative path of the prompt file the instruction belongs in, e.g. src/phases/prompts/implementation.md>",
-     "intent": "<natural-language description of the instruction to add and why, from step 5 — not file content>",
-     "prTitle": "Improve prompt to prevent <short label for inefficient pattern> observed in <ticketId>",
-     "prBody": "<body text citing the triggering ticket ID, the turns/task_count ratio, and the root cause>"
-   }
+   ```markdown
+   ---
+   id: "<YYYYMMDDTHHMMSS>"
+   ticketId: "<ticket ID from context>"
+   repo: jackjennings/lazyboy
+   targetFile: "<repo-relative path of the prompt file the instruction belongs in, e.g. src/phases/prompts/implementation.md>"
+   prTitle: "Improve prompt to prevent <short label for inefficient pattern> observed in <ticketId>"
+   prBody: "<body text citing the triggering ticket ID, the turns/task_count ratio, and the root cause>"
+   ---
+
+   <natural-language description of the instruction to add and why, from step 5>
    ```
 
-   `intent` is a description, not file content. The next tick applies it: an LLM
+   The body is a description, not file content. The next tick applies it: an LLM
    integrates the instruction into `targetFile` at the appropriate location and
    opens the draft PR. Do not run `git` or `gh` commands and do not edit any
    prompt file yourself.

@@ -1,6 +1,11 @@
 import { assertEquals } from "@std/assert";
-import { stripAnsiCode } from "@std/fmt/colors";
-import { formatHudHeader, formatTickLogLine } from "./hud.ts";
+import { dim, stripAnsiCode } from "@std/fmt/colors";
+import {
+  formatHudHeader,
+  formatTickLogLine,
+  logPaneLines,
+  openLogWatch,
+} from "./hud.ts";
 
 // ── formatTickLogLine ─────────────────────────────────────────────────────────
 
@@ -54,4 +59,27 @@ Deno.test("formatHudHeader: shows disabled badge when enabled is false", () => {
   const line = formatHudHeader(false, 0, 5);
   assertEquals(stripAnsiCode(line).includes("disabled"), true);
   assertEquals(line.includes("0/5 running"), true);
+});
+
+// ── logPaneLines ──────────────────────────────────────────────────────────────
+
+Deno.test("logPaneLines: returns dim placeholder when lines is empty", () => {
+  assertEquals(logPaneLines([]), [dim("(no logs)")]);
+});
+
+Deno.test("logPaneLines: passes through non-empty lines unchanged", () => {
+  const lines = ["12:00:00 tick-failed"];
+  assertEquals(logPaneLines(lines), lines);
+});
+
+// ── openLogWatch ──────────────────────────────────────────────────────────────
+
+Deno.test("openLogWatch: resolves when log.ndjson does not exist", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    const watcher = await openLogWatch(tmpDir);
+    watcher.close();
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
 });

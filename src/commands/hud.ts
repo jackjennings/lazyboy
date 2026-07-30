@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import { bgGreen, bgRed, white } from "@std/fmt/colors";
+import { bgGreen, bgRed, dim, white } from "@std/fmt/colors";
 import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
 import { isCronEnabled } from "../cron.ts";
@@ -52,6 +52,17 @@ export function formatHudHeader(
     ? bgGreen(white(" enabled "))
     : bgRed(white(" disabled "));
   return `${badge}  ${running}/${max} running`;
+}
+
+export function logPaneLines(lines: string[]): string[] {
+  return lines.length === 0 ? [dim("(no logs)")] : lines;
+}
+
+export async function openLogWatch(
+  parentDir: string,
+): Promise<Deno.FsWatcher> {
+  await Deno.mkdir(parentDir, { recursive: true });
+  return Deno.watchFs(parentDir);
 }
 
 async function readState(
@@ -110,6 +121,7 @@ export const hud: Command = {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
     const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "log.ndjson");
+    const parentDir = join(Deno.env.get("HOME")!, ".lazyboy");
 
     const terminal = new ProcessTerminal();
     const tui = new TUI(terminal);
@@ -125,7 +137,7 @@ export const hud: Command = {
     });
 
     const logPane = new ScrollPane({
-      getLines: (_w) => currentLogLines,
+      getLines: (_w) => logPaneLines(currentLogLines),
       tui,
       title: "log",
       getHeight: () =>
@@ -160,7 +172,7 @@ export const hud: Command = {
       currentStatusLines = statusLines;
       currentLogLines = logLines;
       statusPane.setContent((_w) => currentStatusLines);
-      logPane.setContent((_w) => currentLogLines);
+      logPane.setContent((_w) => logPaneLines(currentLogLines));
 
       if (logWasAtEnd) {
         logPane.scrollToEnd();
@@ -184,7 +196,7 @@ export const hud: Command = {
     }
 
     const watchState = Deno.watchFs(stateDir, { recursive: true });
-    const watchLog = Deno.watchFs(tickLogPath);
+    const watchLog = await openLogWatch(parentDir);
 
     (async () => {
       for await (const _event of watchState) {

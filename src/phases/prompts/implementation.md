@@ -25,7 +25,11 @@ Implement the plan exactly as specified using TDD:
 1. Write failing tests first
 2. Implement the minimal code to make them pass
 3. Refactor if needed
-4. Confirm all tests pass
+4. Confirm all tests pass with `deno task test 2>&1 | tail -20` — always pipe
+   through `tail` so the final pass/fail summary is visible in one invocation.
+   Running without `tail` produces long output that may truncate before the
+   summary line, forcing a second run to confirm the result; this wastes an
+   entire test cycle and two turns.
 5. Run `deno fmt && deno lint`. Required even when only `.md` files changed —
    `deno fmt` formats Markdown.
 

@@ -762,6 +762,15 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
       runCommand: defaultCommandRunner(),
     }),
+    notifyTickFailure: async (error: string) => {
+      const escaped = error.replaceAll("'", "\\'");
+      const body = escaped.slice(0, 200);
+      await defaultCommandRunner()([
+        "osascript",
+        "-e",
+        `display notification "${body}" with title "Tick failed"`,
+      ]);
+    },
     scaffoldStatePrompts: () => ensureStatePrompts(stateDir),
     runCeremonies: () => ceremonies.run(),
     generateShortTitle: async (title) => {

@@ -128,6 +128,7 @@ export interface TickServiceDeps {
   runCeremonies?(): Promise<void>;
   scaffoldStatePrompts?(): Promise<void>;
   generateShortTitle?(title: string): Promise<string | null>;
+  notifyTickFailure?(error: string): Promise<void>;
 }
 
 export function selectCandidates(
@@ -560,7 +561,13 @@ export class TickService {
         }
       });
     } catch (e) {
+      const errorStr = e instanceof Error ? e.message : String(e);
       console.error(e);
+      try {
+        await deps.notifyTickFailure?.(errorStr);
+      } catch {
+        // notification failure must not suppress original error or change exit code
+      }
       (deps.exit ?? Deno.exit)(1);
     }
   }

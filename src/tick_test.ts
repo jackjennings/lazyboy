@@ -1881,6 +1881,84 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "TickService: notifyTickFailure called with error message when workflow throws",
+  async () => {
+    const captured: string[] = [];
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.reject(new Error("auth failure")),
+      notifyTickFailure: (error) => {
+        captured.push(error);
+        return Promise.resolve();
+      },
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertEquals(captured, ["auth failure"]);
+  },
+);
+
+Deno.test(
+  "TickService: notifyTickFailure called with String(e) when non-Error thrown",
+  async () => {
+    const captured: string[] = [];
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.reject("raw string error"),
+      notifyTickFailure: (error) => {
+        captured.push(error);
+        return Promise.resolve();
+      },
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertEquals(captured, ["raw string error"]);
+  },
+);
+
+Deno.test(
+  "TickService: notifyTickFailure called for pre-lock failures",
+  async () => {
+    const captured: string[] = [];
+    const deps = makeFakeServiceDeps({
+      installPackages: () => Promise.reject(new Error("install failed")),
+      notifyTickFailure: (error) => {
+        captured.push(error);
+        return Promise.resolve();
+      },
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertEquals(captured, ["install failed"]);
+  },
+);
+
+Deno.test(
+  "TickService: exit(1) still fires when notifyTickFailure throws",
+  async () => {
+    const exitSpy = spy((_code: number) => {});
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.reject(new Error("workflow error")),
+      notifyTickFailure: () => Promise.reject(new Error("notify failed")),
+      exit: exitSpy,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(exitSpy, 0, { args: [1] });
+  },
+);
+
+Deno.test(
+  "TickService: proceeds normally when notifyTickFailure is absent",
+  async () => {
+    const exitSpy = spy((_code: number) => {});
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.reject(new Error("workflow error")),
+      exit: exitSpy,
+    });
+    await new TickService(deps).run();
+    assertSpyCall(exitSpy, 0, { args: [1] });
+  },
+);
+
 // ── selectCandidates ──────────────────────────────────────────────────────────
 
 Deno.test("selectCandidates: empty candidates returns empty", () => {

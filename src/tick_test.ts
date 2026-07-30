@@ -3280,6 +3280,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
@@ -3317,6 +3318,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);

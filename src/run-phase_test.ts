@@ -942,6 +942,7 @@ Deno.test("executePhase: writes .exit sidecar with exit code before returning", 
     await executePhase(
       {
         ticketDir,
+        stateDir: ticketDir,
         outputFile,
         phase: "intake",
         scopeDirs: [],
@@ -981,6 +982,7 @@ Deno.test("executePhase: .exit sidecar write failure does not suppress returned 
     const returnedCode = await executePhase(
       {
         ticketDir,
+        stateDir: ticketDir,
         outputFile,
         phase: "intake",
         scopeDirs: [],

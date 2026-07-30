@@ -121,6 +121,7 @@ export interface TickServiceDeps {
   notify?(ticket: TicketState): Promise<void>;
   appendTickLog?(entry: object): Promise<void>;
   runCeremonies?(): Promise<void>;
+  scaffoldStatePrompts?(): Promise<void>;
   generateShortTitle?(title: string): Promise<string | null>;
 }
 
@@ -599,6 +600,7 @@ export class TickService {
     }
 
     await deps.writeLastWorked(selectedIds);
+    await deps.scaffoldStatePrompts?.();
     await deps.commitState();
     await deps.runCeremonies?.();
   }

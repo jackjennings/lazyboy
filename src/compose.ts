@@ -64,6 +64,24 @@ import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
 import { readDir, readTextFile, remove, stat } from "./fs.ts";
+import { PHASE_SEQUENCE } from "./phases/types.ts";
+
+export async function ensureStatePrompts(stateDir: string): Promise<void> {
+  const promptsDir = join(stateDir, "prompts");
+  await Deno.mkdir(promptsDir, { recursive: true });
+  for (const phase of PHASE_SEQUENCE) {
+    const filePath = join(promptsDir, `${phase}.md`);
+    try {
+      await Deno.stat(filePath);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) {
+        await Deno.writeTextFile(filePath, "");
+      } else {
+        throw e;
+      }
+    }
+  }
+}
 
 async function ensureRunPidGitignored(stateDir: string): Promise<void> {
   const gitignorePath = join(stateDir, ".gitignore");
@@ -671,6 +689,7 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
       runCommand: defaultCommandRunner(),
     }),
+    scaffoldStatePrompts: () => ensureStatePrompts(stateDir),
     runCeremonies: () => ceremonies.run(),
     generateShortTitle: async (title) => {
       const available = await checkApfelAvailable(defaultCommandRunner());

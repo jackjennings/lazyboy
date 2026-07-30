@@ -35,7 +35,7 @@ export const tail: Command = {
     const id = args[0];
     let logPath: string;
     if (!id) {
-      logPath = join(Deno.env.get("HOME")!, ".lazyboy", "tick.ndjson");
+      logPath = join(Deno.env.get("HOME")!, ".lazyboy", "log.ndjson");
     } else {
       const config = await loadConfig();
       const stateDir = expandHome(config.state.dir);

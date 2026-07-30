@@ -396,6 +396,74 @@ Deno.test("appendTicketLog: appends successive entries on separate lines", async
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("appendTicketLog: writes combined log entry with id field", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", homeDir);
+  try {
+    await Deno.mkdir(join(stateDir, "github/test/repo/1"), { recursive: true });
+    await appendTicketLog(stateDir, "github/test/repo/1", {
+      event: "phase-start",
+    });
+    const combined = await Deno.readTextFile(
+      join(homeDir, ".lazyboy", "log.ndjson"),
+    );
+    const parsed = JSON.parse(combined.trim());
+    assertEquals(parsed.id, "github/test/repo/1");
+    assertEquals(parsed.event, "phase-start");
+    assertEquals(typeof parsed.ts, "string");
+  } finally {
+    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("appendTicketLog: per-ticket log entry has no id field", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", homeDir);
+  try {
+    await Deno.mkdir(join(stateDir, "gh-1"));
+    await appendTicketLog(stateDir, "gh-1", { event: "status-transition" });
+    const ticket = await Deno.readTextFile(
+      join(stateDir, "gh-1", "log.ndjson"),
+    );
+    const parsed = JSON.parse(ticket.trim());
+    assertEquals(parsed.id, undefined);
+    assertEquals(parsed.event, "status-transition");
+  } finally {
+    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("appendTicketLog: primary write succeeds when combined log write fails", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", homeDir);
+  try {
+    // make log.ndjson a directory so writeTextFile to it fails
+    await Deno.mkdir(join(homeDir, ".lazyboy", "log.ndjson"), {
+      recursive: true,
+    });
+    await Deno.mkdir(join(stateDir, "gh-1"));
+    await appendTicketLog(stateDir, "gh-1", { event: "error" });
+    const ticket = await Deno.readTextFile(
+      join(stateDir, "gh-1", "log.ndjson"),
+    );
+    assertEquals(JSON.parse(ticket.trim()).event, "error");
+  } finally {
+    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
 Deno.test("readTicket: reads phases field from frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   const ticketDir = join(dir, "gh-1");

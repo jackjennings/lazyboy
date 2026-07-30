@@ -33,6 +33,15 @@ Deno.test("formatTickLogLine: returns verbatim string on JSON parse failure", ()
   assertEquals(formatTickLogLine("not json"), "not json");
 });
 
+Deno.test("formatTickLogLine: renders id field from combined log entry", () => {
+  const line = formatTickLogLine(
+    '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"status-transition","from":"new","to":"running"}',
+  );
+  assertEquals(line.includes("status-transition"), true);
+  assertEquals(line.includes("id=github/jackjennings/lazyboy/258"), true);
+  assertEquals(line.includes("from=new"), true);
+});
+
 // ── formatHudHeader ───────────────────────────────────────────────────────────
 
 Deno.test("formatHudHeader: shows enabled badge when enabled is true", () => {

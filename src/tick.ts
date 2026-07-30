@@ -470,13 +470,23 @@ export async function advancePhase(
 
 export async function appendTickLog(entry: object): Promise<void> {
   const home = Deno.env.get("HOME")!;
-  const tickLogPath = join(home, ".lazyboy", "tick.ndjson");
-  await Deno.mkdir(join(home, ".lazyboy"), { recursive: true });
+  const lazyDir = join(home, ".lazyboy");
+  const ts = Temporal.Now.instant().toString();
+  await Deno.mkdir(lazyDir, { recursive: true });
   await Deno.writeTextFile(
-    tickLogPath,
-    JSON.stringify({ ts: Temporal.Now.instant().toString(), ...entry }) + "\n",
+    join(lazyDir, "tick.ndjson"),
+    JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
+  try {
+    await Deno.writeTextFile(
+      join(lazyDir, "log.ndjson"),
+      JSON.stringify({ ts, ...entry }) + "\n",
+      { append: true },
+    );
+  } catch {
+    // combined log failure must not interrupt tick log writes
+  }
 }
 
 export class TickService {

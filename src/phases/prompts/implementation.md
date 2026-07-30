@@ -85,6 +85,11 @@ parallel calls in a single turn. Only serialize when edit B's `old_string`
 references text that edit A will write. Failing to batch cross-file independent
 edits costs one extra turn per file after the first.
 
+The same applies to Write calls: when the plan requires writing multiple
+independent files (new files or complete rewrites), issue all Write calls in a
+single parallel turn — not one Write per response. A task that creates four new
+test files can issue four parallel Write calls in one response.
+
 When a file needs changes at three or more separate locations, use Write instead
 of sequential Edit calls: read the file once, incorporate every change into the
 full text, then write the complete modified file in a single Write call. Three

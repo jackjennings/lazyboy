@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
 import type { TicketState } from "../state/types.ts";
@@ -22,32 +23,13 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   };
 }
 
-async function setupGitStateDir(ticket: TicketState): Promise<string> {
-  const stateDir = await Deno.makeTempDir();
-  await writeTicket(stateDir, ticket);
-  await new Deno.Command("git", { args: ["init"], cwd: stateDir }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.email", "test@test.com"],
-    cwd: stateDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.name", "Test"],
-    cwd: stateDir,
-  }).output();
-  await new Deno.Command("git", { args: ["add", "-A"], cwd: stateDir })
-    .output();
-  await new Deno.Command("git", {
-    args: ["commit", "-m", "initial"],
-    cwd: stateDir,
-  }).output();
-  return stateDir;
-}
-
 Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   const ticket = makeTicket({ phase: "plan", status: "waiting" });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id);
+    await performDecline(stateDir, ticket.id, undefined, commitFn);
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -68,9 +50,11 @@ Deno.test("performDecline: does not write approved key", async () => {
       phase: "implementation",
     }],
   });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id);
+    await performDecline(stateDir, ticket.id, undefined, commitFn);
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -83,9 +67,11 @@ Deno.test("performDecline: does not write approved key", async () => {
 
 Deno.test("performDecline: appends phase-transition log entry", async () => {
   const ticket = makeTicket({ phase: "enrichment", status: "waiting" });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id);
+    await performDecline(stateDir, ticket.id, undefined, commitFn);
     const log = await Deno.readTextFile(
       join(stateDir, ticket.id, "log.ndjson"),
     );
@@ -98,27 +84,34 @@ Deno.test("performDecline: appends phase-transition log entry", async () => {
   }
 });
 
-Deno.test("performDecline: makes a git commit with decline message", async () => {
-  const ticket = makeTicket();
-  const stateDir = await setupGitStateDir(ticket);
-  try {
-    await performDecline(stateDir, ticket.id);
-    const result = await new Deno.Command("git", {
-      args: ["log", "--oneline", "-1"],
-      cwd: stateDir,
-    }).output();
-    const log = new TextDecoder().decode(result.stdout);
-    assertStringIncludes(log, `decline: ${ticket.id}`);
-  } finally {
-    await Deno.remove(stateDir, { recursive: true });
-  }
-});
+Deno.test(
+  "performDecline: calls commitFn with stateDir, id, and decline message",
+  async () => {
+    const ticket = makeTicket();
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
+    try {
+      await performDecline(stateDir, ticket.id, undefined, commitFn);
+      assertSpyCalls(commitFn, 1);
+      assertEquals(commitFn.calls[0].args, [
+        stateDir,
+        ticket.id,
+        `decline: ${ticket.id}`,
+      ]);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
 
 Deno.test("performDecline: without reason leaves body unchanged", async () => {
   const ticket = makeTicket({ body: "Original body" });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id);
+    await performDecline(stateDir, ticket.id, undefined, commitFn);
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -131,9 +124,16 @@ Deno.test("performDecline: without reason leaves body unchanged", async () => {
 
 Deno.test("performDecline: with reason appends to body", async () => {
   const ticket = makeTicket({ body: "Original body" });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, "requires manual design review");
+    await performDecline(
+      stateDir,
+      ticket.id,
+      "requires manual design review",
+      commitFn,
+    );
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -146,9 +146,16 @@ Deno.test("performDecline: with reason appends to body", async () => {
 
 Deno.test("performDecline: returns original phase", async () => {
   const ticket = makeTicket({ phase: "spec", status: "waiting" });
-  const stateDir = await setupGitStateDir(ticket);
+  const stateDir = await Deno.makeTempDir();
+  await writeTicket(stateDir, ticket);
+  const commitFn = spy(() => Promise.resolve());
   try {
-    const result = await performDecline(stateDir, ticket.id);
+    const result = await performDecline(
+      stateDir,
+      ticket.id,
+      undefined,
+      commitFn,
+    );
     assertEquals(result.from, "spec");
   } finally {
     await Deno.remove(stateDir, { recursive: true });

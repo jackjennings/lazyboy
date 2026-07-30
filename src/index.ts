@@ -1,4 +1,5 @@
 import { commands } from "./commands/registry.ts";
+import { formatCommandHelp, formatGlobalHelp } from "./commands/help.ts";
 
 try {
   const content = await Deno.readTextFile(
@@ -26,12 +27,7 @@ const publicCommands = commands
   .sort((a, b) => a.name.localeCompare(b.name));
 
 if (Deno.args[0] === "--help") {
-  const usage = publicCommands.map((c) => c.name).join("|");
-  const maxLen = Math.max(...publicCommands.map((c) => c.name.length));
-  const rows = publicCommands
-    .map((c) => `  ${c.name.padEnd(maxLen)}  ${c.description ?? ""}`.trimEnd())
-    .join("\n");
-  console.log(`Usage: lazyboy <${usage}>\n\nCommands:\n${rows}`);
+  console.log(formatGlobalHelp(commands));
   Deno.exit(0);
 }
 
@@ -45,10 +41,7 @@ if (!command) {
 }
 
 if (Deno.args[1] === "--help") {
-  const parts: string[] = [];
-  if (command.usage) parts.push(`Usage: ${command.usage}`);
-  if (command.description) parts.push(command.description);
-  console.log(parts.join("\n\n"));
+  console.log(formatCommandHelp(command));
   Deno.exit(0);
 }
 

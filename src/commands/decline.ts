@@ -12,6 +12,7 @@ export async function performDecline(
   stateDir: string,
   id: string,
   reason?: string,
+  commitFn = commitTicket,
 ): Promise<{ from: TicketPhase }> {
   const ticket = await readTicket(stateDir, id);
   const from = ticket.phase;
@@ -34,7 +35,7 @@ export async function performDecline(
     to: "wont-do",
   });
 
-  await commitTicket(stateDir, id, `decline: ${id}`);
+  await commitFn(stateDir, id, `decline: ${id}`);
 
   return { from };
 }

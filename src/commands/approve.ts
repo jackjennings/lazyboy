@@ -6,6 +6,7 @@ import type { Command } from "./types.ts";
 export async function performApprove(
   stateDir: string,
   id: string,
+  commitFn = commitTicket,
 ): Promise<void> {
   const ticket = await readTicket(stateDir, id);
   const now = Temporal.Now.instant().toString();
@@ -19,7 +20,7 @@ export async function performApprove(
     approvals: [...ticket.approvals, entry],
     updated: now,
   });
-  await commitTicket(stateDir, id, `approve: ${id}`);
+  await commitFn(stateDir, id, `approve: ${id}`);
 }
 
 export const approve: Command = {

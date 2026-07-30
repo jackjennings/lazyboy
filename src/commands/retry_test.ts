@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
 import type { TicketState } from "../state/types.ts";
@@ -22,34 +23,12 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   };
 }
 
-async function setupGitStateDir(ticket: TicketState): Promise<string> {
-  const stateDir = await Deno.makeTempDir();
-  await writeTicket(stateDir, ticket);
-  await new Deno.Command("git", { args: ["init"], cwd: stateDir }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.email", "test@test.com"],
-    cwd: stateDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["config", "user.name", "Test"],
-    cwd: stateDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["add", "-A"],
-    cwd: stateDir,
-  }).output();
-  await new Deno.Command("git", {
-    args: ["commit", "-m", "initial"],
-    cwd: stateDir,
-  }).output();
-  return stateDir;
-}
-
 Deno.test(
   "performRetry: throws when ticket is not in needs-attention",
   async () => {
     const ticket = makeTicket({ phase: "spec", status: "waiting" });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
     try {
       await assertRejects(
         () => performRetry(stateDir, ticket.id),
@@ -66,7 +45,8 @@ Deno.test(
   "performRetry: throws when ticket is running",
   async () => {
     const ticket = makeTicket({ phase: "plan", status: "running" });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
     try {
       await assertRejects(
         () => performRetry(stateDir, ticket.id),
@@ -82,13 +62,12 @@ Deno.test(
 Deno.test(
   "performRetry: resets spec/needs-attention to spec/waiting",
   async () => {
-    const ticket = makeTicket({
-      phase: "spec",
-      status: "needs-attention",
-    });
-    const stateDir = await setupGitStateDir(ticket);
+    const ticket = makeTicket({ phase: "spec", status: "needs-attention" });
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
+      await performRetry(stateDir, ticket.id, commitFn);
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );
@@ -104,13 +83,12 @@ Deno.test(
 Deno.test(
   "performRetry: resets intake/needs-attention to intake/new",
   async () => {
-    const ticket = makeTicket({
-      phase: "intake",
-      status: "needs-attention",
-    });
-    const stateDir = await setupGitStateDir(ticket);
+    const ticket = makeTicket({ phase: "intake", status: "needs-attention" });
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
+      await performRetry(stateDir, ticket.id, commitFn);
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );
@@ -137,9 +115,11 @@ Deno.test(
         },
       ],
     });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
+      await performRetry(stateDir, ticket.id, commitFn);
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );
@@ -155,9 +135,11 @@ Deno.test(
   "performRetry: appends status-transition log entry",
   async () => {
     const ticket = makeTicket({ phase: "plan", status: "needs-attention" });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
+      await performRetry(stateDir, ticket.id, commitFn);
       const log = await Deno.readTextFile(
         join(stateDir, ticket.id, "log.ndjson"),
       );
@@ -176,9 +158,11 @@ Deno.test(
   "performRetry: appends log with 'new' as target for intake phase",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "needs-attention" });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
+      await performRetry(stateDir, ticket.id, commitFn);
       const log = await Deno.readTextFile(
         join(stateDir, ticket.id, "log.ndjson"),
       );
@@ -194,22 +178,23 @@ Deno.test(
 );
 
 Deno.test(
-  "performRetry: makes a git commit",
+  "performRetry: calls commitFn with stateDir, id, and retry message",
   async () => {
     const ticket = makeTicket({
       phase: "enrichment",
       status: "needs-attention",
     });
-    const stateDir = await setupGitStateDir(ticket);
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
     try {
-      await performRetry(stateDir, ticket.id);
-      const result = await new Deno.Command("git", {
-        args: ["log", "--oneline"],
-        cwd: stateDir,
-        stdout: "piped",
-      }).output();
-      const log = new TextDecoder().decode(result.stdout);
-      assertStringIncludes(log, `retry: ${ticket.id}`);
+      await performRetry(stateDir, ticket.id, commitFn);
+      assertSpyCalls(commitFn, 1);
+      assertEquals(commitFn.calls[0].args, [
+        stateDir,
+        ticket.id,
+        `retry: ${ticket.id}`,
+      ]);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }

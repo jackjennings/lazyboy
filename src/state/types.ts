@@ -106,7 +106,7 @@ export interface LearningEntry {
   ticketId: string;
   repo: string;
   targetFile: string;
-  content: string;
+  intent: string;
   prTitle: string;
   prBody: string;
 }

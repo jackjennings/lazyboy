@@ -62,6 +62,7 @@ import { generateShortTitle as apfelGenerateShortTitle } from "./short-title.ts"
 import { makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
+import { applyLearning } from "./apply-learning.ts";
 import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
@@ -670,7 +671,6 @@ export function composeTickDeps(
     processLearnings: async () => {
       const entries = await listLearnings(stateDir);
       for (const entry of entries) {
-        await removeLearning(stateDir, entry.id);
         try {
           const localRepoPath = await findLocalRepo(
             config.codebase.roots.map(expandHome),
@@ -686,11 +686,22 @@ export function composeTickDeps(
           );
           try {
             const targetPath = join(wt.path, entry.targetFile);
+            const currentContent = await Deno.readTextFile(targetPath).catch(
+              () => "",
+            );
+            const applied = await applyLearning(
+              currentContent,
+              entry.intent,
+              fetch,
+            );
+            if (applied === null) {
+              throw new Error("applyLearning returned no content");
+            }
             await Deno.mkdir(
               join(wt.path, ...entry.targetFile.split("/").slice(0, -1)),
               { recursive: true },
             );
-            await Deno.writeTextFile(targetPath, entry.content);
+            await Deno.writeTextFile(targetPath, applied);
             const run = (cmd: string[]) =>
               new Deno.Command(cmd[0], {
                 args: cmd.slice(1),
@@ -708,6 +719,7 @@ export function composeTickDeps(
               "--body",
               entry.prBody,
             ]);
+            await removeLearning(stateDir, entry.id);
           } finally {
             await removeWorktree(wt);
           }

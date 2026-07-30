@@ -23,7 +23,8 @@ Deno.test(
     assertEquals(content.includes('"ticketId"'), true);
     assertEquals(content.includes('"repo"'), true);
     assertEquals(content.includes('"targetFile"'), true);
-    assertEquals(content.includes('"content"'), true);
+    assertEquals(content.includes('"intent"'), true);
+    assertEquals(content.includes('"content"'), false);
     assertEquals(content.includes('"prTitle"'), true);
     assertEquals(content.includes('"prBody"'), true);
   },

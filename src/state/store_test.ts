@@ -752,7 +752,7 @@ function makeLearning(overrides: Partial<LearningEntry> = {}): LearningEntry {
     ticketId: "github/jackjennings/lazyboy/226",
     repo: "jackjennings/lazyboy",
     targetFile: "src/phases/prompts/implementation.md",
-    content: "updated content",
+    intent: "Enumerate all call sites before renaming a function.",
     prTitle:
       "Improve prompt to prevent edit fragmentation observed in github/jackjennings/lazyboy/226",
     prBody: "Body text",
@@ -772,7 +772,10 @@ Deno.test("appendLearning: writes JSON entry to learnings/<id>.json", async () =
     assertEquals(parsed.ticketId, "github/jackjennings/lazyboy/226");
     assertEquals(parsed.repo, "jackjennings/lazyboy");
     assertEquals(parsed.targetFile, "src/phases/prompts/implementation.md");
-    assertEquals(parsed.content, "updated content");
+    assertEquals(
+      parsed.intent,
+      "Enumerate all call sites before renaming a function.",
+    );
     assertEquals(
       parsed.prTitle,
       "Improve prompt to prevent edit fragmentation observed in github/jackjennings/lazyboy/226",

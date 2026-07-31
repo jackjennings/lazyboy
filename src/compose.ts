@@ -498,6 +498,10 @@ export function composeTickDeps(
           },
           writeTicket,
           appendLog: appendTicketLog,
+          writeLearning: async (learning, intent) => {
+            const id = compactTimestamp(Temporal.Now.zonedDateTimeISO("UTC"));
+            await writeLearning(stateDir, { id, ...learning }, intent);
+          },
         }),
         spawnCITriageAction({
           getPRChecks: async (prUrl) => {
@@ -628,7 +632,9 @@ export function composeTickDeps(
               `flakiness with no code correlation. Default to PR_CAUSED unless there is positive ` +
               `evidence of infrastructure failure — a red CI run on a PR branch is overwhelmingly ` +
               `the PR's fault. Write your reasoning, then end your output with exactly one line: ` +
-              `\`VERDICT: PR_CAUSED\` or \`VERDICT: INFRA\`.`;
+              `\`VERDICT: PR_CAUSED\` or \`VERDICT: INFRA\`. ` +
+              `When the verdict is PR_CAUSED, add a second line immediately after: ` +
+              `\`LEARNING: <one or two sentences describing what the implementation phase should have checked or validated to catch this failure before it reached CI>\`.`;
             return spawnPhase({
               ticketDir: opts.ticketDir,
               stateDir,

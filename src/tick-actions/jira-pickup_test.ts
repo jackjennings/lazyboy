@@ -4,7 +4,7 @@ import type { TicketState } from "../state/types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
-    id: "jira-PROJ-42",
+    id: "jira/PROJ-42",
     provider: "jira",
     title: "T",
     url: "https://myorg.atlassian.net/browse/PROJ-42",
@@ -89,9 +89,9 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
   }).run(makeTicket(), "/state");
   assertEquals(result, null);
   assertEquals(calls.length, 2);
-  assertEquals(calls[0].url.includes("PROJ-42/transitions"), true);
+  assertEquals(calls[0].url.includes("/issue/PROJ-42/transitions"), true);
   assertEquals(calls[0].method, "GET");
-  assertEquals(calls[1].url.includes("PROJ-42/transitions"), true);
+  assertEquals(calls[1].url.includes("/issue/PROJ-42/transitions"), true);
   assertEquals(calls[1].method, "POST");
   assertEquals(
     JSON.parse(calls[1].body!),

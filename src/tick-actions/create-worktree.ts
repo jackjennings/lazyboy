@@ -101,7 +101,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
           try {
             const clonedPath = await deps.cloneRemoteRepo(slug);
             resolvedRepos.push({ slug, repoPath: clonedPath });
-          } catch {
+          } catch (e) {
             const updated = {
               ...ticket,
               status: "needs-attention" as const,
@@ -111,6 +111,8 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
             await deps.appendLog(stateDir, ticket.id, {
               event: "needs-attention",
               reason: "clone-failed",
+              slug,
+              message: String(e),
             });
             return updated;
           }

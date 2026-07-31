@@ -351,6 +351,14 @@ Deno.test(
       (logged[0] as Record<string, unknown>).reason,
       "clone-failed",
     );
+    assertEquals(
+      (logged[0] as Record<string, unknown>).slug,
+      "myorg/myrepo",
+    );
+    assertEquals(
+      (logged[0] as Record<string, unknown>).message,
+      "Error: clone failed",
+    );
   },
 );
 

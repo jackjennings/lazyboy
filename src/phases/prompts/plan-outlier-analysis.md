@@ -52,12 +52,25 @@ Follow these steps:
    pattern, the root cause, and the exact prompt change made (full diff or
    before/after).
 
-8. Open a draft PR against `jackjennings/lazyboy`:
+8. Open a draft PR against `jackjennings/lazyboy`. Before creating it, check the
+   lazyboy worktree for a pull request template. Look for each path in order and
+   stop at the first match:
+
+   - `.github/pull_request_template.md`
+   - `.github/PULL_REQUEST_TEMPLATE.md`
+   - `PULL_REQUEST_TEMPLATE.md`
+
+   If a file is found, use its section structure as the skeleton for the body,
+   filling each section with real content. If no file exists at any of those
+   paths — including when only a `.github/PULL_REQUEST_TEMPLATE/` directory is
+   present — use a free-form body.
+
    ```
    gh pr create --draft \
      --title "Improve plan prompt to prevent outlier pattern observed in <ticketId>" \
      --body "..."
    ```
+
    The body must cite the triggering ticket ID, the turns/criterionCount ratio,
    and the root cause identified in step 3 or 4.
 

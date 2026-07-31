@@ -133,6 +133,19 @@ message. Then push the branch and open a pull request using the `gh` CLI. Always
 create pull requests in draft mode — lazyboy automatically promotes them to
 ready-for-review when the implementation phase is approved.
 
+Before running `gh pr create`, check the worktree for a pull request template.
+Look for each path in order and stop at the first match:
+
+- `.github/pull_request_template.md`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `PULL_REQUEST_TEMPLATE.md`
+
+If a file is found, use its section structure as the skeleton for the `--body`
+value. Fill each section with real content derived from the work done — do not
+paste the raw template with placeholder text intact. If no file exists at any of
+those paths — including when only a `.github/PULL_REQUEST_TEMPLATE/` directory
+is present — use a free-form body.
+
 gh pr create --draft --title "<title>" --body "<body>"
 
 If this PR depends on any other pull request — including one in a different

@@ -31,7 +31,7 @@ Deno.test("formatTickLogLine: no trailing key=value when no extra fields", () =>
     '{"ts":"2026-07-29T12:00:00Z","event":"tick-already-running"}',
   );
   const parts = line.trim().split(" ");
-  assertEquals(parts.length, 2); // HH:MM:SS + event
+  assertEquals(parts.length, 3); // timestamp + event
 });
 
 Deno.test("formatTickLogLine: returns verbatim string on JSON parse failure", () => {
@@ -43,15 +43,22 @@ Deno.test("formatTickLogLine: renders id field from combined log entry", () => {
     '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"status-transition","from":"new","to":"running"}',
   );
   assertEquals(line.includes("status-transition"), true);
-  assertEquals(line.includes("id=github/jackjennings/lazyboy/258"), true);
+  assertEquals(line.includes("github/jackjennings/lazyboy/258"), true);
   assertEquals(line.includes("from=new"), true);
+});
+
+Deno.test("formatTickLogLine: renders id second", () => {
+  const line = formatTickLogLine(
+    '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"tick-already-running"}',
+  );
+  assertEquals(line.split(" ", 3)[1], "github/jackjennings/lazyboy/258");
 });
 
 Deno.test("formatTickLogLine: renders context with event", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"failure","context":"agent"}',
   );
-  assertEquals(line.split(" ", 3)[1], "agent/failure");
+  assertEquals(line.split(" ", 3)[2], "agent/failure");
 });
 
 // ── formatHudHeader ───────────────────────────────────────────────────────────

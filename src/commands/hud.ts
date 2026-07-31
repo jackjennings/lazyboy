@@ -23,12 +23,10 @@ export function formatTickLogLine(raw: string): string {
   } catch {
     return raw;
   }
-  const ts = String(entry.ts ?? "");
-  const event = String(entry.event ?? "");
-  const context = String(entry.context ?? "");
+  const { ts = "", event = "", context = "", id = "", ...rest } = entry;
   let timeStr = "??:??:??";
   try {
-    const zdt = Temporal.Instant.from(ts).toZonedDateTimeISO(
+    const zdt = Temporal.Instant.from(String(ts)).toZonedDateTimeISO(
       Temporal.Now.timeZoneId(),
     );
     timeStr = zdt.toString({
@@ -39,14 +37,11 @@ export function formatTickLogLine(raw: string): string {
   } catch {
     // malformed ts
   }
-  const extras = Object.entries(entry)
-    .filter(([k]) => k !== "ts" && k !== "event" && k !== "context")
+  const extras = Object.entries(rest)
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   const subject = context ? `${context}/${event}` : event;
-  return extras
-    ? `${timeStr} ${subject} ${extras}`
-    : `${timeStr} ${subject}`;
+  return extras ? `${timeStr} ${id} ${subject} ${extras}` : `${timeStr} ${id} ${subject}`;
 }
 
 export function formatHudHeader(

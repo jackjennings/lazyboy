@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { dim, stripAnsiCode } from "@std/fmt/colors";
 import {
   formatHudHeader,
@@ -9,11 +9,11 @@ import {
 
 // ── formatTickLogLine ─────────────────────────────────────────────────────────
 
-Deno.test("formatTickLogLine: formats as HH:MM:SS event key=value", () => {
+Deno.test("formatTickLogLine: formats time", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"oh no"}',
   );
-  assertEquals(/^\d{2}:\d{2}:\d{2}/.test(line), true);
+  assertMatch(line, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   assertEquals(line.includes("tick-failed"), true);
   assertEquals(line.includes("error=oh no"), true);
 });

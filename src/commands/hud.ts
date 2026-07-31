@@ -30,9 +30,11 @@ export function formatTickLogLine(raw: string): string {
     const zdt = Temporal.Instant.from(ts).toZonedDateTimeISO(
       Temporal.Now.timeZoneId(),
     );
-    timeStr = `${String(zdt.hour).padStart(2, "0")}:${
-      String(zdt.minute).padStart(2, "0")
-    }:${String(zdt.second).padStart(2, "0")}`;
+    timeStr = zdt.toString({
+      fractionalSecondDigits: 0,
+      offset: "never",
+      timeZoneName: "never",
+    })
   } catch {
     // malformed ts
   }

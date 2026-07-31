@@ -27,7 +27,7 @@ export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
       ticket: TicketState,
       stateDir: string,
     ): Promise<TicketState | null> {
-      const issueKey = ticket.id.replace(/^jira-/, "");
+      const issueKey = ticket.id.replace(/^jira\//, "");
       try {
         await jiraTransition({
           baseUrl: opts.baseUrl,

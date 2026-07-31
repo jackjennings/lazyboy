@@ -47,6 +47,13 @@ Deno.test("formatTickLogLine: renders id field from combined log entry", () => {
   assertEquals(line.includes("from=new"), true);
 });
 
+Deno.test("formatTickLogLine: renders context with event", () => {
+  const line = formatTickLogLine(
+    '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"failure","context":"agent"}',
+  );
+  assertEquals(line.split(" ", 3)[1], "agent/failure");
+});
+
 // ── formatHudHeader ───────────────────────────────────────────────────────────
 
 Deno.test("formatHudHeader: shows enabled badge when enabled is true", () => {

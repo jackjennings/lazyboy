@@ -25,6 +25,7 @@ export function formatTickLogLine(raw: string): string {
   }
   const ts = String(entry.ts ?? "");
   const event = String(entry.event ?? "");
+  const context = String(entry.context ?? "");
   let timeStr = "??:??:??";
   try {
     const zdt = Temporal.Instant.from(ts).toZonedDateTimeISO(
@@ -34,15 +35,18 @@ export function formatTickLogLine(raw: string): string {
       fractionalSecondDigits: 0,
       offset: "never",
       timeZoneName: "never",
-    })
+    });
   } catch {
     // malformed ts
   }
   const extras = Object.entries(entry)
-    .filter(([k]) => k !== "ts" && k !== "event")
+    .filter(([k]) => k !== "ts" && k !== "event" && k !== "context")
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
-  return extras ? `${timeStr} ${event} ${extras}` : `${timeStr} ${event}`;
+  const subject = context ? `${context}/${event}` : event;
+  return extras
+    ? `${timeStr} ${subject} ${extras}`
+    : `${timeStr} ${subject}`;
 }
 
 export function formatHudHeader(
@@ -60,9 +64,7 @@ export function logPaneLines(lines: string[]): string[] {
   return lines.length === 0 ? [dim("(no logs)")] : lines;
 }
 
-export async function openLogWatch(
-  parentDir: string,
-): Promise<Deno.FsWatcher> {
+export async function openLogWatch(parentDir: string): Promise<Deno.FsWatcher> {
   await Deno.mkdir(parentDir, { recursive: true });
   return Deno.watchFs(parentDir);
 }
@@ -94,7 +96,7 @@ async function readState(
         t.approvals,
         formatTokens(tokenTotals[i]),
         t.title,
-      )
+      ),
     ),
   ];
   return {

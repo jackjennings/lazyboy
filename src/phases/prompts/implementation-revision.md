@@ -28,6 +28,19 @@ git push origin HEAD
 Do not open a new pull request. The pull request already exists and will update
 automatically when you push. Do not modify the `prs` array in meta.md.
 
+After pushing, update any open pull request descriptions. Read `ticket.prs` from
+`meta.md`. For each entry where `merged` is `false` and `closed` is not `true`,
+replace the PR description with a freshly written summary of the current
+implementation state. The description must include the GitHub issue URL from the
+`url` field in `meta.md`'s YAML frontmatter. Use:
+
+```
+gh pr edit <url> --body '<description>'
+```
+
+If `ticket.prs` is absent, empty, or every entry has `merged: true` or
+`closed: true`, do nothing — skip this step entirely.
+
 {{agents-md-update}}
 
 Do not write any files outside the repository worktree and the output file path

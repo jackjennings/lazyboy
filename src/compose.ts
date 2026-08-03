@@ -166,6 +166,37 @@ export function deriveOrgFromTicketDir(
   return parts[1] ?? "";
 }
 
+export async function resolveFailingOutput(
+  outputText: string | undefined,
+  externalId: string | undefined,
+  name: string,
+  repoSlug: string,
+  token: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string> {
+  if (outputText) return outputText;
+  if (externalId) {
+    try {
+      const res = await fetcher(
+        `https://api.github.com/repos/${repoSlug}/actions/jobs/${externalId}/logs`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+          },
+        },
+      );
+      if (res.ok) {
+        const text = await res.text();
+        return text.slice(-20480);
+      }
+    } catch {
+      // fall through to name fallback
+    }
+  }
+  return name;
+}
+
 export function composeTickDeps(
   config: Config,
 ): TickServiceDeps {
@@ -440,6 +471,7 @@ export function composeTickDeps(
               runs as Array<{
                 conclusion: string;
                 name: string;
+                external_id?: string;
                 output?: { text?: string };
               }>
             ).find((r) => r.conclusion === "failure");
@@ -447,7 +479,13 @@ export function composeTickDeps(
             return {
               runId: String(suite.id),
               conclusion: suite.conclusion as "failure" | "action_required",
-              failingOutput: failing?.output?.text ?? stepName,
+              failingOutput: await resolveFailingOutput(
+                failing?.output?.text,
+                failing?.external_id,
+                stepName,
+                repoSlug,
+                token,
+              ),
             };
           },
           getPRDiffFiles: async (prUrl) => {

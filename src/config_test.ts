@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertFalse, assertRejects } from "@std/assert";
 import { expandHome, loadConfig } from "./config.ts";
 import { join } from "@std/path";
 
@@ -38,7 +38,7 @@ concurrency = 1
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.tick.resolveCIFailures, true);
+  assert(cfg.tick.resolveCIFailures);
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -59,7 +59,7 @@ resolve_ci_failures = false
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.tick.resolveCIFailures, false);
+  assertFalse(cfg.tick.resolveCIFailures);
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -103,7 +103,7 @@ concurrency = 1
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.tick.principles, true);
+  assert(cfg.tick.principles);
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -124,7 +124,7 @@ principles = false
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.tick.principles, false);
+  assertFalse(cfg.tick.principles);
   await Deno.remove(dir, { recursive: true });
 });
 

@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assertArrayIncludes,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+} from "@std/assert";
 import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import { join } from "@std/path";
 import {
@@ -151,8 +156,8 @@ Deno.test(
       ].join("\n"),
     );
     const models = parseAnthropicPricingPage(md, TODAY);
-    assertEquals(Object.keys(models).includes("claude-unknown"), false);
-    assertEquals(Object.keys(models).includes("claude-haiku-4-5"), true);
+    assertFalse(Object.keys(models).includes("claude-unknown"));
+    assertArrayIncludes(Object.keys(models), ["claude-haiku-4-5"]);
   },
 );
 
@@ -232,7 +237,7 @@ Deno.test(
   () => {
     const usage = makeUsage({ model: "claude-haiku-4-5-20251001" });
     const cost = calculateAnthropicCost(usage, HAIKU_PRICING);
-    assertEquals(cost !== null, true);
+    assertNotEquals(cost, null);
   },
 );
 
@@ -370,7 +375,7 @@ Deno.test(
         await Deno.stat(join(tempHome, ".lazyboy", "anthropic-pricing.json"));
         exists = true;
       } catch { /* not found */ }
-      assertEquals(exists, false);
+      assertFalse(exists);
     } finally {
       await Deno.remove(tempHome, { recursive: true });
     }

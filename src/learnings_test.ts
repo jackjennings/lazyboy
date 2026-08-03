@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import {
   type LearningDeps,
@@ -123,7 +123,7 @@ Deno.test("processLearnings: marks a learning done when its PR merged", async ()
   await processLearnings(deps);
   assertEquals(written.length, 1);
   assertEquals(written[0].learning.status, "done");
-  assertEquals(written[0].learning.prs[0].merged, true);
+  assert(written[0].learning.prs[0].merged);
 });
 
 Deno.test("processLearnings: marks a learning wont-do when its PR is closed unmerged", async () => {
@@ -134,7 +134,7 @@ Deno.test("processLearnings: marks a learning wont-do when its PR is closed unme
   await processLearnings(deps);
   assertEquals(written.length, 1);
   assertEquals(written[0].learning.status, "wont-do");
-  assertEquals(written[0].learning.prs[0].closed, true);
+  assert(written[0].learning.prs[0].closed);
 });
 
 Deno.test("processLearnings: marks a learning needs-attention when apply throws", async () => {

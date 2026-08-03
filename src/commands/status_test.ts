@@ -1,4 +1,11 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertGreater,
+  assertLess,
+  assertStringIncludes,
+} from "@std/assert";
 import { join } from "@std/path";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { TicketState, TicketStatus } from "../state/types.ts";
@@ -37,14 +44,14 @@ function makeTicket(overrides: Partial<TicketState>): TicketState {
 Deno.test("compareTickets: orders by status index within same phase", () => {
   const a = makeTicket({ phase: "spec", status: "new" });
   const b = makeTicket({ phase: "spec", status: "waiting" });
-  assertEquals(compareTickets(a, b) < 0, true);
-  assertEquals(compareTickets(b, a) > 0, true);
+  assertLess(compareTickets(a, b), 0);
+  assertGreater(compareTickets(b, a), 0);
 });
 
 Deno.test("compareTickets: phase difference overrides status", () => {
   const a = makeTicket({ phase: "intake", status: "needs-attention" });
   const b = makeTicket({ phase: "spec", status: "new" });
-  assertEquals(compareTickets(a, b) < 0, true);
+  assertLess(compareTickets(a, b), 0);
 });
 
 Deno.test("compareTickets: same phase and status orders by provider then id", () => {
@@ -60,7 +67,7 @@ Deno.test("compareTickets: same phase and status orders by provider then id", ()
     provider: "github",
     id: "github/a/repo/2",
   });
-  assertEquals(compareTickets(a, b) < 0, true);
+  assertLess(compareTickets(a, b), 0);
 });
 
 Deno.test("compareTickets: unknown status sorts last within phase", () => {
@@ -69,7 +76,7 @@ Deno.test("compareTickets: unknown status sorts last within phase", () => {
     phase: "intake",
     status: "unrecognized" as TicketStatus,
   });
-  assertEquals(compareTickets(a, b) < 0, true);
+  assertLess(compareTickets(a, b), 0);
 });
 
 // ── STATUS_SEQUENCE ───────────────────────────────────────────────────────────
@@ -77,23 +84,21 @@ Deno.test("compareTickets: unknown status sorts last within phase", () => {
 Deno.test("STATUS_SEQUENCE is exported and ordered correctly", () => {
   assertEquals(STATUS_SEQUENCE[0], "new");
   assertEquals(STATUS_SEQUENCE[STATUS_SEQUENCE.length - 1], "done");
-  assertEquals(
-    STATUS_SEQUENCE.indexOf("running") < STATUS_SEQUENCE.indexOf("waiting"),
-    true,
+  assertLess(
+    STATUS_SEQUENCE.indexOf("running"),
+    STATUS_SEQUENCE.indexOf("waiting"),
   );
-  assertEquals(
-    STATUS_SEQUENCE.indexOf("waiting") < STATUS_SEQUENCE.indexOf("revising"),
-    true,
+  assertLess(
+    STATUS_SEQUENCE.indexOf("waiting"),
+    STATUS_SEQUENCE.indexOf("revising"),
   );
-  assertEquals(
-    STATUS_SEQUENCE.indexOf("revising") <
-      STATUS_SEQUENCE.indexOf("needs-attention"),
-    true,
+  assertLess(
+    STATUS_SEQUENCE.indexOf("revising"),
+    STATUS_SEQUENCE.indexOf("needs-attention"),
   );
-  assertEquals(
-    STATUS_SEQUENCE.indexOf("needs-attention") <
-      STATUS_SEQUENCE.indexOf("done"),
-    true,
+  assertLess(
+    STATUS_SEQUENCE.indexOf("needs-attention"),
+    STATUS_SEQUENCE.indexOf("done"),
   );
 });
 
@@ -213,7 +218,7 @@ Deno.test("formatStatusRow: pads ID field to 36 characters", () => {
     "0",
     "My ticket",
   );
-  assertEquals(row.startsWith("github/jackjennings/lazyboy/23      "), true);
+  assert(row.startsWith("github/jackjennings/lazyboy/23      "));
 });
 
 Deno.test("formatStatusHeader: separator line is 117 characters", () => {
@@ -224,20 +229,20 @@ Deno.test("formatStatusHeader: separator line is 117 characters", () => {
 // ── shouldHideTicket ──────────────────────────────────────────────────────────
 
 Deno.test("shouldHideTicket: returns true for merge/done", () => {
-  assertEquals(shouldHideTicket("merge", "done"), true);
+  assert(shouldHideTicket("merge", "done"));
 });
 
 Deno.test("shouldHideTicket: returns true for wont-do (any status)", () => {
-  assertEquals(shouldHideTicket("wont-do", "done"), true);
+  assert(shouldHideTicket("wont-do", "done"));
 });
 
 Deno.test("shouldHideTicket: returns false for merge/running", () => {
-  assertEquals(shouldHideTicket("merge", "running"), false);
+  assertFalse(shouldHideTicket("merge", "running"));
 });
 
 Deno.test("shouldHideTicket: returns false for active phases", () => {
-  assertEquals(shouldHideTicket("intake", "running"), false);
-  assertEquals(shouldHideTicket("implementation", "waiting"), false);
+  assertFalse(shouldHideTicket("intake", "running"));
+  assertFalse(shouldHideTicket("implementation", "waiting"));
 });
 
 // ── readTicketCost ────────────────────────────────────────────────────────────
@@ -354,49 +359,49 @@ Deno.test(
 Deno.test("formatDetailView: renders phase and status", () => {
   const ticket = makeTicket({ phase: "spec", status: "running" });
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(out.startsWith("Phase    spec\nStatus   running\n"), true);
+  assert(out.startsWith("Phase    spec\nStatus   running\n"));
 });
 
 Deno.test("formatDetailView: renders em-dash for null tokens", () => {
   const ticket = makeTicket({});
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(out.includes("Tokens   —"), true);
+  assertStringIncludes(out, "Tokens   —");
 });
 
 Deno.test("formatDetailView: renders formatted token count", () => {
   const ticket = makeTicket({});
   const out = formatDetailView(ticket, 902900, { cost: null, partial: false });
-  assertEquals(out.includes("Tokens   902.9k"), true);
+  assertStringIncludes(out, "Tokens   902.9k");
 });
 
 Deno.test("formatDetailView: renders em-dash when cost is null", () => {
   const ticket = makeTicket({});
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(out.includes("Cost     —"), true);
+  assertStringIncludes(out, "Cost     —");
 });
 
 Deno.test("formatDetailView: renders $X.XX for full cost", () => {
   const ticket = makeTicket({});
   const out = formatDetailView(ticket, null, { cost: 1.23, partial: false });
-  assertEquals(out.includes("Cost     $1.23"), true);
+  assertStringIncludes(out, "Cost     $1.23");
 });
 
 Deno.test("formatDetailView: renders ~$X.XX for partial cost", () => {
   const ticket = makeTicket({});
   const out = formatDetailView(ticket, null, { cost: 1.23, partial: true });
-  assertEquals(out.includes("Cost     ~$1.23"), true);
+  assertStringIncludes(out, "Cost     ~$1.23");
 });
 
 Deno.test("formatDetailView: renders em-dash when prs is absent", () => {
   const ticket = makeTicket({ prs: undefined });
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(out.includes("PRs      —"), true);
+  assertStringIncludes(out, "PRs      —");
 });
 
 Deno.test("formatDetailView: renders em-dash when prs is empty", () => {
   const ticket = makeTicket({ prs: [] });
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(out.includes("PRs      —"), true);
+  assertStringIncludes(out, "PRs      —");
 });
 
 Deno.test("formatDetailView: renders single PR url on PRs line", () => {
@@ -409,10 +414,7 @@ Deno.test("formatDetailView: renders single PR url on PRs line", () => {
     }],
   });
   const out = formatDetailView(ticket, null, { cost: null, partial: false });
-  assertEquals(
-    out.includes("PRs      https://github.com/a/b/pull/1"),
-    true,
-  );
+  assertStringIncludes(out, "PRs      https://github.com/a/b/pull/1");
 });
 
 Deno.test(
@@ -435,11 +437,9 @@ Deno.test(
       ],
     });
     const out = formatDetailView(ticket, null, { cost: null, partial: false });
-    assertEquals(
-      out.includes(
-        "PRs      https://github.com/a/b/pull/1\n         https://github.com/a/b/pull/2",
-      ),
-      true,
+    assertStringIncludes(
+      out,
+      "PRs      https://github.com/a/b/pull/1\n         https://github.com/a/b/pull/2",
     );
   },
 );
@@ -460,7 +460,7 @@ Deno.test(
       ticket.shortTitle ?? ticket.title,
     );
     assertStringIncludes(row, "Short label");
-    assertEquals(row.includes("A very long full title for the issue"), false);
+    assertFalse(row.includes("A very long full title for the issue"));
   },
 );
 

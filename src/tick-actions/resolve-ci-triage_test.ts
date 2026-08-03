@@ -1,4 +1,10 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+  assertStringIncludes,
+} from "@std/assert";
 import { resolveCITriageAction } from "./resolve-ci-triage.ts";
 import type { ResolveCITriageDeps } from "./resolve-ci-triage.ts";
 import type { TicketState } from "../state/types.ts";
@@ -73,26 +79,23 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("resolveCITriageAction: applies when context files exist and pid dead", () => {
-  assertEquals(
+  assert(
     makeAction({ hasCITriageContextFiles: () => true }).applies(makeTicket()),
-    true,
   );
 });
 
 Deno.test("resolveCITriageAction: does not apply when process is alive", () => {
-  assertEquals(
+  assertFalse(
     makeAction({
       hasCITriageContextFiles: () => true,
       isProcessAlive: () => true,
     }).applies(makeTicket()),
-    false,
   );
 });
 
 Deno.test("resolveCITriageAction: does not apply when no context files", () => {
-  assertEquals(
+  assertFalse(
     makeAction({ hasCITriageContextFiles: () => false }).applies(makeTicket()),
-    false,
   );
 });
 
@@ -141,10 +144,10 @@ Deno.test(
     }).run(makeTicket(), "/state");
     assertEquals(issues.length, 1);
     assertEquals(issues[0].repo, "jackjennings/lazyboy");
-    assertEquals(issues[0].title.includes("Fix CI failure"), true);
-    assertEquals(issues[0].body.includes("The error is in a file"), true);
+    assertStringIncludes(issues[0].title, "Fix CI failure");
+    assertStringIncludes(issues[0].body, "The error is in a file");
     assertEquals(removed.length, 2);
-    assertEquals(result !== null, true);
+    assertNotEquals(result, null);
   },
 );
 
@@ -303,12 +306,11 @@ Deno.test(
       createGitHubIssue: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
     }).run(makeTicket(), "/state");
-    assertEquals(removed.some((p) => p.includes("-ci-triage-context-")), true);
-    assertEquals(
+    assert(removed.some((p) => p.includes("-ci-triage-context-")));
+    assert(
       removed.some((p) =>
         p.includes("-ci-triage-") && !p.includes("-context-")
       ),
-      true,
     );
   },
 );
@@ -344,7 +346,7 @@ Deno.test(
     const resolved = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "ci-triage-resolved",
     );
-    assertEquals(resolved !== undefined, true);
+    assertNotEquals(resolved, undefined);
     assertEquals(resolved!.verdict, "PR_CAUSED");
     assertEquals(resolved!.runId, "run-42");
   },

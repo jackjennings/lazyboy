@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { jiraDoneAction } from "./jira-done.ts";
 import type { TicketState } from "../state/types.ts";
 
@@ -51,34 +56,30 @@ const successFetch = makeTransitionsFetch([
 ]);
 
 Deno.test("jiraDoneAction: applies when provider jira, phase merge, status done, providerDone not set", () => {
-  assertEquals(makeAction().applies(makeTicket()), true);
+  assert(makeAction().applies(makeTicket()));
 });
 
 Deno.test("jiraDoneAction: does not apply when providerDone is true", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ providerDone: true })),
-    false,
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when provider is not jira", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ provider: "github" })),
-    false,
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when phase is not merge", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ phase: "implementation" as const })),
-    false,
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when status is not done", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ status: "waiting" })),
-    false,
   );
 });
 
@@ -87,7 +88,7 @@ Deno.test("jiraDoneAction: run returns ticket with providerDone: true on success
     makeTicket(),
     "/state",
   );
-  assertEquals(result?.providerDone, true);
+  assert(result?.providerDone);
 });
 
 Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on success", async () => {
@@ -101,7 +102,7 @@ Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on succ
   }).run(makeTicket(), "/state");
   assertEquals(written.length, 1);
   assertEquals(written[0].id, "jira/PROJ-42");
-  assertEquals(written[0].providerDone, true);
+  assert(written[0].providerDone);
 });
 
 Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for correct issue key", async () => {
@@ -128,7 +129,7 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
       );
     },
   }).run(makeTicket(), "/state");
-  assertEquals(calls[0].url.includes("/issue/PROJ-42/transitions"), true);
+  assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[0].method, "GET");
   assertEquals(calls[1].method, "POST");
   assertEquals(

@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { spawnCITriageAction } from "./spawn-ci-triage.ts";
 import type { CIRunResult, SpawnCITriageDeps } from "./spawn-ci-triage.ts";
@@ -65,36 +70,34 @@ function makeDeps(
 
 Deno.test("spawnCITriageAction: applies when ticket has unmerged PR", () => {
   const action = spawnCITriageAction(makeDeps());
-  assertEquals(action.applies(makeTicket()), true);
+  assert(action.applies(makeTicket()));
 });
 
 Deno.test(
   "spawnCITriageAction: does not apply when all PRs merged",
   () => {
     const action = spawnCITriageAction(makeDeps());
-    assertEquals(
+    assertFalse(
       action.applies(
         makeTicket({
           prs: [{ url: "u", title: "T", dependsOn: [], merged: true }],
         }),
       ),
-      false,
     );
   },
 );
 
 Deno.test("spawnCITriageAction: does not apply when prs is undefined", () => {
   const action = spawnCITriageAction(makeDeps());
-  assertEquals(action.applies(makeTicket({ prs: undefined })), false);
+  assertFalse(action.applies(makeTicket({ prs: undefined })));
 });
 
 Deno.test(
   "spawnCITriageAction: does not apply when status is needs-attention",
   () => {
     const action = spawnCITriageAction(makeDeps());
-    assertEquals(
+    assertFalse(
       action.applies(makeTicket({ status: "needs-attention" })),
-      false,
     );
   },
 );
@@ -103,7 +106,7 @@ Deno.test("spawnCITriageAction: does not apply when process is alive", () => {
   const action = spawnCITriageAction(
     makeDeps({ isProcessAlive: () => true }),
   );
-  assertEquals(action.applies(makeTicket()), false);
+  assertFalse(action.applies(makeTicket()));
 });
 
 // ── no failure → null ─────────────────────────────────────────────────────────
@@ -135,7 +138,7 @@ Deno.test(
       }),
     ).run(makeTicket(), "/state");
     assertEquals(result, null);
-    assertEquals(spawnCalled, false);
+    assertFalse(spawnCalled);
   },
 );
 
@@ -174,8 +177,8 @@ Deno.test(
         },
       }),
     ).run(makeTicket(), "/state");
-    assertEquals(spawnCalled, true);
-    assertEquals(result?.ciHandledRunIds?.includes("run-1"), true);
+    assert(spawnCalled);
+    assert(result?.ciHandledRunIds?.includes("run-1"));
   },
 );
 
@@ -197,7 +200,7 @@ Deno.test(
         },
       }),
     ).run(makeTicket(), "/state");
-    assertEquals(spawnCalled, true);
+    assert(spawnCalled);
   },
 );
 
@@ -235,7 +238,7 @@ Deno.test(
       }),
     ).run(makeTicket(), "/state");
     assertEquals(result, null);
-    assertEquals(spawnCalled, false);
+    assertFalse(spawnCalled);
   },
 );
 
@@ -259,7 +262,7 @@ Deno.test(
       }),
     ).run(makeTicket(), "/state");
     assertEquals(result, null);
-    assertEquals(spawnCalled, false);
+    assertFalse(spawnCalled);
     assertEquals((logged[0] as Record<string, string>).event, "error");
   },
 );
@@ -308,9 +311,9 @@ Deno.test(
       }),
     ).run(makeTicket(), "/state");
     assertEquals(written.length, 1);
-    assertEquals(written[0].content.includes("TS2345"), true);
-    assertEquals(written[0].content.includes("src/foo.ts"), true);
-    assertEquals(written[0].content.includes("-old\n+new"), true);
+    assertStringIncludes(written[0].content, "TS2345");
+    assertStringIncludes(written[0].content, "src/foo.ts");
+    assertStringIncludes(written[0].content, "-old\n+new");
   },
 );
 
@@ -353,7 +356,7 @@ Deno.test(
       }),
     ).run(makeTicket(), "/state");
     assertEquals(written.length, 1);
-    assertEquals(written[0].ciHandledRunIds?.includes("run-1"), true);
+    assert(written[0].ciHandledRunIds?.includes("run-1"));
   },
 );
 
@@ -371,7 +374,7 @@ Deno.test(
         },
       }),
     ).run(makeTicket({ ciHandledRunIds: ["run-1"] }), "/state");
-    assertEquals(written[0].ciHandledRunIds?.includes("run-1"), true);
-    assertEquals(written[0].ciHandledRunIds?.includes("run-2"), true);
+    assert(written[0].ciHandledRunIds?.includes("run-1"));
+    assert(written[0].ciHandledRunIds?.includes("run-2"));
   },
 );

@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { jiraPickupAction } from "./jira-pickup.ts";
 import type { TicketState } from "../state/types.ts";
 
@@ -46,20 +51,18 @@ function makeTransitionsFetch(
 }
 
 Deno.test("jiraPickupAction: applies when provider is jira and status is new", () => {
-  assertEquals(makeAction().applies(makeTicket()), true);
+  assert(makeAction().applies(makeTicket()));
 });
 
 Deno.test("jiraPickupAction: does not apply when provider is not jira", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ provider: "github" })),
-    false,
   );
 });
 
 Deno.test("jiraPickupAction: does not apply when status is not new", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ status: "running" })),
-    false,
   );
 });
 
@@ -89,9 +92,9 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
   }).run(makeTicket(), "/state");
   assertEquals(result, null);
   assertEquals(calls.length, 2);
-  assertEquals(calls[0].url.includes("/issue/PROJ-42/transitions"), true);
+  assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[0].method, "GET");
-  assertEquals(calls[1].url.includes("/issue/PROJ-42/transitions"), true);
+  assertStringIncludes(calls[1].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[1].method, "POST");
   assertEquals(
     JSON.parse(calls[1].body!),

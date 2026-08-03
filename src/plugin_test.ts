@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 
 const plugin = await Deno.readTextFile(
   new URL("../plugin/lazyboy.plugin.zsh", import.meta.url),
@@ -25,7 +25,7 @@ const ID_ALIASES = ["lap", "lrt", "ldc", "lrv", "lsh", "lta"];
 Deno.test("all 13 aliases are declared", () => {
   for (const [alias, subcommand] of EXPECTED_ALIASES) {
     const line = `alias ${alias}='lazyboy ${subcommand}'`;
-    assertEquals(plugin.includes(line), true, `missing: ${line}`);
+    assertStringIncludes(plugin, line, `missing: ${line}`);
   }
 });
 
@@ -42,12 +42,12 @@ Deno.test("no duplicate aliases", () => {
 });
 
 Deno.test("plugin sources lazyboy completion zsh", () => {
-  assertEquals(plugin.includes("source <(lazyboy completion zsh)"), true);
+  assertStringIncludes(plugin, "source <(lazyboy completion zsh)");
 });
 
 Deno.test("compdef registered for all 6 ID-taking aliases", () => {
   for (const alias of ID_ALIASES) {
     const line = `compdef ${alias}=lazyboy`;
-    assertEquals(plugin.includes(line), true, `missing: ${line}`);
+    assertStringIncludes(plugin, line, `missing: ${line}`);
   }
 });

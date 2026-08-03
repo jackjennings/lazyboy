@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assert, assertFalse, assertStringIncludes } from "@std/assert";
 import { cronLine, detectCronEnabled } from "./cron.ts";
 
 Deno.test("cronLine: contains the lazyboy marker", () => {
@@ -13,27 +13,27 @@ Deno.test("cronLine: references the tick.sh script", () => {
 
 Deno.test("cronLine: does not redirect stdout/stderr to tick.ndjson", () => {
   const line = cronLine("/home/user/.lazyboy");
-  assertEquals(line.includes("tick.log"), false);
-  assertEquals(line.includes(">>"), false);
-  assertEquals(line.includes("2>&1"), false);
+  assertFalse(line.includes("tick.log"));
+  assertFalse(line.includes(">>"));
+  assertFalse(line.includes("2>&1"));
 });
 
 Deno.test("detectCronEnabled: returns true for an active marker line", () => {
   const content = `*/5 * * * * /home/user/.lazyboy/scripts/tick.sh # lazyboy\n`;
-  assertEquals(detectCronEnabled(content), true);
+  assert(detectCronEnabled(content));
 });
 
 Deno.test("detectCronEnabled: returns false when marker line is commented out", () => {
   const content =
     `#*/5 * * * * /home/user/.lazyboy/scripts/tick.sh # lazyboy\n`;
-  assertEquals(detectCronEnabled(content), false);
+  assertFalse(detectCronEnabled(content));
 });
 
 Deno.test("detectCronEnabled: returns false when no marker is present", () => {
   const content = `*/5 * * * * /usr/bin/env backup.sh\n`;
-  assertEquals(detectCronEnabled(content), false);
+  assertFalse(detectCronEnabled(content));
 });
 
 Deno.test("detectCronEnabled: returns false for empty crontab", () => {
-  assertEquals(detectCronEnabled(""), false);
+  assertFalse(detectCronEnabled(""));
 });

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals, assertFalse } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { checkMergedPRAction } from "./check-merged-pr.ts";
 import type { TicketState } from "../state/types.ts";
@@ -46,23 +46,22 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("checkMergedPRAction: applies when merge/waiting with prs array", () => {
-  assertEquals(makeAction().applies(makeTicket()), true);
+  assert(makeAction().applies(makeTicket()));
 });
 
 Deno.test("checkMergedPRAction: does not apply when prs is undefined", () => {
-  assertEquals(makeAction().applies(makeTicket({ prs: undefined })), false);
+  assertFalse(makeAction().applies(makeTicket({ prs: undefined })));
 });
 
 Deno.test("checkMergedPRAction: does not apply when prs is empty", () => {
-  assertEquals(makeAction().applies(makeTicket({ prs: [] })), false);
+  assertFalse(makeAction().applies(makeTicket({ prs: [] })));
 });
 
 Deno.test("checkMergedPRAction: does not apply when not merge/waiting", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(
       makeTicket({ phase: "implementation", status: "running" }),
     ),
-    false,
   );
 });
 

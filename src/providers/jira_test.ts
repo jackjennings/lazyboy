@@ -1,4 +1,10 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { JiraProvider } from "./jira.ts";
 import { compareSortKeys } from "./types.ts";
 
@@ -261,22 +267,22 @@ Deno.test("toSortable: jira/PROJ-3 returns [PROJ, 3]", () => {
 });
 
 Deno.test("toSortable: issue 3 sorts before issue 12 via compareSortKeys", () => {
-  assertEquals(
+  assertLess(
     compareSortKeys(
       JiraProvider.toSortable("jira/PROJ-3"),
       JiraProvider.toSortable("jira/PROJ-12"),
-    ) < 0,
-    true,
+    ),
+    0,
   );
 });
 
 Deno.test("toSortable: different projects sort by key first", () => {
-  assertEquals(
+  assertLess(
     compareSortKeys(
       JiraProvider.toSortable("jira/ABC-100"),
       JiraProvider.toSortable("jira/PROJ-1"),
-    ) < 0,
-    true,
+    ),
+    0,
   );
 });
 
@@ -421,8 +427,8 @@ Deno.test(
     });
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);
-    assertEquals(items[0].description.includes("Parent context"), false);
-    assertEquals(items[0].description.includes("---"), false);
+    assertFalse(items[0].description.includes("Parent context"));
+    assertFalse(items[0].description.includes("---"));
   },
 );
 
@@ -450,6 +456,6 @@ Deno.test(
     });
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);
-    assertEquals(items[0].description.includes("Parent context"), false);
+    assertFalse(items[0].description.includes("Parent context"));
   },
 );

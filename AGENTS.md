@@ -393,6 +393,15 @@ Use the project's import conventions from `deno.json`. For test assertions, use
 `@std/assert` (bare specifier) — not `jsr:@std/assert` or
 `https://deno.land/std@...` URLs.
 
+Reach for the most specific `@std/assert` assertion the check allows; a bare
+`assertEquals` against a boolean, comparison, or containment hides intent and
+produces a worse diff on failure. Match the assertion to the check — booleans
+(`assert`/`assertFalse`), presence (`assertExists`), substring/element
+membership (`assertStringIncludes`/`assertArrayIncludes`), ordering
+(`assertGreater`/`assertLess`), errors (`assertRejects`/`assertThrows`), etc.
+Reserve `assertEquals` for genuine value equality. Do not fold a comparison or
+containment into a boolean just to `assertEquals(..., true)`.
+
 For test doubles (spies, stubs), use `spy` and `stub` from `@std/testing/mock`
 (bare specifier). Do not write hand-rolled stub functions for the same purpose.
 Access recorded calls via `spy.calls` and assert call counts with

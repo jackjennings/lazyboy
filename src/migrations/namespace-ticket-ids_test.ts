@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertFalse } from "@std/assert";
 import { join } from "@std/path";
 import migration from "../../migrations/1752710400-namespace-ticket-ids.ts";
 import type { TicketState } from "../state/types.ts";
@@ -48,7 +48,7 @@ Deno.test(
       } catch {
         oldExists = false;
       }
-      assertEquals(oldExists, false);
+      assertFalse(oldExists);
       const newDir = join(stateDir, "github/jackjennings/lazyboy/1");
       assertEquals(
         await Deno.readTextFile(join(newDir, "meta.md")),
@@ -106,7 +106,7 @@ Deno.test(
       } catch {
         oldExists = false;
       }
-      assertEquals(oldExists, false);
+      assertFalse(oldExists);
       const preserved = await Deno.readTextFile(
         join(stateDir, "jira/PROJ-123", "meta.md"),
       );

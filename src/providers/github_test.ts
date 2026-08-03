@@ -1,4 +1,11 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { GitHubProvider } from "./github.ts";
 import { compareSortKeys } from "./types.ts";
 
@@ -91,9 +98,9 @@ Deno.test("fetchNew passes org-resolved token and login to _fetch", async () => 
   await provider.fetchNew(new Set());
   assertEquals(receivedArgs.length, 2);
   assertEquals(receivedArgs[0].token, "tok_personal");
-  assertEquals(receivedArgs[0].url.includes("assignee=jack"), true);
+  assertStringIncludes(receivedArgs[0].url, "assignee=jack");
   assertEquals(receivedArgs[1].token, "tok_work");
-  assertEquals(receivedArgs[1].url.includes("assignee=work-user"), true);
+  assertStringIncludes(receivedArgs[1].url, "assignee=work-user");
 });
 
 Deno.test("GitHubProvider.close calls _patch with correct API URL and body", async () => {
@@ -171,12 +178,12 @@ Deno.test("toSortable: github/org/repo/12 returns [12]", () => {
 });
 
 Deno.test("toSortable: issue 3 sorts before issue 12 via compareSortKeys", () => {
-  assertEquals(
+  assertLess(
     compareSortKeys(
       GitHubProvider.toSortable("github/jackjennings/lazyboy/3"),
       GitHubProvider.toSortable("github/jackjennings/lazyboy/12"),
-    ) < 0,
-    true,
+    ),
+    0,
   );
 });
 
@@ -186,10 +193,7 @@ Deno.test("GitHubProvider.isPRMerged: returns true for HTTP 204", async () => {
     accountResolver: fixedResolver("fake", "user"),
     _mergeCheck: (_url, _token) => Promise.resolve({ status: 204 }),
   });
-  assertEquals(
-    await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
-    true,
-  );
+  assert(await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"));
 });
 
 Deno.test("GitHubProvider.isPRMerged: returns false for HTTP 404", async () => {
@@ -198,9 +202,8 @@ Deno.test("GitHubProvider.isPRMerged: returns false for HTTP 404", async () => {
     accountResolver: fixedResolver("fake", "user"),
     _mergeCheck: (_url, _token) => Promise.resolve({ status: 404 }),
   });
-  assertEquals(
+  assertFalse(
     await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
-    false,
   );
 });
 

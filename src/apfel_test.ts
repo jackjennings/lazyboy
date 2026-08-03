@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { checkApfelAvailable, startApfelServer } from "./apfel.ts";
 
@@ -8,7 +13,7 @@ Deno.test(
     const run = spy((_args: string[]) =>
       Promise.resolve({ code: 0, stdout: "" })
     );
-    assertEquals(await checkApfelAvailable(run), true);
+    assert(await checkApfelAvailable(run));
     assertSpyCalls(run, 1);
   },
 );
@@ -19,7 +24,7 @@ Deno.test(
     const run = spy((_args: string[]) =>
       Promise.resolve({ code: 5, stdout: "" })
     );
-    assertEquals(await checkApfelAvailable(run), false);
+    assertFalse(await checkApfelAvailable(run));
   },
 );
 
@@ -29,7 +34,7 @@ Deno.test(
     const run = spy((_args: string[]) =>
       Promise.resolve({ code: 127, stdout: "" })
     );
-    assertEquals(await checkApfelAvailable(run), false);
+    assertFalse(await checkApfelAvailable(run));
   },
 );
 
@@ -74,9 +79,9 @@ Deno.test(
         Promise.resolve(new Response("{}", { status: 200 })),
     );
     const result = await startApfelServer(spawn, fetcher);
-    assertEquals(result !== null, true);
+    assertNotEquals(result, null);
     assertEquals(result!.url, "http://127.0.0.1:11434");
-    assertEquals(killed.called, false);
+    assertFalse(killed.called);
   },
 );
 
@@ -95,6 +100,6 @@ Deno.test(
     );
     const result = await startApfelServer(spawn, fetcher);
     assertEquals(result, null);
-    assertEquals(killed.called, true);
+    assert(killed.called);
   },
 );

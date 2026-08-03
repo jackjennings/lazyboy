@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
@@ -53,7 +53,7 @@ Deno.test("performApprove: does not write approved key", async () => {
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
-    assertEquals(meta.includes("approved:"), false);
+    assertFalse(meta.includes("approved:"));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

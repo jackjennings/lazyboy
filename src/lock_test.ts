@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertFalse, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { PidFileLock } from "./lock.ts";
 
@@ -18,13 +18,13 @@ Deno.test(
       fnCalled = true;
       return Promise.resolve();
     });
-    assertEquals(fnCalled, true);
+    assert(fnCalled);
     let pidExists = false;
     try {
       await Deno.stat(pidFile);
       pidExists = true;
     } catch { /* not found */ }
-    assertEquals(pidExists, false);
+    assertFalse(pidExists);
   },
 );
 
@@ -43,7 +43,7 @@ Deno.test(
       fnCalled = true;
       return Promise.resolve();
     });
-    assertEquals(fnCalled, false);
+    assertFalse(fnCalled);
   },
 );
 
@@ -83,7 +83,7 @@ Deno.test("PidFileLock: reclaims stale lock and calls fn", async () => {
     fnCalled = true;
     return Promise.resolve();
   });
-  assertEquals(fnCalled, true);
+  assert(fnCalled);
 });
 
 Deno.test("PidFileLock: removes pid file when fn throws", async () => {
@@ -103,7 +103,7 @@ Deno.test("PidFileLock: removes pid file when fn throws", async () => {
     await Deno.stat(pidFile);
     pidExists = true;
   } catch { /* not found */ }
-  assertEquals(pidExists, false);
+  assertFalse(pidExists);
 });
 
 Deno.test(
@@ -118,6 +118,6 @@ Deno.test(
       fnCalled = true;
       return Promise.resolve();
     });
-    assertEquals(fnCalled, true);
+    assert(fnCalled);
   },
 );

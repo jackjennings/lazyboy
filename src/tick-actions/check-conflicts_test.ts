@@ -1,4 +1,10 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+  assertStringIncludes,
+} from "@std/assert";
 import {
   checkConflictsAction,
   sanitizeBranchForFilename,
@@ -57,75 +63,66 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("checkConflictsAction: applies to ticket with worktrees and no live pid", () => {
-  assertEquals(makeAction().applies(makeTicket()), true);
+  assert(makeAction().applies(makeTicket()));
 });
 
 Deno.test("checkConflictsAction: applies to non-implementation phase with worktrees", () => {
-  assertEquals(
+  assert(
     makeAction().applies(makeTicket({ phase: "plan", status: "running" })),
-    true,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply to needs-attention", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ status: "needs-attention" })),
-    false,
   );
 });
 
 Deno.test("checkConflictsAction: applies to merge/waiting ticket with existing worktree", () => {
-  assertEquals(
+  assert(
     makeAction().applies(makeTicket({ phase: "merge", status: "waiting" })),
-    true,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply to merge/waiting when process is alive", () => {
-  assertEquals(
+  assertFalse(
     makeAction({ isProcessAlive: () => true }).applies(
       makeTicket({ phase: "merge", status: "waiting" }),
     ),
-    false,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply to merge/waiting when no worktrees exist on disk", () => {
-  assertEquals(
+  assertFalse(
     makeAction({ worktreeExists: () => false }).applies(
       makeTicket({ phase: "merge", status: "waiting" }),
     ),
-    false,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
-  assertEquals(
+  assertFalse(
     makeAction({
       isProcessAlive: () => true,
     }).applies(makeTicket()),
-    false,
   );
 });
 
 Deno.test("checkConflictsAction: applies when no live process", () => {
-  assertEquals(
+  assert(
     makeAction({ isProcessAlive: () => false }).applies(makeTicket()),
-    true,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply with no worktrees", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ worktrees: {} })),
-    false,
   );
 });
 
 Deno.test("checkConflictsAction: does not apply when worktree path does not exist on disk", () => {
-  assertEquals(
+  assertFalse(
     makeAction({ worktreeExists: () => false }).applies(makeTicket()),
-    false,
   );
 });
 
@@ -194,11 +191,11 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
   const rebaseClean = (logged as Record<string, unknown>[]).find(
     (e) => e.event === "success",
   );
-  assertEquals(rebaseClean !== undefined, true);
+  assertNotEquals(rebaseClean, undefined);
   assertEquals(rebaseClean!.context, "checkConflicts");
   assertEquals(rebaseClean!.worktreePath, "/wt/myorg/myrepo");
   assertEquals(rebaseClean!.branch, "gh-7");
-  assertEquals(calls.some((a) => a[0] === "push"), true);
+  assert(calls.some((a) => a[0] === "push"));
 });
 
 Deno.test("checkConflictsAction: clean rebase with no prs → null, no push, no log", async () => {
@@ -215,7 +212,7 @@ Deno.test("checkConflictsAction: clean rebase with no prs → null, no push, no 
     },
   }).run(makeTicket(), "/state");
   assertEquals(result, null);
-  assertEquals(calls.some((a) => a[0] === "push"), false);
+  assertFalse(calls.some((a) => a[0] === "push"));
   assertEquals(logged.length, 0);
 });
 
@@ -302,9 +299,8 @@ Deno.test(
       },
     }).run(makeTicket(), "/state");
 
-    assertEquals(
+    assertFalse(
       calls.some((a) => a[0] === "rebase" && a[1] === "--abort"),
-      false,
     );
     assertEquals(spawnCalls.length, 1);
     assertEquals(contextFiles.length, 1);
@@ -314,14 +310,11 @@ Deno.test(
     const startEntry = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-started",
     );
-    assertEquals(startEntry !== undefined, true);
+    assertNotEquals(startEntry, undefined);
     assertEquals(startEntry!.worktreePath, "/wt/myorg/myrepo");
     assertEquals(startEntry!.branch, "gh-7");
     assertEquals(startEntry!.conflictedFiles, ["foo.ts", "bar.ts"]);
-    assertEquals(
-      (startEntry!.rebaseStderr as string).includes("CONFLICT"),
-      true,
-    );
+    assertStringIncludes(startEntry!.rebaseStderr as string, "CONFLICT");
   },
 );
 
@@ -428,7 +421,7 @@ Deno.test(
     const rebaseClean = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "success",
     );
-    assertEquals(rebaseClean !== undefined, true);
+    assertNotEquals(rebaseClean, undefined);
   },
 );
 
@@ -460,11 +453,11 @@ Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs 
     "/state",
   );
   assertEquals(result, null);
-  assertEquals(calls.some((a) => a[0] === "push"), true);
+  assert(calls.some((a) => a[0] === "push"));
   const successEntry = (logged as Record<string, unknown>[]).find(
     (e) => e.event === "success",
   );
-  assertEquals(successEntry !== undefined, true);
+  assertNotEquals(successEntry, undefined);
   assertEquals(successEntry!.context, "checkConflicts");
 });
 

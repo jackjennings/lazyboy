@@ -1,4 +1,8 @@
-import { assertEquals } from "@std/assert";
+import {
+  assertArrayIncludes,
+  assertEquals,
+  assertNotEquals,
+} from "@std/assert";
 import type { CommandRunner } from "./apfel.ts";
 import { generateShortTitle } from "./short-title.ts";
 
@@ -39,11 +43,11 @@ Deno.test(
     };
     await generateShortTitle(run, "Add hud subcommand for live agent status");
     assertEquals(capturedArgs[0], "apfel");
-    assertEquals(capturedArgs.includes("--quiet"), true);
+    assertArrayIncludes(capturedArgs, ["--quiet"]);
     const maxTokensIdx = capturedArgs.indexOf("--max-tokens");
-    assertEquals(maxTokensIdx !== -1, true);
+    assertNotEquals(maxTokensIdx, -1);
     assertEquals(capturedArgs[maxTokensIdx + 1], "40");
-    assertEquals(capturedArgs.includes("-s"), true);
+    assertArrayIncludes(capturedArgs, ["-s"]);
     assertEquals(
       capturedArgs[capturedArgs.length - 1],
       "Add hud subcommand for live agent status",

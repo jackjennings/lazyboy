@@ -1,4 +1,12 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  assert,
+  assertArrayIncludes,
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertNotEquals,
+  assertStringIncludes,
+} from "@std/assert";
 import { join } from "@std/path";
 import { findLatestPhaseOutput } from "./review.ts";
 import { formatCompletions } from "./commands/completions.ts";
@@ -24,7 +32,7 @@ const zshFile = new URL("./completion.zsh", import.meta.url).pathname;
 
 Deno.test("completion zsh: output begins with #compdef lazyboy", async () => {
   const content = await Deno.readTextFile(zshFile);
-  assertEquals(content.startsWith("#compdef lazyboy"), true);
+  assert(content.startsWith("#compdef lazyboy"));
 });
 
 Deno.test("completion zsh: defines and registers _lazyboy", async () => {
@@ -74,7 +82,7 @@ Deno.test("_completions: lists all public subcommands with descriptions", () => 
       "update",
     ]
   ) {
-    assertEquals(names.includes(cmd), true, `missing ${cmd}`);
+    assertArrayIncludes(names, [cmd], `missing ${cmd}`);
   }
 });
 
@@ -85,7 +93,7 @@ Deno.test(
       .trim()
       .split("\n")
       .map((l) => l.split("\t")[0]);
-    assertEquals(names.some((n) => n.startsWith("_")), false);
+    assertFalse(names.some((n) => n.startsWith("_")));
   },
 );
 
@@ -572,7 +580,7 @@ Deno.test("update: exits non-zero when pull fails", async () => {
     );
     const { runUpdate } = await import("./commands/update.ts");
     const code = await runUpdate(tmpDir);
-    assertEquals(code !== 0, true);
+    assertNotEquals(code, 0);
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
@@ -617,7 +625,7 @@ Deno.test("tail --help: prints usage and description", () => {
 
 Deno.test("tick --help: omits usage line when usage is absent", () => {
   const cmd = commands.find((c) => c.name === "tick")!;
-  assertEquals(formatCommandHelp(cmd).includes("Usage:"), false);
+  assertFalse(formatCommandHelp(cmd).includes("Usage:"));
 });
 
 Deno.test("--help at position 2 does not trigger help", async () => {
@@ -662,8 +670,8 @@ Deno.test("--help: names padded to longest for alignment", () => {
 
 Deno.test("--help: excludes private commands", () => {
   const output = formatGlobalHelp(commands);
-  assertEquals(output.includes("_completions"), false);
-  assertEquals(output.includes("_ids"), false);
+  assertFalse(output.includes("_completions"));
+  assertFalse(output.includes("_ids"));
 });
 
 Deno.test("--help: commands are sorted alphabetically", () => {
@@ -763,8 +771,8 @@ Deno.test(
       (l) => l.includes("lazyboy") && l.includes("update"),
     );
     const execIdx = lines.findIndex((l) => /^\s*exec\s+deno\b/.test(l));
-    assertEquals(updateIdx !== -1, true);
-    assertEquals(lines[updateIdx].trimEnd().endsWith("|| true"), true);
-    assertEquals(updateIdx < execIdx, true);
+    assertNotEquals(updateIdx, -1);
+    assert(lines[updateIdx].trimEnd().endsWith("|| true"));
+    assertLess(updateIdx, execIdx);
   },
 );

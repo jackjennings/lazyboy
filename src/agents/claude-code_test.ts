@@ -1,4 +1,11 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertNotEquals,
+  assertStringIncludes,
+} from "@std/assert";
 import {
   buildClaudeCodeArgs,
   ClaudeCodeAgent,
@@ -60,12 +67,12 @@ Deno.test("buildClaudeCodeArgs: always includes --print, --output-format stream-
     cwd: "/wt",
     settingsPath: "/s.json",
   });
-  assertEquals(args.includes("--print"), true);
+  assert(args.includes("--print"));
   const idx = args.indexOf("--output-format");
   assertNotEquals(idx, -1);
   assertEquals(args[idx + 1], "stream-json");
-  assertEquals(args.includes("--verbose"), true);
-  assertEquals(args.includes("--dangerously-skip-permissions"), true);
+  assert(args.includes("--verbose"));
+  assert(args.includes("--dangerously-skip-permissions"));
 });
 
 Deno.test("buildClaudeCodeArgs: scopes settings to project,local to exclude the operator's user-level hooks/skills/MCP servers", () => {
@@ -140,7 +147,7 @@ Deno.test("buildClaudeCodeArgs: thinking 'off' omits --effort", () => {
     cwd: "/wt",
     settingsPath: "/s.json",
   });
-  assertEquals(args.includes("--effort"), false);
+  assertFalse(args.includes("--effort"));
 });
 
 Deno.test("buildClaudeCodeArgs: thinking 'minimal' omits --effort", () => {
@@ -152,7 +159,7 @@ Deno.test("buildClaudeCodeArgs: thinking 'minimal' omits --effort", () => {
     cwd: "/wt",
     settingsPath: "/s.json",
   });
-  assertEquals(args.includes("--effort"), false);
+  assertFalse(args.includes("--effort"));
 });
 
 Deno.test("buildClaudeCodeArgs: appends a 'Read these files first' list to the prompt when contextFiles is non-empty", () => {
@@ -164,10 +171,10 @@ Deno.test("buildClaudeCodeArgs: appends a 'Read these files first' list to the p
     cwd: "/worktree",
     settingsPath: "/s.json",
   });
-  assertEquals(args[0].startsWith("base prompt"), true);
-  assertEquals(args[0].includes("Read these files first:"), true);
-  assertEquals(args[0].includes("- /ticket/meta.md"), true);
-  assertEquals(args[0].includes("- /ticket/intake.md"), true);
+  assert(args[0].startsWith("base prompt"));
+  assertStringIncludes(args[0], "Read these files first:");
+  assertStringIncludes(args[0], "- /ticket/meta.md");
+  assertStringIncludes(args[0], "- /ticket/intake.md");
 });
 
 Deno.test("buildClaudeCodeArgs: does not append file list when contextFiles is empty", () => {
@@ -205,7 +212,7 @@ Deno.test("buildClaudeCodeArgs: omits --add-dir entirely when there are no exter
     cwd: "/wt",
     settingsPath: "/s.json",
   });
-  assertEquals(args.includes("--add-dir"), false);
+  assertFalse(args.includes("--add-dir"));
 });
 
 // ── ClaudeCodeAgent ──────────────────────────────────────────────────────────
@@ -232,8 +239,8 @@ Deno.test("buildClaudeCodeArgs: includes --settings with the provided path betwe
     args[settingsIdx + 1],
     "/home/user/.lazyboy/claude-code/settings.json",
   );
-  assertEquals(settingSourcesIdx < settingsIdx, true);
-  assertEquals(settingsIdx < modelIdx, true);
+  assertLess(settingSourcesIdx, settingsIdx);
+  assertLess(settingsIdx, modelIdx);
 });
 
 Deno.test("ClaudeCodeAgent: implements CodeAgent's runPhase signature with settingsPath constructor param", () => {
@@ -265,5 +272,5 @@ Deno.test("buildClaudeCodeArgs: omits --resume when sessionId is absent", () => 
     cwd: "/wt",
     settingsPath: "/s.json",
   });
-  assertEquals(args.includes("--resume"), false);
+  assertFalse(args.includes("--resume"));
 });

@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { CeremonyRunner } from "./ceremonies.ts";
@@ -210,8 +215,8 @@ Deno.test("CeremonyRunner: standup fires when time has passed", async () => {
       files.push(entry.name);
     }
     assertEquals(files.length, 1);
-    assertEquals(files[0].endsWith("-standup.md"), true);
-    assertEquals(files[0].startsWith("20260727"), true);
+    assert(files[0].endsWith("-standup.md"));
+    assert(files[0].startsWith("20260727"));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -283,8 +288,8 @@ Deno.test("renderStandup: omits empty phase sections", () => {
     makeTicket({ id: "github/org/repo/1", phase: "plan", status: "running" }),
   ];
   const output = renderStandup(now, tickets);
-  assertEquals(output.includes("## intake"), false);
-  assertEquals(output.includes("## plan"), true);
+  assertFalse(output.includes("## intake"));
+  assertStringIncludes(output, "## plan");
 });
 
 Deno.test("renderStandup: no active tickets yields no active tickets message", () => {
@@ -320,8 +325,8 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
     for await (const entry of Deno.readDir(outputDir)) {
       written = await Deno.readTextFile(join(outputDir, entry.name));
     }
-    assertEquals(written.includes("github/org/repo/1"), false);
-    assertEquals(written.includes("github/org/repo/2"), true);
+    assertFalse(written.includes("github/org/repo/1"));
+    assertStringIncludes(written, "github/org/repo/2");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

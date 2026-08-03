@@ -1,4 +1,10 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertGreater,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import {
   loadPromptFile,
   loadProviderPrompt,
@@ -17,7 +23,7 @@ Deno.test(
   "loadProviderPrompt: returns file content when supplement file exists",
   async () => {
     const result = await loadProviderPrompt("implementation", "github");
-    assertEquals(result.length > 0, true);
+    assertGreater(result.length, 0);
   },
 );
 
@@ -32,9 +38,8 @@ Deno.test("phase prompts: no prompt instructs the agent to print its response", 
   ];
   for (const phase of phases) {
     const content = await loadPromptFile(`${phase}.md`);
-    assertEquals(
+    assertFalse(
       content.includes("Print your response directly"),
-      false,
       `${phase}.md still contains "Print your response directly"`,
     );
   }
@@ -89,9 +94,9 @@ Deno.test("phase prompts: all five phase prompts include ## Principles instructi
   const phases = ["intake", "enrichment", "spec", "plan", "implementation"];
   for (const phase of phases) {
     const content = await loadPromptFile(`${phase}.md`);
-    assertEquals(
-      content.includes("## Principles"),
-      true,
+    assertStringIncludes(
+      content,
+      "## Principles",
       `${phase}.md does not include ## Principles instruction`,
     );
   }
@@ -105,7 +110,7 @@ Deno.test(
       await Deno.mkdir(`${dir}/prompts`);
       await Deno.writeTextFile(`${dir}/prompts/intake.md`, "{{principles}}");
       const result = await loadStatePrompt("intake", dir);
-      assertEquals(result.includes("## Principles"), true);
+      assertStringIncludes(result, "## Principles");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -152,9 +157,9 @@ Deno.test("phase prompts: every prompt instructs the agent to write to the outpu
   ];
   for (const phase of phases) {
     const content = await loadPromptFile(`${phase}.md`);
-    assertEquals(
-      content.includes("output file path"),
-      true,
+    assertStringIncludes(
+      content,
+      "output file path",
       `${phase}.md does not mention "output file path"`,
     );
   }

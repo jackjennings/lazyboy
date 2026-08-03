@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import { assertEquals, assertFalse, assertNotEquals } from "@std/assert";
 import { buildPiArgs } from "./pi.ts";
 
 Deno.test("buildPiArgs: includes --model with provided value", () => {
@@ -75,5 +75,5 @@ Deno.test("buildPiArgs: omits --session-id when sessionId is absent", () => {
     pathContext: "",
     contextFiles: [],
   });
-  assertEquals(args.includes("--session-id"), false);
+  assertFalse(args.includes("--session-id"));
 });

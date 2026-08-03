@@ -1,4 +1,11 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { join } from "@std/path";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
 import {
@@ -629,13 +636,12 @@ Deno.test(
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(writtenTickets[0].phase, "merge");
     assertEquals(writtenTickets[0].status, "waiting");
-    assertEquals(
+    assert(
       logEntries2.some(
         (e) =>
           (e as Record<string, unknown>).event === "error" &&
           (e as Record<string, unknown>).context === "markPRsReady",
       ),
-      true,
     );
   },
 );
@@ -644,10 +650,7 @@ Deno.test("implementation.md contains explicit draft PR instruction", async () =
   const content = await Deno.readTextFile(
     new URL("./phases/prompts/implementation.md", import.meta.url).pathname,
   );
-  assertEquals(
-    content.includes("pull requests in draft mode"),
-    true,
-  );
+  assertStringIncludes(content, "pull requests in draft mode");
 });
 
 Deno.test("advancePhase: approved waiting phase logs transition to next phase", async () => {
@@ -740,7 +743,7 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCalls(appendLogSpy, 1);
-  assertEquals("ts" in logEntries[0], false);
+  assertFalse("ts" in logEntries[0]);
 });
 
 Deno.test("advancePhase: revising status spawns plan with timestamped outputFile", async () => {
@@ -763,7 +766,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile), true);
+  assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile));
 });
 
 Deno.test("advancePhase: revising status transitions to running", async () => {
@@ -842,10 +845,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(
-    /^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""),
-    true,
-  );
+  assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""));
 });
 
 Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake output filename", async () => {
@@ -868,7 +868,7 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile), true);
+  assert(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile));
 });
 
 Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next-phase output filename", async () => {
@@ -895,10 +895,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(
-    /^\d{8}T\d{6}-enrichment\.md$/.test(spawnedOutputFile ?? ""),
-    true,
-  );
+  assert(/^\d{8}T\d{6}-enrichment\.md$/.test(spawnedOutputFile ?? ""));
 });
 
 Deno.test(
@@ -1456,10 +1453,7 @@ Deno.test(
       concurrency: 0,
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("migrate") < sequence.indexOf("action"),
-      true,
-    );
+    assertLess(sequence.indexOf("migrate"), sequence.indexOf("action"));
   },
 );
 
@@ -1673,9 +1667,9 @@ Deno.test(
       }),
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("writeLastWorked") < sequence.indexOf("commitState"),
-      true,
+    assertLess(
+      sequence.indexOf("writeLastWorked"),
+      sequence.indexOf("commitState"),
     );
   },
 );
@@ -1729,10 +1723,7 @@ Deno.test(
       }),
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("install") < sequence.indexOf("lockFn"),
-      true,
-    );
+    assertLess(sequence.indexOf("install"), sequence.indexOf("lockFn"));
   },
 );
 
@@ -1752,7 +1743,7 @@ Deno.test(
       exit: () => {},
     });
     await new TickService(deps).run();
-    assertEquals(lockFnCalled, false);
+    assertFalse(lockFnCalled);
   },
 );
 
@@ -1773,7 +1764,7 @@ Deno.test(
       exit: () => {},
     });
     await new TickService(deps).run();
-    assertEquals(lockFnCalled, false);
+    assertFalse(lockFnCalled);
   },
 );
 
@@ -2430,11 +2421,10 @@ Deno.test(
     assertSpyCalls(writePhaseOutputSpy, 1);
     assertEquals(writePhaseOutputCalls[0][0], "/state");
     assertEquals(writePhaseOutputCalls[0][1], "gh-1");
-    assertEquals(
+    assert(
       /^\d{8}T\d{6}-intake-self-review\.md$/.test(
         writePhaseOutputCalls[0][2],
       ),
-      true,
     );
     assertEquals(writePhaseOutputCalls[0][3], "REJECT\nCriterion 1 violated.");
   },
@@ -2535,8 +2525,8 @@ Deno.test(
         import.meta.url,
       ).pathname,
     );
-    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
-    assertEquals(spawnedPrompt.includes("\n\n"), true);
+    assertStringIncludes(spawnedPrompt, supplement.trim());
+    assertStringIncludes(spawnedPrompt, "\n\n");
   },
 );
 
@@ -2575,8 +2565,8 @@ Deno.test(
         import.meta.url,
       ).pathname,
     );
-    assertEquals(spawnedPrompt.includes(supplement.trim()), true);
-    assertEquals(spawnedPrompt.includes("gh pr create"), false);
+    assertStringIncludes(spawnedPrompt, supplement.trim());
+    assertFalse(spawnedPrompt.includes("gh pr create"));
   },
 );
 
@@ -2948,13 +2938,12 @@ Deno.test(
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
-    assertEquals(
+    assert(
       logEntries.some(
         (e) =>
           (e as Record<string, unknown>).event === "error" &&
           (e as Record<string, unknown>).context === "spawnOutlierAnalysis",
       ),
-      true,
     );
   },
 );
@@ -3032,13 +3021,12 @@ Deno.test(
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
-    assertEquals(
+    assert(
       logEntries.some(
         (e) =>
           (e as Record<string, unknown>).event === "error" &&
           (e as Record<string, unknown>).context === "spawnOutlierAnalysis",
       ),
-      true,
     );
   },
 );
@@ -3123,7 +3111,7 @@ Deno.test(
         appendPrinciples: () => Promise.resolve(),
       });
       assertSpyCall(spawnSpy, 0);
-      assertEquals(spawnedPrompt.includes("STATE INTAKE CONTEXT"), true);
+      assertStringIncludes(spawnedPrompt, "STATE INTAKE CONTEXT");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -3163,7 +3151,7 @@ Deno.test(
         appendPrinciples: () => Promise.resolve(),
       });
       assertSpyCall(spawnSpy, 0);
-      assertEquals(spawnedPrompt.includes("STATE ENRICHMENT CONTEXT"), true);
+      assertStringIncludes(spawnedPrompt, "STATE ENRICHMENT CONTEXT");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -3205,7 +3193,7 @@ Deno.test(
         appendPrinciples: () => Promise.resolve(),
       });
       assertSpyCall(spawnSpy, 0);
-      assertEquals(spawnedPrompt.includes("STATE IMPL CONTEXT"), true);
+      assertStringIncludes(spawnedPrompt, "STATE IMPL CONTEXT");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -3238,7 +3226,7 @@ Deno.test(
         appendPrinciples: () => Promise.resolve(),
       });
       assertSpyCall(spawnSpy, 0);
-      assertEquals(spawnedPrompt.includes("\n\n\n"), false);
+      assertFalse(spawnedPrompt.includes("\n\n\n"));
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -3487,7 +3475,7 @@ Deno.test("advancePhase: merge/revising outputFile has merge suffix", async () =
     appendPrinciples: () => Promise.resolve(),
   });
   assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedOutputFile?.endsWith("-merge.md"), true);
+  assert(spawnedOutputFile?.endsWith("-merge.md"));
 });
 
 Deno.test("advancePhase: merge revision passes sessionId from log to spawn", async () => {
@@ -3595,9 +3583,9 @@ Deno.test(
       }),
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("processLearnings") < sequence.indexOf("listTickets"),
-      true,
+    assertLess(
+      sequence.indexOf("processLearnings"),
+      sequence.indexOf("listTickets"),
     );
   },
 );
@@ -3627,9 +3615,9 @@ Deno.test(
       }),
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("commitState") < sequence.indexOf("runCeremonies"),
-      true,
+    assertLess(
+      sequence.indexOf("commitState"),
+      sequence.indexOf("runCeremonies"),
     );
   },
 );
@@ -3743,10 +3731,9 @@ Deno.test(
       }),
     });
     await new TickService(deps).run();
-    assertEquals(
-      sequence.indexOf("scaffoldStatePrompts") <
-        sequence.indexOf("commitState"),
-      true,
+    assertLess(
+      sequence.indexOf("scaffoldStatePrompts"),
+      sequence.indexOf("commitState"),
     );
   },
 );

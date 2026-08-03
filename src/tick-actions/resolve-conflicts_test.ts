@@ -1,4 +1,10 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertGreater,
+  assertNotEquals,
+} from "@std/assert";
 import { resolveConflictsAction } from "./resolve-conflicts.ts";
 import type { TicketState } from "../state/types.ts";
 
@@ -40,20 +46,18 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("resolveConflictsAction: applies when running, pid dead", () => {
-  assertEquals(makeAction().applies(makeTicket()), true);
+  assert(makeAction().applies(makeTicket()));
 });
 
 Deno.test("resolveConflictsAction: does not apply when pid is alive", () => {
-  assertEquals(
+  assertFalse(
     makeAction({ isProcessAlive: () => true }).applies(makeTicket()),
-    false,
   );
 });
 
 Deno.test("resolveConflictsAction: does not apply when status is not running", () => {
-  assertEquals(
+  assertFalse(
     makeAction().applies(makeTicket({ status: "waiting" })),
-    false,
   );
 });
 
@@ -127,14 +131,14 @@ Deno.test(
       },
     }).run(makeTicket(), "/state");
 
-    assertEquals(gitCalls.some((a) => a[0] === "push"), true);
-    assertEquals(removed.length > 0, true);
+    assert(gitCalls.some((a) => a[0] === "push"));
+    assertGreater(removed.length, 0);
     assertEquals(result?.status, "waiting");
 
     const resolved = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolved",
     );
-    assertEquals(resolved !== undefined, true);
+    assertNotEquals(resolved, undefined);
     assertEquals(resolved!.worktreePath, "/wt/myorg/myrepo");
     assertEquals(resolved!.branch, "gh-7");
   },
@@ -179,9 +183,8 @@ Deno.test(
     );
 
     assertEquals(result?.status, "waiting");
-    assertEquals(
+    assertFalse(
       gitCalls.some((c) => c.cwd === "/wt/b/repo"),
-      false,
     );
     // (no pid assertion — pid field removed from TicketState)
     const resolvedEntries = (logged as Record<string, unknown>[]).filter(
@@ -236,17 +239,16 @@ Deno.test(
       },
     }).run(makeTicket(), "/state");
 
-    assertEquals(
+    assert(
       gitCalls.some((a) => a[0] === "rebase" && a[1] === "--abort"),
-      true,
     );
-    assertEquals(removed.length > 0, true);
+    assertGreater(removed.length, 0);
     assertEquals(result?.status, "needs-attention");
 
     const failed = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-failed",
     );
-    assertEquals(failed !== undefined, true);
+    assertNotEquals(failed, undefined);
     assertEquals(failed!.reason, "agent-failed");
   },
 );
@@ -301,7 +303,7 @@ Deno.test(
     const failed = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "conflict-resolution-failed",
     );
-    assertEquals(failed !== undefined, true);
+    assertNotEquals(failed, undefined);
     assertEquals(failed!.reason, "push-failed");
   },
 );

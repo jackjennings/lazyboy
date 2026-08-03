@@ -1,4 +1,13 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertArrayIncludes,
+  assertEquals,
+  assertFalse,
+  assertLess,
+  assertNotEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
@@ -57,8 +66,8 @@ Deno.test("setupPiDirectories: creates pi directories in temp home", async () =>
       join(tempHome, ".lazyboy", "pi", "sessions"),
     );
 
-    assertEquals(piDir.isDirectory, true);
-    assertEquals(sessionsDir.isDirectory, true);
+    assert(piDir.isDirectory);
+    assert(sessionsDir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
   }
@@ -75,7 +84,7 @@ Deno.test("setupPiDirectories: succeeds when directories already exist", async (
     await setupPiDirectories(tempHome);
 
     const piDir = await Deno.stat(join(tempHome, ".lazyboy", "pi"));
-    assertEquals(piDir.isDirectory, true);
+    assert(piDir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
   }
@@ -88,7 +97,7 @@ Deno.test("setupClaudeCodeDirectories: creates claude-code directory in temp hom
   try {
     await setupClaudeCodeDirectories(tempHome);
     const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
-    assertEquals(dir.isDirectory, true);
+    assert(dir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
   }
@@ -130,7 +139,7 @@ Deno.test("setupClaudeCodeDirectories: succeeds when directory already exists", 
     await setupClaudeCodeDirectories(tempHome);
     await setupClaudeCodeDirectories(tempHome);
     const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
-    assertEquals(dir.isDirectory, true);
+    assert(dir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
   }
@@ -168,15 +177,9 @@ Deno.test("buildContextFiles: includes prefix-timestamped phase output files", a
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T154506-intake.md`),
-      true,
-    );
-    assertEquals(files.includes(`@${tempDir}/20260629T154506-spec.md`), true);
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T154506-enrichment.md`),
-      false,
-    );
+    assertArrayIncludes(files, [`@${tempDir}/20260629T154506-intake.md`]);
+    assertArrayIncludes(files, [`@${tempDir}/20260629T154506-spec.md`]);
+    assertFalse(files.includes(`@${tempDir}/20260629T154506-enrichment.md`));
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -202,9 +205,9 @@ Deno.test("buildContextFiles: includes prefixed output and feedback files in chr
     const fbIdx = files.indexOf(
       `@${tempDir}/20260629T160000-intake-feedback.md`,
     );
-    assertEquals(outIdx !== -1, true);
-    assertEquals(fbIdx !== -1, true);
-    assertEquals(outIdx < fbIdx, true);
+    assertNotEquals(outIdx, -1);
+    assertNotEquals(fbIdx, -1);
+    assertLess(outIdx, fbIdx);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -222,10 +225,7 @@ Deno.test("buildContextFiles: does not include files for phases not in context l
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T154506-diff.md`),
-      false,
-    );
+    assertFalse(files.includes(`@${tempDir}/20260629T154506-diff.md`));
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -243,10 +243,9 @@ Deno.test("buildContextFiles: includes implementation output files", async () =>
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
-    assertEquals(
-      files.includes(`@${tempDir}/20260630T100000-implementation.md`),
-      true,
-    );
+    assertArrayIncludes(files, [
+      `@${tempDir}/20260630T100000-implementation.md`,
+    ]);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -274,9 +273,9 @@ Deno.test("buildContextFiles: includes implementation feedback files after imple
     const fbIdx = files.indexOf(
       `@${tempDir}/20260630T120000-implementation-feedback.md`,
     );
-    assertEquals(outIdx !== -1, true);
-    assertEquals(fbIdx !== -1, true);
-    assertEquals(outIdx < fbIdx, true);
+    assertNotEquals(outIdx, -1);
+    assertNotEquals(fbIdx, -1);
+    assertLess(outIdx, fbIdx);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -302,9 +301,9 @@ Deno.test("buildContextFiles: implementation files appear after plan files", asy
     const implIdx = files.indexOf(
       `@${tempDir}/20260630T100000-implementation.md`,
     );
-    assertEquals(planIdx !== -1, true);
-    assertEquals(implIdx !== -1, true);
-    assertEquals(planIdx < implIdx, true);
+    assertNotEquals(planIdx, -1);
+    assertNotEquals(implIdx, -1);
+    assertLess(planIdx, implIdx);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -340,23 +339,11 @@ Deno.test("buildContextFiles: prunes superseded drafts, keeping only the latest 
       stateDir: dirname(tempDir),
     });
 
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T090000-spec.md`),
-      false,
-    );
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T091000-spec-feedback.md`),
-      false,
-    );
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T092000-spec.md`),
-      false,
-    );
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T093000-spec-feedback.md`),
-      false,
-    );
-    assertEquals(files.includes(`@${tempDir}/20260629T094000-spec.md`), true);
+    assertFalse(files.includes(`@${tempDir}/20260629T090000-spec.md`));
+    assertFalse(files.includes(`@${tempDir}/20260629T091000-spec-feedback.md`));
+    assertFalse(files.includes(`@${tempDir}/20260629T092000-spec.md`));
+    assertFalse(files.includes(`@${tempDir}/20260629T093000-spec-feedback.md`));
+    assertArrayIncludes(files, [`@${tempDir}/20260629T094000-spec.md`]);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -388,19 +375,12 @@ Deno.test("buildContextFiles: keeps latest doc and pending feedback when a revis
       stateDir: dirname(tempDir),
     });
 
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T090000-plan.md`),
-      false,
-    );
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T091000-plan-feedback.md`),
-      false,
-    );
-    assertEquals(files.includes(`@${tempDir}/20260629T092000-plan.md`), true);
-    assertEquals(
-      files.includes(`@${tempDir}/20260629T093000-plan-feedback.md`),
-      true,
-    );
+    assertFalse(files.includes(`@${tempDir}/20260629T090000-plan.md`));
+    assertFalse(files.includes(`@${tempDir}/20260629T091000-plan-feedback.md`));
+    assertArrayIncludes(files, [`@${tempDir}/20260629T092000-plan.md`]);
+    assertArrayIncludes(files, [
+      `@${tempDir}/20260629T093000-plan-feedback.md`,
+    ]);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -433,7 +413,7 @@ Deno.test("buildContextFiles: omits principles.md when includePrinciples is fals
       includePrinciples: false,
     });
     assertEquals(files[0], `@${ticketDir}/meta.md`);
-    assertEquals(files.some((f) => f.includes("principles.md")), false);
+    assertFalse(files.some((f) => f.includes("principles.md")));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
     await Deno.remove(ticketDir, { recursive: true });
@@ -447,7 +427,7 @@ Deno.test("buildContextFiles: omits principles.md when it does not exist in stat
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
     const files = await buildContextFiles({ ticketDir, stateDir });
     assertEquals(files[0], `@${ticketDir}/meta.md`);
-    assertEquals(files.some((f) => f.includes("principles.md")), false);
+    assertFalse(files.some((f) => f.includes("principles.md")));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
     await Deno.remove(ticketDir, { recursive: true });
@@ -611,13 +591,10 @@ Deno.test("executePhase: forwards buildContextFiles result to agent.runPhase", a
       agent,
     );
 
-    assertEquals(capturedContextFiles.includes(`@${ticketDir}/meta.md`), true);
-    assertEquals(
-      capturedContextFiles.includes(
-        `@${ticketDir}/20260101T000000-intake.md`,
-      ),
-      true,
-    );
+    assertArrayIncludes(capturedContextFiles, [`@${ticketDir}/meta.md`]);
+    assertArrayIncludes(capturedContextFiles, [
+      `@${ticketDir}/20260101T000000-intake.md`,
+    ]);
   } finally {
     await Deno.remove(ticketDir, { recursive: true });
     await Deno.remove(homeDir, { recursive: true });
@@ -656,10 +633,10 @@ Deno.test("executePhase: prompt includes base prompt, ticketDir, scopeDirs, and 
       agent,
     );
 
-    assertEquals(capturedPrompt.startsWith("base prompt"), true);
-    assertEquals(capturedPrompt.includes(ticketDir), true);
-    assertEquals(capturedPrompt.includes("/some/scope"), true);
-    assertEquals(capturedPrompt.includes("/some/worktree"), true);
+    assert(capturedPrompt.startsWith("base prompt"));
+    assertStringIncludes(capturedPrompt, ticketDir);
+    assertStringIncludes(capturedPrompt, "/some/scope");
+    assertStringIncludes(capturedPrompt, "/some/worktree");
   } finally {
     await Deno.remove(ticketDir, { recursive: true });
     await Deno.remove(homeDir, { recursive: true });
@@ -781,9 +758,9 @@ Deno.test(
         },
         agent,
       );
-      assertEquals(
-        capturedPrompt.includes(join(ticketDir, "20260727T000000-spec.md")),
-        true,
+      assertStringIncludes(
+        capturedPrompt,
+        join(ticketDir, "20260727T000000-spec.md"),
       );
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
@@ -1556,7 +1533,7 @@ Deno.test(
         join(ticketDir, "result.usage.json"),
       );
       const usage = JSON.parse(usageRaw);
-      assertEquals("costUsd" in usage, false);
+      assertFalse("costUsd" in usage);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1597,7 +1574,7 @@ Deno.test(
       const claudeCodeDir = await Deno.stat(
         join(homeDir, ".lazyboy", "claude-code"),
       );
-      assertEquals(claudeCodeDir.isDirectory, true);
+      assert(claudeCodeDir.isDirectory);
 
       const settings = JSON.parse(
         await Deno.readTextFile(
@@ -1612,7 +1589,7 @@ Deno.test(
         await Deno.stat(join(homeDir, ".lazyboy", "pi"));
         piDirExists = true;
       } catch { /* expected */ }
-      assertEquals(piDirExists, false);
+      assertFalse(piDirExists);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1664,7 +1641,7 @@ Deno.test(
         await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
         claudeCodeDirExists = true;
       } catch { /* expected */ }
-      assertEquals(claudeCodeDirExists, false);
+      assertFalse(claudeCodeDirExists);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1739,7 +1716,7 @@ Deno.test(
         join(ticketDir, "result.usage.json"),
       );
       const usage = JSON.parse(usageRaw);
-      assertEquals("costUsd" in usage, false);
+      assertFalse("costUsd" in usage);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1780,7 +1757,7 @@ Deno.test(
       const claudeCodeDir = await Deno.stat(
         join(homeDir, ".lazyboy", "claude-code"),
       );
-      assertEquals(claudeCodeDir.isDirectory, true);
+      assert(claudeCodeDir.isDirectory);
 
       const settings = JSON.parse(
         await Deno.readTextFile(
@@ -1795,7 +1772,7 @@ Deno.test(
         await Deno.stat(join(homeDir, ".lazyboy", "pi"));
         piDirExists = true;
       } catch { /* expected */ }
-      assertEquals(piDirExists, false);
+      assertFalse(piDirExists);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1847,7 +1824,7 @@ Deno.test(
         await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
         claudeCodeDirExists = true;
       } catch { /* expected */ }
-      assertEquals(claudeCodeDirExists, false);
+      assertFalse(claudeCodeDirExists);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -2241,7 +2218,7 @@ Deno.test("executePhase: usage sidecar omits tools when agent stdout has no tool
     const usage = JSON.parse(
       await Deno.readTextFile(join(ticketDir, "result.usage.json")),
     );
-    assertEquals("tools" in usage, false);
+    assertFalse("tools" in usage);
   } finally {
     await Deno.remove(ticketDir, { recursive: true });
     await Deno.remove(homeDir, { recursive: true });

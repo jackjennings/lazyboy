@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertFalse, assertStringIncludes } from "@std/assert";
 
 Deno.test(
   "outlier-analysis prompt: does not contain git or gh pr operations",
@@ -6,9 +6,9 @@ Deno.test(
     const content = await Deno.readTextFile(
       new URL("outlier-analysis.md", import.meta.url).pathname,
     );
-    assertEquals(content.includes("git add"), false);
-    assertEquals(content.includes("git commit"), false);
-    assertEquals(content.includes("gh pr create"), false);
+    assertFalse(content.includes("git add"));
+    assertFalse(content.includes("git commit"));
+    assertFalse(content.includes("gh pr create"));
   },
 );
 
@@ -18,16 +18,16 @@ Deno.test(
     const content = await Deno.readTextFile(
       new URL("outlier-analysis.md", import.meta.url).pathname,
     );
-    assertEquals(content.includes("learnings/"), true);
-    assertEquals(content.includes("<YYYYMMDDTHHMMSS>.md"), true);
-    assertEquals(content.includes("id:"), true);
-    assertEquals(content.includes("ticketId:"), true);
-    assertEquals(content.includes("repo:"), true);
-    assertEquals(content.includes("targetFile:"), true);
-    assertEquals(content.includes("prTitle:"), true);
-    assertEquals(content.includes("prBody:"), true);
-    assertEquals(content.includes('"content"'), false);
-    assertEquals(content.includes('"intent"'), false);
+    assertStringIncludes(content, "learnings/");
+    assertStringIncludes(content, "<YYYYMMDDTHHMMSS>.md");
+    assertStringIncludes(content, "id:");
+    assertStringIncludes(content, "ticketId:");
+    assertStringIncludes(content, "repo:");
+    assertStringIncludes(content, "targetFile:");
+    assertStringIncludes(content, "prTitle:");
+    assertStringIncludes(content, "prBody:");
+    assertFalse(content.includes('"content"'));
+    assertFalse(content.includes('"intent"'));
   },
 );
 
@@ -37,6 +37,6 @@ Deno.test(
     const content = await Deno.readTextFile(
       new URL("outlier-analysis.md", import.meta.url).pathname,
     );
-    assertEquals(content.includes("State directory"), true);
+    assertStringIncludes(content, "State directory");
   },
 );

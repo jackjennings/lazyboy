@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { selfReview } from "./self-review.ts";
@@ -163,8 +163,8 @@ Deno.test("selfReview: uses intake-self-review.md content as system message", as
     assertSpyCalls(fetcher, 1);
     const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
     assertEquals(typeof body.system, "string");
-    assertEquals(body.system.includes("APPROVE"), true);
-    assertEquals(body.system.includes("REJECT"), true);
+    assertStringIncludes(body.system, "APPROVE");
+    assertStringIncludes(body.system, "REJECT");
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -286,7 +286,7 @@ Deno.test(
       import.meta.url,
     ).pathname;
     const content = await Deno.readTextFile(promptPath);
-    assertEquals(content.includes("https://github.com/"), true);
-    assertEquals(content.includes("org/repo"), true);
+    assertStringIncludes(content, "https://github.com/");
+    assertStringIncludes(content, "org/repo");
   },
 );

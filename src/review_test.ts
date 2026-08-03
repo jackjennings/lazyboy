@@ -1,4 +1,11 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertLessOrEqual,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { stripAnsiCode } from "@std/fmt/colors";
 import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
@@ -66,7 +73,7 @@ Deno.test("classifyApproval: returns true when API responds with APPROVE", async
     (_url: string | URL | Request, _init?: RequestInit) =>
       Promise.resolve(makeApproveResponse()),
   );
-  assertEquals(await classifyApproval("Looks good!", fetcher), true);
+  assert(await classifyApproval("Looks good!", fetcher));
   assertSpyCalls(fetcher, 1);
 });
 
@@ -80,7 +87,7 @@ Deno.test("classifyApproval: is case-insensitive for APPROVE", async () => {
         ),
       ),
   );
-  assertEquals(await classifyApproval("continue", fetcher), true);
+  assert(await classifyApproval("continue", fetcher));
 });
 
 Deno.test(
@@ -97,7 +104,7 @@ Deno.test(
           ),
         ),
     );
-    assertEquals(await classifyApproval("lgtm", fetcher), true);
+    assert(await classifyApproval("lgtm", fetcher));
   },
 );
 
@@ -108,7 +115,7 @@ Deno.test(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(makeFeedbackResponse()),
     );
-    assertEquals(await classifyApproval("fix the tests", fetcher), false);
+    assertFalse(await classifyApproval("fix the tests", fetcher));
   },
 );
 
@@ -124,7 +131,7 @@ Deno.test(
           ),
         ),
     );
-    assertEquals(await classifyApproval("ship it", fetcher), false);
+    assertFalse(await classifyApproval("ship it", fetcher));
   },
 );
 
@@ -170,7 +177,7 @@ Deno.test(
       "this is definitely longer than twenty chars",
       fetcher,
     );
-    assertEquals(result, false);
+    assertFalse(result);
     assertSpyCalls(fetcher, 0);
   },
 );
@@ -225,8 +232,8 @@ Deno.test("classifyApproval: sends the required system prompt", async () => {
   assertSpyCalls(fetcher, 1);
   const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
   assertEquals(typeof body.system, "string");
-  assertEquals(body.system.includes("APPROVE"), true);
-  assertEquals(body.system.includes("FEEDBACK"), true);
+  assertStringIncludes(body.system, "APPROVE");
+  assertStringIncludes(body.system, "FEEDBACK");
 });
 
 // ── applyApproval ─────────────────────────────────────────────────────────────
@@ -263,7 +270,7 @@ Deno.test("applyApproval: does not write approved key to frontmatter", async () 
     await run(["git", "commit", "-m", "initial"]);
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));
     const raw = await Deno.readTextFile(`${dir}/gh-1/meta.md`);
-    assertEquals(raw.includes("approved:"), false);
+    assertFalse(raw.includes("approved:"));
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -321,7 +328,7 @@ Deno.test("applyApproval: commits with message approve: <id>", async () => {
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));
     const log = await run(["git", "log", "--oneline", "-1"]);
     const message = new TextDecoder().decode(log.stdout).trim();
-    assertEquals(message.endsWith("approve: gh-1"), true);
+    assert(message.endsWith("approve: gh-1"));
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -466,19 +473,19 @@ Deno.test("findLatestPhaseOutput: prefers merge output over earlier phase files"
 Deno.test("renderDiff: prefixes added lines with green '+ ' and removed with red '- '", () => {
   const lines = renderDiff("old\n", "new\n");
   const stripped = lines.map((l) => stripAnsiCode(l));
-  assertEquals(stripped.some((l) => l === "- old"), true);
-  assertEquals(stripped.some((l) => l === "+ new"), true);
+  assert(stripped.some((l) => l === "- old"));
+  assert(stripped.some((l) => l === "+ new"));
 });
 
 Deno.test("renderDiff: prefixes unchanged lines with two spaces dimmed", () => {
   const lines = renderDiff("same\nold\n", "same\nnew\n");
   const stripped = lines.map((l) => stripAnsiCode(l));
-  assertEquals(stripped.some((l) => l === "  same"), true);
+  assert(stripped.some((l) => l === "  same"));
 });
 
 Deno.test("renderDiff: does not emit trailing blank line from file-ending newline", () => {
   const lines = renderDiff("a\n", "a\n");
-  assertEquals(lines.every((l) => stripAnsiCode(l) !== ""), true);
+  assert(lines.every((l) => stripAnsiCode(l) !== ""));
 });
 
 // ── truncateDiffLines ─────────────────────────────────────────────────────────
@@ -487,8 +494,8 @@ Deno.test("truncateDiffLines: truncates a plain line longer than width to fit wi
   const long = "a".repeat(200);
   const result = truncateDiffLines([long], 80);
   assertEquals(result.length, 1);
-  assertEquals(stripAnsiCode(result[0]).length <= 80, true);
-  assertEquals(stripAnsiCode(result[0]).endsWith("..."), true);
+  assertLessOrEqual(stripAnsiCode(result[0]).length, 80);
+  assert(stripAnsiCode(result[0]).endsWith("..."));
 });
 
 Deno.test("truncateDiffLines: returns a plain line shorter than width unchanged", () => {
@@ -501,7 +508,7 @@ Deno.test("truncateDiffLines: truncates ANSI-colored diff lines to visible width
   const diffLines = renderDiff("", "a".repeat(200) + "\n");
   const result = truncateDiffLines(diffLines, 80);
   for (const line of result) {
-    assertEquals(stripAnsiCode(line).length <= 80, true);
+    assertLessOrEqual(stripAnsiCode(line).length, 80);
   }
 });
 
@@ -513,11 +520,10 @@ Deno.test("buildQuestionSystemPrompt: includes fixed framing sentence", async ()
     ["@/ticket/meta.md"],
     readFile,
   );
-  assertEquals(
+  assert(
     result.startsWith(
       "You are a helpful assistant answering questions about a ticket's phase output.",
     ),
-    true,
   );
 });
 
@@ -536,8 +542,8 @@ Deno.test("buildQuestionSystemPrompt: includes file content in output", async ()
     ["@/ticket/spec.md"],
     readFile,
   );
-  assertEquals(result.includes("# Phase Output"), true);
-  assertEquals(result.includes("Some content."), true);
+  assertStringIncludes(result, "# Phase Output");
+  assertStringIncludes(result, "Some content.");
 });
 
 Deno.test("buildQuestionSystemPrompt: silently skips unreadable files", async () => {
@@ -547,7 +553,7 @@ Deno.test("buildQuestionSystemPrompt: silently skips unreadable files", async ()
   const result = await buildQuestionSystemPrompt(["@/missing.md"], readFile);
   assertEquals(typeof result, "string");
   assertSpyCalls(readFile, 1);
-  assertEquals(result.includes("ENOENT"), false);
+  assertFalse(result.includes("ENOENT"));
 });
 
 Deno.test("buildQuestionSystemPrompt: separates multiple files with headings", async () => {
@@ -557,8 +563,8 @@ Deno.test("buildQuestionSystemPrompt: separates multiple files with headings", a
     readFile,
   );
   assertSpyCalls(readFile, 2);
-  assertEquals(result.includes("/ticket/meta.md"), true);
-  assertEquals(result.includes("/ticket/spec.md"), true);
+  assertStringIncludes(result, "/ticket/meta.md");
+  assertStringIncludes(result, "/ticket/spec.md");
 });
 
 // ── answerQuestion ────────────────────────────────────────────────────────────
@@ -723,7 +729,7 @@ Deno.test(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(makeApfelApproveResponse()),
     );
-    assertEquals(await classifyApproval("lgtm", fetcher, APFEL_URL), true);
+    assert(await classifyApproval("lgtm", fetcher, APFEL_URL));
     assertSpyCalls(fetcher, 1);
   },
 );
@@ -740,7 +746,7 @@ Deno.test(
           ),
         ),
     );
-    assertEquals(await classifyApproval("ok", fetcher, APFEL_URL), true);
+    assert(await classifyApproval("ok", fetcher, APFEL_URL));
   },
 );
 
@@ -758,7 +764,7 @@ Deno.test(
           ),
         ),
     );
-    assertEquals(await classifyApproval("ship it", fetcher, APFEL_URL), true);
+    assert(await classifyApproval("ship it", fetcher, APFEL_URL));
   },
 );
 
@@ -769,10 +775,7 @@ Deno.test(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(makeApfelFeedbackResponse()),
     );
-    assertEquals(
-      await classifyApproval("fix tests", fetcher, APFEL_URL),
-      false,
-    );
+    assertFalse(await classifyApproval("fix tests", fetcher, APFEL_URL));
   },
 );
 
@@ -823,7 +826,7 @@ Deno.test(
       fetcher,
       APFEL_URL,
     );
-    assertEquals(result, false);
+    assertFalse(result);
     assertSpyCalls(fetcher, 0);
   },
 );
@@ -870,8 +873,8 @@ Deno.test(
     assertEquals(body.messages[0].role, "system");
     assertEquals(body.system, undefined);
     assertEquals(typeof body.messages[0].content, "string");
-    assertEquals(body.messages[0].content.includes("APPROVE"), true);
-    assertEquals(body.messages[0].content.includes("FEEDBACK"), true);
+    assertStringIncludes(body.messages[0].content, "APPROVE");
+    assertStringIncludes(body.messages[0].content, "FEEDBACK");
   },
 );
 
@@ -898,11 +901,10 @@ Deno.test("ErrorOverlay: render includes the message set via setMessage", () => 
   const overlay = new ErrorOverlay(mockTui);
   overlay.setMessage("Approval detection failed: 401 Unauthorized");
   const lines = overlay.render(80);
-  assertEquals(
+  assert(
     lines.some((l) =>
       l.includes("Approval detection failed: 401 Unauthorized")
     ),
-    true,
   );
 });
 

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals, assertFalse } from "@std/assert";
 import { compactTimestamp } from "./timestamp.ts";
 
 Deno.test("compactTimestamp: formats a known datetime to YYYYMMDDTHHMMSS", () => {
@@ -14,6 +14,6 @@ Deno.test("compactTimestamp: zero-pads single-digit month, day, hour, minute, se
 Deno.test("compactTimestamp: result contains no hyphens in the date portion", () => {
   const zdt = Temporal.ZonedDateTime.from("2026-12-31T23:59:59+00:00[UTC]");
   const result = compactTimestamp(zdt);
-  assertEquals(result.includes("-"), false);
-  assertEquals(/^\d{8}T\d{6}$/.test(result), true);
+  assertFalse(result.includes("-"));
+  assert(/^\d{8}T\d{6}$/.test(result));
 });

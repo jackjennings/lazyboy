@@ -41,7 +41,9 @@ export function formatTickLogLine(raw: string): string {
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   const subject = context ? `${context}/${event}` : event;
-  return extras ? `${timeStr} ${id} ${subject} ${extras}` : `${timeStr} ${id} ${subject}`;
+  return extras
+    ? `${timeStr} ${id} ${subject} ${extras}`
+    : `${timeStr} ${id} ${subject}`;
 }
 
 export function formatHudHeader(
@@ -91,7 +93,7 @@ async function readState(
         t.approvals,
         formatTokens(tokenTotals[i]),
         t.title,
-      ),
+      )
     ),
   ];
   return {

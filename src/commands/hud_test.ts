@@ -1,4 +1,9 @@
-import { assertEquals, assertMatch } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertMatch,
+  assertStringIncludes,
+} from "@std/assert";
 import { dim, stripAnsiCode } from "@std/fmt/colors";
 import {
   formatHudHeader,
@@ -14,16 +19,16 @@ Deno.test("formatTickLogLine: formats time", () => {
     '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"oh no"}',
   );
   assertMatch(line, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-  assertEquals(line.includes("tick-failed"), true);
-  assertEquals(line.includes("error=oh no"), true);
+  assertStringIncludes(line, "tick-failed");
+  assertStringIncludes(line, "error=oh no");
 });
 
 Deno.test("formatTickLogLine: excludes ts and event from key=value pairs", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed"}',
   );
-  assertEquals(line.includes("ts="), false);
-  assertEquals(line.includes("event="), false);
+  assertFalse(line.includes("ts="));
+  assertFalse(line.includes("event="));
 });
 
 Deno.test("formatTickLogLine: no trailing key=value when no extra fields", () => {
@@ -42,9 +47,9 @@ Deno.test("formatTickLogLine: renders id field from combined log entry", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"status-transition","from":"new","to":"running"}',
   );
-  assertEquals(line.includes("status-transition"), true);
-  assertEquals(line.includes("github/jackjennings/lazyboy/258"), true);
-  assertEquals(line.includes("from=new"), true);
+  assertStringIncludes(line, "status-transition");
+  assertStringIncludes(line, "github/jackjennings/lazyboy/258");
+  assertStringIncludes(line, "from=new");
 });
 
 Deno.test("formatTickLogLine: renders id second", () => {
@@ -65,14 +70,14 @@ Deno.test("formatTickLogLine: renders context with event", () => {
 
 Deno.test("formatHudHeader: shows enabled badge when enabled is true", () => {
   const line = formatHudHeader(true, 2, 5);
-  assertEquals(stripAnsiCode(line).includes("enabled"), true);
-  assertEquals(line.includes("2/5 running"), true);
+  assertStringIncludes(stripAnsiCode(line), "enabled");
+  assertStringIncludes(line, "2/5 running");
 });
 
 Deno.test("formatHudHeader: shows disabled badge when enabled is false", () => {
   const line = formatHudHeader(false, 0, 5);
-  assertEquals(stripAnsiCode(line).includes("disabled"), true);
-  assertEquals(line.includes("0/5 running"), true);
+  assertStringIncludes(stripAnsiCode(line), "disabled");
+  assertStringIncludes(line, "0/5 running");
 });
 
 // ── logPaneLines ──────────────────────────────────────────────────────────────

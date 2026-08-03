@@ -1,4 +1,9 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
@@ -73,7 +78,7 @@ Deno.test(
       );
       assertStringIncludes(meta, "status: waiting");
       assertStringIncludes(meta, "phase: spec");
-      assertEquals(meta.includes("pid:"), false);
+      assertFalse(meta.includes("pid:"));
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -94,7 +99,7 @@ Deno.test(
       );
       assertStringIncludes(meta, "status: new");
       assertStringIncludes(meta, "phase: intake");
-      assertEquals(meta.includes("pid:"), false);
+      assertFalse(meta.includes("pid:"));
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -123,7 +128,7 @@ Deno.test(
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );
-      assertEquals(meta.includes("approved:"), false);
+      assertFalse(meta.includes("approved:"));
       assertStringIncludes(meta, "actor: human");
     } finally {
       await Deno.remove(stateDir, { recursive: true });

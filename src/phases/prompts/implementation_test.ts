@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertStringIncludes } from "@std/assert";
 
 Deno.test(
   "implementation prompt includes deno fmt && deno lint as numbered step",
@@ -6,7 +6,7 @@ Deno.test(
     const content = await Deno.readTextFile(
       new URL("implementation.md", import.meta.url).pathname,
     );
-    assertEquals(content.includes("deno fmt && deno lint"), true);
+    assertStringIncludes(content, "deno fmt && deno lint");
   },
 );
 
@@ -16,8 +16,8 @@ Deno.test(
     const content = await Deno.readTextFile(
       new URL("implementation.md", import.meta.url).pathname,
     );
-    assertEquals(content.includes("gh stack submit --auto"), true);
-    assertEquals(content.includes("gh pr view"), true);
-    assertEquals(content.includes("dependsOn"), true);
+    assertStringIncludes(content, "gh stack submit --auto");
+    assertStringIncludes(content, "gh pr view");
+    assertStringIncludes(content, "dependsOn");
   },
 );

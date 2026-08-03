@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { join } from "@std/path";
 import matter from "gray-matter";
 import {
@@ -379,7 +384,7 @@ Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async 
   assertEquals(parsed.from, "new");
   assertEquals(parsed.to, "running-intake");
   assertEquals(typeof parsed.ts, "string");
-  assertEquals(isNaN(Date.parse(parsed.ts)), false);
+  assertFalse(isNaN(Date.parse(parsed.ts)));
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -515,7 +520,7 @@ Deno.test("writeTicket: omits phases key when undefined", async () => {
   const ticket: TicketState = makeTicket({ id: "gh-8" });
   await writeTicket(dir, ticket);
   const raw = await Deno.readTextFile(join(dir, "gh-8", "meta.md"));
-  assertEquals(raw.includes("phases:"), false);
+  assertFalse(raw.includes("phases:"));
   await Deno.remove(dir, { recursive: true });
 });
 
@@ -627,8 +632,8 @@ Deno.test("writeTicket: does not write approved key to frontmatter", async () =>
   try {
     await writeTicket(dir, makeTicket({ approvals: [] }));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
-    assertEquals(raw.includes("approved:"), false);
-    assertEquals(raw.includes("approvals:"), true);
+    assertFalse(raw.includes("approved:"));
+    assertStringIncludes(raw, "approvals:");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -718,7 +723,7 @@ Deno.test("writeTicket: omits shortTitle from frontmatter when not set", async (
     const ticket = makeTicket();
     await writeTicket(dir, ticket);
     const raw = await Deno.readTextFile(join(dir, ticket.id, "meta.md"));
-    assertEquals(raw.includes("shortTitle"), false);
+    assertFalse(raw.includes("shortTitle"));
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -794,7 +799,7 @@ Deno.test("writeTicket/readTicket: outputRetries absent when undefined", async (
   try {
     await writeTicket(dir, makeTicket());
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
-    assertEquals(raw.includes("outputRetries"), false);
+    assertFalse(raw.includes("outputRetries"));
     const read = await readTicket(dir, "gh-1");
     assertEquals(read.outputRetries, undefined);
   } finally {
@@ -818,7 +823,7 @@ Deno.test("commitPrinciples: commits principles.md to git", async () => {
     await commitPrinciples(dir, "principles: test");
     const log = await run(["git", "log", "--oneline"]);
     const logText = new TextDecoder().decode(log.stdout);
-    assertEquals(logText.includes("principles: test"), true);
+    assertStringIncludes(logText, "principles: test");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -884,7 +889,7 @@ Deno.test(
     try {
       await writeLearning(dir, makeLearning(), INTENT);
       const stat = await Deno.stat(join(dir, "learnings"));
-      assertEquals(stat.isDirectory, true);
+      assert(stat.isDirectory);
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -994,7 +999,7 @@ Deno.test("removeLearning: deletes the entry file", async () => {
     } catch {
       threw = true;
     }
-    assertEquals(threw, true);
+    assert(threw);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

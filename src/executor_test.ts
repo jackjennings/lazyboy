@@ -1,4 +1,9 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+} from "@std/assert";
 import { join } from "@std/path";
 import {
   buildPhaseArgs,
@@ -47,8 +52,8 @@ Deno.test("buildPhaseArgs: includes --output-file", () => {
 
 Deno.test("buildPhaseArgs: does not include bash wrapper flags", () => {
   const args = buildPhaseArgs(makeOpts());
-  assertEquals(args.includes("-c"), false);
-  assertEquals(args.includes("bash"), false);
+  assertFalse(args.includes("-c"));
+  assertFalse(args.includes("bash"));
 });
 
 Deno.test("buildPhaseArgs: first two args are run --allow-all", () => {
@@ -58,11 +63,11 @@ Deno.test("buildPhaseArgs: first two args are run --allow-all", () => {
 });
 
 Deno.test("isProcessAlive returns true for current process", () => {
-  assertEquals(isProcessAlive(Deno.pid), true);
+  assert(isProcessAlive(Deno.pid));
 });
 
 Deno.test("isProcessAlive returns false for dead PID", () => {
-  assertEquals(isProcessAlive(99999999), false);
+  assertFalse(isProcessAlive(99999999));
 });
 
 Deno.test("buildPhaseArgs: includes --model", () => {
@@ -102,13 +107,13 @@ Deno.test("buildPhaseArgs: includes --context-files when contextFiles is provide
 
 Deno.test("buildPhaseArgs: omits --context-files when contextFiles is not provided", () => {
   const args = buildPhaseArgs(makeOpts());
-  assertEquals(args.includes("--context-files"), false);
+  assertFalse(args.includes("--context-files"));
 });
 
 Deno.test("isPhaseAlive: returns false when no run.pid exists", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
-    assertEquals(isPhaseAlive(tempDir), false);
+    assertFalse(isPhaseAlive(tempDir));
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -118,7 +123,7 @@ Deno.test("isPhaseAlive: returns true when run.pid contains current process PID"
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(join(tempDir, "run.pid"), String(Deno.pid));
-    assertEquals(isPhaseAlive(tempDir), true);
+    assert(isPhaseAlive(tempDir));
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -128,7 +133,7 @@ Deno.test("isPhaseAlive: returns false when run.pid contains a dead PID", async 
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(join(tempDir, "run.pid"), "99999999");
-    assertEquals(isPhaseAlive(tempDir), false);
+    assertFalse(isPhaseAlive(tempDir));
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
@@ -150,8 +155,8 @@ Deno.test("buildPhaseArgs: includes --agent claude-code when specified", () => {
 
 Deno.test("buildPhaseArgs: pidFile option does not appear in args", () => {
   const args = buildPhaseArgs(makeOpts({ pidFile: "outlier-analysis.pid" }));
-  assertEquals(args.includes("outlier-analysis.pid"), false);
-  assertEquals(args.includes("--pid-file"), false);
+  assertFalse(args.includes("outlier-analysis.pid"));
+  assertFalse(args.includes("--pid-file"));
 });
 
 Deno.test("buildPhaseArgs: includes --session-id when sessionId is provided", () => {
@@ -163,22 +168,22 @@ Deno.test("buildPhaseArgs: includes --session-id when sessionId is provided", ()
 
 Deno.test("buildPhaseArgs: omits --session-id when sessionId is absent", () => {
   const args = buildPhaseArgs(makeOpts());
-  assertEquals(args.includes("--session-id"), false);
+  assertFalse(args.includes("--session-id"));
 });
 
 Deno.test("buildPhaseArgs: includes --skip-principles when includePrinciples is false", () => {
   const args = buildPhaseArgs(makeOpts({ includePrinciples: false }));
-  assertEquals(args.includes("--skip-principles"), true);
+  assert(args.includes("--skip-principles"));
 });
 
 Deno.test("buildPhaseArgs: omits --skip-principles when includePrinciples is true", () => {
   const args = buildPhaseArgs(makeOpts({ includePrinciples: true }));
-  assertEquals(args.includes("--skip-principles"), false);
+  assertFalse(args.includes("--skip-principles"));
 });
 
 Deno.test("buildPhaseArgs: omits --skip-principles when includePrinciples is absent", () => {
   const args = buildPhaseArgs(makeOpts());
-  assertEquals(args.includes("--skip-principles"), false);
+  assertFalse(args.includes("--skip-principles"));
 });
 
 Deno.test("buildPhaseArgs: includes --state-dir", () => {

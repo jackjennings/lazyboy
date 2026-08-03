@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { makeNotify } from "./notify.ts";
 import type { TicketState } from "./state/types.ts";
@@ -56,7 +56,7 @@ Deno.test(
       },
     });
     await notify(makeTicket());
-    assertEquals(sequence[0].startsWith("append:"), true);
+    assert(sequence[0].startsWith("append:"));
     assertEquals(sequence[1], "osascript");
   },
 );

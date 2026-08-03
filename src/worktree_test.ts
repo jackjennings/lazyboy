@@ -1,4 +1,12 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertGreater,
+  assertNotEquals,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import type { RepoCandidate } from "./worktree.ts";
@@ -299,9 +307,9 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
     info = await createWorktree(repoDir, ticketId, "jackjennings/lazyboy");
 
     const stat = await Deno.stat(info.path);
-    assertEquals(stat.isDirectory, true);
+    assert(stat.isDirectory);
     assertEquals(info.branch, ticketId);
-    assertEquals(info.path.endsWith("jackjennings/lazyboy"), true);
+    assert(info.path.endsWith("jackjennings/lazyboy"));
   } finally {
     // cleanup
     if (info) {
@@ -537,7 +545,7 @@ Deno.test("removeWorktree: removes the worktree directory and its branch", async
     } catch {
       exists = false;
     }
-    assertEquals(exists, false);
+    assertFalse(exists);
 
     const { stdout } = await runGit(
       ["branch", "--list", "my-branch"],
@@ -564,7 +572,7 @@ Deno.test("runGit: returns stderr alongside stdout and code", async () => {
     ["invalid-subcommand-that-does-not-exist"],
     Deno.cwd(),
   );
-  assertEquals(result.code !== 0, true);
+  assertNotEquals(result.code, 0);
   assertEquals(typeof result.stderr, "string");
-  assertEquals(result.stderr.length > 0, true);
+  assertGreater(result.stderr.length, 0);
 });

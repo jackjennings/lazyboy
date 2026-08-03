@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { stripAnsiCode } from "@std/fmt/colors";
 import type { TUI } from "@earendil-works/pi-tui";
 import { ScrollPane } from "./scroll-pane.ts";
@@ -14,7 +19,7 @@ Deno.test("ScrollPane: render includes title in header", () => {
     title: "Status",
     getHeight: () => 10,
   });
-  assertEquals(stripAnsiCode(pane.render(80)[0]).includes("Status"), true);
+  assertStringIncludes(stripAnsiCode(pane.render(80)[0]), "Status");
 });
 
 Deno.test("ScrollPane: render returns 1 header + getHeight content lines", () => {
@@ -35,7 +40,7 @@ Deno.test("ScrollPane: initial scroll offset is 0", () => {
     title: "T",
     getHeight: () => 10,
   });
-  assertEquals(pane.render(80).some((l) => l.includes("alpha")), true);
+  assert(pane.render(80).some((l) => l.includes("alpha")));
 });
 
 Deno.test("ScrollPane: space advances scroll by one page", () => {
@@ -48,8 +53,8 @@ Deno.test("ScrollPane: space advances scroll by one page", () => {
   });
   pane.handleInput(" ");
   const lines = pane.render(80);
-  assertEquals(lines.some((l) => l.includes("line 5")), true);
-  assertEquals(lines.some((l) => l.includes("line 0")), false);
+  assert(lines.some((l) => l.includes("line 5")));
+  assertFalse(lines.some((l) => l.includes("line 0")));
 });
 
 Deno.test("ScrollPane: f advances scroll by one page", () => {
@@ -61,7 +66,7 @@ Deno.test("ScrollPane: f advances scroll by one page", () => {
     getHeight: () => 5,
   });
   pane.handleInput("f");
-  assertEquals(pane.render(80).some((l) => l.includes("line 5")), true);
+  assert(pane.render(80).some((l) => l.includes("line 5")));
 });
 
 Deno.test("ScrollPane: b retreats scroll by one page", () => {
@@ -74,7 +79,7 @@ Deno.test("ScrollPane: b retreats scroll by one page", () => {
   });
   pane.handleInput(" ");
   pane.handleInput("b");
-  assertEquals(pane.render(80).some((l) => l.includes("line 0")), true);
+  assert(pane.render(80).some((l) => l.includes("line 0")));
 });
 
 Deno.test("ScrollPane: handleInput is no-op when focused is false", () => {
@@ -87,8 +92,8 @@ Deno.test("ScrollPane: handleInput is no-op when focused is false", () => {
   });
   pane.focused = false;
   pane.handleInput(" ");
-  assertEquals(pane.render(80).some((l) => l.includes("line 0")), true);
-  assertEquals(pane.render(80).some((l) => l.includes("line 5")), false);
+  assert(pane.render(80).some((l) => l.includes("line 0")));
+  assertFalse(pane.render(80).some((l) => l.includes("line 5")));
 });
 
 Deno.test("ScrollPane: setContent replaces getLines and resets scroll to 0", () => {
@@ -101,7 +106,7 @@ Deno.test("ScrollPane: setContent replaces getLines and resets scroll to 0", () 
   });
   pane.handleInput(" ");
   pane.setContent((_w) => ["fresh"]);
-  assertEquals(pane.render(80).some((l) => l.includes("fresh")), true);
+  assert(pane.render(80).some((l) => l.includes("fresh")));
   assertEquals(pane.scrollOffset, 0);
 });
 
@@ -114,7 +119,7 @@ Deno.test("ScrollPane: scrollToEnd shows last line", () => {
     getHeight: () => 5,
   });
   pane.scrollToEnd();
-  assertEquals(pane.render(80).some((l) => l.includes("line 19")), true);
+  assert(pane.render(80).some((l) => l.includes("line 19")));
 });
 
 Deno.test("ScrollPane: isAtEnd returns true after scrollToEnd", () => {
@@ -126,7 +131,7 @@ Deno.test("ScrollPane: isAtEnd returns true after scrollToEnd", () => {
     getHeight: () => 5,
   });
   pane.scrollToEnd();
-  assertEquals(pane.isAtEnd(80), true);
+  assert(pane.isAtEnd(80));
 });
 
 Deno.test("ScrollPane: isAtEnd returns false at top with scrollable content", () => {
@@ -137,7 +142,7 @@ Deno.test("ScrollPane: isAtEnd returns false at top with scrollable content", ()
     title: "T",
     getHeight: () => 5,
   });
-  assertEquals(pane.isAtEnd(80), false);
+  assertFalse(pane.isAtEnd(80));
 });
 
 Deno.test("ScrollPane: getLines receives the render width", () => {
@@ -167,5 +172,5 @@ Deno.test("ScrollPane: onInvalidate callback is called by invalidate()", () => {
     },
   });
   pane.invalidate();
-  assertEquals(called, true);
+  assert(called);
 });

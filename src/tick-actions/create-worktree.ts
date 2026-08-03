@@ -21,7 +21,7 @@ export interface CreateWorktreeDeps {
   cloneRemoteRepo: (slug: string) => Promise<string>;
   stat: (path: string) => Promise<boolean>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
-  applyWorktreeInclude?: (
+  applyWorktreeInclude: (
     worktreePath: string,
     sourcePath: string,
   ) => Promise<void>;
@@ -131,16 +131,14 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
             ticket.id,
             slug,
           );
-          if (deps.applyWorktreeInclude) {
-            try {
-              await deps.applyWorktreeInclude(worktrees[slug].path, repoPath);
-            } catch (e) {
-              await deps.appendLog(stateDir, ticket.id, {
-                event: "worktree-include-failed",
-                slug,
-                message: String(e),
-              });
-            }
+          try {
+            await deps.applyWorktreeInclude(worktrees[slug].path, repoPath);
+          } catch (e) {
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "worktree-include-failed",
+              slug,
+              message: String(e),
+            });
           }
         }
       } catch {

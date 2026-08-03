@@ -38,6 +38,7 @@ function makeAction(
     cloneRemoteRepo: () => Promise.reject(new Error("no clone")),
     stat: () => Promise.resolve(false),
     appendLog: () => Promise.resolve(),
+    applyWorktreeInclude: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -469,22 +470,6 @@ Deno.test(
     assertSpyCalls(applySpy, 1);
     assertEquals(applySpy.calls[0].args[0], "/wt/myorg/myrepo");
     assertEquals(applySpy.calls[0].args[1], "/code/myorg/myrepo");
-  },
-);
-
-Deno.test(
-  "createWorktreeAction: action succeeds when applyWorktreeInclude absent",
-  async () => {
-    const written: TicketState[] = [];
-    const result = await makeAction({
-      writeTicket: (_dir, t) => {
-        written.push(t);
-        return Promise.resolve();
-      },
-    }).run(makeTicket(), "/state");
-
-    assertEquals(result?.status, "waiting");
-    assertEquals(written.length, 1);
   },
 );
 

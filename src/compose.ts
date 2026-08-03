@@ -341,6 +341,7 @@ export function composeTickDeps(
             );
             if (!prRes.ok) throw new Error(`GitHub API ${prRes.status}`);
             const prData = await prRes.json();
+            if (prData.state === "closed") return null;
             const headSha: string = prData.head.sha;
             const suiteRes = await fetch(
               `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-suites`,

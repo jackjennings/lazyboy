@@ -120,6 +120,21 @@ Deno.test("spawnCITriageAction: no CI result → returns null", async () => {
 });
 
 Deno.test(
+  "spawnCITriageAction: closed PR (getPRChecks returns null) → no spawn",
+  async () => {
+    const spawnSpy = spy(() => Promise.resolve());
+    const result = await spawnCITriageAction(
+      makeDeps({
+        getPRChecks: () => Promise.resolve(null),
+        spawn: spawnSpy,
+      }),
+    ).run(makeTicket(), "/state");
+    assertEquals(result, null);
+    assertSpyCalls(spawnSpy, 0);
+  },
+);
+
+Deno.test(
   "spawnCITriageAction: CI success conclusion → returns null, no spawn",
   async () => {
     let spawnCalled = false;

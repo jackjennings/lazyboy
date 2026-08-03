@@ -216,6 +216,22 @@ export function composeTickDeps(
         cloneRemoteRepo(slug, (s, d, cwd) => githubProvider.clone(s, d, cwd)),
       stat,
       appendLog: appendTicketLog,
+      applyWorktreeInclude: async (
+        worktreePath: string,
+        sourcePath: string,
+      ) => {
+        const result = await new Deno.Command("git-worktreeinclude", {
+          args: ["apply", "--from", sourcePath],
+          cwd: worktreePath,
+        }).output();
+        if (!result.success) {
+          throw new Error(
+            `git-worktreeinclude apply exited ${result.code}: ${
+              new TextDecoder().decode(result.stderr)
+            }`,
+          );
+        }
+      },
     }),
     checkMergedPRAction({
       isPRMerged: (url) => githubProvider.isPRMerged(url),

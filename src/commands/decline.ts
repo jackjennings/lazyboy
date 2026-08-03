@@ -22,8 +22,13 @@ export async function performDecline(
   stateDir: string,
   id: string,
   reason?: string,
-  commitFn = commitTicket,
-  killFn: (pid: number) => void = defaultKillFn,
+  {
+    commitFn = commitTicket,
+    killFn = defaultKillFn,
+  }: {
+    commitFn?: typeof commitTicket;
+    killFn?: (pid: number) => void;
+  } = {},
 ): Promise<{ from: TicketPhase }> {
   const ticketDir = join(stateDir, id);
 

@@ -34,7 +34,7 @@ Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -59,7 +59,7 @@ Deno.test("performDecline: does not write approved key", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -76,7 +76,7 @@ Deno.test("performDecline: appends phase-transition log entry", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const log = await Deno.readTextFile(
       join(stateDir, ticket.id, "log.ndjson"),
     );
@@ -97,7 +97,7 @@ Deno.test(
     await writeTicket(stateDir, ticket);
     const commitFn = spy(() => Promise.resolve());
     try {
-      await performDecline(stateDir, ticket.id, undefined, commitFn);
+      await performDecline(stateDir, ticket.id, undefined, { commitFn });
       assertSpyCalls(commitFn, 1);
       assertEquals(commitFn.calls[0].args, [
         stateDir,
@@ -116,7 +116,7 @@ Deno.test("performDecline: without reason leaves body unchanged", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -137,7 +137,7 @@ Deno.test("performDecline: with reason appends to body", async () => {
       stateDir,
       ticket.id,
       "requires manual design review",
-      commitFn,
+      { commitFn },
     );
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
@@ -159,7 +159,7 @@ Deno.test("performDecline: returns original phase", async () => {
       stateDir,
       ticket.id,
       undefined,
-      commitFn,
+      { commitFn },
     );
     assertEquals(result.from, "spec");
   } finally {
@@ -178,7 +178,10 @@ Deno.test(
     const commitFn = spy(() => Promise.resolve());
     const killFn = spy((_pid: number) => {});
     try {
-      await performDecline(stateDir, ticket.id, undefined, commitFn, killFn);
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
       assertSpyCalls(killFn, 1);
       assertEquals(killFn.calls[0].args[0], Deno.pid);
       await assertRejects(
@@ -200,7 +203,10 @@ Deno.test(
     const commitFn = spy(() => Promise.resolve());
     const killFn = spy((_pid: number) => {});
     try {
-      await performDecline(stateDir, ticket.id, undefined, commitFn, killFn);
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
       assertSpyCalls(killFn, 0);
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
@@ -226,7 +232,10 @@ Deno.test(
       throw new Error("process already dead");
     });
     try {
-      await performDecline(stateDir, ticket.id, undefined, commitFn, killFn);
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
       const meta = await Deno.readTextFile(
         join(stateDir, ticket.id, "meta.md"),
       );

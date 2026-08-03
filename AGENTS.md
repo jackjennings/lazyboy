@@ -183,8 +183,11 @@ tick-specific concept, so its `log` implementation (`appendTickLog`) lives in
 `src/tick.ts` and `composeTickDeps` wires the two together.
 
 Command functions that internally call `commitTicket` (`performApprove`,
-`performRetry`, `performDecline`) accept an optional `commitFn` parameter
-(defaulting to `commitTicket`). Tests pass a `spy(() => Promise.resolve())` from
+`performRetry`) accept an optional `commitFn` parameter (defaulting to
+`commitTicket`). `performDecline` accepts multiple injected functions and takes
+them as a single deps object (`{ commitFn?, killFn? }`). When a command function
+needs more than one injected dependency, use a deps object rather than
+positional parameters. Tests pass a `spy(() => Promise.resolve())` from
 `@std/testing/mock` to avoid a real git repo. Do not use `setupGitStateDir` or
 real git processes in tests for these three commands.
 

@@ -1455,6 +1455,31 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: tick actions skipped for wont-do tickets",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "wont-do",
+      status: "done",
+    });
+    const appliesSpy = spy((_t: TicketState) => true);
+    const runSpy = spy(
+      (_t: TicketState, _sd: string) =>
+        Promise.resolve<TicketState | null>(null),
+    );
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      tickActions: [{ applies: appliesSpy, run: runSpy }],
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(appliesSpy, 0);
+    assertSpyCalls(runSpy, 0);
+  },
+);
+
+Deno.test(
   "TickService: writeLastWorked called with selected candidate IDs",
   async () => {
     const t1 = makeTicket({

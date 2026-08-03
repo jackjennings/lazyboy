@@ -634,6 +634,7 @@ export class TickService {
 
     const processedTickets = [...migratedTickets];
     for (let i = 0; i < processedTickets.length; i++) {
+      if (processedTickets[i].phase === "wont-do") continue;
       for (const action of deps.tickActions) {
         if (action.applies(processedTickets[i])) {
           const updated = await action.run(

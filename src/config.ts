@@ -24,6 +24,14 @@ export async function loadConfig(path?: string): Promise<Config> {
     }
     jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
   }
+  const todoTxtRaw = parsed.todo_txt as Record<string, unknown> | undefined;
+  let todoTxt: Config["todoTxt"];
+  if (todoTxtRaw !== undefined) {
+    if (typeof todoTxtRaw.file !== "string") {
+      throw new Error("config.toml: [todo_txt].file is required");
+    }
+    todoTxt = { file: expandHome(todoTxtRaw.file) };
+  }
   const piRaw = parsed.pi as Record<string, unknown> | undefined;
   if (piRaw?.provider !== undefined && typeof piRaw.provider !== "string") {
     throw new Error("config.toml: [pi].provider must be a string");
@@ -117,6 +125,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     pi: { provider: piProvider },
     agent: { type: agentType },
     jira,
+    todoTxt,
     phases: phasesDefaults !== undefined
       ? { defaults: phasesDefaults }
       : undefined,

@@ -23,6 +23,7 @@ import { dedupePrinciples, extractPrinciples } from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
+import { TodoTxtProvider } from "./providers/todo-txt.ts";
 import type { Provider } from "./providers/types.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
@@ -162,6 +163,10 @@ export function composeTickDeps(
         project: config.jira.project,
       }),
     );
+  }
+
+  if (config.todoTxt) {
+    providers.push(new TodoTxtProvider({ file: config.todoTxt.file }));
   }
 
   const tickActions = [

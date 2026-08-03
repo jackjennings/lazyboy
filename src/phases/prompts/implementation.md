@@ -53,6 +53,16 @@ task in the plan. Make all edits to a file together in as few Edit calls as
 possible — do not make a separate Edit call per plan section or task when
 multiple sections touch the same file.
 
+## Efficiency for mechanical changes
+
+When the plan describes a change that recurs across many call sites (e.g. "update
+every `makeTicket()` override," a field rename, a signature change applied to all
+callers), do not edit each occurrence with a separate tool call. First grep to
+enumerate every occurrence. Then apply the change in as few operations as possible:
+a single `sed`/`Bash` scripted pass, or `Edit` with `replace_all` when the anchor
+text is unique enough. Reserve one-by-one `Edit` calls for occurrences that
+actually differ in surrounding context or require judgment.
+
 Scope discipline: implement exactly what the plan specifies. Do not add
 parameters, helpers, log/warn callbacks, or fallback paths the plan does not
 call for, even when they seem like obvious improvements. If something genuinely

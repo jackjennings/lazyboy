@@ -180,7 +180,12 @@ export async function advancePhase(
       activePhase,
       ticket.provider,
     );
-    const revisingStatePrompt = await loadStatePrompt(activePhase, stateDir);
+    const revisingStatePrompt = await loadStatePrompt(
+      activePhase,
+      stateDir,
+      ticket.provider,
+      ticket.id,
+    );
     const prompt = [basePrompt, revisingSupplement, revisingStatePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
@@ -224,7 +229,12 @@ export async function advancePhase(
       ticket.provider,
     );
     const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
-    const intakeStatePrompt = await loadStatePrompt("intake", stateDir);
+    const intakeStatePrompt = await loadStatePrompt(
+      "intake",
+      stateDir,
+      ticket.provider,
+      ticket.id,
+    );
     const prompt = [intakeBase, intakeSupplement, corpusText, intakeStatePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
@@ -493,7 +503,12 @@ export async function advancePhase(
     }
     const basePrompt = await loadPrompt(next);
     const supplement = await loadProviderPrompt(next, ticket.provider);
-    const statePrompt = await loadStatePrompt(next, stateDir);
+    const statePrompt = await loadStatePrompt(
+      next,
+      stateDir,
+      ticket.provider,
+      ticket.id,
+    );
     const prompt = [basePrompt, supplement, statePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");

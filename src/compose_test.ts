@@ -178,3 +178,131 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "ensureStatePrompts: creates github repo subdirectory with phase files",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, ["jackjennings/lazyboy"]);
+      for (const phase of PHASE_SEQUENCE) {
+        const content = await Deno.readTextFile(
+          join(
+            stateDir,
+            "prompts",
+            "github",
+            "jackjennings",
+            "lazyboy",
+            `${phase}.md`,
+          ),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: creates jira board subdirectory with phase files",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, [], "FOO");
+      for (const phase of PHASE_SEQUENCE) {
+        const content = await Deno.readTextFile(
+          join(stateDir, "prompts", "jira", "FOO", `${phase}.md`),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: scaffolds multiple github repos independently",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, [
+        "jackjennings/lazyboy",
+        "jackjennings/other",
+      ]);
+      for (const repo of ["lazyboy", "other"]) {
+        const content = await Deno.readTextFile(
+          join(
+            stateDir,
+            "prompts",
+            "github",
+            "jackjennings",
+            repo,
+            "intake.md",
+          ),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: does not overwrite existing files in subdirectories",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(
+        join(stateDir, "prompts", "github", "jackjennings", "lazyboy"),
+        { recursive: true },
+      );
+      await Deno.writeTextFile(
+        join(
+          stateDir,
+          "prompts",
+          "github",
+          "jackjennings",
+          "lazyboy",
+          "spec.md",
+        ),
+        "existing",
+      );
+      await ensureStatePrompts(stateDir, ["jackjennings/lazyboy"]);
+      assertEquals(
+        await Deno.readTextFile(
+          join(
+            stateDir,
+            "prompts",
+            "github",
+            "jackjennings",
+            "lazyboy",
+            "spec.md",
+          ),
+        ),
+        "existing",
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: empty repos list and no jira creates no subdirectories",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, []);
+      const entries: string[] = [];
+      for await (const entry of Deno.readDir(join(stateDir, "prompts"))) {
+        if (entry.isDirectory) entries.push(entry.name);
+      }
+      assertEquals(entries, []);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

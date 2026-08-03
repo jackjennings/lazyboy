@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { lazyboyDir } from "./paths.ts";
 import { deleteRunPid } from "./executor.ts";
 import {
   extractPrinciples,
@@ -540,8 +541,7 @@ export async function advancePhase(
 }
 
 export async function appendTickLog(entry: object): Promise<void> {
-  const home = Deno.env.get("HOME")!;
-  const lazyDir = join(home, ".lazyboy");
+  const lazyDir = lazyboyDir();
   const ts = Temporal.Now.instant().toString();
   await Deno.mkdir(lazyDir, { recursive: true });
   await Deno.writeTextFile(

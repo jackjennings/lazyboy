@@ -17,7 +17,7 @@ import {
   writeLearning,
   writeTicket,
 } from "./store.ts";
-import { tempHome } from "../test-support.ts";
+import { withLazyboyDir } from "../test-support.ts";
 import type { LearningState, TicketState } from "./types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -372,7 +372,6 @@ Deno.test("commitTicket: silently succeeds when nothing to commit", async () => 
 });
 
 Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async () => {
-  using _home = tempHome();
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await appendTicketLog(dir, "gh-1", {
@@ -391,7 +390,6 @@ Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async 
 });
 
 Deno.test("appendTicketLog: appends successive entries on separate lines", async () => {
-  using _home = tempHome();
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await appendTicketLog(dir, "gh-1", { event: "a" });
@@ -405,34 +403,28 @@ Deno.test("appendTicketLog: appends successive entries on separate lines", async
 });
 
 Deno.test("appendTicketLog: writes combined log entry with id field", async () => {
+  using lazy = withLazyboyDir();
   const stateDir = await Deno.makeTempDir();
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
   try {
     await Deno.mkdir(join(stateDir, "github/test/repo/1"), { recursive: true });
     await appendTicketLog(stateDir, "github/test/repo/1", {
       event: "phase-start",
     });
     const combined = await Deno.readTextFile(
-      join(homeDir, ".lazyboy", "log.ndjson"),
+      join(lazy.path, "log.ndjson"),
     );
     const parsed = JSON.parse(combined.trim());
     assertEquals(parsed.id, "github/test/repo/1");
     assertEquals(parsed.event, "phase-start");
     assertEquals(typeof parsed.ts, "string");
   } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
     await Deno.remove(stateDir, { recursive: true });
-    await Deno.remove(homeDir, { recursive: true });
   }
 });
 
 Deno.test("appendTicketLog: per-ticket log entry has no id field", async () => {
+  using _lazy = withLazyboyDir();
   const stateDir = await Deno.makeTempDir();
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
   try {
     await Deno.mkdir(join(stateDir, "gh-1"));
     await appendTicketLog(stateDir, "gh-1", { event: "status-transition" });
@@ -443,22 +435,16 @@ Deno.test("appendTicketLog: per-ticket log entry has no id field", async () => {
     assertEquals(parsed.id, undefined);
     assertEquals(parsed.event, "status-transition");
   } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
     await Deno.remove(stateDir, { recursive: true });
-    await Deno.remove(homeDir, { recursive: true });
   }
 });
 
 Deno.test("appendTicketLog: primary write succeeds when combined log write fails", async () => {
+  using lazy = withLazyboyDir();
   const stateDir = await Deno.makeTempDir();
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
   try {
     // make log.ndjson a directory so writeTextFile to it fails
-    await Deno.mkdir(join(homeDir, ".lazyboy", "log.ndjson"), {
-      recursive: true,
-    });
+    await Deno.mkdir(join(lazy.path, "log.ndjson"), { recursive: true });
     await Deno.mkdir(join(stateDir, "gh-1"));
     await appendTicketLog(stateDir, "gh-1", { event: "error" });
     const ticket = await Deno.readTextFile(
@@ -466,9 +452,7 @@ Deno.test("appendTicketLog: primary write succeeds when combined log write fails
     );
     assertEquals(JSON.parse(ticket.trim()).event, "error");
   } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
     await Deno.remove(stateDir, { recursive: true });
-    await Deno.remove(homeDir, { recursive: true });
   }
 });
 

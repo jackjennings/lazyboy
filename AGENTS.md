@@ -25,7 +25,7 @@ Config is read from `~/.config/lazyboy/config.toml`.
 
 ```bash
 deno task test                          # run all tests
-deno test --allow-all src/foo_test.ts  # run a single test file
+LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/foo_test.ts  # single file
 deno task start tick                    # run the tick loop once
 deno run --allow-all src/index.ts status
 
@@ -154,6 +154,25 @@ phase's context when the file exists. When a phase output contains a
 existing file, and — if novel — appends and commits `principles.md` alone via
 `commitPrinciples`. The parsing and dedup logic (`extractPrinciples`,
 `dedupePrinciples`) lives in `src/run-phase.ts`.
+
+## Runtime dir (`lazyboyDir`)
+
+Anything that writes under the runtime dir — the combined `log.ndjson`,
+`tick.ndjson`, and future logging — must resolve its base path via
+`lazyboyDir()` (`src/paths.ts`), never `join(HOME, ".lazyboy", …)` inline. It
+returns `$LAZYBOY_DIR` when set, else `$HOME/.lazyboy`. This is the single seam
+that keeps tests from writing to the operator's real `~/.lazyboy`:
+`deno task
+test` sets `LAZYBOY_DIR=$(mktemp -d)`, so any code routed through
+`lazyboyDir()` is isolated automatically with no per-test setup. Single-file
+runs must set it too (see Commands). A test that inspects the combined/tick log
+directly uses `withLazyboyDir()` (`src/test-support.ts`) for its own scratch
+dir.
+
+Non-log paths (`worktrees/`, `pi/`, `claude-code/`, `anthropic-pricing.json`,
+`tick.pid`, `last-worked.json`) still read `HOME`/`opts.homeDir` directly; their
+tests isolate via `HOME`. Do not route them through `lazyboyDir()` — it would
+defeat that per-test `HOME` isolation.
 
 ## `tick.ndjson` format
 

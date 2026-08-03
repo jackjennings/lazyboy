@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { lazyboyDir } from "../paths.ts";
 import { readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { Command } from "./types.ts";
@@ -35,7 +36,7 @@ export const tail: Command = {
     const id = args[0];
     let logPath: string;
     if (!id) {
-      logPath = join(Deno.env.get("HOME")!, ".lazyboy", "log.ndjson");
+      logPath = join(lazyboyDir(), "log.ndjson");
     } else {
       const config = await loadConfig();
       const stateDir = expandHome(config.state.dir);

@@ -167,14 +167,14 @@ Deno.test("classifyApproval: throws when fetch throws", async () => {
 });
 
 Deno.test(
-  "classifyApproval: returns false without calling fetch when text exceeds 20 characters",
+  "classifyApproval: returns false without calling fetch when text exceeds 50 characters",
   async () => {
     const fetcher = spy(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(makeApproveResponse()),
     );
     const result = await classifyApproval(
-      "this is definitely longer than twenty chars",
+      "a".repeat(51),
       fetcher,
     );
     assertFalse(result);
@@ -190,6 +190,18 @@ Deno.test(
         Promise.resolve(makeFeedbackResponse()),
     );
     await classifyApproval("12345678901234567890", fetcher);
+    assertSpyCalls(fetcher, 1);
+  },
+);
+
+Deno.test(
+  "classifyApproval: calls fetch when trimmed text is 21 characters",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeFeedbackResponse()),
+    );
+    await classifyApproval("this looks good to go", fetcher);
     assertSpyCalls(fetcher, 1);
   },
 );
@@ -235,6 +247,67 @@ Deno.test("classifyApproval: sends the required system prompt", async () => {
   assertStringIncludes(body.system, "APPROVE");
   assertStringIncludes(body.system, "FEEDBACK");
 });
+
+Deno.test(
+  "classifyApproval: returns true when API response is APPROVE with trailing period",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ content: [{ type: "text", text: "APPROVE." }] }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assert(await classifyApproval("lgtm", fetcher));
+  },
+);
+
+Deno.test(
+  "classifyApproval: returns false when API response is APPROVED",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ content: [{ type: "text", text: "APPROVED" }] }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertFalse(await classifyApproval("lgtm", fetcher));
+  },
+);
+
+Deno.test(
+  "classifyApproval: returns false when API response is I APPROVE",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ content: [{ type: "text", text: "I APPROVE" }] }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertFalse(await classifyApproval("lgtm", fetcher));
+  },
+);
+
+Deno.test(
+  "classifyApproval: system prompt does not list 'continue' as an approval example",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeFeedbackResponse()),
+    );
+    await classifyApproval("lgtm", fetcher);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertFalse(body.system.includes("continue"));
+  },
+);
 
 // ── applyApproval ─────────────────────────────────────────────────────────────
 
@@ -815,19 +888,31 @@ Deno.test(
 );
 
 Deno.test(
-  "classifyApproval: with apfelUrl, returns false without calling fetch when text exceeds 20 characters",
+  "classifyApproval: with apfelUrl, returns false without calling fetch when text exceeds 50 characters",
   async () => {
     const fetcher = spy(
       (_url: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(makeApfelApproveResponse()),
     );
     const result = await classifyApproval(
-      "this is definitely longer than twenty chars",
+      "a".repeat(51),
       fetcher,
       APFEL_URL,
     );
     assertFalse(result);
     assertSpyCalls(fetcher, 0);
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, calls fetch when trimmed text is 21 characters",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("this looks good to go", fetcher, APFEL_URL);
+    assertSpyCalls(fetcher, 1);
   },
 );
 
@@ -889,6 +974,73 @@ Deno.test(
     const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
     assertEquals(body.messages[1].role, "user");
     assertEquals(body.messages[1].content, "ship it");
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns true when response is APPROVE with trailing punctuation",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "APPROVE!" } }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assert(await classifyApproval("lgtm", fetcher, APFEL_URL));
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false when response is APPROVED",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "APPROVED" } }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertFalse(await classifyApproval("lgtm", fetcher, APFEL_URL));
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, returns false when response is I APPROVE",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "I APPROVE" } }],
+            }),
+            { status: 200 },
+          ),
+        ),
+    );
+    assertFalse(await classifyApproval("lgtm", fetcher, APFEL_URL));
+  },
+);
+
+Deno.test(
+  "classifyApproval: with apfelUrl, system prompt does not list 'continue' as an approval example",
+  async () => {
+    const fetcher = spy(
+      (_url: string | URL | Request, _init?: RequestInit) =>
+        Promise.resolve(makeApfelFeedbackResponse()),
+    );
+    await classifyApproval("lgtm", fetcher, APFEL_URL);
+    const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+    assertFalse(body.messages[0].content.includes("continue"));
   },
 );
 

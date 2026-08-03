@@ -125,7 +125,7 @@ export async function classifyApproval(
   fetcher: typeof fetch,
   apfelUrl: string | null = null,
 ): Promise<boolean> {
-  if (text.trim().length > 20) return false;
+  if (text.trim().length > 50) return false;
   if (apfelUrl !== null) {
     try {
       const response = await fetcher(`${apfelUrl}/v1/chat/completions`, {
@@ -138,7 +138,7 @@ export async function classifyApproval(
             {
               role: "system",
               content:
-                "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval, acceptance, or intent to continue without changes (e.g. 'approved', 'looks good', 'continue', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
+                "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval or acceptance (e.g. 'approved', 'looks good', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
             },
             { role: "user", content: text },
           ],
@@ -152,7 +152,8 @@ export async function classifyApproval(
       const data = await response.json();
       const result = (data?.choices?.[0]?.message?.content ?? "")
         .trim()
-        .toUpperCase();
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "");
       return result === "APPROVE";
     } catch (e) {
       throw e;
@@ -170,7 +171,7 @@ export async function classifyApproval(
         model: "claude-haiku-4-5",
         max_tokens: 5,
         system:
-          "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval, acceptance, or intent to continue without changes (e.g. 'approved', 'looks good', 'continue', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
+          "The user is reviewing an AI-generated work product. Reply with exactly the word APPROVE if the user's message clearly expresses approval or acceptance (e.g. 'approved', 'looks good', 'good to go', 'lgtm', 'ship it'). Reply with exactly the word FEEDBACK for anything else, including questions, suggestions, corrections, ambiguous text, or anything unclear.",
         messages: [{ role: "user", content: text }],
       }),
     });
@@ -180,7 +181,10 @@ export async function classifyApproval(
       );
     }
     const data = await response.json();
-    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
+    const result = (data?.content?.[0]?.text ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "");
     return result === "APPROVE";
   } catch (e) {
     throw e;

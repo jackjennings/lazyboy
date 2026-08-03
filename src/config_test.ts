@@ -670,6 +670,75 @@ concurrency = 1
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("loadConfig parses [todo_txt] section", async () => {
+  const dir = await Deno.makeTempDir();
+  const home = Deno.env.get("HOME")!;
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[todo_txt]
+file = "~/todo.txt"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.todoTxt?.file, `${home}/todo.txt`);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig sets config.todoTxt to undefined when [todo_txt] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.todoTxt, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [todo_txt] present but file absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[todo_txt]
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [todo_txt].file is required",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("loadConfig throws when [github.orgs] references unknown account", async () => {
   const dir = await Deno.makeTempDir();
   Deno.env.set("GITHUB_TOKEN_PERSONAL", "tok");

@@ -133,7 +133,15 @@ type = "pi"
 
 [pi]
 provider = "anthropic"
+
+[todo_txt]
+file = "~/todo.txt"
 ```
+
+`[todo_txt]` adds a local [todo.txt](https://todotxt.org) file as a work
+provider. Every non-completed task becomes a ticket. When a ticket closes, the
+task is marked done in-place with an `x YYYY-MM-DD` prefix. The `file` key is
+required when the section is present; `~/` is expanded to the home directory.
 
 `[agent].type` selects which CLI runs every phase — `"pi"` (default) for the
 `pi` CLI, or `"claude-code"` to run the `claude` CLI instead. This is orthogonal

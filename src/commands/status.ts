@@ -14,11 +14,13 @@ import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
 import { JiraProvider } from "../providers/jira.ts";
+import { TodoTxtProvider } from "../providers/todo-txt.ts";
 import { compareSortKeys } from "../providers/types.ts";
 
 const toSortableMap: Record<string, (id: string) => Array<string | number>> = {
   github: GitHubProvider.toSortable,
   jira: JiraProvider.toSortable,
+  "todo-txt": TodoTxtProvider.toSortable,
 };
 
 export function compareTickets(a: TicketState, b: TicketState): number {

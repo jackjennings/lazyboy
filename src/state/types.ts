@@ -138,6 +138,7 @@ export interface Config {
   pi: { provider: string };
   agent: { type: "pi" | "claude-code" };
   jira?: { baseUrl: string; project: string };
+  todoTxt?: { file: string };
   phases?: {
     defaults?: PhaseModelConfig;
   };

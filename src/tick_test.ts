@@ -3745,3 +3745,47 @@ Deno.test(
     await new TickService(deps).run();
   },
 );
+
+Deno.test(
+  "advancePhase: per-provider prompt content is included in spawned prompt",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(stateDir, "prompts", "github"), {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        join(stateDir, "prompts", "github", "intake.md"),
+        "github intake supplement",
+      );
+      const ticket = makeTicket({
+        id: "github/jackjennings/testrepo/1",
+        provider: "github",
+        phase: "intake",
+        status: "new",
+      });
+      let capturedPrompt = "";
+      await advancePhase(ticket, stateDir, {
+        spawn: (opts) => {
+          capturedPrompt = opts.prompt;
+          return Promise.resolve();
+        },
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("content"),
+        appendPrinciples: () => Promise.resolve(),
+      });
+      assertEquals(capturedPrompt.includes("github intake supplement"), true);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

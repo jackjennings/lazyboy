@@ -5,6 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
+import { join } from "@std/path";
 import {
   loadPromptFile,
   loadProviderPrompt,
@@ -164,3 +165,217 @@ Deno.test("phase prompts: every prompt instructs the agent to write to the outpu
     );
   }
 });
+
+Deno.test(
+  "loadStatePrompt: includes provider-level content when provider and id provided",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts", "github"), { recursive: true });
+      await Deno.writeTextFile(join(dir, "prompts", "spec.md"), "");
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "spec.md"),
+        "github supplement",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "github supplement");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: concatenates top-level and provider-level with double newline",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts", "github"), { recursive: true });
+      await Deno.writeTextFile(join(dir, "prompts", "spec.md"), "top");
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "spec.md"),
+        "provider",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "top\n\nprovider");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: includes project-level content for github ticket",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy"),
+        { recursive: true },
+      );
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy", "spec.md"),
+        "repo specific",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "repo specific");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: concatenates all three levels in order",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy"),
+        { recursive: true },
+      );
+      await Deno.writeTextFile(join(dir, "prompts", "spec.md"), "top");
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "spec.md"),
+        "provider",
+      );
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy", "spec.md"),
+        "project",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "top\n\nprovider\n\nproject");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: extracts jira board prefix for project-level path",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts", "jira", "FOO"), {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        join(dir, "prompts", "jira", "FOO", "spec.md"),
+        "jira board content",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "jira",
+        "jira/FOO-123",
+      );
+      assertEquals(result, "jira board content");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: skips absent provider/project files silently",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts"), { recursive: true });
+      await Deno.writeTextFile(join(dir, "prompts", "spec.md"), "top only");
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "top only");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: returns empty string when all levels absent",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: empty files at any level contribute nothing to result",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy"),
+        { recursive: true },
+      );
+      await Deno.writeTextFile(join(dir, "prompts", "spec.md"), "");
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "spec.md"),
+        "provider",
+      );
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "jackjennings", "lazyboy", "spec.md"),
+        "",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertEquals(result, "provider");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: two-arg form unchanged (no provider/id → top-level only)",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts"), { recursive: true });
+      await Deno.writeTextFile(join(dir, "prompts", "intake.md"), "top only");
+      const result = await loadStatePrompt("intake", dir);
+      assertEquals(result, "top only");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);

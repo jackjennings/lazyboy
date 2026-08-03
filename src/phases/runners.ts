@@ -53,18 +53,54 @@ export async function loadProviderPrompt(
   }
 }
 
-export async function loadStatePrompt(
-  phase: string,
-  stateDir: string,
-): Promise<string> {
+function deriveProjectPath(provider: string, ticketId: string): string {
+  if (provider === "github") {
+    const segments = ticketId.split("/");
+    return segments.slice(1, -1).join("/");
+  }
+  if (provider === "jira") {
+    const key = ticketId.split("/")[1] ?? "";
+    return key.replace(/-\d+$/, "");
+  }
+  return "";
+}
+
+async function readPromptFile(path: string): Promise<string> {
   let content: string;
   try {
-    content = await Deno.readTextFile(join(stateDir, "prompts", `${phase}.md`));
+    content = await Deno.readTextFile(path);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) return "";
     throw e;
   }
   return renderTemplate(content);
+}
+
+export async function loadStatePrompt(
+  phase: string,
+  stateDir: string,
+  provider?: string,
+  ticketId?: string,
+): Promise<string> {
+  const paths: string[] = [join(stateDir, "prompts", `${phase}.md`)];
+
+  if (provider && ticketId) {
+    paths.push(join(stateDir, "prompts", provider, `${phase}.md`));
+    const projectPath = deriveProjectPath(provider, ticketId);
+    if (projectPath) {
+      paths.push(
+        join(stateDir, "prompts", provider, projectPath, `${phase}.md`),
+      );
+    }
+  }
+
+  const parts: string[] = [];
+  for (const path of paths) {
+    const rendered = await readPromptFile(path);
+    if (rendered.length > 0) parts.push(rendered);
+  }
+
+  return parts.join("\n\n");
 }
 
 export function nextPhase(current: ActivePhase): ActivePhase | "done" {

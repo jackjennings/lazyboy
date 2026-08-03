@@ -72,20 +72,39 @@ import type { Config } from "./state/types.ts";
 import { readDir, readTextFile, remove, stat } from "./fs.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 
-export async function ensureStatePrompts(stateDir: string): Promise<void> {
+export async function ensureStatePrompts(
+  stateDir: string,
+  githubRepos: string[] = [],
+  jiraProject?: string,
+): Promise<void> {
   const promptsDir = join(stateDir, "prompts");
   await Deno.mkdir(promptsDir, { recursive: true });
-  for (const phase of PHASE_SEQUENCE) {
-    const filePath = join(promptsDir, `${phase}.md`);
-    try {
-      await Deno.stat(filePath);
-    } catch (e) {
-      if (e instanceof Deno.errors.NotFound) {
-        await Deno.writeTextFile(filePath, "");
-      } else {
-        throw e;
+
+  async function scaffoldPhaseFiles(dir: string): Promise<void> {
+    await Deno.mkdir(dir, { recursive: true });
+    for (const phase of PHASE_SEQUENCE) {
+      const filePath = join(dir, `${phase}.md`);
+      try {
+        await Deno.stat(filePath);
+      } catch (e) {
+        if (e instanceof Deno.errors.NotFound) {
+          await Deno.writeTextFile(filePath, "");
+        } else {
+          throw e;
+        }
       }
     }
+  }
+
+  await scaffoldPhaseFiles(promptsDir);
+
+  for (const repo of githubRepos) {
+    const [org, name] = repo.split("/");
+    await scaffoldPhaseFiles(join(promptsDir, "github", org, name));
+  }
+
+  if (jiraProject) {
+    await scaffoldPhaseFiles(join(promptsDir, "jira", jiraProject));
   }
 }
 
@@ -818,7 +837,12 @@ export function composeTickDeps(
         `display notification "${body}" with title "Tick failed"`,
       ]);
     },
-    scaffoldStatePrompts: () => ensureStatePrompts(stateDir),
+    scaffoldStatePrompts: () =>
+      ensureStatePrompts(
+        stateDir,
+        config.github.repos,
+        config.jira?.project,
+      ),
     runCeremonies: () => ceremonies.run(),
     generateShortTitle: async (title) => {
       const available = await checkApfelAvailable(defaultCommandRunner());

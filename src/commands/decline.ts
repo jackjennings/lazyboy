@@ -4,16 +4,48 @@ import {
   readTicket,
   writeTicket,
 } from "../state/store.ts";
+import { join } from "@std/path";
+import { deleteRunPid, isPhaseAlive } from "../executor.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { TicketPhase } from "../state/types.ts";
 import type { Command } from "./types.ts";
+
+function defaultKillFn(pid: number): void {
+  try {
+    Deno.kill(pid, "SIGTERM");
+  } catch {
+    // process died between liveness check and kill
+  }
+}
 
 export async function performDecline(
   stateDir: string,
   id: string,
   reason?: string,
-  commitFn = commitTicket,
+  {
+    commitFn = commitTicket,
+    killFn = defaultKillFn,
+  }: {
+    commitFn?: typeof commitTicket;
+    killFn?: (pid: number) => void;
+  } = {},
 ): Promise<{ from: TicketPhase }> {
+  const ticketDir = join(stateDir, id);
+
+  if (isPhaseAlive(ticketDir)) {
+    const content = Deno.readTextFileSync(`${ticketDir}/run.pid`);
+    const pid = parseInt(content.trim(), 10);
+    if (!isNaN(pid)) {
+      try {
+        killFn(pid);
+      } catch {
+        // TOCTOU: process died between isPhaseAlive and kill
+      }
+    }
+  }
+
+  await deleteRunPid(ticketDir);
+
   const ticket = await readTicket(stateDir, id);
   const from = ticket.phase;
 

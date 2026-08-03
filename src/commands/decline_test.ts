@@ -1,4 +1,9 @@
-import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
@@ -29,7 +34,7 @@ Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -54,7 +59,7 @@ Deno.test("performDecline: does not write approved key", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -71,7 +76,7 @@ Deno.test("performDecline: appends phase-transition log entry", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const log = await Deno.readTextFile(
       join(stateDir, ticket.id, "log.ndjson"),
     );
@@ -92,7 +97,7 @@ Deno.test(
     await writeTicket(stateDir, ticket);
     const commitFn = spy(() => Promise.resolve());
     try {
-      await performDecline(stateDir, ticket.id, undefined, commitFn);
+      await performDecline(stateDir, ticket.id, undefined, { commitFn });
       assertSpyCalls(commitFn, 1);
       assertEquals(commitFn.calls[0].args, [
         stateDir,
@@ -111,7 +116,7 @@ Deno.test("performDecline: without reason leaves body unchanged", async () => {
   await writeTicket(stateDir, ticket);
   const commitFn = spy(() => Promise.resolve());
   try {
-    await performDecline(stateDir, ticket.id, undefined, commitFn);
+    await performDecline(stateDir, ticket.id, undefined, { commitFn });
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
     );
@@ -132,7 +137,7 @@ Deno.test("performDecline: with reason appends to body", async () => {
       stateDir,
       ticket.id,
       "requires manual design review",
-      commitFn,
+      { commitFn },
     );
     const meta = await Deno.readTextFile(
       join(stateDir, ticket.id, "meta.md"),
@@ -154,10 +159,94 @@ Deno.test("performDecline: returns original phase", async () => {
       stateDir,
       ticket.id,
       undefined,
-      commitFn,
+      { commitFn },
     );
     assertEquals(result.from, "spec");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "performDecline: calls killFn with PID when run.pid is present and alive",
+  async () => {
+    const ticket = makeTicket({ phase: "implementation", status: "running" });
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const ticketDir = join(stateDir, ticket.id);
+    await Deno.writeTextFile(join(ticketDir, "run.pid"), Deno.pid.toString());
+    const commitFn = spy(() => Promise.resolve());
+    const killFn = spy((_pid: number) => {});
+    try {
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
+      assertSpyCalls(killFn, 1);
+      assertEquals(killFn.calls[0].args[0], Deno.pid);
+      await assertRejects(
+        () => Deno.stat(join(ticketDir, "run.pid")),
+        Deno.errors.NotFound,
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "performDecline: does not call killFn when run.pid is absent",
+  async () => {
+    const ticket = makeTicket({ phase: "plan", status: "waiting" });
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const commitFn = spy(() => Promise.resolve());
+    const killFn = spy((_pid: number) => {});
+    try {
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
+      assertSpyCalls(killFn, 0);
+      const meta = await Deno.readTextFile(
+        join(stateDir, ticket.id, "meta.md"),
+      );
+      assertStringIncludes(meta, "phase: wont-do");
+      assertStringIncludes(meta, "status: done");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "performDecline: completes normally when killFn throws",
+  async () => {
+    const ticket = makeTicket({ phase: "implementation", status: "running" });
+    const stateDir = await Deno.makeTempDir();
+    await writeTicket(stateDir, ticket);
+    const ticketDir = join(stateDir, ticket.id);
+    await Deno.writeTextFile(join(ticketDir, "run.pid"), Deno.pid.toString());
+    const commitFn = spy(() => Promise.resolve());
+    const killFn = spy((_pid: number) => {
+      throw new Error("process already dead");
+    });
+    try {
+      await performDecline(stateDir, ticket.id, undefined, {
+        commitFn,
+        killFn,
+      });
+      const meta = await Deno.readTextFile(
+        join(stateDir, ticket.id, "meta.md"),
+      );
+      assertStringIncludes(meta, "phase: wont-do");
+      assertStringIncludes(meta, "status: done");
+      await assertRejects(
+        () => Deno.stat(join(ticketDir, "run.pid")),
+        Deno.errors.NotFound,
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

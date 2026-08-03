@@ -1140,6 +1140,7 @@ Deno.test(
       readPhaseOutput: () => Promise.resolve(null),
       appendPrinciples: () => Promise.resolve(),
       readTicketLog: () => Promise.resolve(recoveryLog),
+      readPhaseExitCode: () => Promise.resolve(null),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "running");
@@ -1197,6 +1198,7 @@ Deno.test(
             sessionId: "s",
           }),
         ),
+      readPhaseExitCode: () => Promise.resolve(null),
     });
     assertEquals(spawned, false);
     const final = writtenTickets[writtenTickets.length - 1];
@@ -1230,6 +1232,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve(null),
       appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
@@ -1259,6 +1262,7 @@ Deno.test(
       readPhaseOutput: () => Promise.resolve(null),
       appendPrinciples: () => Promise.resolve(),
       readTicketLog: () => Promise.resolve(""),
+      readPhaseExitCode: () => Promise.resolve(null),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
@@ -1291,6 +1295,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
       appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
     });
     const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
     assertEquals(waitingWrite?.outputRetries, undefined);
@@ -3730,6 +3735,7 @@ Deno.test("advancePhase: merge/revising spawns with ticket.worktrees", async () 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
+    readPhaseExitCode: () => Promise.resolve(null),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
@@ -3759,6 +3765,7 @@ Deno.test("advancePhase: merge/revising spawns with phase implementation", async
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
+    readPhaseExitCode: () => Promise.resolve(null),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "implementation");
@@ -3786,6 +3793,7 @@ Deno.test("advancePhase: merge/revising outputFile has merge suffix", async () =
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
+    readPhaseExitCode: () => Promise.resolve(null),
   });
   assertSpyCall(spawnSpy, 0);
   assert(spawnedOutputFile?.endsWith("-merge.md"));
@@ -3814,6 +3822,7 @@ Deno.test("advancePhase: merge revision passes sessionId from log to spawn", asy
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
     readTicketLog: () => Promise.resolve(makeRevisionLog("sess-merge")),
+    readPhaseExitCode: () => Promise.resolve(null),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedSessionId, "sess-merge");
@@ -3842,6 +3851,7 @@ Deno.test("advancePhase: merge revision with no qualifying log entry spawns with
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
     readTicketLog: () => Promise.resolve(""),
+    readPhaseExitCode: () => Promise.resolve(null),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedSessionId, undefined);
@@ -4096,6 +4106,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
+        readPhaseExitCode: () => Promise.resolve(null),
       });
       assertEquals(capturedPrompt.includes("github intake supplement"), true);
     } finally {

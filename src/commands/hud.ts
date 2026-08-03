@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
-import { bgGreen, bgRed, black, dim, inverse, white } from "@std/fmt/colors";
+import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
 import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
 import { isCronEnabled } from "../cron.ts";
@@ -42,9 +42,9 @@ export function formatTickLogLine(raw: string): string {
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   const subject = context ? `${context}/${event}` : event;
-  let line = `${dim(timeStr)} ${inverse(String(id))} ${subject}`
+  let line = `${dim(timeStr)} ${inverse(String(id))} ${subject}`;
   if (extras) {
-    line += ` ${extras}`
+    line += ` ${extras}`;
   }
   return line;
 }

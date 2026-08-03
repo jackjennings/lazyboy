@@ -111,18 +111,76 @@ function formatPrs(prs: PrEntry[] | undefined): string {
   return [first.url, ...rest.map((p) => " ".repeat(9) + p.url)].join("\n");
 }
 
+type LogEntry = {
+  ts: string;
+  event: string;
+  [key: string]: unknown;
+};
+
+function isAttentionEntry(e: LogEntry): boolean {
+  return (
+    e.event === "phase-output-invalid" ||
+    (e.event === "phase-transition" && e.to === "needs-attention") ||
+    e.event === "needs-attention" ||
+    e.event === "conflict-resolution-failed" ||
+    (e.event === "error" && e.context === "resolveCITriage")
+  );
+}
+
+function formatAttentionEntry(e: LogEntry): string {
+  let fields: string;
+  if (e.event === "phase-output-invalid") {
+    fields = `phase=${e.phase}, reason=${e.reason}`;
+  } else if (e.event === "phase-transition") {
+    fields = `reason=${e.reason}`;
+  } else if (e.event === "needs-attention") {
+    fields = `reason=${e.reason}`;
+  } else if (e.event === "conflict-resolution-failed") {
+    fields = `reason=${e.reason}, branch=${e.branch}`;
+  } else {
+    fields = `reason=${e.reason}, runId=${e.runId}`;
+  }
+  return `${e.ts}: ${e.event}: ${fields}`;
+}
+
+export async function readAttentionReason(
+  ticketDir: string,
+): Promise<string | null> {
+  let raw: string;
+  try {
+    raw = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+  } catch {
+    return null;
+  }
+  let last: LogEntry | null = null;
+  for (const line of raw.split("\n").filter(Boolean)) {
+    try {
+      const entry = JSON.parse(line) as LogEntry;
+      if (isAttentionEntry(entry)) last = entry;
+    } catch {
+      // skip malformed lines
+    }
+  }
+  return last ? formatAttentionEntry(last) : null;
+}
+
 export function formatDetailView(
   ticket: TicketState,
   tokens: number | null,
   costResult: { cost: number | null; partial: boolean },
+  attentionReason?: string | null,
 ): string {
-  return [
+  const lines = [
     `${"Phase".padEnd(8)} ${ticket.phase}`,
     `${"Status".padEnd(8)} ${ticket.status}`,
     `${"Tokens".padEnd(8)} ${formatTokens(tokens)}`,
     `${"Cost".padEnd(8)} ${formatCost(costResult)}`,
     `${"PRs".padEnd(8)} ${formatPrs(ticket.prs)}`,
-  ].join("\n");
+  ];
+  if (attentionReason) {
+    lines.push(`${"Reason".padEnd(8)} ${attentionReason}`);
+  }
+  return lines.join("\n");
 }
 
 export function formatStatusRow(
@@ -174,11 +232,16 @@ export const status: Command = {
         throw e;
       }
       const ticketDir = join(stateDir, id);
-      const [tokens, costResult] = await Promise.all([
+      const [tokens, costResult, attentionReason] = await Promise.all([
         readTicketTokens(ticketDir),
         readTicketCost(ticketDir),
+        ticket.status === "needs-attention"
+          ? readAttentionReason(ticketDir)
+          : Promise.resolve(null),
       ]);
-      console.log(formatDetailView(ticket, tokens, costResult));
+      console.log(
+        formatDetailView(ticket, tokens, costResult, attentionReason),
+      );
       return;
     }
 

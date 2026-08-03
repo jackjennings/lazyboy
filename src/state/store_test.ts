@@ -17,6 +17,7 @@ import {
   writeLearning,
   writeTicket,
 } from "./store.ts";
+import { tempHome } from "../test-support.ts";
 import type { LearningState, TicketState } from "./types.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -371,6 +372,7 @@ Deno.test("commitTicket: silently succeeds when nothing to commit", async () => 
 });
 
 Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async () => {
+  using _home = tempHome();
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await appendTicketLog(dir, "gh-1", {
@@ -389,6 +391,7 @@ Deno.test("appendTicketLog: creates log.ndjson with a single JSON entry", async 
 });
 
 Deno.test("appendTicketLog: appends successive entries on separate lines", async () => {
+  using _home = tempHome();
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(join(dir, "gh-1"));
   await appendTicketLog(dir, "gh-1", { event: "a" });

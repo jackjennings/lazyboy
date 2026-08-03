@@ -14,6 +14,7 @@ These must be present on the host; they are not managed by Deno.
 | `crontab`                     | Installs and removes the tick cron job                                                                                                                           |
 | GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                                                  |
 | `apfel`                       | Runs local LLM server for approval classification in review mode; also generates short titles at ticket ingestion (optional; skipped when absent or unavailable) |
+| `git-worktreeinclude`         | Copies declared files from main checkout into new worktrees                                                                                                      |
 
 Runtime env vars (tick only): `ANTHROPIC_API_KEY`, plus either
 `GITHUB_TOKEN`/`GITHUB_LOGIN` (single-account) or the `token_env` vars named in

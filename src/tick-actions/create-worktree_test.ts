@@ -38,6 +38,7 @@ function makeAction(
     cloneRemoteRepo: () => Promise.reject(new Error("no clone")),
     stat: () => Promise.resolve(false),
     appendLog: () => Promise.resolve(),
+    applyWorktreeInclude: () => Promise.resolve(),
     ...overrides,
   });
 }
@@ -452,5 +453,70 @@ Deno.test(
     );
 
     assertEquals(result?.status, "needs-attention");
+  },
+);
+
+// ── run: applyWorktreeInclude ─────────────────────────────────────────────────
+
+Deno.test(
+  "createWorktreeAction: applyWorktreeInclude called with worktree path and repo path",
+  async () => {
+    const applySpy = spy((_wt: string, _src: string) => Promise.resolve());
+    await makeAction({
+      findLocalRepo: () => Promise.resolve("/code/myorg/myrepo"),
+      applyWorktreeInclude: applySpy,
+    }).run(makeTicket(), "/state");
+
+    assertSpyCalls(applySpy, 1);
+    assertEquals(applySpy.calls[0].args[0], "/wt/myorg/myrepo");
+    assertEquals(applySpy.calls[0].args[1], "/code/myorg/myrepo");
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: applyWorktreeInclude failure is logged but does not block writeTicket",
+  async () => {
+    const logged: object[] = [];
+    const written: TicketState[] = [];
+    const result = await makeAction({
+      applyWorktreeInclude: () =>
+        Promise.reject(new Error("permission denied")),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(), "/state");
+
+    assertEquals(result?.status, "waiting");
+    assertEquals(written.length, 1);
+    assertEquals(logged.length, 1);
+    assertEquals(
+      (logged[0] as Record<string, unknown>).event,
+      "worktree-include-failed",
+    );
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: applyWorktreeInclude called once per worktree",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - other/repo\n```\n\n## Reasoning\n\nText.\n";
+    const applySpy = spy((_wt: string, _src: string) => Promise.resolve());
+    await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      findLocalRepo: (_, slug) => Promise.resolve(`/code/${slug}`),
+      createWorktree: (_repo, _id, slug) =>
+        Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
+      applyWorktreeInclude: applySpy,
+    }).run(makeTicket(), "/state");
+
+    assertSpyCalls(applySpy, 2);
+    const srcPaths = applySpy.calls.map((c) => c.args[1] as string).sort();
+    assertEquals(srcPaths, ["/code/myorg/myrepo", "/code/other/repo"]);
   },
 );

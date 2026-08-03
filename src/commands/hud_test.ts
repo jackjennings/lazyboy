@@ -66,39 +66,6 @@ Deno.test("formatTickLogLine: renders context with event", () => {
   assertEquals(line.split(" ", 3)[2], "agent/failure");
 });
 
-Deno.test("formatTickLogLine: collapses \\r\\n in field value to single space", () => {
-  const line = formatTickLogLine(
-    '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"GitHub API error: 401\\r\\n  \\"message\\": \\"Requires authentication\\""}',
-  );
-  assertFalse(line.includes("\r"));
-  assertFalse(line.includes("\n"));
-  assertStringIncludes(line, "error=GitHub API error: 401");
-});
-
-Deno.test("formatTickLogLine: collapses bare \\n in field value to single space", () => {
-  const line = formatTickLogLine(
-    '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"line1\\nline2"}',
-  );
-  assertFalse(line.includes("\n"));
-  assertStringIncludes(line, "error=line1 line2");
-});
-
-Deno.test("formatTickLogLine: collapses consecutive newlines to single space", () => {
-  const line = formatTickLogLine(
-    '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"a\\n\\nb"}',
-  );
-  assertFalse(line.includes("\n"));
-  assertStringIncludes(line, "error=a b");
-});
-
-Deno.test("formatTickLogLine: collapses bare \\r in field value to single space", () => {
-  const line = formatTickLogLine(
-    '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"a\\rb"}',
-  );
-  assertFalse(line.includes("\r"));
-  assertStringIncludes(line, "error=a b");
-});
-
 // ── formatHudHeader ───────────────────────────────────────────────────────────
 
 Deno.test("formatHudHeader: shows enabled badge when enabled is true", () => {

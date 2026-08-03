@@ -39,7 +39,7 @@ export function formatTickLogLine(raw: string): string {
     // malformed ts
   }
   const extras = Object.entries(rest)
-    .map(([k, v]) => `${k}=${`${v}`.replace(/[\r\n]+/g, " ")}`)
+    .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   const subject = context ? `${context}/${event}` : event;
   return extras

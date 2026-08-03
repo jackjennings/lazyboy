@@ -19,6 +19,7 @@ import type { TickDeps, TickServiceDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
 import { loadPromptFile } from "./phases/runners.ts";
+import { withLazyboyDir } from "./test-support.ts";
 import type { Provider, WorkItem } from "./providers/types.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
@@ -1239,58 +1240,35 @@ Deno.test(
 // ── appendTickLog ─────────────────────────────────────────────────────────────
 
 Deno.test("appendTickLog: writes to combined log without id field", async () => {
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
-  try {
-    await appendTickLog({ event: "tick-failed", error: "boom" });
-    const combined = await Deno.readTextFile(
-      join(homeDir, ".lazyboy", "log.ndjson"),
-    );
-    const parsed = JSON.parse(combined.trim());
-    assertEquals(parsed.event, "tick-failed");
-    assertEquals(parsed.id, undefined);
-  } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
-    await Deno.remove(homeDir, { recursive: true });
-  }
+  using lazy = withLazyboyDir();
+  await appendTickLog({ event: "tick-failed", error: "boom" });
+  const combined = await Deno.readTextFile(
+    join(lazy.path, "log.ndjson"),
+  );
+  const parsed = JSON.parse(combined.trim());
+  assertEquals(parsed.event, "tick-failed");
+  assertEquals(parsed.id, undefined);
 });
 
 Deno.test("appendTickLog: tick log entry is unchanged", async () => {
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
-  try {
-    await appendTickLog({ event: "stale-lock" });
-    const tick = await Deno.readTextFile(
-      join(homeDir, ".lazyboy", "tick.ndjson"),
-    );
-    const parsed = JSON.parse(tick.trim());
-    assertEquals(parsed.event, "stale-lock");
-    assertEquals(parsed.id, undefined);
-  } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
-    await Deno.remove(homeDir, { recursive: true });
-  }
+  using lazy = withLazyboyDir();
+  await appendTickLog({ event: "stale-lock" });
+  const tick = await Deno.readTextFile(
+    join(lazy.path, "tick.ndjson"),
+  );
+  const parsed = JSON.parse(tick.trim());
+  assertEquals(parsed.event, "stale-lock");
+  assertEquals(parsed.id, undefined);
 });
 
 Deno.test("appendTickLog: tick log write succeeds when combined log write fails", async () => {
-  const homeDir = await Deno.makeTempDir();
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", homeDir);
-  try {
-    await Deno.mkdir(join(homeDir, ".lazyboy", "log.ndjson"), {
-      recursive: true,
-    });
-    await appendTickLog({ event: "tick-already-running" });
-    const tick = await Deno.readTextFile(
-      join(homeDir, ".lazyboy", "tick.ndjson"),
-    );
-    assertEquals(JSON.parse(tick.trim()).event, "tick-already-running");
-  } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
-    await Deno.remove(homeDir, { recursive: true });
-  }
+  using lazy = withLazyboyDir();
+  await Deno.mkdir(join(lazy.path, "log.ndjson"), { recursive: true });
+  await appendTickLog({ event: "tick-already-running" });
+  const tick = await Deno.readTextFile(
+    join(lazy.path, "tick.ndjson"),
+  );
+  assertEquals(JSON.parse(tick.trim()).event, "tick-already-running");
 });
 
 // ── TickService ────────────────────────────────────────────────────────────────

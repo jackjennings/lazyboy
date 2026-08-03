@@ -1,7 +1,7 @@
 {
   "tasks": {
     "start": "deno run --allow-all src/index.ts",
-    "test": "deno test --allow-all src/ migrations/ bin/"
+    "test": "LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/ migrations/ bin/"
   },
   "imports": {
     "@std/fs": "jsr:@std/fs@^1.0.24",

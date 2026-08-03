@@ -1,5 +1,6 @@
 import matter from "gray-matter";
 import { join } from "@std/path";
+import { lazyboyDir } from "../paths.ts";
 import {
   type ApprovalEntry,
   assertValidPhaseStatus,
@@ -189,8 +190,7 @@ export async function appendTicketLog(
     JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
-  const home = Deno.env.get("HOME")!;
-  const lazyDir = join(home, ".lazyboy");
+  const lazyDir = lazyboyDir();
   await Deno.mkdir(lazyDir, { recursive: true });
   try {
     await Deno.writeTextFile(

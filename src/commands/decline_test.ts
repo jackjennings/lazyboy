@@ -8,7 +8,6 @@ import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
 import type { TicketState } from "../state/types.ts";
-import { tempHome } from "../test-support.ts";
 import { performDecline } from "./decline.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -30,7 +29,6 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
 }
 
 Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({ phase: "plan", status: "waiting" });
   const stateDir = await Deno.makeTempDir();
   await writeTicket(stateDir, ticket);
@@ -48,7 +46,6 @@ Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
 });
 
 Deno.test("performDecline: does not write approved key", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({
     phase: "implementation",
     status: "running",
@@ -74,7 +71,6 @@ Deno.test("performDecline: does not write approved key", async () => {
 });
 
 Deno.test("performDecline: appends phase-transition log entry", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({ phase: "enrichment", status: "waiting" });
   const stateDir = await Deno.makeTempDir();
   await writeTicket(stateDir, ticket);
@@ -96,7 +92,6 @@ Deno.test("performDecline: appends phase-transition log entry", async () => {
 Deno.test(
   "performDecline: calls commitFn with stateDir, id, and decline message",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket();
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -116,7 +111,6 @@ Deno.test(
 );
 
 Deno.test("performDecline: without reason leaves body unchanged", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({ body: "Original body" });
   const stateDir = await Deno.makeTempDir();
   await writeTicket(stateDir, ticket);
@@ -134,7 +128,6 @@ Deno.test("performDecline: without reason leaves body unchanged", async () => {
 });
 
 Deno.test("performDecline: with reason appends to body", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({ body: "Original body" });
   const stateDir = await Deno.makeTempDir();
   await writeTicket(stateDir, ticket);
@@ -157,7 +150,6 @@ Deno.test("performDecline: with reason appends to body", async () => {
 });
 
 Deno.test("performDecline: returns original phase", async () => {
-  using _home = tempHome();
   const ticket = makeTicket({ phase: "spec", status: "waiting" });
   const stateDir = await Deno.makeTempDir();
   await writeTicket(stateDir, ticket);
@@ -178,7 +170,6 @@ Deno.test("performDecline: returns original phase", async () => {
 Deno.test(
   "performDecline: calls killFn with PID when run.pid is present and alive",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "implementation", status: "running" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -206,7 +197,6 @@ Deno.test(
 Deno.test(
   "performDecline: does not call killFn when run.pid is absent",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "plan", status: "waiting" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -232,7 +222,6 @@ Deno.test(
 Deno.test(
   "performDecline: completes normally when killFn throws",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "implementation", status: "running" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);

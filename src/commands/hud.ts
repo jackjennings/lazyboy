@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { lazyboyDir } from "../paths.ts";
 import { bgGreen, bgRed, dim, white } from "@std/fmt/colors";
 import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
@@ -121,8 +122,8 @@ export const hud: Command = {
   async run(_args) {
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
-    const tickLogPath = join(Deno.env.get("HOME")!, ".lazyboy", "log.ndjson");
-    const parentDir = join(Deno.env.get("HOME")!, ".lazyboy");
+    const parentDir = lazyboyDir();
+    const tickLogPath = join(parentDir, "log.ndjson");
 
     const terminal = new ProcessTerminal();
     const tui = new TUI(terminal);

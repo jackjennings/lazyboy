@@ -8,7 +8,6 @@ import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
 import type { TicketState } from "../state/types.ts";
-import { tempHome } from "../test-support.ts";
 import { performRetry } from "./retry.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
@@ -32,7 +31,6 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
 Deno.test(
   "performRetry: throws when ticket is not in needs-attention",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "spec", status: "waiting" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -51,7 +49,6 @@ Deno.test(
 Deno.test(
   "performRetry: throws when ticket is running",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "plan", status: "running" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -70,7 +67,6 @@ Deno.test(
 Deno.test(
   "performRetry: resets spec/needs-attention to spec/waiting",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "spec", status: "needs-attention" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -92,7 +88,6 @@ Deno.test(
 Deno.test(
   "performRetry: resets intake/needs-attention to intake/new",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "intake", status: "needs-attention" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -114,7 +109,6 @@ Deno.test(
 Deno.test(
   "performRetry: preserves approvals through retry",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({
       phase: "implementation",
       status: "needs-attention",
@@ -145,7 +139,6 @@ Deno.test(
 Deno.test(
   "performRetry: appends status-transition log entry",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "plan", status: "needs-attention" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -169,7 +162,6 @@ Deno.test(
 Deno.test(
   "performRetry: appends log with 'new' as target for intake phase",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({ phase: "intake", status: "needs-attention" });
     const stateDir = await Deno.makeTempDir();
     await writeTicket(stateDir, ticket);
@@ -193,7 +185,6 @@ Deno.test(
 Deno.test(
   "performRetry: calls commitFn with stateDir, id, and retry message",
   async () => {
-    using _home = tempHome();
     const ticket = makeTicket({
       phase: "enrichment",
       status: "needs-attention",

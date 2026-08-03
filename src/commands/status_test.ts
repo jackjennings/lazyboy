@@ -15,6 +15,7 @@ import {
   formatStatusHeader,
   formatStatusRow,
   formatTokens,
+  readAttentionReason,
   readTicketCost,
   readTicketTokens,
   shouldHideTicket,
@@ -484,4 +485,276 @@ Deno.test(
 
 Deno.test("status command has completesWith set to _ids", () => {
   assertEquals(status.completesWith, "_ids");
+});
+
+// ── readAttentionReason ───────────────────────────────────────────────────────
+
+Deno.test("readAttentionReason: returns null when log file is missing", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    assertEquals(await readAttentionReason(tempDir), null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: returns null when log has no matching events", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-30T10:00:00Z",
+        event: "phase-start",
+        phase: "intake",
+      }) + "\n",
+    );
+    assertEquals(await readAttentionReason(tempDir), null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: returns last matching entry when multiple exist", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      [
+        JSON.stringify({
+          ts: "2026-07-30T10:00:00Z",
+          event: "needs-attention",
+          reason: "clone-failed",
+        }),
+        JSON.stringify({
+          ts: "2026-07-30T11:00:00Z",
+          event: "phase-start",
+          phase: "intake",
+        }),
+        JSON.stringify({
+          ts: "2026-07-30T12:00:00Z",
+          event: "needs-attention",
+          reason: "worktree-creation-failed",
+        }),
+      ].join("\n") + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-30T12:00:00Z: needs-attention: reason=worktree-creation-failed",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats phase-output-invalid with phase and reason", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-30T16:41:11Z",
+        event: "phase-output-invalid",
+        phase: "intake",
+        reason: "missing",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-30T16:41:11Z: phase-output-invalid: phase=intake, reason=missing",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats phase-transition to needs-attention with reason", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T18:06:28Z",
+        event: "phase-transition",
+        from: "intake",
+        to: "needs-attention",
+        reason: "no-worktrees",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T18:06:28Z: phase-transition: reason=no-worktrees",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: ignores phase-transition not targeting needs-attention", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T18:06:28Z",
+        event: "phase-transition",
+        from: "intake",
+        to: "running",
+        reason: "retry",
+      }) + "\n",
+    );
+    assertEquals(await readAttentionReason(tempDir), null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats needs-attention event with reason", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T18:06:28Z",
+        event: "needs-attention",
+        reason: "clone-failed",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T18:06:28Z: needs-attention: reason=clone-failed",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats conflict-resolution-failed with reason and branch, omits worktreePath", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T19:45:22Z",
+        event: "conflict-resolution-failed",
+        reason: "agent-failed",
+        branch: "github/jackjennings/lazyboy/271",
+        worktreePath: "/some/long/path",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T19:45:22Z: conflict-resolution-failed: reason=agent-failed, branch=github/jackjennings/lazyboy/271",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats error/resolveCITriage with reason and runId", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T20:00:00Z",
+        event: "error",
+        context: "resolveCITriage",
+        reason: "output-file-missing",
+        runId: "wf_abc123",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T20:00:00Z: error: reason=output-file-missing, runId=wf_abc123",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: ignores error events without resolveCITriage context", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T20:00:00Z",
+        event: "error",
+        context: "other",
+        reason: "something",
+      }) + "\n",
+    );
+    assertEquals(await readAttentionReason(tempDir), null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: skips malformed JSON lines and continues scanning", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      [
+        "not-valid-json",
+        JSON.stringify({
+          ts: "2026-07-31T18:06:28Z",
+          event: "needs-attention",
+          reason: "clone-failed",
+        }),
+      ].join("\n") + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T18:06:28Z: needs-attention: reason=clone-failed",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+// ── formatDetailView (Reason line) ────────────────────────────────────────────
+
+Deno.test("formatDetailView: appends Reason line when attentionReason is provided", () => {
+  const ticket = makeTicket({ status: "needs-attention" });
+  const out = formatDetailView(
+    ticket,
+    null,
+    { cost: null, partial: false },
+    "2026-07-30T16:41:11Z: needs-attention: reason=clone-failed",
+  );
+  assertStringIncludes(
+    out,
+    "Reason   2026-07-30T16:41:11Z: needs-attention: reason=clone-failed",
+  );
+});
+
+Deno.test("formatDetailView: omits Reason line when attentionReason is null", () => {
+  const ticket = makeTicket({ status: "needs-attention" });
+  const out = formatDetailView(
+    ticket,
+    null,
+    { cost: null, partial: false },
+    null,
+  );
+  assertFalse(out.includes("Reason"));
+});
+
+Deno.test("formatDetailView: omits Reason line when attentionReason is not passed", () => {
+  const ticket = makeTicket({ status: "needs-attention" });
+  const out = formatDetailView(ticket, null, { cost: null, partial: false });
+  assertFalse(out.includes("Reason"));
+});
+
+Deno.test("formatDetailView: Reason is the last line", () => {
+  const ticket = makeTicket({ status: "needs-attention" });
+  const out = formatDetailView(
+    ticket,
+    null,
+    { cost: null, partial: false },
+    "2026-07-30T16:41:11Z: needs-attention: reason=clone-failed",
+  );
+  const lines = out.split("\n");
+  assert(lines[lines.length - 1].startsWith("Reason"));
 });

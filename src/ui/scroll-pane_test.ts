@@ -222,3 +222,54 @@ Deno.test("ScrollPane: isAtEnd accounts for expanded lines from multiline string
   pane.scrollToEnd();
   assert(pane.isAtEnd(80));
 });
+
+Deno.test("ScrollPane: arrow down advances scroll by one line", () => {
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.handleInput("\x1b[B");
+  assertEquals(pane.scrollOffset, 1);
+});
+
+Deno.test("ScrollPane: arrow up retreats scroll by one line", () => {
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.handleInput("\x1b[B");
+  pane.handleInput("\x1b[A");
+  assertEquals(pane.scrollOffset, 0);
+});
+
+Deno.test("ScrollPane: arrow down at bottom is no-op", () => {
+  const content = Array.from({ length: 7 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.scrollToEnd();
+  const before = pane.scrollOffset;
+  pane.handleInput("\x1b[B");
+  assertEquals(pane.scrollOffset, before);
+});
+
+Deno.test("ScrollPane: arrow up at top is no-op", () => {
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.handleInput("\x1b[A");
+  assertEquals(pane.scrollOffset, 0);
+});

@@ -167,14 +167,12 @@ export function deriveOrgFromTicketDir(
 }
 
 export async function resolveFailingOutput(
-  outputText: string | undefined,
   externalId: string | undefined,
   name: string,
   repoSlug: string,
   token: string,
   fetcher: typeof fetch = fetch,
 ): Promise<string> {
-  if (outputText) return outputText;
   if (externalId) {
     try {
       const res = await fetcher(
@@ -472,7 +470,6 @@ export function composeTickDeps(
                 conclusion: string;
                 name: string;
                 external_id?: string;
-                output?: { text?: string };
               }>
             ).find((r) => r.conclusion === "failure");
             const stepName = failing?.name ?? "";
@@ -480,7 +477,6 @@ export function composeTickDeps(
               runId: String(suite.id),
               conclusion: suite.conclusion as "failure" | "action_required",
               failingOutput: await resolveFailingOutput(
-                failing?.output?.text,
                 failing?.external_id,
                 stepName,
                 repoSlug,

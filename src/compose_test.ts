@@ -319,30 +319,10 @@ function makeOkFetcher(body: string) {
 }
 
 Deno.test(
-  "resolveFailingOutput: returns output.text when present, fetcher not called",
-  async () => {
-    const fetcherSpy = spy(() =>
-      Promise.resolve(new Response("", { status: 200 }))
-    );
-    const result = await resolveFailingOutput(
-      "some output",
-      "42",
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcherSpy as unknown as typeof fetch,
-    );
-    assertEquals(result, "some output");
-    assertSpyCalls(fetcherSpy, 0);
-  },
-);
-
-Deno.test(
-  "resolveFailingOutput: fetches log when output.text absent and external_id present",
+  "resolveFailingOutput: fetches log when external_id present",
   async () => {
     const fetcher = makeOkFetcher("build output here");
     const result = await resolveFailingOutput(
-      undefined,
       "42",
       "ci",
       "owner/repo",
@@ -358,7 +338,6 @@ Deno.test("resolveFailingOutput: truncates log to last 20480 chars", async () =>
   const long = "a".repeat(30000);
   const fetcher = makeOkFetcher(long);
   const result = await resolveFailingOutput(
-    undefined,
     "42",
     "ci",
     "owner/repo",
@@ -375,7 +354,6 @@ Deno.test(
       Promise.resolve(new Response("", { status: 403 }))
     );
     const result = await resolveFailingOutput(
-      undefined,
       "42",
       "ci",
       "owner/repo",
@@ -389,7 +367,6 @@ Deno.test(
 Deno.test("resolveFailingOutput: returns name when log fetch throws", async () => {
   const fetcherSpy = spy(() => Promise.reject(new Error("network")));
   const result = await resolveFailingOutput(
-    undefined,
     "42",
     "ci",
     "owner/repo",
@@ -406,7 +383,6 @@ Deno.test(
       Promise.resolve(new Response("", { status: 200 }))
     );
     const result = await resolveFailingOutput(
-      undefined,
       undefined,
       "ci",
       "owner/repo",
@@ -425,7 +401,6 @@ Deno.test(
       Promise.resolve(new Response("", { status: 200 }))
     );
     const result = await resolveFailingOutput(
-      undefined,
       "",
       "ci",
       "owner/repo",
@@ -446,7 +421,6 @@ Deno.test(
       return Promise.resolve(new Response("log", { status: 200 }));
     });
     await resolveFailingOutput(
-      undefined,
       "99",
       "ci",
       "owner/repo",

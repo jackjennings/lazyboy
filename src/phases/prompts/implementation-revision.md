@@ -25,8 +25,26 @@ message. Then push to the existing remote branch:
 
 git push origin HEAD
 
-Do not open a new pull request. The pull request already exists and will update
-automatically when you push. Do not modify the `prs` array in meta.md.
+In the common case the revision continues on the same branches as the original
+implementation. Each existing pull request updates automatically when you push,
+so do not open a new pull request and do not modify the `prs` array in meta.md.
+
+Only when the revision abandons an existing pull request — because the approach
+changed so its branch is no longer part of the solution (for example the change
+moved to a different repository, or the feedback made that PR unnecessary) —
+reconcile the `prs` array with the new set of pull requests:
+
+- Close the abandoned PR on GitHub with `gh pr close <url>`.
+- Remove that PR's entry from the `prs` array entirely, and remove its URL from
+  every other entry's `dependsOn`. Do not merely flag it — a lingering entry
+  that never merges keeps the ticket stuck in the merge phase forever.
+- For each new pull request the revised approach requires, open it as a draft
+  with `gh pr create --draft` exactly as the initial implementation does, then
+  append a `PrEntry` with `url`, `title`, `dependsOn` (empty unless it stacks on
+  another PR), `merged: false`, and `worktreeKey`.
+
+A routine revision that only pushes more commits to the existing branches must
+leave the `prs` array untouched.
 
 After pushing, update any open pull request descriptions. Read `ticket.prs` from
 `meta.md`. For each entry where `merged` is `false` and `closed` is not `true`,

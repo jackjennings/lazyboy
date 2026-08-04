@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertFalse,
+  assertGreater,
   assertLessOrEqual,
   assertRejects,
   assertStringIncludes,
@@ -18,7 +19,7 @@ import {
   formatTimestamp,
   renderDiff,
   review,
-  truncateDiffLines,
+  wrapDiffLines,
 } from "./review.ts";
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { join } from "@std/path";
@@ -561,28 +562,38 @@ Deno.test("renderDiff: does not emit trailing blank line from file-ending newlin
   assert(lines.every((l) => stripAnsiCode(l) !== ""));
 });
 
-// ── truncateDiffLines ─────────────────────────────────────────────────────────
+// ── wrapDiffLines ─────────────────────────────────────────────────────────────
 
-Deno.test("truncateDiffLines: truncates a plain line longer than width to fit with ellipsis", () => {
-  const long = "a".repeat(200);
-  const result = truncateDiffLines([long], 80);
-  assertEquals(result.length, 1);
-  assertLessOrEqual(stripAnsiCode(result[0]).length, 80);
-  assert(stripAnsiCode(result[0]).endsWith("..."));
-});
-
-Deno.test("truncateDiffLines: returns a plain line shorter than width unchanged", () => {
-  const short = "hello world";
-  const result = truncateDiffLines([short], 80);
-  assertEquals(result[0], short);
-});
-
-Deno.test("truncateDiffLines: truncates ANSI-colored diff lines to visible width", () => {
-  const diffLines = renderDiff("", "a".repeat(200) + "\n");
-  const result = truncateDiffLines(diffLines, 80);
+Deno.test("wrapDiffLines: wraps long added line and prefixes each continuation with '+ '", () => {
+  const lines = renderDiff("", ("word ".repeat(40)).trimEnd() + "\n");
+  const result = wrapDiffLines(lines, 80);
+  assertGreater(result.length, 1);
   for (const line of result) {
     assertLessOrEqual(stripAnsiCode(line).length, 80);
+    assert(stripAnsiCode(line).startsWith("+ "));
+    assertFalse(stripAnsiCode(line).endsWith("..."));
   }
+});
+
+Deno.test("wrapDiffLines: does not truncate long single-token removed line", () => {
+  const lines = renderDiff("a".repeat(200) + "\n", "");
+  const result = wrapDiffLines(lines, 80);
+  assertEquals(result.length, 1);
+  assertGreater(stripAnsiCode(result[0]).length, 80);
+  assertFalse(stripAnsiCode(result[0]).endsWith("..."));
+});
+
+Deno.test("wrapDiffLines: short context line is returned unchanged", () => {
+  const lines = renderDiff("context text\n", "context text\n");
+  const result = wrapDiffLines(lines, 80);
+  assertEquals(result.length, 1);
+  assertEquals(result[0], lines[0]);
+});
+
+Deno.test("wrapDiffLines: short diff lines produce identical output to renderDiff", () => {
+  const diffLines = renderDiff("old line\n", "new line\n");
+  const result = wrapDiffLines(diffLines, 80);
+  assertEquals(result, diffLines);
 });
 
 // ── buildQuestionSystemPrompt ────────────────────────────────────────────────

@@ -40,6 +40,19 @@ export const PHASE_MODEL_DEFAULTS: Record<
   "ci-triage": { model: "claude-sonnet-4-6", thinking: "high" },
 };
 
+const THINKING_LEVEL_ORDER = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+const IMPLEMENTATION_MODEL_FLOOR = "claude-sonnet-4-6";
+const IMPLEMENTATION_THINKING_FLOOR = "high";
+
 export function resolvePhaseModel(
   config: Config,
   phase: ActivePhase | "conflict-resolution" | "ci-triage",
@@ -48,11 +61,26 @@ export function resolvePhaseModel(
   const ticketOverride = ticket.phases?.[phase];
   const configDefault = config.phases?.defaults?.[phase];
   const hardcoded = PHASE_MODEL_DEFAULTS[phase];
-  return {
-    model: ticketOverride?.model ?? configDefault?.model ?? hardcoded.model,
-    thinking: ticketOverride?.thinking ?? configDefault?.thinking ??
-      hardcoded.thinking,
-  };
+  let model = ticketOverride?.model ?? configDefault?.model ?? hardcoded.model;
+  let thinking = ticketOverride?.thinking ?? configDefault?.thinking ??
+    hardcoded.thinking;
+
+  if (phase === "implementation") {
+    if (model.includes("haiku")) {
+      model = IMPLEMENTATION_MODEL_FLOOR;
+    }
+    const thinkingIdx = THINKING_LEVEL_ORDER.indexOf(
+      thinking as (typeof THINKING_LEVEL_ORDER)[number],
+    );
+    const floorIdx = THINKING_LEVEL_ORDER.indexOf(
+      IMPLEMENTATION_THINKING_FLOOR,
+    );
+    if (thinkingIdx !== -1 && thinkingIdx < floorIdx) {
+      thinking = IMPLEMENTATION_THINKING_FLOOR;
+    }
+  }
+
+  return { model, thinking };
 }
 
 export interface TickDeps {

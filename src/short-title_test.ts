@@ -1,7 +1,10 @@
 import {
   assertArrayIncludes,
   assertEquals,
+  assertFalse,
+  assertLess,
   assertNotEquals,
+  assertStringIncludes,
 } from "@std/assert";
 import type { CommandRunner } from "./apfel.ts";
 import { generateShortTitle } from "./short-title.ts";
@@ -52,5 +55,33 @@ Deno.test(
       capturedArgs[capturedArgs.length - 1],
       "Add hud subcommand for live agent status",
     );
+  },
+);
+
+Deno.test(
+  "generateShortTitle: includes context in the user prompt when provided",
+  async () => {
+    let userPrompt = "";
+    const run: CommandRunner = (args) => {
+      userPrompt = args[args.length - 1];
+      return Promise.resolve({ code: 0, stdout: "Short" });
+    };
+    await generateShortTitle(run, "Fix flaky login test", "Details here.");
+    assertStringIncludes(userPrompt, "Fix flaky login test");
+    assertStringIncludes(userPrompt, "Details here.");
+  },
+);
+
+Deno.test(
+  "generateShortTitle: truncates oversized context",
+  async () => {
+    let userPrompt = "";
+    const run: CommandRunner = (args) => {
+      userPrompt = args[args.length - 1];
+      return Promise.resolve({ code: 0, stdout: "Short" });
+    };
+    await generateShortTitle(run, "Title", "x".repeat(50000));
+    assertLess(userPrompt.length, 50000);
+    assertFalse(userPrompt.includes("x".repeat(20000)));
   },
 );

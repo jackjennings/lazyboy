@@ -129,7 +129,10 @@ export interface TickServiceDeps {
   appendTickLog?(entry: object): Promise<void>;
   runCeremonies?(): Promise<void>;
   scaffoldStatePrompts?(): Promise<void>;
-  generateShortTitle?(title: string): Promise<string | null>;
+  generateShortTitle?(
+    title: string,
+    context?: string,
+  ): Promise<string | null>;
   notifyTickFailure?(error: string): Promise<void>;
 }
 
@@ -618,7 +621,8 @@ export class TickService {
       const newItems = await provider.fetchNew(existingIds);
       for (const item of newItems) {
         const shortTitle = deps.generateShortTitle
-          ? (await deps.generateShortTitle(item.title)) ?? undefined
+          ? (await deps.generateShortTitle(item.title, item.description)) ??
+            undefined
           : undefined;
         await deps.writeTicket({
           id: item.id,

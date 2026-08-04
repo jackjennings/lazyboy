@@ -860,10 +860,10 @@ export function composeTickDeps(
         config.jira?.project,
       ),
     runCeremonies: () => ceremonies.run(),
-    generateShortTitle: async (title) => {
+    generateShortTitle: async (title, context) => {
       const available = await checkApfelAvailable(defaultCommandRunner());
       if (!available) return null;
-      return apfelGenerateShortTitle(captureCommandRunner(), title);
+      return apfelGenerateShortTitle(captureCommandRunner(), title, context);
     },
   };
 }

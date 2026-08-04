@@ -28,17 +28,12 @@ Config is read from `~/.config/lazyboy/config.toml`.
 deno task test                          # run all tests
 LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/foo_test.ts  # single file
 deno task start tick                    # run the tick loop once
-bin/lazyboy status
+deno run --allow-all src/index.ts status
 
 notion-fetch page <url>           # fetch a Notion page as Markdown (requires NOTION_TOKEN)
 notion-fetch database <url>       # fetch a Notion database as a Markdown table
 notion-fetch search <query>       # search the Notion workspace
 ```
-
-Production Deno processes must run via `bin/lazyboy` or `scripts/tick.sh`, which
-pre-parse `config.toml` and use scoped Deno permission flags. Do not invoke
-`deno run --allow-all src/index.ts` for production use. `--allow-all` is
-reserved for test runs (`deno task test`, `deno test --allow-all`).
 
 ## Architecture
 

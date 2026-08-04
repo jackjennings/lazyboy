@@ -4,6 +4,7 @@ import {
   type Focusable,
   matchesKey,
   type TUI,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 
 export class ScrollPane implements Component, Focusable {
@@ -30,7 +31,11 @@ export class ScrollPane implements Component, Focusable {
   }
 
   private expandLines(width: number): string[] {
-    return this.getLinesFn(width).flatMap((line) => line.split(/\r\n|\n|\r/));
+    const raw = this.getLinesFn(width).flatMap((line) =>
+      line.split(/\r\n|\n|\r/)
+    );
+    if (width <= 0) return raw;
+    return raw.flatMap((segment) => wrapTextWithAnsi(segment, width));
   }
 
   setContent(getLines: (width: number) => string[]): void {

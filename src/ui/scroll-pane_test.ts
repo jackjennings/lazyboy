@@ -273,3 +273,94 @@ Deno.test("ScrollPane: arrow up at top is no-op", () => {
   pane.handleInput("\x1b[A");
   assertEquals(pane.scrollOffset, 0);
 });
+
+Deno.test(
+  "ScrollPane: 160-char line expands to 2 visual lines at width 80",
+  () => {
+    const longLine = "x".repeat(160);
+    const pane = new ScrollPane({
+      getLines: (_w) => [longLine],
+      tui: makeTui(24, 80),
+      title: "T",
+      getHeight: () => 1,
+    });
+    const firstPage = pane.render(80);
+    assertEquals(firstPage.length, 2);
+    assertEquals(firstPage[1], "x".repeat(80));
+    pane.handleInput(" ");
+    const secondPage = pane.render(80);
+    assertEquals(secondPage.length, 2);
+    assertEquals(secondPage[1], "x".repeat(80));
+  },
+);
+
+Deno.test("ScrollPane: scrollToEnd accounts for wrapped lines", () => {
+  const longLine = "x".repeat(160);
+  const pane = new ScrollPane({
+    getLines: (_w) => [longLine],
+    tui: makeTui(24, 80),
+    title: "T",
+    getHeight: () => 1,
+  });
+  pane.scrollToEnd();
+  assertEquals(pane.render(80)[1], "x".repeat(80));
+});
+
+Deno.test(
+  "ScrollPane: isAtEnd is false when wrapped line extends past viewport",
+  () => {
+    const longLine = "x".repeat(160);
+    const pane = new ScrollPane({
+      getLines: (_w) => [longLine],
+      tui: makeTui(24, 80),
+      title: "T",
+      getHeight: () => 1,
+    });
+    assertFalse(pane.isAtEnd(80));
+    pane.scrollToEnd();
+    assert(pane.isAtEnd(80));
+  },
+);
+
+Deno.test(
+  "ScrollPane: no-whitespace line hard-wraps at width boundary",
+  () => {
+    const noSpaceLine = "a".repeat(160);
+    const pane = new ScrollPane({
+      getLines: (_w) => [noSpaceLine],
+      tui: makeTui(24, 80),
+      title: "T",
+      getHeight: () => 5,
+    });
+    const contentLines = pane.render(80).slice(1);
+    assertEquals(contentLines.length, 2);
+    assert(contentLines.every((l) => l.length <= 80));
+  },
+);
+
+Deno.test(
+  "ScrollPane: expandLines falls back to newline split when width is 0",
+  () => {
+    const pane = new ScrollPane({
+      getLines: (_w) => ["first\nsecond"],
+      tui: makeTui(24, 0),
+      title: "T",
+      getHeight: () => 5,
+    });
+    const rendered = pane.render(0);
+    assert(rendered.some((l) => l === "first"));
+    assert(rendered.some((l) => l === "second"));
+  },
+);
+
+Deno.test("ScrollPane: bare \\r is treated as a line break", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["before\rafter"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+  });
+  const rendered = pane.render(80);
+  assert(rendered.some((l) => l === "before"));
+  assert(rendered.some((l) => l === "after"));
+});

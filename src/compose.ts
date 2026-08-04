@@ -508,6 +508,7 @@ export function composeTickDeps(
               agent: agentType,
               model: opts.model,
               thinking: opts.thinking,
+              codebaseRoots: expandedRoots,
               contextFiles: [
                 `@${opts.ticketDir}/meta.md`,
                 `@${opts.ticketDir}/${opts.contextFile}`,

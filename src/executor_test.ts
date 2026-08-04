@@ -27,7 +27,6 @@ function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
     model: "claude-sonnet-4-6",
     thinking: "off",
     agent: "pi",
-    codebaseRoots: [],
     ...overrides,
   };
 }
@@ -57,39 +56,10 @@ Deno.test("buildPhaseArgs: does not include bash wrapper flags", () => {
   assertFalse(args.includes("bash"));
 });
 
-Deno.test("buildPhaseArgs: uses scoped permissions instead of --allow-all", () => {
+Deno.test("buildPhaseArgs: first two args are run --allow-all", () => {
   const args = buildPhaseArgs(makeOpts());
   assertEquals(args[0], "run");
-  assertEquals(args.includes("--allow-all"), false);
-  assertNotEquals(args.find((a) => a.startsWith("--allow-read=")), undefined);
-  assertNotEquals(args.find((a) => a.startsWith("--allow-write=")), undefined);
-  assertEquals(
-    args.find((a) => a.startsWith("--allow-net=")),
-    "--allow-net=api.github.com,api.anthropic.com",
-  );
-  assertNotEquals(args.find((a) => a.startsWith("--allow-env=")), undefined);
-  assertNotEquals(args.find((a) => a.startsWith("--allow-run=")), undefined);
-  assertEquals(args.includes("--allow-sys=kill"), true);
-});
-
-Deno.test("buildPhaseArgs: --allow-read includes ticketDir and codebaseRoots", () => {
-  const args = buildPhaseArgs(
-    makeOpts({ ticketDir: "/state/gh-1", codebaseRoots: ["/home/user/code"] }),
-  );
-  const readFlag = args.find((a) => a.startsWith("--allow-read="))!;
-  const paths = readFlag.slice("--allow-read=".length).split(",");
-  assertEquals(paths.some((p) => p === "/state/gh-1"), true);
-  assertEquals(paths.some((p) => p === "/home/user/code"), true);
-});
-
-Deno.test("buildPhaseArgs: --allow-read includes worktree paths", () => {
-  const args = buildPhaseArgs(
-    makeOpts({
-      worktrees: { main: { path: "/worktree/path", branch: "main" } },
-    }),
-  );
-  const readFlag = args.find((a) => a.startsWith("--allow-read="))!;
-  assertEquals(readFlag.includes("/worktree/path"), true);
+  assertEquals(args[1], "--allow-all");
 });
 
 Deno.test("isProcessAlive returns true for current process", () => {

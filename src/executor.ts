@@ -13,6 +13,7 @@ export interface ExecutorOptions {
   model: string;
   thinking: string;
   agent: "pi" | "claude-code";
+  codebaseRoots: string[];
   contextFiles?: string[];
   pidFile?: string;
   sessionId?: string;
@@ -30,10 +31,39 @@ export function isProcessAlive(pid: number): boolean {
 
 export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   const runPhaseScript = new URL("./run-phase.ts", import.meta.url).pathname;
+  const srcDir = new URL(".", import.meta.url).pathname;
   const phase = opts.outputFile.replace(/\.md$/, "");
+  const homeDir = Deno.env.get("HOME") ?? "";
+  const shellPath = Deno.env.get("SHELL");
+  const worktreePaths = Object.values(opts.worktrees).map((w) => w.path);
+  const readPaths = [
+    `${homeDir}/.config/lazyboy`,
+    `${homeDir}/.lazyboy`,
+    srcDir,
+    opts.ticketDir,
+    ...opts.scopeDirs,
+    ...worktreePaths,
+    ...opts.codebaseRoots,
+  ].filter(Boolean);
+  const runTargets = [
+    "git",
+    "deno",
+    "pi",
+    "claude",
+    "osascript",
+    "crontab",
+    "gh",
+    "tail",
+    ...(shellPath ? [shellPath] : []),
+  ];
   const args = [
     "run",
-    "--allow-all",
+    `--allow-read=${readPaths.join(",")}`,
+    `--allow-write=${homeDir}/.lazyboy,${opts.ticketDir}`,
+    "--allow-net=api.github.com,api.anthropic.com",
+    "--allow-env=HOME,GITHUB_TOKEN,ANTHROPIC_API_KEY,GITHUB_LOGIN,SHELL,JIRA_EMAIL,JIRA_API_TOKEN,PATH",
+    `--allow-run=${runTargets.join(",")}`,
+    "--allow-sys=kill",
     runPhaseScript,
     "--ticket-dir",
     opts.ticketDir,

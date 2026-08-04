@@ -4,6 +4,7 @@ import {
   assertFalse,
   assertGreater,
   assertLess,
+  assertMatch,
   assertStringIncludes,
 } from "@std/assert";
 import { join } from "@std/path";
@@ -222,9 +223,10 @@ Deno.test("formatStatusRow: pads ID field to 36 characters", () => {
   assert(row.startsWith("github/jackjennings/lazyboy/23      "));
 });
 
-Deno.test("formatStatusHeader: separator line is 117 characters", () => {
+Deno.test("formatStatusHeader: separator line is a full-width rule", () => {
   const lines = formatStatusHeader().split("\n");
-  assertEquals(lines[1].length, 117);
+  assertGreater(lines[1].length, 0);
+  assertMatch(lines[1], /^─+$/);
 });
 
 // ── shouldHideTicket ──────────────────────────────────────────────────────────

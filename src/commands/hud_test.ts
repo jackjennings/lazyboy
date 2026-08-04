@@ -18,7 +18,7 @@ Deno.test("formatTickLogLine: formats time", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","error":"oh no"}',
   );
-  assertMatch(line, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  assertMatch(stripAnsiCode(line), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   assertStringIncludes(line, "tick-failed");
   assertStringIncludes(line, "error=oh no");
 });
@@ -56,7 +56,10 @@ Deno.test("formatTickLogLine: renders id second", () => {
   const line = formatTickLogLine(
     '{"ts":"2026-07-29T12:00:00Z","id":"github/jackjennings/lazyboy/258","event":"tick-already-running"}',
   );
-  assertEquals(line.split(" ", 3)[1], "github/jackjennings/lazyboy/258");
+  assertEquals(
+    stripAnsiCode(line).split(" ", 3)[1],
+    "github/jackjennings/lazyboy/258",
+  );
 });
 
 Deno.test("formatTickLogLine: renders context with event", () => {

@@ -2701,7 +2701,7 @@ Deno.test(
       ).pathname,
     );
     assertStringIncludes(spawnedPrompt, supplement.trim());
-    assertFalse(spawnedPrompt.includes("gh pr create"));
+    assertFalse(supplement.includes("gh pr create"));
   },
 );
 

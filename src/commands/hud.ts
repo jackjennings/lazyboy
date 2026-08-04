@@ -3,7 +3,7 @@ import { lazyboyDir } from "../paths.ts";
 import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
 import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
-import { isCronEnabled } from "../cron.ts";
+import { isLaunchdEnabled } from "../launchd.ts";
 import { isPhaseAlive } from "../executor.ts";
 import {
   compareTickets,
@@ -74,7 +74,7 @@ async function readState(
   config: { tick: { concurrency: number } },
 ): Promise<{ header: string; statusLines: string[] }> {
   const [enabled, ids] = await Promise.all([
-    isCronEnabled(),
+    isLaunchdEnabled(),
     listTickets(stateDir),
   ]);
   const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));

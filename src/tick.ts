@@ -357,6 +357,21 @@ export async function advancePhase(
         return;
       }
 
+      if (ticket.phase === "implementation" && !(ticket.prs?.length)) {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-transition",
+          from: "implementation",
+          to: "needs-attention",
+          reason: "no-prs",
+        });
+        return;
+      }
+
       const principles = extractPrinciples(outputContent);
       if (principles) {
         await deps.appendPrinciples(

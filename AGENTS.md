@@ -11,7 +11,7 @@ These must be present on the host; they are not managed by Deno.
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `git`                         | Worktree management, rebase/push, state repo commits                                                                                                             |
 | `pi`                          | Runs phase prompts; checks/installs agent packages                                                                                                               |
-| `crontab`                     | Installs and removes the tick cron job                                                                                                                           |
+| `launchctl`                   | Loads and unloads the tick LaunchAgent (`com.jackjennings.lazyboy`)                                                                                              |
 | GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                                                  |
 | `apfel`                       | Runs local LLM server for approval classification in review mode; also generates short titles at ticket ingestion (optional; skipped when absent or unavailable) |
 | `git-worktreeinclude`         | Copies declared files from main checkout into new worktrees                                                                                                      |
@@ -44,9 +44,9 @@ the subcommand takes a ticket ID argument.
 
 ## Architecture
 
-lazyboy is a cron-driven pipeline. `TickService` (`src/tick.ts`) owns the tick
-workflow: acquire lock → install packages → fetch work → migrate → action pass →
-advance pass → commit.
+lazyboy is a LaunchAgent-driven pipeline. `TickService` (`src/tick.ts`) owns the
+tick workflow: acquire lock → install packages → fetch work → migrate → action
+pass → advance pass → commit.
 
 - `composeTickDeps` (`src/compose.ts`) is the single site where concrete
   adapters are constructed. No adapter construction happens inside
@@ -192,9 +192,9 @@ UTC) and `event`. Events: `tick-already-running`, `stale-lock`, `lock-failed`,
 `tick-failed`. `appendTickLog` (`src/tick.ts`) writes it directly; it is not
 `appendTicketLog` (`src/state/store.ts`).
 
-The cron line from `cronLine()` must **not** redirect stdout/stderr to
-`tick.ndjson` — the tick process owns its own writes. Do not add
-`>> … tick.ndjson 2>&1`.
+The plist from `plistContent()` must **not** include `StandardOutPath` or
+`StandardErrorPath` pointing to `tick.ndjson` — the tick process owns its own
+writes.
 
 ## Per-ticket `log.ndjson` format
 

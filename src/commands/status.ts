@@ -203,13 +203,19 @@ export function shouldHideTicket(phase: string, status: string): boolean {
   return (phase === "merge" && status === "done") || phase === "wont-do";
 }
 
+function terminalWidth(fallback: number): number {
+  try {
+    return Deno.consoleSize().columns;
+  } catch {
+    return fallback;
+  }
+}
+
 export function formatStatusHeader(): string {
-  return [
-    `${"ID".padEnd(36)} ${"PHASE".padEnd(16)} ${"STATUS".padEnd(17)} ${
-      "APPROVED".padEnd(9)
-    } ${"TOKENS".padStart(10)} TITLE`,
-    "-".repeat(117),
-  ].join("\n");
+  const header = `${"ID".padEnd(36)} ${"PHASE".padEnd(16)} ${
+    "STATUS".padEnd(17)
+  } ${"APPROVED".padEnd(9)} ${"TOKENS".padStart(10)} TITLE`;
+  return [header, "─".repeat(terminalWidth(header.length))].join("\n");
 }
 
 export const status: Command = {

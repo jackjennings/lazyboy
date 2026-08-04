@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
-import { bgGreen, bgRed, dim, white } from "@std/fmt/colors";
+import { bgGreen, bgRed, black, dim, inverse, white } from "@std/fmt/colors";
 import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
 import { isCronEnabled } from "../cron.ts";
@@ -42,9 +42,11 @@ export function formatTickLogLine(raw: string): string {
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   const subject = context ? `${context}/${event}` : event;
-  return extras
-    ? `${timeStr} ${id} ${subject} ${extras}`
-    : `${timeStr} ${id} ${subject}`;
+  let line = `${dim(timeStr)} ${inverse(String(id))} ${subject}`
+  if (extras) {
+    line += ` ${extras}`
+  }
+  return line;
 }
 
 export function formatHudHeader(
@@ -53,8 +55,8 @@ export function formatHudHeader(
   max: number,
 ): string {
   const badge = enabled
-    ? bgGreen(white(" enabled "))
-    : bgRed(white(" disabled "));
+    ? bgGreen(black(" enabled "))
+    : bgRed(black(" disabled "));
   return `${badge}  ${running}/${max} running`;
 }
 
@@ -93,7 +95,7 @@ async function readState(
         t.status,
         t.approvals,
         formatTokens(tokenTotals[i]),
-        t.title,
+        t.shortTitle ?? t.title,
       )
     ),
   ];

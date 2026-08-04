@@ -174,3 +174,51 @@ Deno.test("ScrollPane: onInvalidate callback is called by invalidate()", () => {
   pane.invalidate();
   assert(called);
 });
+
+Deno.test("ScrollPane: render expands \\n in string into separate rows", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["first\nsecond"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+  });
+  const rendered = pane.render(80);
+  assert(rendered.some((l) => l === "first"));
+  assert(rendered.some((l) => l === "second"));
+});
+
+Deno.test("ScrollPane: render expands \\r\\n in string into separate rows", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["part1\r\npart2"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+  });
+  const rendered = pane.render(80);
+  assert(rendered.some((l) => l === "part1"));
+  assert(rendered.some((l) => l === "part2"));
+});
+
+Deno.test("ScrollPane: scrollToEnd accounts for multiline strings", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["a\nb\nc\nd\ne\nf"],
+    tui: makeTui(24, 80),
+    title: "T",
+    getHeight: () => 3,
+  });
+  pane.scrollToEnd();
+  const rendered = pane.render(80);
+  assert(rendered.some((l) => l === "f"));
+});
+
+Deno.test("ScrollPane: isAtEnd accounts for expanded lines from multiline strings", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["a\nb\nc\nd\ne"],
+    tui: makeTui(24, 80),
+    title: "T",
+    getHeight: () => 3,
+  });
+  assertFalse(pane.isAtEnd(80));
+  pane.scrollToEnd();
+  assert(pane.isAtEnd(80));
+});

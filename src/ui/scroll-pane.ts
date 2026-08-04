@@ -29,6 +29,10 @@ export class ScrollPane implements Component, Focusable {
     this.onInvalidateFn = options.onInvalidate;
   }
 
+  private expandLines(width: number): string[] {
+    return this.getLinesFn(width).flatMap((line) => line.split(/\r\n|\n|\r/));
+  }
+
   setContent(getLines: (width: number) => string[]): void {
     this.getLinesFn = getLines;
     this.scrollOffset = 0;
@@ -37,12 +41,12 @@ export class ScrollPane implements Component, Focusable {
   scrollToEnd(): void {
     const width = this.tui.terminal.columns;
     const height = this.getHeight();
-    const lines = this.getLinesFn(width);
+    const lines = this.expandLines(width);
     this.scrollOffset = Math.max(0, lines.length - height);
   }
 
   isAtEnd(width: number): boolean {
-    const lines = this.getLinesFn(width);
+    const lines = this.expandLines(width);
     const height = this.getHeight();
     return this.scrollOffset >= Math.max(0, lines.length - height);
   }
@@ -60,7 +64,7 @@ export class ScrollPane implements Component, Focusable {
     const width = this.tui.terminal.columns;
     if (matchesKey(data, "space") || matchesKey(data, "f")) {
       const height = this.getHeight();
-      const lines = this.getLinesFn(width);
+      const lines = this.expandLines(width);
       const maxOffset = Math.max(0, lines.length - height);
       this.scrollOffset = Math.min(this.scrollOffset + height, maxOffset);
     }
@@ -75,7 +79,7 @@ export class ScrollPane implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const lines = this.getLinesFn(width);
+    const lines = this.expandLines(width);
     const height = this.getHeight();
     const content = lines.slice(this.scrollOffset, this.scrollOffset + height);
     return [this.header(width), ...content];

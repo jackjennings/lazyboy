@@ -72,6 +72,15 @@ export class ScrollPane implements Component, Focusable {
       const height = this.getHeight();
       this.scrollOffset = Math.max(0, this.scrollOffset - height);
     }
+    if (matchesKey(data, "down")) {
+      const height = this.getHeight();
+      const lines = this.expandLines(width);
+      const maxOffset = Math.max(0, lines.length - height);
+      this.scrollOffset = Math.min(this.scrollOffset + 1, maxOffset);
+    }
+    if (matchesKey(data, "up")) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+    }
   }
 
   invalidate(): void {

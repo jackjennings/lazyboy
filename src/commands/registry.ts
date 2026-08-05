@@ -13,12 +13,14 @@ import { shell } from "./shell.ts";
 import { tail } from "./tail.ts";
 import { update } from "./update.ts";
 import { hud } from "./hud.ts";
+import { usage } from "./usage.ts";
 import type { Command } from "./types.ts";
 
 export const commands: Command[] = [
   tick,
   approve,
   status,
+  usage,
   enable,
   disable,
   ids,

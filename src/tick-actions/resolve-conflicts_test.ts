@@ -141,6 +141,13 @@ Deno.test(
     assertNotEquals(resolved, undefined);
     assertEquals(resolved!.worktreePath, "/wt/myorg/myrepo");
     assertEquals(resolved!.branch, "gh-7");
+
+    const pushed = (logged as Record<string, unknown>[]).find(
+      (e) => e.event === "branch-pushed",
+    );
+    assertNotEquals(pushed, undefined);
+    assertEquals(pushed!.worktreePath, "/wt/myorg/myrepo");
+    assertEquals(pushed!.branch, "gh-7");
   },
 );
 

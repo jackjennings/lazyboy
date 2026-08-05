@@ -88,8 +88,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
               });
             } else {
               await deps.appendLog(stateDir, ticket.id, {
-                event: "success",
-                context: "checkConflicts",
+                event: "branch-pushed",
                 worktreePath: wt.path,
                 branch: wt.branch,
               });

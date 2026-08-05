@@ -126,6 +126,11 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
           });
           return updated;
         }
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "branch-pushed",
+          worktreePath: wt.path,
+          branch: wt.branch,
+        });
       }
 
       for (const f of contextFiles) {

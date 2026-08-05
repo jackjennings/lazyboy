@@ -164,7 +164,7 @@ Deno.test("checkConflictsAction: fetch failure logs error and returns null", asy
 
 // ── clean rebase ──────────────────────────────────────────────────────────────
 
-Deno.test("checkConflictsAction: clean rebase and push → null, logs success", async () => {
+Deno.test("checkConflictsAction: clean rebase and push → null, logs branch-pushed", async () => {
   const logged: object[] = [];
   const calls: string[][] = [];
   const result = await makeAction({
@@ -189,10 +189,9 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs success", 
   );
   assertEquals(result, null);
   const rebaseClean = (logged as Record<string, unknown>[]).find(
-    (e) => e.event === "success",
+    (e) => e.event === "branch-pushed",
   );
   assertNotEquals(rebaseClean, undefined);
-  assertEquals(rebaseClean!.context, "checkConflicts");
   assertEquals(rebaseClean!.worktreePath, "/wt/myorg/myrepo");
   assertEquals(rebaseClean!.branch, "gh-7");
   assert(calls.some((a) => a[0] === "push"));
@@ -419,7 +418,7 @@ Deno.test(
     );
     assertEquals(result, null);
     const rebaseClean = (logged as Record<string, unknown>[]).find(
-      (e) => e.event === "success",
+      (e) => e.event === "branch-pushed",
     );
     assertNotEquals(rebaseClean, undefined);
   },
@@ -427,7 +426,7 @@ Deno.test(
 
 // ── merge/waiting run paths ──────────────────────────────────────────────────
 
-Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs success", async () => {
+Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs branch-pushed", async () => {
   const logged: object[] = [];
   const calls: string[][] = [];
   const result = await makeAction({
@@ -455,10 +454,9 @@ Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs 
   assertEquals(result, null);
   assert(calls.some((a) => a[0] === "push"));
   const successEntry = (logged as Record<string, unknown>[]).find(
-    (e) => e.event === "success",
+    (e) => e.event === "branch-pushed",
   );
   assertNotEquals(successEntry, undefined);
-  assertEquals(successEntry!.context, "checkConflicts");
 });
 
 Deno.test("checkConflictsAction: merge/waiting — rebase conflict spawns agent", async () => {

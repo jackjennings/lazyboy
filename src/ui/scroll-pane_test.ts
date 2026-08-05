@@ -332,8 +332,10 @@ Deno.test(
       title: "T",
       getHeight: () => 5,
     });
-    const contentLines = pane.render(80).slice(1);
-    assertEquals(contentLines.length, 2);
+    const rendered = pane.render(80);
+    assertEquals(rendered.length, 6);
+    const contentLines = rendered.slice(1);
+    assertEquals(contentLines.length, 5);
     assert(contentLines.every((l) => l.length <= 80));
   },
 );
@@ -439,4 +441,14 @@ Deno.test("ScrollPane: pinnedSidebar receives the computed sidebarWidth", () => 
   });
   pane.render(100);
   assertEquals(capturedSidebarWidth, 25);
+});
+
+Deno.test("ScrollPane: render pads to getHeight lines when content is short", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["line 0", "line 1"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+  });
+  assertEquals(pane.render(80).length, 11);
 });

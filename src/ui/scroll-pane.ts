@@ -121,6 +121,7 @@ export class ScrollPane implements Component, Focusable {
     const lines = this.expandLines(cw);
     const height = this.getHeight();
     const sliced = lines.slice(this.scrollOffset, this.scrollOffset + height);
+    while (sliced.length < height) sliced.push("");
     if (sw > 0 && this.pinnedSidebar) {
       const tocLines = this.pinnedSidebar(sw);
       return [

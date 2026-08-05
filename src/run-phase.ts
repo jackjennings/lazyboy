@@ -322,7 +322,9 @@ export function extractPrinciples(content: string): string | null {
   );
   if (!match) return null;
   const body = match[1].trim();
-  return body.length > 0 ? body : null;
+  if (body.length === 0) return null;
+  if (!/^\s*-\s/m.test(body)) return null;
+  return body;
 }
 
 function parsePrincipleEntries(

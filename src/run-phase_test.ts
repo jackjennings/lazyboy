@@ -457,9 +457,24 @@ Deno.test("extractPrinciples: captures content to end of string when no followin
   assertEquals(extractPrinciples(output), "- only learning");
 });
 
-Deno.test("extractPrinciples: trims surrounding whitespace from body", () => {
+Deno.test("extractPrinciples: returns null when body has no bullet entries after trimming", () => {
   const output = `## Principles\n\n\n  trimmed  \n\n`;
-  assertEquals(extractPrinciples(output), "trimmed");
+  assertEquals(extractPrinciples(output), null);
+});
+
+Deno.test("extractPrinciples: returns null when body has no bullet entries", () => {
+  const output =
+    `## Principles\n\n_(Nothing from this ticket meets the bar — the fix is a specific layout compositing correction, not a general engineering idiom.)_`;
+  assertEquals(extractPrinciples(output), null);
+});
+
+Deno.test("extractPrinciples: returns body when preamble paragraph precedes a bullet", () => {
+  const output =
+    `## Principles\n\nSome introductory remark.\n\n- prefer X over Y`;
+  assertEquals(
+    extractPrinciples(output),
+    "Some introductory remark.\n\n- prefer X over Y",
+  );
 });
 
 // ── dedupePrinciples ─────────────────────────────────────────────────────────

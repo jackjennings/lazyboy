@@ -6,7 +6,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
-import { GitHubProvider } from "./github.ts";
+import { formatGitHubApiError, GitHubProvider } from "./github.ts";
 import { compareSortKeys } from "./types.ts";
 
 function fixedResolver(token: string, login: string) {
@@ -101,6 +101,41 @@ Deno.test("fetchNew passes org-resolved token and login to _fetch", async () => 
   assertStringIncludes(receivedArgs[0].url, "assignee=jack");
   assertEquals(receivedArgs[1].token, "tok_work");
   assertStringIncludes(receivedArgs[1].url, "assignee=work-user");
+});
+
+const POISONED_URL =
+  'https://api.github.com/repos/jackjennings/lazyboy/issues?assignee={\r\n  "message": "Requires authentication",\r\n  "status": "401"\r\n}&state=open&per_page=50';
+
+Deno.test("formatGitHubApiError: 401 surfaces body message and an auth hint", () => {
+  const msg = formatGitHubApiError(
+    401,
+    "https://api.github.com/repos/jackjennings/lazyboy/issues",
+    JSON.stringify({ message: "Requires authentication" }),
+  );
+  assertStringIncludes(msg, "401");
+  assertStringIncludes(msg, "Requires authentication");
+  assertStringIncludes(msg, "GITHUB_TOKEN");
+});
+
+Deno.test("formatGitHubApiError: strips the query string from the endpoint", () => {
+  const msg = formatGitHubApiError(401, POISONED_URL, "");
+  assertStringIncludes(
+    msg,
+    "https://api.github.com/repos/jackjennings/lazyboy/issues",
+  );
+  assertFalse(msg.includes("assignee="));
+  assertFalse(msg.includes("\n"));
+});
+
+Deno.test("formatGitHubApiError: non-JSON body does not crash or add a detail", () => {
+  const msg = formatGitHubApiError(500, "https://api.github.com/x", "<html>");
+  assertStringIncludes(msg, "500");
+  assertFalse(msg.includes("<html>"));
+});
+
+Deno.test("formatGitHubApiError: unknown status omits the hint", () => {
+  const msg = formatGitHubApiError(500, "https://api.github.com/x", "");
+  assertFalse(msg.includes("authentication failed"));
 });
 
 Deno.test("GitHubProvider.close calls _patch with correct API URL and body", async () => {

@@ -22,6 +22,44 @@ interface GitHubIssue {
   html_url: string;
 }
 
+const GITHUB_STATUS_HINTS: Record<number, string> = {
+  401:
+    "authentication failed — check that GITHUB_TOKEN is set and `gh auth status` is valid",
+  403: "forbidden — the token may lack required scopes or be rate-limited",
+  404: "not found — check the repository path and the token's access to it",
+};
+
+function githubBodyMessage(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && typeof parsed.message === "string") return parsed.message;
+  } catch {
+    // non-JSON error bodies carry no structured message
+  }
+  return undefined;
+}
+
+function githubEndpoint(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+export function formatGitHubApiError(
+  status: number,
+  url: string,
+  body: string,
+): string {
+  const message = githubBodyMessage(body);
+  const detail = message ? `: ${message}` : "";
+  const hint = GITHUB_STATUS_HINTS[status];
+  const suffix = hint ? ` (${hint})` : "";
+  return `GitHub API ${status}${detail} for ${githubEndpoint(url)}${suffix}`;
+}
+
 export class GitHubProvider implements Provider {
   private repos: string[];
   private accountResolver: AccountResolver;
@@ -58,7 +96,11 @@ export class GitHubProvider implements Provider {
         Accept: "application/vnd.github+json",
       },
     });
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${url}`);
+    if (!res.ok) {
+      throw new Error(
+        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
+      );
+    }
     return res.json();
   }
 
@@ -137,7 +179,11 @@ export class GitHubProvider implements Provider {
         Accept: "application/vnd.github+json",
       },
     });
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${url}`);
+    if (!res.ok) {
+      throw new Error(
+        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
+      );
+    }
     const data = await res.json();
     return { merged: Boolean(data.merged), state: String(data.state) };
   }
@@ -170,7 +216,11 @@ export class GitHubProvider implements Provider {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${url}`);
+    if (!res.ok) {
+      throw new Error(
+        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
+      );
+    }
   }
 
   async close(url: string): Promise<void> {

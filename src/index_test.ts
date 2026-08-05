@@ -3,7 +3,6 @@ import {
   assertArrayIncludes,
   assertEquals,
   assertFalse,
-  assertLess,
   assertNotEquals,
   assertStringIncludes,
 } from "@std/assert";
@@ -514,8 +513,8 @@ Deno.test(
     const { localDir, tmpDir } = await makeRepoWithRemote();
     try {
       const { runUpdate } = await import("./commands/update.ts");
-      const code = await runUpdate(localDir);
-      assertEquals(code, 0);
+      const result = await runUpdate(localDir);
+      assertEquals(result.code, 0);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -529,8 +528,8 @@ Deno.test(
     try {
       await Deno.writeTextFile(join(localDir, "dirty.txt"), "change");
       const { runUpdate } = await import("./commands/update.ts");
-      const code = await runUpdate(localDir);
-      assertEquals(code, 1);
+      const result = await runUpdate(localDir);
+      assertEquals(result.code, 1);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -579,8 +578,8 @@ Deno.test("update: exits non-zero when pull fails", async () => {
       tmpDir,
     );
     const { runUpdate } = await import("./commands/update.ts");
-    const code = await runUpdate(tmpDir);
-    assertNotEquals(code, 0);
+    const result = await runUpdate(tmpDir);
+    assertNotEquals(result.code, 0);
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
@@ -762,7 +761,7 @@ Deno.test(
 );
 
 Deno.test(
-  "tick.sh: calls lazyboy update with || true guard before exec deno",
+  "tick.sh: does not call lazyboy update",
   async () => {
     const tickSh = new URL("../scripts/tick.sh", import.meta.url).pathname;
     const content = await Deno.readTextFile(tickSh);
@@ -770,9 +769,6 @@ Deno.test(
     const updateIdx = lines.findIndex(
       (l) => l.includes("lazyboy") && l.includes("update"),
     );
-    const execIdx = lines.findIndex((l) => /^\s*exec\s+deno\b/.test(l));
-    assertNotEquals(updateIdx, -1);
-    assert(lines[updateIdx].trimEnd().endsWith("|| true"));
-    assertLess(updateIdx, execIdx);
+    assertEquals(updateIdx, -1);
   },
 );

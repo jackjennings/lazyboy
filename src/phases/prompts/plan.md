@@ -16,6 +16,11 @@ file during the survey, before writing any tasks. If a specific symbol or line
 from an already-read file is needed while drafting, use `grep` or `bash` to
 fetch it — do not re-read the full file.
 
+When searching for test files, issue a single discovery command that covers all
+plausible naming conventions at once (e.g.,
+`find src \( -name '*_test.ts' -o -name '*.test.ts' \) | head -20`). Do not
+reissue discovery commands iteratively after each empty result.
+
 When a task depends on the behavior of an external tool, file path, or API,
 verify the actual behavior (run the command, read the file, inspect the
 response) before writing tasks against assumptions. Either include the

@@ -3,19 +3,28 @@ import type { Command } from "./types.ts";
 
 const lazboyDir = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 
-export async function runUpdate(dir: string): Promise<number> {
-  const { stdout } = await runGit(["status", "--porcelain"], dir);
+export async function runUpdate(
+  dir: string,
+  runGitFn: typeof runGit = runGit,
+): Promise<{ code: number; pulled: boolean }> {
+  const { stdout } = await runGitFn(["status", "--porcelain"], dir);
   if (stdout !== "") {
-    return 1;
+    return { code: 1, pulled: false };
   }
-  const { code } = await runGit(["pull"], dir);
-  return code;
+  const { stdout: headBefore } = await runGitFn(["rev-parse", "HEAD"], dir);
+  const { code } = await runGitFn(["pull"], dir);
+  if (code !== 0) {
+    return { code, pulled: false };
+  }
+  const { stdout: headAfter } = await runGitFn(["rev-parse", "HEAD"], dir);
+  return { code: 0, pulled: headBefore !== headAfter };
 }
 
 export const update: Command = {
   name: "update",
   description: "pull latest lazyboy source",
   async run(_args) {
-    Deno.exit(await runUpdate(lazboyDir));
+    const result = await runUpdate(lazboyDir);
+    Deno.exit(result.code);
   },
 };

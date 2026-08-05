@@ -619,6 +619,27 @@ export function composeTickDeps(
         await Deno.writeTextFile(principlesPath, newContent);
         await commitPrinciples(sd, `principles: ${ticketId} ${phase}`);
       },
+      readPhaseExitCode: async (ticketDir, phase) => {
+        const pattern = new RegExp(
+          `^\\d{8}T\\d{6}-${phase}\\.md\\.exit$`,
+        );
+        const matches: string[] = [];
+        try {
+          for await (const entry of Deno.readDir(ticketDir)) {
+            if (entry.isFile && pattern.test(entry.name)) {
+              matches.push(entry.name);
+            }
+          }
+        } catch {
+          // dir missing
+        }
+        if (matches.length === 0) return null;
+        matches.sort();
+        const content = await Deno.readTextFile(
+          join(ticketDir, matches[matches.length - 1]),
+        );
+        return parseInt(content, 10);
+      },
       markPRsReady: async (prUrls: string[]) => {
         for (const url of prUrls) {
           const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);

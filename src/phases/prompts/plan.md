@@ -10,7 +10,11 @@ Extend these patterns rather than introducing parallel ones.
 
 Read each file at most once. Complete your full codebase survey before writing
 any task. Do not re-read a file while drafting tasks — write from what you
-already loaded.
+already loaded. When the spec cites a specific file as a reference pattern to
+copy (e.g. "same as X in file.ts"), extract the exact relevant lines from that
+file during the survey, before writing any tasks. If a specific symbol or line
+from an already-read file is needed while drafting, use `grep` or `bash` to
+fetch it — do not re-read the full file.
 
 When a task depends on the behavior of an external tool, file path, or API,
 verify the actual behavior (run the command, read the file, inspect the

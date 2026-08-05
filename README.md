@@ -21,17 +21,16 @@ Each phase runs [pi](https://pi.dev) as a host subprocess with `cwd` set to the
 ticket directory or approved worktree, and the relevant context files passed in
 as `@/path` arguments.
 
-A cron job runs `lazyboy tick` every 5 minutes. Tickets advance automatically
-until they hit a gate, then wait for `lazyboy approve <id>`.
+lazyboy runs `tick` every 5 minutes as a background job. Tickets advance
+automatically until they hit a gate, then wait for `lazyboy approve <id>`.
 
-Cron invokes `scripts/tick.sh`, which handles token capture and env setup. To
-override env vars (e.g. `ANTHROPIC_API_KEY`), add them to
-`~/.config/lazyboy/env`.
+`scripts/tick.sh` handles token capture and env setup. To override env vars
+(e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
 
 ## Usage
 
 ```bash
-lazyboy tick                # advance all active tickets (run by cron)
+lazyboy tick                # advance all active tickets (run automatically)
 lazyboy approve <id>        # approve the current phase gate
 lazyboy status             # show all active tickets
 lazyboy hud                # live status display
@@ -40,8 +39,8 @@ lazyboy decline <id> [why] # permanently exclude a ticket from the queue
 lazyboy review <id>        # review the latest phase output
 lazyboy shell <id>         # open a shell in the ticket's worktree
 lazyboy tail [id]          # stream the tick log or a ticket's event log
-lazyboy enable             # add cron job
-lazyboy disable            # remove cron job
+lazyboy enable             # start the scheduler
+lazyboy disable            # stop the scheduler
 lazyboy update             # pull latest lazyboy source
 lazyboy completion zsh     # print zsh completion script
 ```

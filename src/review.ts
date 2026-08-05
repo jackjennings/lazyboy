@@ -7,6 +7,7 @@ import {
   italic,
   red,
   strikethrough,
+  stripAnsiCode,
   underline,
   yellow,
 } from "@std/fmt/colors";
@@ -22,7 +23,6 @@ import {
   type OverlayHandle,
   ProcessTerminal,
   setKeybindings,
-  truncateToWidth,
   TUI,
   TUI_KEYBINDINGS,
   wrapTextWithAnsi,
@@ -84,8 +84,22 @@ export function renderDiff(oldStr: string, newStr: string): string[] {
   return lines;
 }
 
-export function truncateDiffLines(lines: string[], width: number): string[] {
-  return lines.map((line) => truncateToWidth(line, width));
+export function wrapDiffLines(lines: string[], width: number): string[] {
+  return lines.flatMap((line) => {
+    const visible = stripAnsiCode(line);
+    if (visible.length <= width) return [line];
+    const visibleBody = visible.slice(2);
+    if (!visibleBody.includes(" ")) return [line];
+    const visiblePrefix = visible.slice(0, 2);
+    const coloredPrefix = visiblePrefix === "+ "
+      ? green(visiblePrefix)
+      : visiblePrefix === "- "
+      ? red(visiblePrefix)
+      : dim(visiblePrefix);
+    return wrapTextWithAnsi(visibleBody, width - 2).map((chunk) =>
+      coloredPrefix + chunk
+    );
+  });
 }
 
 export async function findLatestPhaseOutput(
@@ -458,7 +472,7 @@ export async function review(id: string): Promise<void> {
   let contentGetLines: (width: number) => string[];
   let contentOnInvalidate: (() => void) | undefined;
   if (Array.isArray(paneContent)) {
-    contentGetLines = (w) => truncateDiffLines(paneContent, w);
+    contentGetLines = (w) => wrapDiffLines(paneContent, w);
     contentOnInvalidate = undefined;
   } else {
     const md = new Markdown(paneContent, 1, 0, markdownTheme);

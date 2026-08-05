@@ -2,14 +2,10 @@ import { join } from "@std/path";
 import { bgGreen, bgRed, white } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
+import { readUsageFiles } from "../usage.ts";
 import { isCronEnabled } from "../cron.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-import type {
-  ApprovalEntry,
-  PhaseUsage,
-  PrEntry,
-  TicketState,
-} from "../state/types.ts";
+import type { ApprovalEntry, PrEntry, TicketState } from "../state/types.ts";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
@@ -54,24 +50,6 @@ export function formatTokens(total: number | null): string {
   if (total === null) return "—";
   if (total < 1000) return String(total);
   return `${(Math.round(total / 100) / 10).toFixed(1)}k`;
-}
-
-async function readUsageFiles(ticketDir: string): Promise<PhaseUsage[] | null> {
-  const files: PhaseUsage[] = [];
-  try {
-    for await (const entry of Deno.readDir(ticketDir)) {
-      if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
-      try {
-        const raw = await Deno.readTextFile(join(ticketDir, entry.name));
-        files.push(JSON.parse(raw) as PhaseUsage);
-      } catch {
-        return null;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return files;
 }
 
 export async function readTicketTokens(

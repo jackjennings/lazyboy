@@ -323,8 +323,36 @@ export function extractPrinciples(content: string): string | null {
   if (!match) return null;
   const body = match[1].trim();
   if (body.length === 0) return null;
-  if (!/^\s*-\s/m.test(body)) return null;
   return body;
+}
+
+export async function judgePrinciples(
+  body: string,
+  fetcher: typeof fetch,
+): Promise<boolean> {
+  try {
+    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 5,
+        system:
+          "You are evaluating whether content from an AI coding agent's Principles section contains substantive engineering guidance worth preserving. Reply with exactly KEEP if the content contains at least one concrete, reusable engineering principle or guideline — a lesson that could inform future engineering decisions. Reply with exactly SKIP if the content is a meta-commentary explaining why no principles were added, a placeholder, or otherwise lacks actionable engineering guidance.",
+        messages: [{ role: "user", content: body }],
+      }),
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
+    return result === "KEEP";
+  } catch {
+    return false;
+  }
 }
 
 function parsePrincipleEntries(

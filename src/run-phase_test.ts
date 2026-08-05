@@ -8,6 +8,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
@@ -20,6 +21,7 @@ import {
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
+  judgePrinciples,
   resolvePhaseSessionId,
   resolveRevisionSessionId,
   setupClaudeCodeDirectories,
@@ -457,24 +459,93 @@ Deno.test("extractPrinciples: captures content to end of string when no followin
   assertEquals(extractPrinciples(output), "- only learning");
 });
 
-Deno.test("extractPrinciples: returns null when body has no bullet entries after trimming", () => {
+Deno.test("extractPrinciples: trims surrounding whitespace", () => {
   const output = `## Principles\n\n\n  trimmed  \n\n`;
-  assertEquals(extractPrinciples(output), null);
+  assertEquals(extractPrinciples(output), "trimmed");
 });
 
-Deno.test("extractPrinciples: returns null when body has no bullet entries", () => {
-  const output =
-    `## Principles\n\n_(Nothing from this ticket meets the bar — the fix is a specific layout compositing correction, not a general engineering idiom.)_`;
-  assertEquals(extractPrinciples(output), null);
-});
+// ── judgePrinciples ───────────────────────────────────────────────────────────
 
-Deno.test("extractPrinciples: returns body when preamble paragraph precedes a bullet", () => {
-  const output =
-    `## Principles\n\nSome introductory remark.\n\n- prefer X over Y`;
-  assertEquals(
-    extractPrinciples(output),
-    "Some introductory remark.\n\n- prefer X over Y",
+Deno.test("judgePrinciples: returns true when fetch responds KEEP", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
   );
+  assert(await judgePrinciples("- prefer X over Y", fetcher as typeof fetch));
+  assertSpyCalls(fetcher, 1);
+});
+
+Deno.test("judgePrinciples: returns false when fetch responds SKIP", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "SKIP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  assertFalse(
+    await judgePrinciples(
+      "_(Nothing from this ticket meets the bar.)_",
+      fetcher as typeof fetch,
+    ),
+  );
+});
+
+Deno.test("judgePrinciples: returns false on non-2xx response", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 500 })),
+  );
+  assertFalse(
+    await judgePrinciples("- some principle", fetcher as typeof fetch),
+  );
+});
+
+Deno.test("judgePrinciples: returns false when fetch throws", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.reject(new Error("network error")),
+  );
+  assertFalse(
+    await judgePrinciples("- some principle", fetcher as typeof fetch),
+  );
+});
+
+Deno.test("judgePrinciples: sends body as user message content", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.messages[0].content, "- prefer X over Y");
+});
+
+Deno.test("judgePrinciples: uses model claude-haiku-4-5", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.model, "claude-haiku-4-5");
 });
 
 // ── dedupePrinciples ─────────────────────────────────────────────────────────

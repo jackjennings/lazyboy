@@ -14,5 +14,4 @@ if [ -f "$HOME/.config/lazyboy/env" ]; then
   set +a
 fi
 
-"$LAZYBOY_DIR/bin/lazyboy" update || true
 exec deno run --allow-all "$LAZYBOY_DIR/src/index.ts" tick

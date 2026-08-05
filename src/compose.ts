@@ -134,6 +134,80 @@ async function ensureRunPidGitignored(stateDir: string): Promise<void> {
   );
 }
 
+export class GitHubAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GitHubAuthError";
+  }
+}
+
+type CommandRunner = (
+  cmd: string[],
+) => Promise<{ code: number; stdout: string; stderr: string }>;
+
+type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
+export async function preflightGitHubCredentials(
+  config: Config,
+  opts: { run: CommandRunner; fetch: FetchFn },
+): Promise<void> {
+  if (config.github.accounts) {
+    const tokenToEnv = new Map<string, string>();
+    for (const account of Object.values(config.github.accounts)) {
+      const token = Deno.env.get(account.tokenEnv);
+      if (!token) {
+        throw new GitHubAuthError(`${account.tokenEnv} is not set`);
+      }
+      if (!tokenToEnv.has(token)) {
+        tokenToEnv.set(token, account.tokenEnv);
+      }
+    }
+    for (const [token, tokenEnv] of tokenToEnv) {
+      const res = await opts.fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (res.status === 401 || res.status === 403) {
+        throw new GitHubAuthError(
+          `GitHub authentication failed for ${tokenEnv} — check that the token is set and valid`,
+        );
+      }
+    }
+    return;
+  }
+
+  let token = Deno.env.get("GITHUB_TOKEN");
+  if (!token) {
+    const result = await opts.run(["gh", "auth", "token"]);
+    if (result.code !== 0 || result.stdout.trim() === "") {
+      throw new GitHubAuthError(
+        `GITHUB_TOKEN is not set and \`gh auth token\` failed: ${result.stderr}`,
+      );
+    }
+    token = result.stdout.trim();
+    Deno.env.set("GITHUB_TOKEN", token);
+  }
+
+  const res = await opts.fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new GitHubAuthError(
+      "GitHub authentication failed — check that GITHUB_TOKEN is set and `gh auth status` is valid",
+    );
+  }
+
+  if (!Deno.env.get("GITHUB_LOGIN")) {
+    const data = await res.json();
+    Deno.env.set("GITHUB_LOGIN", data.login);
+  }
+}
+
 export function resolveGitHubAccount(
   org: string,
   config: Config,
@@ -940,6 +1014,23 @@ export function composeTickDeps(
     notify: makeNotify({
       runCommand: defaultCommandRunner(),
     }),
+    preflightGitHubCredentials: () =>
+      preflightGitHubCredentials(config, {
+        run: async (cmd) => {
+          const result = await new Deno.Command(cmd[0], {
+            args: cmd.slice(1),
+            stdout: "piped",
+            stderr: "piped",
+          }).output();
+          const decoder = new TextDecoder();
+          return {
+            code: result.code,
+            stdout: decoder.decode(result.stdout),
+            stderr: decoder.decode(result.stderr),
+          };
+        },
+        fetch,
+      }),
     notifyTickFailure: async (error: string) => {
       const escaped = error.replaceAll("'", "\\'");
       const body = escaped.slice(0, 200);

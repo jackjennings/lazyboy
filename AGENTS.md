@@ -186,6 +186,59 @@ The cron line from `cronLine()` must **not** redirect stdout/stderr to
 `tick.ndjson` — the tick process owns its own writes. Do not add
 `>> … tick.ndjson 2>&1`.
 
+## Per-ticket `log.ndjson` format
+
+`<stateDir>/<ticket.id>/log.ndjson` is the per-ticket event log (distinct from
+the runtime `tick.ndjson` above). Every entry is written by `appendTicketLog`
+(`src/state/store.ts`) — do not append to it inline elsewhere — and carries a
+`ts` (ISO 8601 UTC), an `event`, and event-specific fields. Reuse an existing
+event rather than coining a synonym:
+
+| `event`                                                                            | Written by / meaning                                  |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `phase-start` / `phase-end`                                                        | A phase subprocess is spawned / completes.            |
+| `phase-transition`                                                                 | `phase` changes.                                      |
+| `status-transition`                                                                | `status` changes.                                     |
+| `needs-attention`                                                                  | Ticket parked for a human; carries a `reason`.        |
+| `phase-output-invalid`                                                             | Agent produced no/invalid output; carries a `reason`. |
+| `phase-output-retry`                                                               | Recovery resume attempted after invalid output.       |
+| `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.        |
+| `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                        |
+| `ci-triage-resolved`                                                               | A CI-triage run's verdict was applied.                |
+| `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).        |
+| `error`                                                                            | An action or phase threw; carries the error message.  |
+
+A `reason` field, where present, is a lowercase kebab-case label naming the
+cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-worktrees`,
+`no-github-repos`, `github-slug-extraction-failed`, `clone-failed`,
+`worktree-creation-failed`, `push-failed`, `no-verdict-line`). Reuse an existing
+label when it fits; add a new one only for a genuinely new cause, and never put
+free prose in `reason` (that belongs in a separate field or the `error`
+message). Work-item identity is the ticket directory itself — do not add an `id`
+or `ticketId` field to per-ticket entries.
+
+## Failure handling
+
+The default response to a failure is decided by where it happens, not per-caller
+— do not re-derive this for each new action:
+
+- **Phase subprocess failure or invalid output** → `needs-attention`, with a
+  `reason`. This is the only path that parks a ticket for a human (see the phase
+  state machine and the one-shot output recovery above).
+- **`TickAction` side-effect failure** (push, rebase, worktree cleanup, closing
+  the upstream issue, notification) → log it to `log.ndjson` and continue;
+  **never block the state machine or throw out of the action.** An action may
+  set `needs-attention` only when the failure means the ticket genuinely cannot
+  proceed — and then its `applies` must exclude `status === "needs-attention"`
+  to avoid a retry loop.
+- **Background analysis subprocess** → fire-and-forget; its failure must never
+  touch ticket state (see Background analysis subprocesses).
+
+New per-tick behavior that mutates `TicketState` belongs in a `TickAction`, not
+inline in `advancePhase`; keep `advancePhase` to phase/status transitions and
+their recovery. Inline logic in `advancePhase` is reserved for the state-machine
+transitions themselves.
+
 ## Dependency injection
 
 Modules expose `*Deps` interfaces for testing (`TickDeps`, `TickServiceDeps`,
@@ -261,6 +314,14 @@ thinking = "off"
 ```
 
 `thinking` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+
+Ancillary (non-phase) LLM calls — approval classification (`src/review.ts`),
+self-review (`src/self-review.ts`), the review Q&A overlay, short-title
+generation — are **not** routed through `resolvePhaseModel` and are not
+per-phase configurable. They pin their model at the call site: cheap
+classification and validation use `claude-haiku-4-5`; a call that must reason
+over a diff (e.g. `apply-learning.ts`) uses `claude-sonnet-4-6`. A new ancillary
+call follows this split rather than adding a config knob.
 
 ## Tick actions
 
@@ -393,6 +454,16 @@ slashes create the namespaced directory structure under `stateDir`.
 
 Do not introduce ID formats that omit the provider prefix or use a flat
 single-segment string.
+
+## Shell completion
+
+`src/completion.zsh` is a static, generic dispatcher — it does **not** hardcode
+command names, flags, or IDs. It reads `lazyboy _completions` (name,
+description, and `completesWith` per command) and `lazyboy _ids` at runtime. So
+a new command or flag becomes completable by declaring its metadata on the
+`Command` (set `completesWith: "_ids"` for a command that takes a ticket ID, or
+a comma-separated literal list for fixed choices) — **do not edit
+`completion.zsh`** for a new command, flag, status value, or phase.
 
 ## `codebase.roots` semantics
 

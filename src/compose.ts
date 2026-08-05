@@ -39,6 +39,7 @@ import {
 } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
+import { cleanOrphanedWorktreesAction } from "./tick-actions/clean-orphaned-worktrees.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import { spawnCITriageAction } from "./tick-actions/spawn-ci-triage.ts";
@@ -237,6 +238,13 @@ export function composeTickDeps(
       isPRMerged: (url) => githubProvider.isPRMerged(url),
       cleanupWorktree: removeWorktree,
       closeWorkItem: (url: string) => githubProvider.close(url),
+      writeTicket,
+      appendLog: appendTicketLog,
+    }),
+    cleanOrphanedWorktreesAction({
+      isProcessAlive: (ticketId: string) =>
+        isPhaseAlive(join(stateDir, ticketId)),
+      cleanupWorktree: removeWorktree,
       writeTicket,
       appendLog: appendTicketLog,
     }),

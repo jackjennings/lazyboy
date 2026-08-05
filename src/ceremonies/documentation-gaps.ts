@@ -2,7 +2,7 @@ import { join } from "@std/path";
 import { compactTimestamp } from "../timestamp.ts";
 import type { Ceremony } from "./types.ts";
 
-export interface DocGapsCeremonyDeps {
+export interface DocumentationGapsCeremonyDeps {
   stateDir: string;
   repoDir: string;
   fetch: typeof globalThis.fetch;
@@ -109,7 +109,9 @@ async function readPriorHeadings(outputDir: string): Promise<string[]> {
   const headings: string[] = [];
   try {
     for await (const entry of Deno.readDir(outputDir)) {
-      if (!entry.isFile || !entry.name.endsWith("-doc-gaps.md")) continue;
+      if (!entry.isFile || !entry.name.endsWith("-documentation-gaps.md")) {
+        continue;
+      }
       const content = await Deno.readTextFile(join(outputDir, entry.name));
       for (const line of content.split("\n")) {
         if (line.startsWith("## ")) headings.push(line.slice(3));
@@ -135,7 +137,7 @@ async function callLlm(
     : "None.";
   const userMessage = [
     `## Questions\n${questionsBlock}`,
-    `## Doc Corpus\n${corpus}`,
+    `## Documentation Corpus\n${corpus}`,
     `## Previously Reported Gaps\n${priorBlock}`,
     `## Required Output Format\n\`\`\`\n${OUTPUT_FORMAT_TEMPLATE}\n\`\`\`\nwhere \`N clusters across M tickets\` are computed from the surviving clusters.`,
   ].join("\n\n");
@@ -168,11 +170,11 @@ async function callLlm(
   }
 }
 
-export class DocGapsCeremony implements Ceremony {
-  readonly name = "doc-gaps";
-  readonly #deps: DocGapsCeremonyDeps;
+export class DocumentationGapsCeremony implements Ceremony {
+  readonly name = "documentation-gaps";
+  readonly #deps: DocumentationGapsCeremonyDeps;
 
-  constructor(deps: DocGapsCeremonyDeps) {
+  constructor(deps: DocumentationGapsCeremonyDeps) {
     this.#deps = deps;
   }
 
@@ -180,7 +182,10 @@ export class DocGapsCeremony implements Ceremony {
     await Deno.mkdir(outputDir, { recursive: true });
 
     const questions = await collectOpenQuestions(this.#deps.stateDir);
-    const outputPath = join(outputDir, `${compactTimestamp(now)}-doc-gaps.md`);
+    const outputPath = join(
+      outputDir,
+      `${compactTimestamp(now)}-documentation-gaps.md`,
+    );
 
     let content: string;
     if (questions.length === 0) {
@@ -200,7 +205,7 @@ export class DocGapsCeremony implements Ceremony {
     await this.#deps.commitState();
 
     try {
-      await this.#deps.notify?.("lazyboy", "Doc gaps ready");
+      await this.#deps.notify?.("lazyboy", "Documentation gaps ready");
     } catch {
       // notification failures must not abort the ceremony run
     }

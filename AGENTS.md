@@ -524,6 +524,10 @@ Do not add comments or docblocks. The code should be self-explanatory through
 naming. Only add a comment when explaining a non-obvious constraint or
 workaround.
 
+Do not abbreviate words in identifiers, names, or user-visible strings. Write
+`DocumentationGapsCeremony`, not `DocGapsCeremony`;
+`"Documentation gaps ready"`, not `"Doc gaps ready"`.
+
 ## Formatting
 
 Run `deno fmt` and `deno lint` after writing all files and before committing,

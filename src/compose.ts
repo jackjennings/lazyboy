@@ -1,7 +1,7 @@
 import { existsSync } from "@std/fs";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { StandupCeremony } from "./ceremonies/standup.ts";
-import { DocGapsCeremony } from "./ceremonies/doc-gaps.ts";
+import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
 import { join } from "@std/path";
 import {
   detectImplementationOutlier,
@@ -562,13 +562,13 @@ export function composeTickDeps(
         ]);
       },
     }),
-    new DocGapsCeremony({
+    new DocumentationGapsCeremony({
       stateDir,
       repoDir: new URL("../", import.meta.url).pathname,
       fetch,
       commitState: async () => {
         await ensureRunPidGitignored(stateDir);
-        await commitState(stateDir, "ceremony: doc-gaps");
+        await commitState(stateDir, "ceremony: documentation-gaps");
       },
       notify: async (title, message) => {
         await defaultCommandRunner()([

@@ -2,13 +2,16 @@ import { join } from "@std/path";
 import { parse } from "@std/toml";
 import { readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
+import { PromptCeremony } from "./ceremonies/prompt.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
 
 export interface CeremonyRunnerDeps {
   stateDir: string;
+  anthropicApiKey: string;
   appendTickLog(entry: object): Promise<void>;
   now?: () => Temporal.ZonedDateTime;
+  fetch?: typeof globalThis.fetch;
 }
 
 function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
@@ -59,8 +62,25 @@ export class CeremonyRunner {
     }
     for (const entry of dirEntries) {
       if (!entry.isDirectory) continue;
-      const ceremony = this.#ceremonies.get(entry.name);
-      if (!ceremony) continue;
+      let ceremony: Ceremony | undefined = this.#ceremonies.get(entry.name);
+      if (!ceremony) {
+        const promptPath = join(ceremoniesDir, entry.name, "prompt.md");
+        let hasPrompt = false;
+        try {
+          await Deno.stat(promptPath);
+          hasPrompt = true;
+        } catch (e) {
+          if (!(e instanceof Deno.errors.NotFound)) throw e;
+        }
+        if (!hasPrompt) continue;
+        ceremony = new PromptCeremony({
+          name: entry.name,
+          stateDir: this.#deps.stateDir,
+          anthropicApiKey: this.#deps.anthropicApiKey,
+          appendTickLog: this.#deps.appendTickLog,
+          fetch: this.#deps.fetch,
+        });
+      }
       await this.#runCeremony(ceremony, join(ceremoniesDir, entry.name));
     }
   }

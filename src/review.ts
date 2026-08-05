@@ -47,7 +47,7 @@ import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { diffLines } from "diff";
 import { ScrollPane } from "./ui/scroll-pane.ts";
-import { buildCompositedGetLines, extractHeadings } from "./ui/toc.ts";
+import { extractHeadings, renderTocLines } from "./ui/toc.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -472,14 +472,15 @@ export async function review(id: string): Promise<void> {
 
   let contentGetLines: (width: number) => string[];
   let contentOnInvalidate: (() => void) | undefined;
+  let headings: { level: number; title: string }[] = [];
   if (Array.isArray(paneContent)) {
     contentGetLines = (w) => wrapDiffLines(paneContent, w);
     contentOnInvalidate = undefined;
   } else {
     const md = new Markdown(paneContent, 1, 0, markdownTheme);
     const baseGetLines = (w: number) => md.render(w);
-    const headings = extractHeadings(paneContent);
-    contentGetLines = buildCompositedGetLines(baseGetLines, headings, dim("│"));
+    headings = extractHeadings(paneContent);
+    contentGetLines = baseGetLines;
     contentOnInvalidate = () => md.invalidate();
   }
 
@@ -504,6 +505,12 @@ export async function review(id: string): Promise<void> {
         tui.terminal.rows - editor.render(tui.terminal.columns).length - 1,
       ),
     onInvalidate: contentOnInvalidate,
+    pinnedSidebar: Array.isArray(paneContent)
+      ? undefined
+      : (w) => renderTocLines(headings, w),
+    pinnedSidebarWidth: Array.isArray(paneContent)
+      ? undefined
+      : (w) => (headings.length === 0 || w < 100 ? 0 : Math.floor(w / 3)),
   });
 
   tui.addChild(contentPane);

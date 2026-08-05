@@ -6,10 +6,16 @@ import {
   type TUI,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { compositeSideBySide } from "./toc.ts";
+
+const SIDEBAR_SEP = dim("│");
+const SIDEBAR_SEP_WIDTH = 1;
 
 export class ScrollPane implements Component, Focusable {
   private getLinesFn: (width: number) => string[];
   private onInvalidateFn?: () => void;
+  private pinnedSidebar?: (sidebarWidth: number) => string[];
+  private pinnedSidebarWidth?: (totalWidth: number) => number;
   scrollOffset = 0;
   focused = true;
   private tui: TUI;
@@ -22,12 +28,26 @@ export class ScrollPane implements Component, Focusable {
     title: string;
     getHeight: () => number;
     onInvalidate?: () => void;
+    pinnedSidebar?: (sidebarWidth: number) => string[];
+    pinnedSidebarWidth?: (totalWidth: number) => number;
   }) {
     this.getLinesFn = options.getLines;
     this.tui = options.tui;
     this.title = options.title;
     this.getHeight = options.getHeight;
     this.onInvalidateFn = options.onInvalidate;
+    this.pinnedSidebar = options.pinnedSidebar;
+    this.pinnedSidebarWidth = options.pinnedSidebarWidth;
+  }
+
+  private activeSidebarWidth(totalWidth: number): number {
+    return this.pinnedSidebarWidth?.(totalWidth) ?? 0;
+  }
+
+  private effectiveContentWidth(totalWidth: number): number {
+    const sw = this.activeSidebarWidth(totalWidth);
+    if (sw === 0) return totalWidth;
+    return totalWidth - sw - SIDEBAR_SEP_WIDTH;
   }
 
   private expandLines(width: number): string[] {
@@ -45,13 +65,15 @@ export class ScrollPane implements Component, Focusable {
 
   scrollToEnd(): void {
     const width = this.tui.terminal.columns;
+    const cw = this.effectiveContentWidth(width);
     const height = this.getHeight();
-    const lines = this.expandLines(width);
+    const lines = this.expandLines(cw);
     this.scrollOffset = Math.max(0, lines.length - height);
   }
 
   isAtEnd(width: number): boolean {
-    const lines = this.expandLines(width);
+    const cw = this.effectiveContentWidth(width);
+    const lines = this.expandLines(cw);
     const height = this.getHeight();
     return this.scrollOffset >= Math.max(0, lines.length - height);
   }
@@ -67,9 +89,10 @@ export class ScrollPane implements Component, Focusable {
   handleInput(data: string): void {
     if (!this.focused) return;
     const width = this.tui.terminal.columns;
+    const cw = this.effectiveContentWidth(width);
     if (matchesKey(data, "space") || matchesKey(data, "f")) {
       const height = this.getHeight();
-      const lines = this.expandLines(width);
+      const lines = this.expandLines(cw);
       const maxOffset = Math.max(0, lines.length - height);
       this.scrollOffset = Math.min(this.scrollOffset + height, maxOffset);
     }
@@ -79,7 +102,7 @@ export class ScrollPane implements Component, Focusable {
     }
     if (matchesKey(data, "down")) {
       const height = this.getHeight();
-      const lines = this.expandLines(width);
+      const lines = this.expandLines(cw);
       const maxOffset = Math.max(0, lines.length - height);
       this.scrollOffset = Math.min(this.scrollOffset + 1, maxOffset);
     }
@@ -93,9 +116,18 @@ export class ScrollPane implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const lines = this.expandLines(width);
+    const sw = this.activeSidebarWidth(width);
+    const cw = this.effectiveContentWidth(width);
+    const lines = this.expandLines(cw);
     const height = this.getHeight();
-    const content = lines.slice(this.scrollOffset, this.scrollOffset + height);
-    return [this.header(width), ...content];
+    const sliced = lines.slice(this.scrollOffset, this.scrollOffset + height);
+    if (sw > 0 && this.pinnedSidebar) {
+      const tocLines = this.pinnedSidebar(sw);
+      return [
+        this.header(width),
+        ...compositeSideBySide(sliced, cw, tocLines, SIDEBAR_SEP),
+      ];
+    }
+    return [this.header(width), ...sliced];
   }
 }

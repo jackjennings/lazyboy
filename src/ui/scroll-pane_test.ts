@@ -364,3 +364,79 @@ Deno.test("ScrollPane: bare \\r is treated as a line break", () => {
   assert(rendered.some((l) => l === "before"));
   assert(rendered.some((l) => l === "after"));
 });
+
+Deno.test("ScrollPane: pinned sidebar appears at row 0 after scrolling content", () => {
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+    pinnedSidebar: (_w) => ["Section 1", "Section 2"],
+    pinnedSidebarWidth: (_w) => 20,
+  });
+  pane.handleInput(" ");
+  const rendered = pane.render(100);
+  assert(rendered.some((l) => l.includes("Section 1")));
+  assertFalse(rendered.some((l) => l.includes("line 0")));
+});
+
+Deno.test("ScrollPane: getLines receives effectiveContentWidth when sidebar is present", () => {
+  let capturedWidth = 0;
+  const pane = new ScrollPane({
+    getLines: (w) => {
+      capturedWidth = w;
+      return ["x"];
+    },
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+    pinnedSidebar: (_w) => ["toc"],
+    pinnedSidebarWidth: (_w) => 30,
+  });
+  pane.render(100);
+  assertEquals(capturedWidth, 69);
+});
+
+Deno.test("ScrollPane: no sidebar rendered when pinnedSidebarWidth returns 0", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["content"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+    pinnedSidebar: (_w) => ["toc entry"],
+    pinnedSidebarWidth: (_w) => 0,
+  });
+  assertFalse(pane.render(80).some((l) => l.includes("|")));
+});
+
+Deno.test("ScrollPane: scrollToEnd accounts for effectiveContentWidth with sidebar", () => {
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(24, 100),
+    title: "T",
+    getHeight: () => 5,
+    pinnedSidebar: (_w) => ["toc"],
+    pinnedSidebarWidth: (_w) => 29,
+  });
+  pane.scrollToEnd();
+  assert(pane.render(100).some((l) => l.includes("line 19")));
+});
+
+Deno.test("ScrollPane: pinnedSidebar receives the computed sidebarWidth", () => {
+  let capturedSidebarWidth = 0;
+  const pane = new ScrollPane({
+    getLines: (_w) => ["line"],
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+    pinnedSidebar: (w) => {
+      capturedSidebarWidth = w;
+      return ["toc"];
+    },
+    pinnedSidebarWidth: (_w) => 25,
+  });
+  pane.render(100);
+  assertEquals(capturedSidebarWidth, 25);
+});

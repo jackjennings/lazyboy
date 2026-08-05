@@ -511,7 +511,6 @@ export async function review(id: string): Promise<void> {
     pinnedSidebarWidth: Array.isArray(paneContent)
       ? undefined
       : (w) => (headings.length === 0 || w < 100 ? 0 : Math.floor(w / 3)),
-    sidebarSep: dim("│"),
   });
 
   tui.addChild(contentPane);

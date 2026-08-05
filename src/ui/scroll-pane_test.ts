@@ -374,7 +374,6 @@ Deno.test("ScrollPane: pinned sidebar appears at row 0 after scrolling content",
     getHeight: () => 5,
     pinnedSidebar: (_w) => ["Section 1", "Section 2"],
     pinnedSidebarWidth: (_w) => 20,
-    sidebarSep: "|",
   });
   pane.handleInput(" ");
   const rendered = pane.render(100);
@@ -394,7 +393,6 @@ Deno.test("ScrollPane: getLines receives effectiveContentWidth when sidebar is p
     getHeight: () => 10,
     pinnedSidebar: (_w) => ["toc"],
     pinnedSidebarWidth: (_w) => 30,
-    sidebarSep: "|",
   });
   pane.render(100);
   assertEquals(capturedWidth, 69);
@@ -408,7 +406,6 @@ Deno.test("ScrollPane: no sidebar rendered when pinnedSidebarWidth returns 0", (
     getHeight: () => 10,
     pinnedSidebar: (_w) => ["toc entry"],
     pinnedSidebarWidth: (_w) => 0,
-    sidebarSep: "|",
   });
   assertFalse(pane.render(80).some((l) => l.includes("|")));
 });
@@ -422,7 +419,6 @@ Deno.test("ScrollPane: scrollToEnd accounts for effectiveContentWidth with sideb
     getHeight: () => 5,
     pinnedSidebar: (_w) => ["toc"],
     pinnedSidebarWidth: (_w) => 29,
-    sidebarSep: "|",
   });
   pane.scrollToEnd();
   assert(pane.render(100).some((l) => l.includes("line 19")));
@@ -440,7 +436,6 @@ Deno.test("ScrollPane: pinnedSidebar receives the computed sidebarWidth", () => 
       return ["toc"];
     },
     pinnedSidebarWidth: (_w) => 25,
-    sidebarSep: "|",
   });
   pane.render(100);
   assertEquals(capturedSidebarWidth, 25);

@@ -8,12 +8,14 @@ import {
 } from "@earendil-works/pi-tui";
 import { compositeSideBySide } from "./toc.ts";
 
+const SIDEBAR_SEP = dim("│");
+const SIDEBAR_SEP_WIDTH = 1;
+
 export class ScrollPane implements Component, Focusable {
   private getLinesFn: (width: number) => string[];
   private onInvalidateFn?: () => void;
   private pinnedSidebar?: (sidebarWidth: number) => string[];
   private pinnedSidebarWidth?: (totalWidth: number) => number;
-  private sidebarSep: string;
   scrollOffset = 0;
   focused = true;
   private tui: TUI;
@@ -28,7 +30,6 @@ export class ScrollPane implements Component, Focusable {
     onInvalidate?: () => void;
     pinnedSidebar?: (sidebarWidth: number) => string[];
     pinnedSidebarWidth?: (totalWidth: number) => number;
-    sidebarSep?: string;
   }) {
     this.getLinesFn = options.getLines;
     this.tui = options.tui;
@@ -37,7 +38,6 @@ export class ScrollPane implements Component, Focusable {
     this.onInvalidateFn = options.onInvalidate;
     this.pinnedSidebar = options.pinnedSidebar;
     this.pinnedSidebarWidth = options.pinnedSidebarWidth;
-    this.sidebarSep = options.sidebarSep ?? "";
   }
 
   private activeSidebarWidth(totalWidth: number): number {
@@ -47,7 +47,7 @@ export class ScrollPane implements Component, Focusable {
   private effectiveContentWidth(totalWidth: number): number {
     const sw = this.activeSidebarWidth(totalWidth);
     if (sw === 0) return totalWidth;
-    return totalWidth - sw - this.sidebarSep.length;
+    return totalWidth - sw - SIDEBAR_SEP_WIDTH;
   }
 
   private expandLines(width: number): string[] {
@@ -125,7 +125,7 @@ export class ScrollPane implements Component, Focusable {
       const tocLines = this.pinnedSidebar(sw);
       return [
         this.header(width),
-        ...compositeSideBySide(sliced, cw, tocLines, this.sidebarSep),
+        ...compositeSideBySide(sliced, cw, tocLines, SIDEBAR_SEP),
       ];
     }
     return [this.header(width), ...sliced];

@@ -4593,6 +4593,86 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: spec/waiting + approved + skipPlan skips plan, advances to implementation",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "spec" }],
+      skipPlan: true,
+      worktrees: {
+        "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
+      },
+    });
+    let spawnedPhase = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPhase = opts.phase;
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, entry: object) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+    });
+    assertEquals(spawnedPhase, "implementation");
+    assertArrayIncludes(logEntries as Record<string, unknown>[], [
+      { event: "phase-transition", from: "spec", to: "implementation" },
+    ]);
+  },
+);
+
+Deno.test(
+  "advancePhase: spec/waiting + approved without skipPlan advances to plan",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "spec" }],
+    });
+    let spawnedPhase = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPhase = opts.phase;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+    });
+    assertEquals(spawnedPhase, "plan");
+  },
+);
+
+Deno.test(
   "advancePhase: emits prompt-too-long for waiting+approved path when threshold exceeded",
   async () => {
     const ticket = makeTicket({

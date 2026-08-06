@@ -1,12 +1,13 @@
 import { join } from "@std/path";
 import { findLatestPhaseOutput } from "./review.ts";
+import type { CommandRunner } from "./apfel.ts";
 
 const PROMPT_DIR = new URL("./phases/prompts/", import.meta.url).pathname;
 
 export async function selfReview(
   phase: string,
   ticketDir: string,
-  fetcher: typeof fetch,
+  run: CommandRunner,
 ): Promise<{ approved: boolean; reason: string | null }> {
   let systemPrompt: string;
   try {
@@ -25,23 +26,21 @@ export async function selfReview(
   );
 
   try {
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 200,
-        system: systemPrompt,
-        messages: [{ role: "user", content: outputContent }],
-      }),
-    });
-    if (!response.ok) return { approved: false, reason: null };
-    const data = await response.json();
-    const text = (data?.content?.[0]?.text ?? "").trim();
+    const { code, stdout } = await run([
+      "claude",
+      outputContent,
+      "--print",
+      "--output-format",
+      "text",
+      "--system-prompt",
+      systemPrompt,
+      "--model",
+      "claude-haiku-4-5",
+      "--tools",
+      "",
+    ]);
+    if (code !== 0) return { approved: false, reason: null };
+    const text = stdout.trim();
     const firstLine = text.split("\n")[0].trim().toUpperCase();
     if (firstLine === "APPROVE") return { approved: true, reason: null };
     return { approved: false, reason: text.length > 0 ? text : null };

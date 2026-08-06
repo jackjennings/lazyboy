@@ -2,25 +2,7 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { assertValidPhaseStatus, isApproved } from "./types.ts";
 import type { TicketPhase, TicketState, TicketStatus } from "./types.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "Test",
-    url: "https://github.com/x/y/issues/1",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: new Date().toISOString(),
-    updated: new Date().toISOString(),
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../test-support.ts";
 
 Deno.test("TicketState has required fields", () => {
   const t: TicketState = makeTicket();

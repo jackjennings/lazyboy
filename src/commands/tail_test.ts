@@ -1,27 +1,8 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
-import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 import { resolveTicketLogPath } from "./tail.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/test/repo/1",
-    provider: "github",
-    title: "Test ticket",
-    url: "https://github.com/test/repo/issues/1",
-    phase: "spec",
-    status: "running",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "Test body",
-    artifact: "pr",
-    ...overrides,
-  };
-}
 
 Deno.test(
   "resolveTicketLogPath: returns log path when ticket and log exist",
@@ -66,7 +47,7 @@ Deno.test(
       await assertRejects(
         () => resolveTicketLogPath(stateDir, ticket.id),
         Error,
-        "No log file found for github/test/repo/1",
+        `No log file found for ${ticket.id}`,
       );
     } finally {
       await Deno.remove(stateDir, { recursive: true });

@@ -7,27 +7,8 @@ import {
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
-import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 import { performRetry } from "./retry.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/test/repo/1",
-    provider: "github",
-    title: "Test ticket",
-    url: "https://github.com/test/repo/issues/1",
-    phase: "spec",
-    status: "needs-attention",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "Test body",
-    artifact: "pr",
-    ...overrides,
-  };
-}
 
 Deno.test(
   "performRetry: throws when ticket is not in needs-attention",

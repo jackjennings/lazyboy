@@ -35,6 +35,11 @@ notion-fetch database <url>       # fetch a Notion database as a Markdown table
 notion-fetch search <query>       # search the Notion workspace
 ```
 
+Every new subcommand must have a 3-character zsh alias (`l` + first two unique
+letters of the subcommand name) in `plugin/lazyboy.plugin.zsh` and a matching
+row in the `README.md` alias table. Add a `compdef <alias>=lazyboy` line only if
+the subcommand takes a ticket ID argument.
+
 ## Architecture
 
 lazyboy is a cron-driven pipeline. `TickService` (`src/tick.ts`) owns the tick

@@ -82,6 +82,7 @@ completion setup is needed when using the plugin.
 | `lta` | `lazyboy tail`       |
 | `lup` | `lazyboy update`     |
 | `lhd` | `lazyboy hud`        |
+| `lus` | `lazyboy usage`      |
 
 ## Config
 

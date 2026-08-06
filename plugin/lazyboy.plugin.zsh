@@ -16,6 +16,7 @@ alias lsh='lazyboy shell'
 alias lta='lazyboy tail'
 alias lup='lazyboy update'
 alias lhd='lazyboy hud'
+alias lus='lazyboy usage'
 
 source <(lazyboy completion zsh)
 

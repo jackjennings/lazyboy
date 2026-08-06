@@ -90,6 +90,7 @@ export async function readTicket(
     notionPages: data.notionPages as
       | { url: string; title: string }[]
       | undefined,
+    skipPlan: data.skipPlan as boolean | undefined,
   };
 
   if (needsMigration) {
@@ -131,6 +132,7 @@ export async function writeTicket(
   if (ticket.notionPages !== undefined) {
     frontmatter.notionPages = ticket.notionPages;
   }
+  if (ticket.skipPlan === true) frontmatter.skipPlan = true;
   const raw = matter.stringify(ticket.body, frontmatter);
   await Deno.writeTextFile(join(dir, "meta.md"), raw);
 }

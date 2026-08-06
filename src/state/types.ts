@@ -81,6 +81,7 @@ export interface TicketState {
   phases?: PhaseModelConfig;
   artifact: "pr" | "notion";
   notionPages?: { url: string; title: string }[];
+  skipPlan?: boolean;
 }
 
 export function isApproved(ticket: TicketState): boolean {

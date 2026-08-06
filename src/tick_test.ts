@@ -2292,7 +2292,12 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     github: { repos: [] },
     state: { dir: "" },
-    tick: { concurrency: 1, resolveCIFailures: true, principles: true },
+    tick: {
+      concurrency: 1,
+      resolveCIFailures: true,
+      principles: true,
+      agentsMdMaxTokens: 8000,
+    },
     codebase: { roots: [] },
     packages: { enabled: [] },
     pi: { provider: "anthropic" },
@@ -4241,5 +4246,152 @@ Deno.test(
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
+  },
+);
+
+Deno.test(
+  "TickService: emits agents-md-too-large when file token count exceeds threshold",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const agentsMdPath = join(dir, "AGENTS.md");
+    await Deno.writeTextFile(agentsMdPath, "word ".repeat(500));
+    const captured: object[] = [];
+    const deps = makeFakeServiceDeps({
+      agentsMdPaths: [agentsMdPath],
+      agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    await Deno.remove(dir, { recursive: true });
+    const entry = captured.find(
+      (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
+    );
+    assert(entry !== undefined);
+    const e = entry as Record<string, unknown>;
+    assertEquals(e.path, agentsMdPath);
+    assertEquals(e.maxTokens, 10);
+    assert(typeof e.tokens === "number" && (e.tokens as number) > 10);
+  },
+);
+
+Deno.test(
+  "TickService: no agents-md-too-large event when agentsMdPaths is absent",
+  async () => {
+    const captured: object[] = [];
+    const deps = makeFakeServiceDeps({
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    assertFalse(
+      captured.some(
+        (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
+      ),
+    );
+  },
+);
+
+Deno.test(
+  "TickService: no agents-md-too-large event when file token count is within threshold",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const agentsMdPath = join(dir, "AGENTS.md");
+    await Deno.writeTextFile(agentsMdPath, "hi");
+    const captured: object[] = [];
+    const deps = makeFakeServiceDeps({
+      agentsMdPaths: [agentsMdPath],
+      agentsMdMaxTokens: 100000,
+      listTickets: () => Promise.resolve(["gh-1"]),
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    await Deno.remove(dir, { recursive: true });
+    assertFalse(
+      captured.some(
+        (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
+      ),
+    );
+  },
+);
+
+Deno.test(
+  "TickService: missing AGENTS.md is skipped silently and tick completes",
+  async () => {
+    const commitStateSpy = spy((): Promise<void> => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      agentsMdPaths: ["/nonexistent/path/AGENTS.md"],
+      agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
+      commitState: commitStateSpy,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(commitStateSpy, 1);
+  },
+);
+
+Deno.test(
+  "TickService: emits one agents-md-too-large event per exceeding file",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const path1 = join(dir, "root1", "AGENTS.md");
+    const path2 = join(dir, "root2", "AGENTS.md");
+    await Deno.mkdir(join(dir, "root1"), { recursive: true });
+    await Deno.mkdir(join(dir, "root2"), { recursive: true });
+    await Deno.writeTextFile(path1, "word ".repeat(500));
+    await Deno.writeTextFile(path2, "word ".repeat(500));
+    const captured: object[] = [];
+    const deps = makeFakeServiceDeps({
+      agentsMdPaths: [path1, path2],
+      agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    await Deno.remove(dir, { recursive: true });
+    const events = captured.filter(
+      (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
+    );
+    assertEquals(events.length, 2);
+    const paths = events.map((e) => (e as Record<string, unknown>).path);
+    assertArrayIncludes(paths, [path1, path2]);
+  },
+);
+
+Deno.test(
+  "TickService: agents-md-too-large fires on each phase start while over threshold",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const agentsMdPath = join(dir, "AGENTS.md");
+    await Deno.writeTextFile(agentsMdPath, "word ".repeat(500));
+    const captured: object[] = [];
+    const appendTickLog = (entry: object) => {
+      captured.push(entry);
+      return Promise.resolve();
+    };
+    const deps = makeFakeServiceDeps({
+      agentsMdPaths: [agentsMdPath],
+      agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
+      appendTickLog,
+    });
+    await new TickService(deps).run();
+    await new TickService(deps).run();
+    await Deno.remove(dir, { recursive: true });
+    const events = captured.filter(
+      (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
+    );
+    assertEquals(events.length, 2);
   },
 );

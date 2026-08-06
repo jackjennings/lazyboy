@@ -134,6 +134,7 @@ export interface Config {
     concurrency: number;
     resolveCIFailures: boolean;
     principles: boolean;
+    agentsMdMaxTokens: number;
   };
   codebase: { roots: string[] };
   packages: { enabled: string[] };

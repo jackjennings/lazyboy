@@ -769,3 +769,89 @@ concurrency = 1
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig defaults tick.agentsMdMaxTokens to 8000 when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.agentsMdMaxTokens, 8000);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig parses tick.agents_md_max_tokens", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+agents_md_max_tokens = 5000
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.agentsMdMaxTokens, 5000);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig accepts 0 for tick.agents_md_max_tokens", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+agents_md_max_tokens = 0
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.agentsMdMaxTokens, 0);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.agents_md_max_tokens is not a non-negative integer", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+agents_md_max_tokens = -1
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [tick].agents_md_max_tokens must be a non-negative integer",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

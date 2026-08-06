@@ -64,6 +64,18 @@ export async function loadConfig(path?: string): Promise<Config> {
   if (principlesRaw !== undefined && typeof principlesRaw !== "boolean") {
     throw new Error("config.toml: [tick].principles must be a boolean");
   }
+  const agentsMdMaxTokensRaw = tickRaw?.agents_md_max_tokens;
+  if (agentsMdMaxTokensRaw !== undefined) {
+    if (
+      typeof agentsMdMaxTokensRaw !== "number" ||
+      !Number.isInteger(agentsMdMaxTokensRaw) ||
+      agentsMdMaxTokensRaw < 0
+    ) {
+      throw new Error(
+        "config.toml: [tick].agents_md_max_tokens must be a non-negative integer",
+      );
+    }
+  }
 
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
@@ -119,6 +131,7 @@ export async function loadConfig(path?: string): Promise<Config> {
       concurrency: (tickRaw?.concurrency as number) ?? 1,
       resolveCIFailures: (resolveCIFailuresRaw as boolean | undefined) ?? true,
       principles: (principlesRaw as boolean | undefined) ?? true,
+      agentsMdMaxTokens: (agentsMdMaxTokensRaw as number | undefined) ?? 8000,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },

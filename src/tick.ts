@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { estimateTokenCount } from "tokenx";
 import { lazyboyDir } from "./paths.ts";
 import { deleteRunPid } from "./executor.ts";
 import {
@@ -132,6 +133,8 @@ export interface TickServiceDeps {
   processLearnings?(): Promise<void>;
   notify?(ticket: TicketState): Promise<void>;
   appendTickLog?(entry: object): Promise<void>;
+  agentsMdPaths?: string[];
+  agentsMdMaxTokens?: number;
   runCeremonies?(): Promise<void>;
   scaffoldStatePrompts?(): Promise<void>;
   generateShortTitle?(
@@ -769,7 +772,33 @@ export class TickService {
         ticket.status === "revising" ||
         (ticket.status === "waiting" && isApproved(ticket));
       if (willSpawn && running >= deps.concurrency) continue;
-      if (willSpawn) running++;
+      if (willSpawn) {
+        running++;
+        if (
+          deps.agentsMdPaths &&
+          deps.agentsMdPaths.length > 0 &&
+          deps.agentsMdMaxTokens &&
+          deps.agentsMdMaxTokens > 0
+        ) {
+          for (const agentsMdPath of deps.agentsMdPaths) {
+            let content: string;
+            try {
+              content = await Deno.readTextFile(agentsMdPath);
+            } catch {
+              continue;
+            }
+            const tokens = estimateTokenCount(content);
+            if (tokens > deps.agentsMdMaxTokens) {
+              await (deps.appendTickLog ?? appendTickLog)({
+                event: "agents-md-too-large",
+                path: agentsMdPath,
+                tokens,
+                maxTokens: deps.agentsMdMaxTokens,
+              });
+            }
+          }
+        }
+      }
       await advancePhase(ticket, deps.stateDir, deps.tickDeps);
     }
 

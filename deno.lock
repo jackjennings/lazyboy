@@ -18,7 +18,8 @@
     "npm:@notionhq/client@2": "2.3.0",
     "npm:adf2markdown@^1.2.0": "1.2.0",
     "npm:diff@^5.2.0": "5.2.2",
-    "npm:gray-matter@4.0.3": "4.0.3"
+    "npm:gray-matter@4.0.3": "4.0.3",
+    "npm:tokenx@2.0.0": "2.0.0"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -281,6 +282,9 @@
     "strip-bom-string@1.0.0": {
       "integrity": "sha512-uCC2VHvQRYu+lMh4My/sFNmF2klFymLX1wHJeXnbEJERpV/ZsVuonzerjfrGpIGF7LBVa1O7i9kjiWvJiFck8g=="
     },
+    "tokenx@2.0.0": {
+      "integrity": "sha512-kLZDSxJ/a8nvQEp0o6xfss4b7X8wa0YLdJfKD/TfzTCKiYR6nPckcAVdTymdo9f7ru9W/5gsWCk/BuPjpjUHwg=="
+    },
     "tr46@0.0.3": {
       "integrity": "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="
     },
@@ -311,7 +315,8 @@
       "npm:@notionhq/client@2",
       "npm:adf2markdown@^1.2.0",
       "npm:diff@^5.2.0",
-      "npm:gray-matter@4.0.3"
+      "npm:gray-matter@4.0.3",
+      "npm:tokenx@2.0.0"
     ]
   }
 }

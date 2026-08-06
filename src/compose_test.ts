@@ -12,7 +12,12 @@ function makeConfig(overrides: Partial<Config["github"]> = {}): Config {
   return {
     github: { repos: [], ...overrides },
     state: { dir: "/tmp" },
-    tick: { concurrency: 1, resolveCIFailures: true, principles: true },
+    tick: {
+      concurrency: 1,
+      resolveCIFailures: true,
+      principles: true,
+      agentsMdMaxTokens: 8000,
+    },
     codebase: { roots: [] },
     packages: { enabled: [] },
     pi: { provider: "anthropic" },

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env=NOTION_TOKEN --allow-net=api.notion.com
+#!/usr/bin/env -S deno run --allow-env=NOTION_TOKEN --allow-net=api.notion.com --allow-read=-
 
 import { Client } from "@notionhq/client";
 import type {
@@ -255,6 +255,164 @@ export async function runSearch(
   return lines.join("\n\n");
 }
 
+type RichTextInput = { type: "text"; text: { content: string } };
+type BlockInput = Record<string, unknown>;
+
+function toRich(text: string): RichTextInput[] {
+  return [{ type: "text", text: { content: text } }];
+}
+
+export function markdownToBlocks(markdown: string): BlockInput[] {
+  const lines = markdown.split("\n");
+  const blocks: BlockInput[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    const fenceMatch = line.match(/^```([^\s`]*)/);
+    if (fenceMatch) {
+      const language = fenceMatch[1] || "plain text";
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++;
+      blocks.push({
+        type: "code",
+        code: { rich_text: toRich(codeLines.join("\n")), language },
+      });
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      blocks.push({
+        type: "heading_3",
+        heading_3: { rich_text: toRich(line.slice(4)) },
+      });
+      i++;
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push({
+        type: "heading_2",
+        heading_2: { rich_text: toRich(line.slice(3)) },
+      });
+      i++;
+      continue;
+    }
+
+    if (line.startsWith("# ")) {
+      blocks.push({
+        type: "heading_1",
+        heading_1: { rich_text: toRich(line.slice(2)) },
+      });
+      i++;
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*] (.+)/);
+    if (bulletMatch) {
+      blocks.push({
+        type: "bulleted_list_item",
+        bulleted_list_item: { rich_text: toRich(bulletMatch[1]) },
+      });
+      i++;
+      continue;
+    }
+
+    const numberedMatch = line.match(/^\d+\. (.+)/);
+    if (numberedMatch) {
+      blocks.push({
+        type: "numbered_list_item",
+        numbered_list_item: { rich_text: toRich(numberedMatch[1]) },
+      });
+      i++;
+      continue;
+    }
+
+    const quoteMatch = line.match(/^> (.+)/);
+    if (quoteMatch) {
+      blocks.push({
+        type: "quote",
+        quote: { rich_text: toRich(quoteMatch[1]) },
+      });
+      i++;
+      continue;
+    }
+
+    if (/^---+\s*$/.test(line)) {
+      blocks.push({ type: "divider", divider: {} });
+      i++;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (i < lines.length && lines[i].trim() !== "") {
+      const l = lines[i];
+      if (
+        l.startsWith("# ") || l.startsWith("## ") || l.startsWith("### ") ||
+        l.match(/^[-*] /) || l.match(/^\d+\. /) || l.startsWith("> ") ||
+        l.startsWith("```") || /^---+\s*$/.test(l)
+      ) break;
+      paragraphLines.push(l);
+      i++;
+    }
+    if (paragraphLines.length > 0) {
+      blocks.push({
+        type: "paragraph",
+        paragraph: { rich_text: toRich(paragraphLines.join("\n")) },
+      });
+    }
+  }
+
+  return blocks;
+}
+
+export async function runCreate(
+  client: Client,
+  parentPageUrl: string,
+  title: string,
+): Promise<string> {
+  const parentId = parseNotionId(parentPageUrl);
+  if (!parentId) {
+    throw new Error(`could not parse Notion ID from URL: ${parentPageUrl}`);
+  }
+  const response = await client.pages.create({
+    parent: { page_id: parentId },
+    properties: {
+      title: { title: [{ type: "text", text: { content: title } }] },
+    },
+  }) as { id: string };
+  return `https://www.notion.so/${response.id}`;
+}
+
+export async function runAppend(
+  client: Client,
+  pageUrl: string,
+  markdown: string,
+): Promise<void> {
+  const pageId = parseNotionId(pageUrl);
+  if (!pageId) {
+    throw new Error(`could not parse Notion ID from URL: ${pageUrl}`);
+  }
+  const blocks = markdownToBlocks(markdown);
+  await client.blocks.children.append({
+    block_id: pageId,
+    children: blocks as Parameters<
+      typeof client.blocks.children.append
+    >[0]["children"],
+  });
+}
+
 if (import.meta.main) {
   const token = Deno.env.get("NOTION_TOKEN");
   if (!token) {
@@ -262,13 +420,15 @@ if (import.meta.main) {
     Deno.exit(1);
   }
 
-  const [subcommand, arg] = Deno.args;
-  const known = ["page", "database", "search"];
-  if (!subcommand || !known.includes(subcommand) || !arg) {
+  const [subcommand, ...rest] = Deno.args;
+  const known = ["page", "database", "search", "create", "append"];
+  if (!subcommand || !known.includes(subcommand)) {
     console.error(
       "usage: notion-fetch page <url>\n" +
         "       notion-fetch database <url>\n" +
-        "       notion-fetch search <query>",
+        "       notion-fetch search <query>\n" +
+        "       notion-fetch create <parent-page-url> <title>\n" +
+        "       notion-fetch append <page-url>",
     );
     Deno.exit(1);
   }
@@ -276,26 +436,58 @@ if (import.meta.main) {
   const client = new Client({ auth: token });
 
   try {
-    let output: string;
-    if (subcommand === "page" || subcommand === "database") {
-      const id = parseNotionId(arg);
-      if (!id) {
-        console.error(`error: could not parse Notion ID from URL: ${arg}`);
+    if (subcommand === "create") {
+      const parentUrl = rest[0];
+      const title = rest.slice(1).join(" ");
+      if (!parentUrl || !title) {
+        console.error(
+          "usage: notion-fetch create <parent-page-url> <title>",
+        );
         Deno.exit(1);
       }
-      output = subcommand === "page"
-        ? await runPage(client, id)
-        : await runDatabase(client, id);
+      const url = await runCreate(client, parentUrl, title);
+      console.log(url);
+    } else if (subcommand === "append") {
+      const pageUrl = rest[0];
+      if (!pageUrl) {
+        console.error("usage: notion-fetch append <page-url>");
+        Deno.exit(1);
+      }
+      const markdown = await new Response(Deno.stdin.readable).text();
+      await runAppend(client, pageUrl, markdown);
     } else {
-      output = await runSearch(client, arg);
+      const arg = rest[0];
+      if (!arg) {
+        console.error(
+          "usage: notion-fetch page <url>\n" +
+            "       notion-fetch database <url>\n" +
+            "       notion-fetch search <query>\n" +
+            "       notion-fetch create <parent-page-url> <title>\n" +
+            "       notion-fetch append <page-url>",
+        );
+        Deno.exit(1);
+      }
+      let output: string;
+      if (subcommand === "page" || subcommand === "database") {
+        const id = parseNotionId(arg);
+        if (!id) {
+          console.error(`error: could not parse Notion ID from URL: ${arg}`);
+          Deno.exit(1);
+        }
+        output = subcommand === "page"
+          ? await runPage(client, id)
+          : await runDatabase(client, id);
+      } else {
+        output = await runSearch(client, arg);
+      }
+      console.log(output);
     }
-    console.log(output);
   } catch (err) {
     if (
       err && typeof err === "object" && "status" in err &&
       (err as { status: number }).status === 404
     ) {
-      const id = subcommand !== "search" ? (parseNotionId(arg) ?? arg) : arg;
+      const id = rest[0] ? (parseNotionId(rest[0]) ?? rest[0]) : "";
       console.error(
         `error: Notion returned 404 for ${id} — check that the integration has been granted access to this page`,
       );

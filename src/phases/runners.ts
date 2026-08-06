@@ -53,6 +53,21 @@ export async function loadProviderPrompt(
   }
 }
 
+export async function loadArtifactPrompt(
+  phase: string,
+  artifact: string,
+): Promise<string> {
+  try {
+    const content = await Deno.readTextFile(
+      join(PROMPT_DIR, `${artifact}-${phase}.md`),
+    );
+    return renderTemplate(content);
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return "";
+    throw e;
+  }
+}
+
 function deriveProjectPath(provider: string, ticketId: string): string {
   if (provider === "github") {
     const segments = ticketId.split("/");

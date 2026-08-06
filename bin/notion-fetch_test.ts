@@ -1,10 +1,13 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
   blockToMarkdown,
   databaseToMarkdown,
+  markdownToBlocks,
   parseNotionId,
   propertyToString,
   richTextToMarkdown,
+  runAppend,
+  runCreate,
   runDatabase,
   runPage,
   runSearch,
@@ -622,4 +625,152 @@ Deno.test("runSearch — appends truncation comment when results exceed 20", asy
 
   const output = await runSearch(client, "query");
   assert(output.includes("<!-- truncated: result limit reached -->"));
+});
+
+// ── markdownToBlocks ──────────────────────────────────────────────────────────
+
+Deno.test("markdownToBlocks — empty string returns empty array", () => {
+  assertEquals(markdownToBlocks(""), []);
+});
+
+Deno.test("markdownToBlocks — blank lines are skipped", () => {
+  assertEquals(markdownToBlocks("\n\n\n"), []);
+});
+
+Deno.test("markdownToBlocks — paragraph block", () => {
+  const blocks = markdownToBlocks("Hello world");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "paragraph");
+});
+
+Deno.test("markdownToBlocks — heading_1 block", () => {
+  const blocks = markdownToBlocks("# Title");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "heading_1");
+});
+
+Deno.test("markdownToBlocks — heading_2 block", () => {
+  const blocks = markdownToBlocks("## Sub");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "heading_2");
+});
+
+Deno.test("markdownToBlocks — heading_3 block", () => {
+  const blocks = markdownToBlocks("### Sub-sub");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "heading_3");
+});
+
+Deno.test("markdownToBlocks — bulleted list item", () => {
+  const blocks = markdownToBlocks("- item one");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "bulleted_list_item");
+});
+
+Deno.test("markdownToBlocks — numbered list item", () => {
+  const blocks = markdownToBlocks("1. first");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "numbered_list_item");
+});
+
+Deno.test("markdownToBlocks — block quote", () => {
+  const blocks = markdownToBlocks("> quoted text");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "quote");
+});
+
+Deno.test("markdownToBlocks — divider", () => {
+  const blocks = markdownToBlocks("---");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "divider");
+});
+
+Deno.test("markdownToBlocks — fenced code block with language", () => {
+  const blocks = markdownToBlocks("```typescript\nconst x = 1;\n```");
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, "code");
+  const code = blocks[0].code as { language: string };
+  assertEquals(code.language, "typescript");
+});
+
+// ── runCreate ─────────────────────────────────────────────────────────────────
+
+Deno.test("runCreate — calls pages.create and returns new page URL", async () => {
+  const client = {
+    pages: {
+      create: () => Promise.resolve({ id: "newpage123456789012345678901234" }),
+    },
+  } as unknown as Client;
+
+  const url = await runCreate(
+    client,
+    "https://www.notion.so/abc1234567890abcdef1234567890ab",
+    "My Document",
+  );
+  assert(url.startsWith("https://www.notion.so/"));
+  assert(url.includes("newpage"));
+});
+
+Deno.test("runCreate — throws when parent URL is unparseable", async () => {
+  const client = {} as unknown as Client;
+  await assertRejects(
+    () => runCreate(client, "https://www.notion.so/no-hex-here", "Title"),
+    Error,
+    "could not parse Notion ID from URL",
+  );
+});
+
+// ── runAppend ─────────────────────────────────────────────────────────────────
+
+Deno.test("runAppend — converts markdown to blocks and calls append", async () => {
+  let appendedBlocks: unknown[] = [];
+  const client = {
+    blocks: {
+      children: {
+        append: (args: { children: unknown[] }) => {
+          appendedBlocks = args.children;
+          return Promise.resolve({});
+        },
+      },
+    },
+  } as unknown as Client;
+
+  await runAppend(
+    client,
+    "https://www.notion.so/abc1234567890abcdef1234567890ab",
+    "# Hello\n\nWorld",
+  );
+  assert(appendedBlocks.length > 0);
+});
+
+Deno.test("runAppend — throws when page URL is unparseable", async () => {
+  const client = {} as unknown as Client;
+  await assertRejects(
+    () =>
+      runAppend(
+        client,
+        "https://www.notion.so/no-hex-here",
+        "# Hello\n\nWorld",
+      ),
+    Error,
+    "could not parse Notion ID from URL",
+  );
+});
+
+// ── CLI: new subcommands ──────────────────────────────────────────────────────
+
+Deno.test("CLI exits 1 with usage on create with missing title", async () => {
+  const result = await new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-env=NOTION_TOKEN",
+      "--allow-net=api.notion.com",
+      scriptPath,
+      "create",
+      "https://www.notion.so/abc1234567890abcdef1234567890ab",
+    ],
+    env: { ...Deno.env.toObject(), NOTION_TOKEN: "secret_test" },
+  }).output();
+  assertEquals(result.code, 1);
+  assert(new TextDecoder().decode(result.stderr).includes("usage:"));
 });

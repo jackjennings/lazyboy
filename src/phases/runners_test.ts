@@ -7,6 +7,7 @@ import {
 } from "@std/assert";
 import { join } from "@std/path";
 import {
+  loadArtifactPrompt,
   loadPromptFile,
   loadProviderPrompt,
   loadStatePrompt,
@@ -377,5 +378,31 @@ Deno.test(
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
+  },
+);
+
+Deno.test(
+  "loadArtifactPrompt: returns empty string for unknown artifact",
+  async () => {
+    const result = await loadArtifactPrompt("spec", "unknown-artifact-xyz");
+    assertEquals(result.length, 0);
+  },
+);
+
+Deno.test("loadArtifactPrompt: notion-spec returns non-empty content", async () => {
+  const result = await loadArtifactPrompt("spec", "notion");
+  assertGreater(result.length, 0);
+});
+
+Deno.test("loadArtifactPrompt: notion-plan returns non-empty content", async () => {
+  const result = await loadArtifactPrompt("plan", "notion");
+  assertGreater(result.length, 0);
+});
+
+Deno.test(
+  "loadArtifactPrompt: notion-implementation returns non-empty content",
+  async () => {
+    const result = await loadArtifactPrompt("implementation", "notion");
+    assertGreater(result.length, 0);
   },
 );

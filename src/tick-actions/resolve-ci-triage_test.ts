@@ -37,6 +37,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: "2026-07-29T00:00:00Z",
     updated: "2026-07-29T00:00:00Z",
     body: "",
+    artifact: "pr",
     ...overrides,
   };
 }

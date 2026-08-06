@@ -2,24 +2,7 @@ import { assertArrayIncludes, assertEquals, assertRejects } from "@std/assert";
 import { createMigrationRunner } from "./runner.ts";
 import type { TicketState } from "../state/types.ts";
 import type { Migration, StoreMigration } from "./types.ts";
-
-function makeTicket(id: string): TicketState {
-  return {
-    id,
-    provider: "github",
-    title: "T",
-    url: "u",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-  };
-}
+import { makeTicket } from "../test-support.ts";
 
 Deno.test("createMigrationRunner: no migrations returns tickets unchanged without writes", async () => {
   const writtenTickets: TicketState[] = [];
@@ -37,7 +20,10 @@ Deno.test("createMigrationRunner: no migrations returns tickets unchanged withou
       return Promise.resolve();
     },
   });
-  const tickets = [makeTicket("gh-1"), makeTicket("gh-2")];
+  const tickets = [
+    makeTicket({ id: "gh-1", url: "u" }),
+    makeTicket({ id: "gh-2", url: "u" }),
+  ];
   const result = await runner("/state", tickets);
   assertEquals(result, tickets);
   assertEquals(writtenTickets.length, 0);
@@ -65,8 +51,8 @@ Deno.test("createMigrationRunner: one unapplied migration runs against all ticke
     },
   });
   const result = await runner("/state", [
-    makeTicket("gh-1"),
-    makeTicket("gh-2"),
+    makeTicket({ id: "gh-1", url: "u" }),
+    makeTicket({ id: "gh-2", url: "u" }),
   ]);
   assertEquals(result.length, 2);
   assertEquals(result[0].title, "migrated");
@@ -90,7 +76,7 @@ Deno.test("createMigrationRunner: already applied migration is not re-applied", 
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/state", [makeTicket("gh-1")]);
+  await runner("/state", [makeTicket({ id: "gh-1", url: "u" })]);
   assertEquals(runCount, 0);
 });
 
@@ -109,7 +95,7 @@ Deno.test("createMigrationRunner: two migrations run in ascending ID order", asy
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/state", [makeTicket("gh-1")]);
+  await runner("/state", [makeTicket({ id: "gh-1", url: "u" })]);
   assertEquals(sequence, ["1000-a.ts", "2000-b.ts"]);
 });
 
@@ -134,7 +120,7 @@ Deno.test("createMigrationRunner: failing migration re-throws with IDs, no write
     },
   });
   await assertRejects(
-    () => runner("/state", [makeTicket("gh-1")]),
+    () => runner("/state", [makeTicket({ id: "gh-1", url: "u" })]),
     Error,
     "Migration 1000-fail.ts failed on ticket gh-1: bad data",
   );
@@ -158,7 +144,7 @@ Deno.test("createMigrationRunner: absent .migrations file causes all migrations 
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/state", [makeTicket("gh-1")]);
+  await runner("/state", [makeTicket({ id: "gh-1", url: "u" })]);
   assertEquals(runCount, 2);
 });
 
@@ -177,7 +163,10 @@ Deno.test("createMigrationRunner: stateDir is passed to migration.run for each t
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/my-state", [makeTicket("gh-1"), makeTicket("gh-2")]);
+  await runner("/my-state", [
+    makeTicket({ id: "gh-1", url: "u" }),
+    makeTicket({ id: "gh-2", url: "u" }),
+  ]);
   assertEquals(capturedStateDirs, ["/my-state", "/my-state"]);
 });
 
@@ -199,7 +188,10 @@ Deno.test("createMigrationRunner: store migration runs once and leaves tickets u
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  const tickets = [makeTicket("gh-1"), makeTicket("gh-2")];
+  const tickets = [
+    makeTicket({ id: "gh-1", url: "u" }),
+    makeTicket({ id: "gh-2", url: "u" }),
+  ];
   const result = await runner("/state", tickets);
   assertEquals(storeRunCount, 1);
   assertEquals(capturedStateDir, "/state");
@@ -222,7 +214,7 @@ Deno.test("createMigrationRunner: store migration ID written to applied list", a
     },
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/state", [makeTicket("gh-1")]);
+  await runner("/state", [makeTicket({ id: "gh-1", url: "u" })]);
   assertArrayIncludes(writtenApplied, ["1000-setup-store.ts"]);
 });
 
@@ -253,7 +245,7 @@ Deno.test("createMigrationRunner: store and per-ticket migrations run in filenam
     writeApplied: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
   });
-  await runner("/state", [makeTicket("gh-1")]);
+  await runner("/state", [makeTicket({ id: "gh-1", url: "u" })]);
   assertEquals(sequence, ["store", "ticket"]);
 });
 
@@ -270,7 +262,7 @@ Deno.test("createMigrationRunner: failing store migration throws with migration 
     writeTicket: () => Promise.resolve(),
   });
   await assertRejects(
-    () => runner("/state", [makeTicket("gh-1")]),
+    () => runner("/state", [makeTicket({ id: "gh-1", url: "u" })]),
     Error,
     "Migration 1000-bad-store.ts failed: disk full",
   );

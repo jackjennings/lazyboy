@@ -1,26 +1,7 @@
 import { assertEquals, assertFalse } from "@std/assert";
 import { join } from "@std/path";
 import migration from "../../migrations/1752710400-namespace-ticket-ids.ts";
-import type { TicketState } from "../state/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/jackjennings/lazyboy/issues/1",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../test-support.ts";
 
 Deno.test(
   "namespace-ticket-ids: renames GitHub ticket directory and updates ID",
@@ -41,7 +22,13 @@ Deno.test(
         join(ticketDir, "20260101T000000-intake.md"),
         "intake body",
       );
-      const result = await migration.run(makeTicket(), stateDir);
+      const result = await migration.run(
+        makeTicket({
+          id: "gh-1",
+          url: "https://github.com/jackjennings/lazyboy/issues/1",
+        }),
+        stateDir,
+      );
       assertEquals(result.id, "github/jackjennings/lazyboy/1");
       let oldExists = true;
       try {
@@ -74,7 +61,10 @@ Deno.test(
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
-      const ticket = makeTicket({ id: "github/jackjennings/lazyboy/1" });
+      const ticket = makeTicket({
+        id: "github/jackjennings/lazyboy/1",
+        url: "https://github.com/jackjennings/lazyboy/issues/1",
+      });
       const result = await migration.run(ticket, stateDir);
       assertEquals(result.id, "github/jackjennings/lazyboy/1");
     } finally {
@@ -141,7 +131,11 @@ Deno.test(
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
-      const ticket = makeTicket({ id: "other-123", provider: "other" });
+      const ticket = makeTicket({
+        id: "other-123",
+        provider: "other",
+        url: "https://github.com/jackjennings/lazyboy/issues/1",
+      });
       const result = await migration.run(ticket, stateDir);
       assertEquals(result.id, "other-123");
     } finally {

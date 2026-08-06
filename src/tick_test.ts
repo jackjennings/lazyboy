@@ -1669,6 +1669,63 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: ticket-captured logged for each new item",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-2",
+      provider: "github",
+      title: "Fix the bug",
+      url: "https://github.com/t/r/issues/2",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const appendLogSpy = spy(() => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(appendLogSpy, 1);
+    assertEquals(appendLogSpy.calls[0].args, [
+      "/state",
+      "gh-2",
+      { event: "ticket-captured", title: "Fix the bug" },
+    ]);
+  },
+);
+
+Deno.test(
+  "TickService: ticket-captured not logged when writeTicket throws",
+  async () => {
+    const item: WorkItem = {
+      id: "gh-2",
+      provider: "github",
+      title: "Fix the bug",
+      url: "https://github.com/t/r/issues/2",
+      description: "body",
+    };
+    const provider: Provider = {
+      fetchNew: () => Promise.resolve([item]),
+      close: () => Promise.resolve(),
+    };
+    const appendLogSpy = spy(() => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      providers: [provider],
+      listTickets: () => Promise.resolve([]),
+      writeTicket: () => Promise.reject(new Error("write failed")),
+      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      exit: () => {},
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(appendLogSpy, 0);
+  },
+);
+
+Deno.test(
   "TickService: runMigrations called before tick actions",
   async () => {
     const sequence: string[] = [];
@@ -2672,7 +2729,11 @@ Deno.test(
 Deno.test(
   "advancePhase: selfReview returning reason writes self-review output file",
   async () => {
-    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "running" });
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
     const writePhaseOutputCalls: Array<[string, string, string, string]> = [];
     const writePhaseOutputSpy = spy(
       (stateDir: string, id: string, file: string, content: string) => {

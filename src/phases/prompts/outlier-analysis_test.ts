@@ -40,3 +40,23 @@ Deno.test(
     assertStringIncludes(content, "State directory");
   },
 );
+
+Deno.test(
+  "outlier-analysis prompt does not reference deno eval",
+  async () => {
+    const content = await Deno.readTextFile(
+      new URL("outlier-analysis.md", import.meta.url).pathname,
+    );
+    assertFalse(content.includes("deno eval"));
+  },
+);
+
+Deno.test(
+  "outlier-analysis prompt instructs writing language-agnostic improvements",
+  async () => {
+    const content = await Deno.readTextFile(
+      new URL("outlier-analysis.md", import.meta.url).pathname,
+    );
+    assertStringIncludes(content, "language-agnostic");
+  },
+);

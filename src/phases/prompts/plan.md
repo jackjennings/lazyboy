@@ -14,10 +14,10 @@ file genuinely exceeds the default; when it does, use the default page size per
 page, not 100- or 200-line increments. Complete your full codebase survey before
 writing any task. Do not re-read a file while drafting tasks — write from what
 you already loaded. When the spec cites a specific file as a reference pattern
-to copy (e.g. "same as X in file.ts"), extract the exact relevant lines from
-that file during the survey, before writing any tasks. If a specific symbol or
-line from an already-read file is needed while drafting, use `grep` or `bash` to
-fetch it — do not re-read the full file.
+to copy (e.g. "same pattern as X in another file"), extract the exact relevant
+lines from that file during the survey, before writing any tasks. If a specific
+symbol or line from an already-read file is needed while drafting, use `grep` or
+`bash` to fetch it — do not re-read the full file.
 
 When a file is too large to read in one pass, read consecutive pages to the end
 before moving to the next file. Do not skip a line range — the moment you stop
@@ -30,7 +30,7 @@ during task drafting is the same violation as a full re-read.
 
 When searching for test files, issue a single discovery command that covers all
 plausible naming conventions at once (e.g.,
-`find src \( -name '*_test.ts' -o -name '*.test.ts' \) | head -20`). Issue this
+`find src \( -name '*_test.*' -o -name '*.test.*' \) | head -20`). Issue this
 command once for the entire plan — do not split discovery across multiple
 commands, one per file or feature area, even when each prior command finds
 results.

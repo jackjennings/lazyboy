@@ -26,8 +26,8 @@ Implement the plan exactly as specified using TDD:
 2. Implement the minimal code to make them pass
 3. Refactor if needed
 4. Confirm all tests pass
-5. Run `deno fmt && deno lint`. Required even when only `.md` files changed —
-   `deno fmt` formats Markdown.
+5. Run the project's formatter and linter. Required even when only `.md` files
+   changed — the formatter handles Markdown too.
 
 Apply this TDD cycle per file, not per task: when multiple plan tasks modify the
 same file, write all failing tests for that file across all tasks first, then
@@ -87,10 +87,10 @@ read contains the target pattern, use that read as the edit anchor without
 re-reading the file.
 
 When multiple files each require the same type of independent change (e.g., the
-same import added to `tick.ts` and `run-phase.ts`), issue all such edits as
-parallel calls in a single turn. Only serialize when edit B's `old_string`
-references text that edit A will write. Failing to batch cross-file independent
-edits costs one extra turn per file after the first.
+same change applied to two independent files), issue all such edits as parallel
+calls in a single turn. Only serialize when edit B's `old_string` references
+text that edit A will write. Failing to batch cross-file independent edits costs
+one extra turn per file after the first.
 
 The same applies to Write calls: when the plan requires writing multiple
 independent files (new files or complete rewrites), issue all Write calls in a
@@ -107,12 +107,12 @@ non-overlapping anchors are not an exception. Count your planned changes to a
 file before making any edits; if the count is three or more, switch to Write.
 
 When test failures reveal unplanned fixes (e.g., existing tests that break after
-your changes), run the complete failing test suite once — `deno task test` or
-the relevant test file — and collect every failure before making any edits.
-Enumerate all repairs needed per file, then apply them in a single Write call
-(or minimum Edit calls). Do not fix one failure, re-run tests, then fix the next
-— the fix-one-retest cycle multiplies turns in direct proportion to the failure
-count, and three or more fixes in the same file always warrant a Write.
+your changes), run the complete failing test suite once — the relevant test file
+— and collect every failure before making any edits. Enumerate all repairs
+needed per file, then apply them in a single Write call (or minimum Edit calls).
+Do not fix one failure, re-run tests, then fix the next — the fix-one-retest
+cycle multiplies turns in direct proportion to the failure count, and three or
+more fixes in the same file always warrant a Write.
 
 When the plan specifies an explicit count of call sites to update (e.g. "all 21
 `buildContextFiles` calls"), assert that count inside the script — for example

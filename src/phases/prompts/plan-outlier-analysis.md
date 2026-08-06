@@ -52,7 +52,7 @@ Follow these steps:
    pattern, the root cause, and the exact prompt change made (full diff or
    before/after).
 
-8. Open a draft PR against `jackjennings/lazyboy`. Before creating it, check the
+8. Open a draft PR in the current repository. Before creating it, check the
    lazyboy worktree for a pull request template. Look for each path in order and
    stop at the first match:
 

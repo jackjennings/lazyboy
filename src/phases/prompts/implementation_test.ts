@@ -1,12 +1,18 @@
-import { assertStringIncludes } from "@std/assert";
+import { assertFalse, assertStringIncludes } from "@std/assert";
 
 Deno.test(
-  "implementation prompt includes deno fmt && deno lint as numbered step",
+  "implementation prompt includes formatter and linter as numbered step",
   async () => {
     const content = await Deno.readTextFile(
       new URL("implementation.md", import.meta.url).pathname,
     );
-    assertStringIncludes(content, "deno fmt && deno lint");
+    assertStringIncludes(content, "formatter and linter");
+    assertFalse(content.includes("deno fmt && deno lint"));
+    assertFalse(content.includes("deno task test"));
+    assertStringIncludes(
+      content,
+      "same change applied to two independent files",
+    );
   },
 );
 

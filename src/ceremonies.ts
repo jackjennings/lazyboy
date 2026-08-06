@@ -10,6 +10,32 @@ export interface CeremonyRunnerDeps {
   now?: () => Temporal.ZonedDateTime;
 }
 
+function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
+  if (filename.length < 15 || filename[8] !== "T") return null;
+  const year = parseInt(filename.slice(0, 4), 10);
+  const month = parseInt(filename.slice(4, 6), 10);
+  const day = parseInt(filename.slice(6, 8), 10);
+  const hour = parseInt(filename.slice(9, 11), 10);
+  const minute = parseInt(filename.slice(11, 13), 10);
+  const second = parseInt(filename.slice(13, 15), 10);
+  if (
+    isNaN(year) || isNaN(month) || isNaN(day) ||
+    isNaN(hour) || isNaN(minute) || isNaN(second)
+  ) return null;
+  try {
+    return Temporal.PlainDateTime.from({
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      second,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export class CeremonyRunner {
   readonly #deps: CeremonyRunnerDeps;
   readonly #ceremonies: Map<string, Ceremony>;
@@ -92,19 +118,53 @@ export class CeremonyRunner {
       nanosecond: 0,
     });
 
-    if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return;
-
-    const todayPrefix = String(now.year) +
-      String(now.month).padStart(2, "0") +
-      String(now.day).padStart(2, "0");
-
+    const intervalHours = typeof config.interval_hours === "number"
+      ? config.interval_hours
+      : null;
+    const workdaysOnly = config.workdays_only === true;
     const outputDir = join(ceremonyDir, "output");
-    try {
-      for await (const entry of Deno.readDir(outputDir)) {
-        if (entry.isFile && entry.name.startsWith(todayPrefix)) return;
+
+    if (intervalHours !== null) {
+      if (workdaysOnly && now.dayOfWeek > 5) return;
+      if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return;
+
+      let mostRecent: Temporal.PlainDateTime | null = null;
+      try {
+        for await (const entry of Deno.readDir(outputDir)) {
+          if (!entry.isFile || !entry.name.includes(ceremony.name)) continue;
+          const dt = parseTimestampPrefix(entry.name);
+          if (
+            dt !== null &&
+            (mostRecent === null ||
+              Temporal.PlainDateTime.compare(dt, mostRecent) > 0)
+          ) {
+            mostRecent = dt;
+          }
+        }
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e;
       }
-    } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e;
+
+      if (mostRecent !== null) {
+        const elapsed = mostRecent
+          .until(now.toPlainDateTime())
+          .total("seconds");
+        if (elapsed < intervalHours * 3600) return;
+      }
+    } else {
+      if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return;
+
+      const todayPrefix = String(now.year) +
+        String(now.month).padStart(2, "0") +
+        String(now.day).padStart(2, "0");
+
+      try {
+        for await (const entry of Deno.readDir(outputDir)) {
+          if (entry.isFile && entry.name.startsWith(todayPrefix)) return;
+        }
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e;
+      }
     }
 
     await ceremony.run(now, outputDir);

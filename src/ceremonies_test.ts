@@ -1,5 +1,6 @@
 import {
   assert,
+  assertArrayIncludes,
   assertEquals,
   assertFalse,
   assertStringIncludes,
@@ -9,8 +10,10 @@ import { join } from "@std/path";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
+import { GeminiMeetingNotesCeremony } from "./ceremonies/gemini-meeting-notes.ts";
 import { makeTicket } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
+import type { Ceremony } from "./ceremonies/types.ts";
 
 const BASE = { title: "Ticket", url: "https://example.com" };
 
@@ -51,6 +54,24 @@ function makeStandup(
     commitState: opts.commitState ?? (() => Promise.resolve()),
     notify: opts.notify,
   });
+}
+
+function makeCountedCeremony(
+  name: string,
+): { ceremony: Ceremony; runCount: () => number } {
+  let count = 0;
+  const ceremony: Ceremony = {
+    name,
+    run: async (_now, outputDir) => {
+      await Deno.mkdir(outputDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(outputDir, `${name}-output.md`),
+        "output",
+      );
+      count++;
+    },
+  };
+  return { ceremony, runCount: () => count };
 }
 
 Deno.test("CeremonyRunner: no ceremonies dir does not throw", async () => {
@@ -249,6 +270,136 @@ Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion",
     await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
       .run();
     assertSpyCalls(commitState, 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: interval ceremony skipped on weekend when workdays_only", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(stateDir, "ceremonies", "interval-test"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "interval-test", "config.toml"),
+      'time = "09:00"\ninterval_hours = 2\nworkdays_only = true\n',
+    );
+    // 2026-07-25 is a Saturday
+    const saturday = Temporal.ZonedDateTime.from(
+      "2026-07-25T10:00:00[America/New_York]",
+    );
+    const { ceremony, runCount } = makeCountedCeremony("interval-test");
+    await makeRunner(stateDir, {
+      now: () => saturday,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: interval ceremony runs on weekend when workdays_only is false", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(stateDir, "ceremonies", "interval-test"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "interval-test", "config.toml"),
+      'time = "09:00"\ninterval_hours = 2\nworkdays_only = false\n',
+    );
+    const saturday = Temporal.ZonedDateTime.from(
+      "2026-07-25T10:00:00[America/New_York]",
+    );
+    const { ceremony, runCount } = makeCountedCeremony("interval-test");
+    await makeRunner(stateDir, {
+      now: () => saturday,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: interval ceremony skipped when output file is within interval", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const outputDir = join(
+      stateDir,
+      "ceremonies",
+      "interval-test",
+      "output",
+    );
+    await Deno.mkdir(outputDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "interval-test", "config.toml"),
+      'time = "09:00"\ninterval_hours = 2\n',
+    );
+    // TEST_NOW is 2026-07-27T10:00. A file from 1 hour ago is within the 2-hour interval.
+    await Deno.writeTextFile(
+      join(outputDir, "20260727T090000-interval-test.md"),
+      "prior output",
+    );
+    const { ceremony, runCount } = makeCountedCeremony("interval-test");
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: interval ceremony runs when output file is beyond interval", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const outputDir = join(
+      stateDir,
+      "ceremonies",
+      "interval-test",
+      "output",
+    );
+    await Deno.mkdir(outputDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "interval-test", "config.toml"),
+      'time = "09:00"\ninterval_hours = 2\n',
+    );
+    // 3 hours ago — beyond the 2-hour interval
+    await Deno.writeTextFile(
+      join(outputDir, "20260727T070000-interval-test.md"),
+      "prior output",
+    );
+    const { ceremony, runCount } = makeCountedCeremony("interval-test");
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: interval ceremony runs when no prior output file exists", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(stateDir, "ceremonies", "interval-test"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "interval-test", "config.toml"),
+      'time = "09:00"\ninterval_hours = 2\n',
+    );
+    const { ceremony, runCount } = makeCountedCeremony("interval-test");
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 1);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -648,5 +799,238 @@ Deno.test("DocumentationGapsCeremony: notify receives lazyboy title and Document
   } finally {
     await Deno.remove(stateDir, { recursive: true });
     await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+function makeGeminiCeremony(
+  opts: {
+    listTickets?: () => Promise<string[]>;
+    readTicket?: (id: string) => Promise<TicketState>;
+    fetch?: typeof globalThis.fetch;
+    runClaude?: (prompt: string) => Promise<string>;
+    commitState?: () => Promise<void>;
+    notify?: (title: string, message: string) => Promise<void>;
+    stateDir?: string;
+  } = {},
+): GeminiMeetingNotesCeremony {
+  return new GeminiMeetingNotesCeremony({
+    stateDir: opts.stateDir ?? "/tmp/unused-state",
+    listTickets: opts.listTickets ?? (() => Promise.resolve([])),
+    readTicket: opts.readTicket ??
+      (() => Promise.reject(new Error("not called"))),
+    fetch: opts.fetch ??
+      (() => Promise.reject(new Error("fetch not expected"))),
+    runClaude: opts.runClaude ?? (() => Promise.resolve("assessment result")),
+    commitState: opts.commitState ?? (() => Promise.resolve()),
+    notify: opts.notify,
+  });
+}
+
+function driveListResponse(
+  files: Array<{ id: string; name: string; createdTime: string }>,
+): Response {
+  return new Response(JSON.stringify({ files }), { status: 200 });
+}
+
+function driveExportResponse(content: string): Response {
+  return new Response(content, { status: 200 });
+}
+
+Deno.test("GeminiMeetingNotesCeremony: missing GOOGLE_ACCESS_TOKEN returns without writing output", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  const saved = Deno.env.get("GOOGLE_ACCESS_TOKEN");
+  Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+  try {
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeGeminiCeremony({ commitState });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 0);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 0);
+  } finally {
+    if (saved !== undefined) Deno.env.set("GOOGLE_ACCESS_TOKEN", saved);
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("GeminiMeetingNotesCeremony: Drive API 401 returns without writing output", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  Deno.env.set("GOOGLE_ACCESS_TOKEN", "token");
+  try {
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeGeminiCeremony({
+      fetch: () =>
+        Promise.resolve(new Response("Unauthorized", { status: 401 })),
+      commitState,
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 0);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 0);
+  } finally {
+    Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("GeminiMeetingNotesCeremony: no new documents writes no-new-summaries output", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  Deno.env.set("GOOGLE_ACCESS_TOKEN", "token");
+  try {
+    const seenIds = ["doc-1", "doc-2"];
+    await Deno.writeTextFile(
+      join(stateDir, "seen.json"),
+      JSON.stringify(seenIds),
+    );
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeGeminiCeremony({
+      fetch: () =>
+        Promise.resolve(
+          driveListResponse([
+            {
+              id: "doc-1",
+              name: "Meeting notes",
+              createdTime: "2026-07-27T09:00:00Z",
+            },
+            {
+              id: "doc-2",
+              name: "Meeting notes 2",
+              createdTime: "2026-07-26T09:00:00Z",
+            },
+          ]),
+        ),
+      commitState,
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 1);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 1);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "No new meeting summaries found.");
+    assertStringIncludes(content, "# Gemini Meeting Notes Assessment");
+  } finally {
+    Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("GeminiMeetingNotesCeremony: new documents produce assessment output and update seen.json", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  Deno.env.set("GOOGLE_ACCESS_TOKEN", "tok");
+  try {
+    let capturedPrompt = "";
+    const tickets = [
+      makeTicket({
+        ...BASE,
+        id: "github/org/repo/1",
+        phase: "plan",
+        status: "running",
+      }),
+    ];
+    const ceremony = makeGeminiCeremony({
+      listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
+      readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
+      fetch: (url) => {
+        if (String(url).includes("/export")) {
+          return Promise.resolve(driveExportResponse("Summary text"));
+        }
+        return Promise.resolve(
+          driveListResponse([
+            {
+              id: "new-doc",
+              name: "Meeting notes July 27",
+              createdTime: "2026-07-27T10:00:00Z",
+            },
+          ]),
+        );
+      },
+      runClaude: (prompt) => {
+        capturedPrompt = prompt;
+        return Promise.resolve("Ticket github/org/repo/1 is affected.");
+      },
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertStringIncludes(capturedPrompt, "github/org/repo/1");
+    assertStringIncludes(capturedPrompt, "Summary text");
+    assertStringIncludes(capturedPrompt, "Meeting notes July 27");
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 1);
+    assert(files[0].endsWith("-gemini-meeting-notes.md"));
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "# Gemini Meeting Notes Assessment");
+    assertStringIncludes(content, "Ticket github/org/repo/1 is affected.");
+    const seen = JSON.parse(
+      await Deno.readTextFile(join(stateDir, "seen.json")),
+    );
+    assertArrayIncludes(seen, ["new-doc"]);
+  } finally {
+    Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("GeminiMeetingNotesCeremony: runClaude failure writes error output and updates seen.json", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  Deno.env.set("GOOGLE_ACCESS_TOKEN", "tok");
+  try {
+    const ceremony = makeGeminiCeremony({
+      fetch: (url) => {
+        if (String(url).includes("/export")) {
+          return Promise.resolve(driveExportResponse("text"));
+        }
+        return Promise.resolve(
+          driveListResponse([
+            {
+              id: "doc-fail",
+              name: "Meeting notes",
+              createdTime: "2026-07-27T10:00:00Z",
+            },
+          ]),
+        );
+      },
+      runClaude: () => Promise.reject(new Error("claude not found")),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 1);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "Error: assessment unavailable.");
+    const seen = JSON.parse(
+      await Deno.readTextFile(join(stateDir, "seen.json")),
+    );
+    assertArrayIncludes(seen, ["doc-fail"]);
+  } finally {
+    Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("GeminiMeetingNotesCeremony: notify failure does not abort ceremony", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = join(stateDir, "output");
+  await Deno.mkdir(outputDir, { recursive: true });
+  Deno.env.set("GOOGLE_ACCESS_TOKEN", "tok");
+  try {
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeGeminiCeremony({
+      fetch: () => Promise.resolve(driveListResponse([])),
+      commitState,
+      notify: () => Promise.reject(new Error("osascript failed")),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 1);
+  } finally {
+    Deno.env.delete("GOOGLE_ACCESS_TOKEN");
+    await Deno.remove(stateDir, { recursive: true });
   }
 });

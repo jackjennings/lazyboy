@@ -32,6 +32,12 @@ command once for the entire plan — do not split discovery across multiple
 commands, one per file or feature area, even when each prior command finds
 results.
 
+When the survey requires extracting the same structural pattern (a function
+body, a field value, a type definition) from more than five files, use a single
+`grep -A <n>` or `bash` command to extract the relevant lines from all matching
+files at once. Do not read each file individually with the Read tool — one grep
+across the full file set takes one turn, not one turn per file.
+
 When a task depends on the behavior of an external tool, file path, or API,
 verify the actual behavior (run the command, read the file, inspect the
 response) before writing tasks against assumptions. Either include the

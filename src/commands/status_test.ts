@@ -8,6 +8,7 @@ import {
   assertStringIncludes,
 } from "@std/assert";
 import { join } from "@std/path";
+import { green, red, stripAnsiCode, yellow } from "@std/fmt/colors";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { TicketStatus } from "../state/types.ts";
 import { makeTicket } from "../test-support.ts";
@@ -1222,3 +1223,52 @@ Deno.test(
     assertEquals(result.phaseBreakdown, null);
   },
 );
+
+// ── formatStatusRow color ─────────────────────────────────────────────────────
+
+Deno.test("formatStatusRow: running status uses green foreground color", () => {
+  const row = formatStatusRow(
+    "github/a/repo/1",
+    "intake",
+    "running",
+    [],
+    "0",
+    "t",
+  );
+  assertStringIncludes(row, green("running".padEnd(17)));
+  assertStringIncludes(stripAnsiCode(row), "running");
+});
+
+Deno.test("formatStatusRow: waiting status uses yellow foreground color", () => {
+  const row = formatStatusRow(
+    "github/a/repo/1",
+    "intake",
+    "waiting",
+    [],
+    "0",
+    "t",
+  );
+  assertStringIncludes(row, yellow("waiting".padEnd(17)));
+  assertStringIncludes(stripAnsiCode(row), "waiting");
+});
+
+Deno.test("formatStatusRow: needs-attention status uses red foreground color", () => {
+  const row = formatStatusRow(
+    "github/a/repo/1",
+    "intake",
+    "needs-attention",
+    [],
+    "0",
+    "t",
+  );
+  assertStringIncludes(row, red("needs-attention".padEnd(17)));
+  assertStringIncludes(stripAnsiCode(row), "needs-attention");
+});
+
+Deno.test("formatStatusRow: new, revising, done statuses are not colored", () => {
+  for (const s of ["new", "revising", "done"]) {
+    const row = formatStatusRow("github/a/repo/1", "intake", s, [], "0", "t");
+    assertStringIncludes(row, s.padEnd(17));
+    assertEquals(row, stripAnsiCode(row));
+  }
+});

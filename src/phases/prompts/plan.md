@@ -27,8 +27,10 @@ during task drafting is the same violation as a full re-read.
 
 When searching for test files, issue a single discovery command that covers all
 plausible naming conventions at once (e.g.,
-`find src \( -name '*_test.ts' -o -name '*.test.ts' \) | head -20`). Do not
-reissue discovery commands iteratively after each empty result.
+`find src \( -name '*_test.ts' -o -name '*.test.ts' \) | head -20`). Issue this
+command once for the entire plan — do not split discovery across multiple
+commands, one per file or feature area, even when each prior command finds
+results.
 
 When a task depends on the behavior of an external tool, file path, or API,
 verify the actual behavior (run the command, read the file, inspect the

@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import { bgGreen, bgRed, white } from "@std/fmt/colors";
+import { bgGreen, bgRed, green, red, white, yellow } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { readUsageFiles } from "../usage.ts";
@@ -301,6 +301,14 @@ export function formatDetailView(
   return lines.join("\n");
 }
 
+function colorizeStatus(status: string): string {
+  const padded = status.padEnd(17);
+  if (status === "running") return green(padded);
+  if (status === "waiting") return yellow(padded);
+  if (status === "needs-attention") return red(padded);
+  return padded;
+}
+
 export function formatStatusRow(
   id: string,
   phase: string,
@@ -312,7 +320,7 @@ export function formatStatusRow(
   const last = approvals.at(-1);
   const approvedFor = last?.phase === phase ? last.actor : null;
   const approvedStr = approvedFor ?? "-";
-  return `${id.padEnd(36)} ${phase.padEnd(16)} ${status.padEnd(17)} ${
+  return `${id.padEnd(36)} ${phase.padEnd(16)} ${colorizeStatus(status)} ${
     approvedStr.padEnd(9)
   } ${tokenStr.padStart(10)} ${title}`;
 }

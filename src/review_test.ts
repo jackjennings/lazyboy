@@ -24,7 +24,9 @@ import {
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { join } from "@std/path";
 import { readTicket, writeTicket } from "./state/store.ts";
-import type { TicketState } from "./state/types.ts";
+import { makeTicket } from "./test-support.ts";
+
+const BASE = { id: "gh-1" };
 
 async function initGitRepo(dir: string): Promise<void> {
   const run = (cmd: string[]) =>
@@ -33,25 +35,6 @@ async function initGitRepo(dir: string): Promise<void> {
   await run(["git", "config", "user.email", "test@example.com"]);
   await run(["git", "config", "user.name", "Test User"]);
   await run(["git", "config", "commit.gpgsign", "false"]);
-}
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "T",
-    url: "u",
-    phase: "spec",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-06-29T00:00:00Z",
-    updated: "2026-06-29T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
 }
 
 function makeApproveResponse(): Response {
@@ -319,7 +302,10 @@ Deno.test("applyApproval: appends entry with actor human and current phase", asy
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
   try {
-    await writeTicket(dir, makeTicket({ phase: "spec", status: "waiting" }));
+    await writeTicket(
+      dir,
+      makeTicket({ ...BASE, phase: "spec", status: "waiting" }),
+    );
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "initial"]);
     const now = Temporal.ZonedDateTime.from("2026-06-29T12:00:00+00:00[UTC]");
@@ -340,7 +326,7 @@ Deno.test("applyApproval: does not write approved key to frontmatter", async () 
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
   try {
-    await writeTicket(dir, makeTicket());
+    await writeTicket(dir, makeTicket(BASE));
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "initial"]);
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));
@@ -357,7 +343,7 @@ Deno.test("applyApproval: leaves status unchanged", async () => {
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
   try {
-    await writeTicket(dir, makeTicket({ status: "waiting" }));
+    await writeTicket(dir, makeTicket({ ...BASE, status: "waiting" }));
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "initial"]);
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));
@@ -376,7 +362,7 @@ Deno.test(
     const run = (cmd: string[]) =>
       new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
     try {
-      await writeTicket(dir, makeTicket());
+      await writeTicket(dir, makeTicket(BASE));
       await run(["git", "add", "-A"]);
       await run(["git", "commit", "-m", "initial"]);
       const now = Temporal.ZonedDateTime.from(
@@ -397,7 +383,7 @@ Deno.test("applyApproval: commits with message approve: <id>", async () => {
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
   try {
-    await writeTicket(dir, makeTicket());
+    await writeTicket(dir, makeTicket(BASE));
     await run(["git", "add", "-A"]);
     await run(["git", "commit", "-m", "initial"]);
     await applyApproval(dir, "gh-1", Temporal.Now.zonedDateTimeISO("UTC"));

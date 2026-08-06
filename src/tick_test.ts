@@ -11,13 +11,13 @@ import {
 import { join } from "@std/path";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
 import {
-  adjudicateImplementationModel,
   advancePhase,
   appendTickLog,
   resolvePhaseModel,
   selectCandidates,
   TickService,
 } from "./tick.ts";
+import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import type { TickDeps, TickServiceDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
@@ -4697,7 +4697,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: determineImplementationModel called with prompt when next is implementation",
+  "advancePhase: adjudicatePhaseModel called with prompt when next is implementation",
   async () => {
     const ticket = makeTicket({
       phase: "plan",
@@ -4706,21 +4706,21 @@ Deno.test(
       worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "b" } },
     });
     let capturedPrompt: string | undefined;
-    const determineImplementationModelSpy = spy((p: string) => {
+    const adjudicatePhaseModelSpy = spy((p: string) => {
       capturedPrompt = p;
       return Promise.resolve(null);
     });
     await advancePhase(ticket, "/state", {
       ...makeFakeTickDeps(),
-      determineImplementationModel: determineImplementationModelSpy,
+      adjudicatePhaseModel: adjudicatePhaseModelSpy,
     });
-    assertSpyCalls(determineImplementationModelSpy, 1);
+    assertSpyCalls(adjudicatePhaseModelSpy, 1);
     assertExists(capturedPrompt);
   },
 );
 
 Deno.test(
-  "advancePhase: non-null determineImplementationModel result is merged into ticket before resolveModelConfig",
+  "advancePhase: non-null adjudicatePhaseModel result is merged into ticket before resolveModelConfig",
   async () => {
     const ticket = makeTicket({
       phase: "plan",
@@ -4741,7 +4741,7 @@ Deno.test(
         resolveModelConfigTicket = t;
         return { model: "claude-sonnet-4-6", thinking: "off" };
       },
-      determineImplementationModel: () => Promise.resolve(adjudicatedModel),
+      adjudicatePhaseModel: () => Promise.resolve(adjudicatedModel),
     });
     assertEquals(
       resolveModelConfigTicket?.phases?.["implementation"],
@@ -4756,7 +4756,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: null determineImplementationModel result leaves ticket unchanged for resolveModelConfig",
+  "advancePhase: null adjudicatePhaseModel result leaves ticket unchanged for resolveModelConfig",
   async () => {
     const ticket = makeTicket({
       phase: "plan",
@@ -4771,7 +4771,7 @@ Deno.test(
         resolveModelConfigTicket = t;
         return { model: "claude-sonnet-4-6", thinking: "off" };
       },
-      determineImplementationModel: () => Promise.resolve(null),
+      adjudicatePhaseModel: () => Promise.resolve(null),
     });
     assertEquals(
       resolveModelConfigTicket?.phases?.["implementation"],
@@ -4781,24 +4781,24 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: determineImplementationModel not called for non-implementation next phase",
+  "advancePhase: adjudicatePhaseModel not called for non-implementation next phase",
   async () => {
     const ticket = makeTicket({
       phase: "intake",
       status: "waiting",
       approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
     });
-    const determineImplementationModelSpy = spy(() => Promise.resolve(null));
+    const adjudicatePhaseModelSpy = spy(() => Promise.resolve(null));
     await advancePhase(ticket, "/state", {
       ...makeFakeTickDeps(),
-      determineImplementationModel: determineImplementationModelSpy,
+      adjudicatePhaseModel: adjudicatePhaseModelSpy,
     });
-    assertSpyCalls(determineImplementationModelSpy, 0);
+    assertSpyCalls(adjudicatePhaseModelSpy, 0);
   },
 );
 
 Deno.test(
-  "adjudicateImplementationModel: valid response returns parsed model and thinking",
+  "adjudicatePhaseModel: valid response returns parsed model and thinking",
   async () => {
     const fetcher = spy((_url: string, _opts: RequestInit) => {
       return Promise.resolve(
@@ -4817,7 +4817,7 @@ Deno.test(
         ),
       );
     });
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "implement something",
       fetcher as unknown as typeof fetch,
       "test-key",
@@ -4827,7 +4827,7 @@ Deno.test(
 );
 
 Deno.test(
-  "adjudicateImplementationModel: invalid model id returns null",
+  "adjudicatePhaseModel: invalid model id returns null",
   async () => {
     const fetcher = spy(() =>
       Promise.resolve(
@@ -4841,7 +4841,7 @@ Deno.test(
         ),
       )
     );
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "p",
       fetcher as unknown as typeof fetch,
       "k",
@@ -4851,7 +4851,7 @@ Deno.test(
 );
 
 Deno.test(
-  "adjudicateImplementationModel: invalid thinking level returns null",
+  "adjudicatePhaseModel: invalid thinking level returns null",
   async () => {
     const fetcher = spy(() =>
       Promise.resolve(
@@ -4870,7 +4870,7 @@ Deno.test(
         ),
       )
     );
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "p",
       fetcher as unknown as typeof fetch,
       "k",
@@ -4880,12 +4880,12 @@ Deno.test(
 );
 
 Deno.test(
-  "adjudicateImplementationModel: non-200 response returns null",
+  "adjudicatePhaseModel: non-200 response returns null",
   async () => {
     const fetcher = spy(() =>
       Promise.resolve(new Response("", { status: 500 }))
     );
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "p",
       fetcher as unknown as typeof fetch,
       "k",
@@ -4895,7 +4895,7 @@ Deno.test(
 );
 
 Deno.test(
-  "adjudicateImplementationModel: JSON parse failure returns null",
+  "adjudicatePhaseModel: JSON parse failure returns null",
   async () => {
     const fetcher = spy(() =>
       Promise.resolve(
@@ -4905,7 +4905,7 @@ Deno.test(
         ),
       )
     );
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "p",
       fetcher as unknown as typeof fetch,
       "k",
@@ -4915,12 +4915,12 @@ Deno.test(
 );
 
 Deno.test(
-  "adjudicateImplementationModel: network error returns null",
+  "adjudicatePhaseModel: network error returns null",
   async () => {
     const fetcher = spy(() => {
       throw new Error("network error");
     });
-    const result = await adjudicateImplementationModel(
+    const result = await adjudicatePhaseModel(
       "p",
       fetcher as unknown as typeof fetch,
       "k",

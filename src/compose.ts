@@ -57,11 +57,11 @@ import {
 import { createMigrationRunner } from "./migrations/runner.ts";
 import type { Migration, StoreMigration } from "./migrations/types.ts";
 import {
-  adjudicateImplementationModel,
   appendTickLog,
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
+import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import {
   captureCommandRunner,
   checkApfelAvailable,
@@ -724,8 +724,8 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
-      determineImplementationModel: (prompt) =>
-        adjudicateImplementationModel(prompt, fetch, anthropicApiKey),
+      adjudicatePhaseModel: (prompt) =>
+        adjudicatePhaseModel(prompt, fetch, anthropicApiKey),
       spawnOutlierAnalysis: async (
         ticketId,
         ticketDir,

@@ -29,7 +29,6 @@ import {
   type WorktreeInfo,
 } from "./state/types.ts";
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
-import { estimateTokenCount } from "tokenx";
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase | "conflict-resolution" | "ci-triage",

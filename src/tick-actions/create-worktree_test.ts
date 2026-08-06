@@ -2,29 +2,20 @@ import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { createWorktreeAction } from "./create-worktree.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/myorg/myrepo/1",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/myorg/myrepo/issues/1",
-    phase: "intake",
-    status: "waiting",
-    approvals: [{
-      timestamp: "2026-06-23T00:00:00Z",
-      actor: "human",
-      phase: "intake",
-    }],
-    scope: [],
-    worktrees: {},
-    created: "2026-06-23T00:00:00Z",
-    updated: "2026-06-23T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = {
+  id: "github/myorg/myrepo/1",
+  url: "https://github.com/myorg/myrepo/issues/1",
+  status: "waiting" as const,
+  approvals: [{
+    timestamp: "2026-06-23T00:00:00Z",
+    actor: "human" as const,
+    phase: "intake" as const,
+  }],
+  created: "2026-06-23T00:00:00Z",
+  updated: "2026-06-23T00:00:00Z",
+};
 
 function makeAction(
   overrides: Partial<Parameters<typeof createWorktreeAction>[0]> = {},
@@ -50,7 +41,7 @@ Deno.test(
   "createWorktreeAction: applies to intake/waiting/approved ticket with no worktrees",
   () => {
     assertEquals(
-      makeAction().applies(makeTicket()),
+      makeAction().applies(makeTicket(BASE)),
       true,
     );
   },
@@ -58,14 +49,14 @@ Deno.test(
 
 Deno.test("createWorktreeAction: does not apply when status is new", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ status: "new", approvals: [] })),
+    makeAction().applies(makeTicket({ ...BASE, status: "new", approvals: [] })),
     false,
   );
 });
 
 Deno.test("createWorktreeAction: does not apply when not approved", () => {
   assertEquals(
-    makeAction().applies(makeTicket({ approvals: [] })),
+    makeAction().applies(makeTicket({ ...BASE, approvals: [] })),
     false,
   );
 });
@@ -76,6 +67,7 @@ Deno.test(
     assertEquals(
       makeAction().applies(
         makeTicket({
+          ...BASE,
           worktrees: { "myorg/myrepo": { path: "/wt", branch: "b" } },
         }),
       ),
@@ -89,7 +81,7 @@ Deno.test(
   () => {
     assertEquals(
       makeAction().applies(
-        makeTicket({ phase: "enrichment", status: "waiting" }),
+        makeTicket({ ...BASE, phase: "enrichment", status: "waiting" }),
       ),
       false,
     );
@@ -108,7 +100,7 @@ Deno.test(
         written.push(t);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.worktrees, {
       "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-1" },
@@ -135,7 +127,7 @@ Deno.test(
       findLocalRepo: () => Promise.resolve(null),
       cloneRemoteRepo: cloneSpy,
       createWorktree: createWorktreeSpy,
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertSpyCalls(cloneSpy, 1);
     assertEquals(cloneSpy.calls[0].args[0], "myorg/myrepo");
@@ -154,7 +146,7 @@ Deno.test(
         written.push(t);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.status, "needs-attention");
     assertEquals(written[0].status, "needs-attention");
@@ -174,7 +166,7 @@ Deno.test(
         createdSlugs.push(slug);
         return Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" });
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(createdSlugs.sort(), ["myorg/myrepo", "other/repo"]);
     assertEquals(Object.keys(result?.worktrees ?? {}).sort(), [
@@ -197,7 +189,7 @@ Deno.test(
         createdSlugs.push(slug);
         return Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" });
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(createdSlugs, ["myorg/myrepo"]);
   },
@@ -216,7 +208,7 @@ Deno.test(
         createdSlugs.push(slug);
         return Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" });
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(createdSlugs.sort(), ["myorg/myrepo", "other/repo"]);
   },
@@ -235,7 +227,7 @@ Deno.test(
         createdSlugs.push(slug);
         return Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" });
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.scope, ["/usr/local/myproject"]);
     assertEquals(createdSlugs, ["myorg/myrepo"]);
@@ -250,7 +242,7 @@ Deno.test(
     const result = await makeAction({
       readIntakeOutput: () => Promise.resolve(intakeContent),
       stat: () => Promise.resolve(false),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.scope, []);
     assertEquals(result?.status, "waiting");
@@ -276,7 +268,7 @@ Deno.test(
         written.push(t);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.status, "needs-attention");
     assertEquals(written[0].worktrees, {});
@@ -295,7 +287,7 @@ Deno.test(
         return Promise.resolve();
       },
     }).run(
-      makeTicket({ url: "https://github.com/not-a-valid-issue-url" }),
+      makeTicket({ ...BASE, url: "https://github.com/not-a-valid-issue-url" }),
       "/state",
     );
     assertEquals(logged.length, 1);
@@ -322,6 +314,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         id: "jira/PROJ-1",
         provider: "jira",
         url: "https://myco.atlassian.net/browse/PROJ-1",
@@ -347,7 +340,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(logged.length, 1);
     assertEquals(
       (logged[0] as Record<string, unknown>).reason,
@@ -375,7 +368,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(logged.length, 1);
     assertEquals(
       (logged[0] as Record<string, unknown>).reason,
@@ -398,6 +391,7 @@ Deno.test(
         Promise.resolve({ path: `/wt/${slug}`, branch: "jira-1" }),
     }).run(
       makeTicket({
+        ...BASE,
         id: "jira/PROJ-1",
         provider: "jira",
         url: "https://myco.atlassian.net/browse/PROJ-1",
@@ -424,6 +418,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         id: "jira/PROJ-1",
         provider: "jira",
         url: "https://myco.atlassian.net/browse/PROJ-1",
@@ -446,6 +441,7 @@ Deno.test(
       stat: () => Promise.resolve(true),
     }).run(
       makeTicket({
+        ...BASE,
         id: "jira/PROJ-1",
         provider: "jira",
         url: "https://myco.atlassian.net/browse/PROJ-1",
@@ -466,7 +462,7 @@ Deno.test(
     await makeAction({
       findLocalRepo: () => Promise.resolve("/code/myorg/myrepo"),
       applyWorktreeInclude: applySpy,
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertSpyCalls(applySpy, 1);
     assertEquals(applySpy.calls[0].args[0], "/wt/myorg/myrepo");
@@ -490,7 +486,7 @@ Deno.test(
         written.push(t);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.status, "waiting");
     assertEquals(written.length, 1);
@@ -514,7 +510,7 @@ Deno.test(
       createWorktree: (_repo, _id, slug) =>
         Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
       applyWorktreeInclude: applySpy,
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertSpyCalls(applySpy, 2);
     const srcPaths = applySpy.calls.map((c) => c.args[1] as string).sort();

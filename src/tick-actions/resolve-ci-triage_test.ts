@@ -8,39 +8,31 @@ import {
 import { resolveCITriageAction } from "./resolve-ci-triage.ts";
 import type { ResolveCITriageDeps } from "./resolve-ci-triage.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/jackjennings/lazyboy/178",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/jackjennings/lazyboy/issues/178",
-    phase: "implementation",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {
-      "jackjennings/lazyboy": {
-        path: "/wt/lazyboy",
-        branch: "github/jackjennings/lazyboy/178",
-      },
+const BASE = {
+  id: "github/jackjennings/lazyboy/178",
+  url: "https://github.com/jackjennings/lazyboy/issues/178",
+  phase: "implementation" as const,
+  status: "waiting" as const,
+  worktrees: {
+    "jackjennings/lazyboy": {
+      path: "/wt/lazyboy",
+      branch: "github/jackjennings/lazyboy/178",
     },
-    prs: [
-      {
-        url: "https://github.com/jackjennings/lazyboy/pull/99",
-        title: "feat",
-        dependsOn: [],
-        merged: false,
-        worktreeKey: "jackjennings/lazyboy",
-      },
-    ],
-    created: "2026-07-29T00:00:00Z",
-    updated: "2026-07-29T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+  },
+  prs: [
+    {
+      url: "https://github.com/jackjennings/lazyboy/pull/99",
+      title: "feat",
+      dependsOn: [],
+      merged: false,
+      worktreeKey: "jackjennings/lazyboy",
+    },
+  ],
+  created: "2026-07-29T00:00:00Z",
+  updated: "2026-07-29T00:00:00Z",
+};
 
 const CONTEXT_CONTENT =
   "PR-URL: https://github.com/jackjennings/lazyboy/pull/99\n" +
@@ -81,7 +73,9 @@ function makeAction(
 
 Deno.test("resolveCITriageAction: applies when context files exist and pid dead", () => {
   assert(
-    makeAction({ hasCITriageContextFiles: () => true }).applies(makeTicket()),
+    makeAction({ hasCITriageContextFiles: () => true }).applies(
+      makeTicket(BASE),
+    ),
   );
 });
 
@@ -90,13 +84,15 @@ Deno.test("resolveCITriageAction: does not apply when process is alive", () => {
     makeAction({
       hasCITriageContextFiles: () => true,
       isProcessAlive: () => true,
-    }).applies(makeTicket()),
+    }).applies(makeTicket(BASE)),
   );
 });
 
 Deno.test("resolveCITriageAction: does not apply when no context files", () => {
   assertFalse(
-    makeAction({ hasCITriageContextFiles: () => false }).applies(makeTicket()),
+    makeAction({ hasCITriageContextFiles: () => false }).applies(
+      makeTicket(BASE),
+    ),
   );
 });
 
@@ -108,7 +104,7 @@ Deno.test("resolveCITriageAction: run returns null when no triage context files 
     readDir: async function* () {
       yield { name: "plan.md", isFile: true };
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
 });
 
@@ -142,7 +138,7 @@ Deno.test(
         return Promise.resolve();
       },
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(issues.length, 1);
     assertEquals(issues[0].repo, "jackjennings/lazyboy");
     assertStringIncludes(issues[0].title, "Fix CI failure");
@@ -187,7 +183,7 @@ Deno.test(
         return Promise.resolve();
       },
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(issues.length, 0);
     assertEquals(removed.length, 2);
     const resolved = (logged as Record<string, unknown>[]).find(
@@ -231,7 +227,7 @@ Deno.test(
         removed.push(path);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result?.status, "needs-attention");
     assertEquals(removed.length, 1);
     assertEquals(
@@ -271,7 +267,7 @@ Deno.test(
         return Promise.resolve();
       },
       remove: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(written[0]?.status, "needs-attention");
     assertEquals(
       (logged[0] as Record<string, string>).event,
@@ -306,7 +302,7 @@ Deno.test(
       },
       createGitHubIssue: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assert(removed.some((p) => p.includes("-ci-triage-context-")));
     assert(
       removed.some((p) =>
@@ -343,7 +339,7 @@ Deno.test(
       createGitHubIssue: () => Promise.resolve(),
       remove: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     const resolved = (logged as Record<string, unknown>[]).find(
       (e) => e.event === "ci-triage-resolved",
     );

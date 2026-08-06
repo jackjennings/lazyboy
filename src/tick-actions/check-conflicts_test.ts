@@ -10,6 +10,7 @@ import {
   sanitizeBranchForFilename,
 } from "./check-conflicts.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
 // ── sanitizeBranchForFilename ─────────────────────────────────────────────────
 
@@ -24,26 +25,17 @@ Deno.test("sanitizeBranchForFilename: leaves simple branch names unchanged", () 
   assertEquals(sanitizeBranchForFilename("gh-7"), "gh-7");
 });
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-7",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/myorg/myrepo/issues/7",
-    phase: "implementation",
-    status: "running",
-    approvals: [],
-    scope: [],
-    worktrees: {
-      "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
-    },
-    created: "2026-06-30T00:00:00Z",
-    updated: "2026-06-30T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = {
+  id: "gh-7",
+  url: "https://github.com/myorg/myrepo/issues/7",
+  phase: "implementation" as const,
+  status: "running" as const,
+  worktrees: {
+    "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
+  },
+  created: "2026-06-30T00:00:00Z",
+  updated: "2026-06-30T00:00:00Z",
+};
 
 function makeAction(
   overrides: Partial<Parameters<typeof checkConflictsAction>[0]> = {},
@@ -64,31 +56,35 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("checkConflictsAction: applies to ticket with worktrees and no live pid", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("checkConflictsAction: applies to non-implementation phase with worktrees", () => {
   assert(
-    makeAction().applies(makeTicket({ phase: "plan", status: "running" })),
+    makeAction().applies(
+      makeTicket({ ...BASE, phase: "plan", status: "running" }),
+    ),
   );
 });
 
 Deno.test("checkConflictsAction: does not apply to needs-attention", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ status: "needs-attention" })),
+    makeAction().applies(makeTicket({ ...BASE, status: "needs-attention" })),
   );
 });
 
 Deno.test("checkConflictsAction: applies to merge/waiting ticket with existing worktree", () => {
   assert(
-    makeAction().applies(makeTicket({ phase: "merge", status: "waiting" })),
+    makeAction().applies(
+      makeTicket({ ...BASE, phase: "merge", status: "waiting" }),
+    ),
   );
 });
 
 Deno.test("checkConflictsAction: does not apply to merge/waiting when process is alive", () => {
   assertFalse(
     makeAction({ isProcessAlive: () => true }).applies(
-      makeTicket({ phase: "merge", status: "waiting" }),
+      makeTicket({ ...BASE, phase: "merge", status: "waiting" }),
     ),
   );
 });
@@ -96,7 +92,7 @@ Deno.test("checkConflictsAction: does not apply to merge/waiting when process is
 Deno.test("checkConflictsAction: does not apply to merge/waiting when no worktrees exist on disk", () => {
   assertFalse(
     makeAction({ worktreeExists: () => false }).applies(
-      makeTicket({ phase: "merge", status: "waiting" }),
+      makeTicket({ ...BASE, phase: "merge", status: "waiting" }),
     ),
   );
 });
@@ -105,25 +101,25 @@ Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
   assertFalse(
     makeAction({
       isProcessAlive: () => true,
-    }).applies(makeTicket()),
+    }).applies(makeTicket(BASE)),
   );
 });
 
 Deno.test("checkConflictsAction: applies when no live process", () => {
   assert(
-    makeAction({ isProcessAlive: () => false }).applies(makeTicket()),
+    makeAction({ isProcessAlive: () => false }).applies(makeTicket(BASE)),
   );
 });
 
 Deno.test("checkConflictsAction: does not apply with no worktrees", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ worktrees: {} })),
+    makeAction().applies(makeTicket({ ...BASE, worktrees: {} })),
   );
 });
 
 Deno.test("checkConflictsAction: does not apply when worktree path does not exist on disk", () => {
   assertFalse(
-    makeAction({ worktreeExists: () => false }).applies(makeTicket()),
+    makeAction({ worktreeExists: () => false }).applies(makeTicket(BASE)),
   );
 });
 
@@ -148,7 +144,7 @@ Deno.test("checkConflictsAction: fetch failure logs error and returns null", asy
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(logged.length, 1);
   assertEquals((logged[0] as Record<string, unknown>).event, "error");
@@ -179,6 +175,7 @@ Deno.test("checkConflictsAction: clean rebase and push → null, logs branch-pus
     },
   }).run(
     makeTicket({
+      ...BASE,
       prs: [{
         url: "https://github.com/myorg/myrepo/pull/7",
         title: "",
@@ -210,7 +207,7 @@ Deno.test("checkConflictsAction: clean rebase with no prs → null, no push, no 
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertFalse(calls.some((a) => a[0] === "push"));
   assertEquals(logged.length, 0);
@@ -233,6 +230,7 @@ Deno.test("checkConflictsAction: push failure logs error but returns null (trans
     },
   }).run(
     makeTicket({
+      ...BASE,
       prs: [{
         url: "https://github.com/myorg/myrepo/pull/7",
         title: "",
@@ -297,7 +295,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertFalse(
       calls.some((a) => a[0] === "rebase" && a[1] === "--abort"),
@@ -345,7 +343,7 @@ Deno.test(
         assertEquals(ticket.id, "gh-7");
         return { model: "claude-sonnet-4-6", thinking: "off" };
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(spawnCalls.length, 1);
     assertEquals(spawnCalls[0].model, "claude-sonnet-4-6");
@@ -376,7 +374,7 @@ Deno.test(
       },
       writeTicket: () => Promise.resolve(),
       appendLog: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(spawnCalls.length, 1);
     assertEquals(spawnCalls[0].contextFile, filename);
@@ -404,6 +402,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         prs: [{
           url: "https://github.com/myorg/myrepo/pull/7",
           title: "",
@@ -441,6 +440,7 @@ Deno.test("checkConflictsAction: merge/waiting — clean rebase pushes and logs 
     },
   }).run(
     makeTicket({
+      ...BASE,
       phase: "merge",
       status: "waiting",
       prs: [{
@@ -480,7 +480,7 @@ Deno.test("checkConflictsAction: merge/waiting — rebase conflict spawns agent"
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
   }).run(
-    makeTicket({ phase: "merge", status: "waiting" }),
+    makeTicket({ ...BASE, phase: "merge", status: "waiting" }),
     "/state",
   );
   assertEquals(spawnCalls.length, 1);
@@ -513,6 +513,7 @@ Deno.test(
       appendLog: () => Promise.resolve(),
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "a/repo": { path: "/wt/a/repo", branch: "gh-7" },
           "b/repo": { path: "/wt/b/repo", branch: "gh-7" },

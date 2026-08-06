@@ -5,26 +5,7 @@ import {
   assertStringIncludes,
 } from "@std/assert";
 import { jiraPickupAction } from "./jira-pickup.ts";
-import type { TicketState } from "../state/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "jira/PROJ-42",
-    provider: "jira",
-    title: "T",
-    url: "https://myorg.atlassian.net/browse/PROJ-42",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../test-support.ts";
 
 function makeAction(
   overrides: Partial<Parameters<typeof jiraPickupAction>[0]> = {},
@@ -51,19 +32,27 @@ function makeTransitionsFetch(
   };
 }
 
+const BASE = {
+  id: "jira/PROJ-42",
+  provider: "jira" as const,
+  url: "https://myorg.atlassian.net/browse/PROJ-42",
+  created: "2026-07-01T00:00:00Z",
+  updated: "2026-07-01T00:00:00Z",
+};
+
 Deno.test("jiraPickupAction: applies when provider is jira and status is new", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("jiraPickupAction: does not apply when provider is not jira", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ provider: "github" })),
+    makeAction().applies(makeTicket({ ...BASE, provider: "github" })),
   );
 });
 
 Deno.test("jiraPickupAction: does not apply when status is not new", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ status: "running" })),
+    makeAction().applies(makeTicket({ ...BASE, status: "running" })),
   );
 });
 
@@ -90,7 +79,7 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
         ),
       );
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(calls.length, 2);
   assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
@@ -108,7 +97,7 @@ Deno.test("jiraPickupAction: run returns null on success", async () => {
     _fetch: makeTransitionsFetch([
       { id: "31", to: { statusCategory: { key: "in-progress" } } },
     ]),
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
 });
 
@@ -121,7 +110,7 @@ Deno.test("jiraPickupAction: run logs error and returns null when transition thr
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(logged.length, 1);
   assertEquals((logged[0] as Record<string, string>).event, "error");
@@ -138,7 +127,7 @@ Deno.test("jiraPickupAction: run logs error when no matching transition found", 
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals((logged[0] as Record<string, string>).event, "error");
   assertEquals((logged[0] as Record<string, string>).context, "jiraPickup");
 });

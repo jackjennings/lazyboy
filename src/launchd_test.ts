@@ -1,0 +1,69 @@
+import { assert, assertFalse, assertStringIncludes } from "@std/assert";
+import { detectLaunchdEnabled, plistContent } from "./launchd.ts";
+import type { LaunchctlRunner } from "./launchd.ts";
+
+Deno.test("plistContent: includes the label", () => {
+  assertStringIncludes(
+    plistContent("/home/user/.lazyboy"),
+    "com.jackjennings.lazyboy",
+  );
+});
+
+Deno.test("plistContent: StartInterval is 300", () => {
+  assertStringIncludes(
+    plistContent("/home/user/.lazyboy"),
+    "<integer>300</integer>",
+  );
+});
+
+Deno.test("plistContent: RunAtLoad is true", () => {
+  assertStringIncludes(plistContent("/home/user/.lazyboy"), "<true/>");
+});
+
+Deno.test("plistContent: references tick.sh at lazboyDir", () => {
+  assertStringIncludes(
+    plistContent("/home/user/.lazyboy"),
+    "/home/user/.lazyboy/scripts/tick.sh",
+  );
+});
+
+Deno.test("plistContent: does not contain tick.ndjson", () => {
+  assertFalse(plistContent("/home/user/.lazyboy").includes("tick.ndjson"));
+});
+
+Deno.test("plistContent: does not contain StandardOutPath", () => {
+  assertFalse(plistContent("/home/user/.lazyboy").includes("StandardOutPath"));
+});
+
+Deno.test("plistContent: does not contain StandardErrorPath", () => {
+  assertFalse(
+    plistContent("/home/user/.lazyboy").includes("StandardErrorPath"),
+  );
+});
+
+Deno.test(
+  "detectLaunchdEnabled: returns false when launchctl is not found",
+  async () => {
+    const notFound: LaunchctlRunner = (_args) => {
+      throw new Deno.errors.NotFound("launchctl");
+    };
+    assertFalse(await detectLaunchdEnabled(notFound));
+  },
+);
+
+Deno.test(
+  "detectLaunchdEnabled: returns true when launchctl print exits 0",
+  async () => {
+    const success: LaunchctlRunner = (_args) => Promise.resolve({ code: 0 });
+    assert(await detectLaunchdEnabled(success));
+  },
+);
+
+Deno.test(
+  "detectLaunchdEnabled: returns false when launchctl print exits non-zero",
+  async () => {
+    const notLoaded: LaunchctlRunner = (_args) =>
+      Promise.resolve({ code: 113 });
+    assertFalse(await detectLaunchdEnabled(notLoaded));
+  },
+);

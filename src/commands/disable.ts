@@ -1,10 +1,10 @@
-import { disableCron } from "../cron.ts";
+import { disableLaunchd } from "../launchd.ts";
 import type { Command } from "./types.ts";
 
 export const disable: Command = {
   name: "disable",
-  description: "remove cron job",
+  description: "remove launchd job",
   async run(_args) {
-    await disableCron();
+    await disableLaunchd();
   },
 };

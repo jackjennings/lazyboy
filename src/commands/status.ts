@@ -3,7 +3,7 @@ import { bgGreen, bgRed, green, red, white, yellow } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import { readUsageFiles } from "../usage.ts";
-import { isCronEnabled } from "../cron.ts";
+import { isLaunchdEnabled } from "../launchd.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type {
   ApprovalEntry,
@@ -383,7 +383,7 @@ export const status: Command = {
       return;
     }
 
-    const enabled = await isCronEnabled();
+    const enabled = await isLaunchdEnabled();
     const label = enabled
       ? bgGreen(white(" enabled "))
       : bgRed(white(" disabled "));

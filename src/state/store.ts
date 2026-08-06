@@ -86,7 +86,7 @@ export async function readTicket(
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
-    artifact: data.artifact as "pr" | "notion" | undefined,
+    artifact: (data.artifact as "pr" | "notion" | undefined) ?? "pr",
     notionPages: data.notionPages as
       | { url: string; title: string }[]
       | undefined,
@@ -127,7 +127,7 @@ export async function writeTicket(
     frontmatter.shortTitle = ticket.shortTitle;
   }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
-  if (ticket.artifact !== undefined) frontmatter.artifact = ticket.artifact;
+  if (ticket.artifact !== "pr") frontmatter.artifact = ticket.artifact;
   if (ticket.notionPages !== undefined) {
     frontmatter.notionPages = ticket.notionPages;
   }

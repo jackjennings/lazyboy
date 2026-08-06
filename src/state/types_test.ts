@@ -17,6 +17,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
     body: "",
+    artifact: "pr",
     ...overrides,
   };
 }

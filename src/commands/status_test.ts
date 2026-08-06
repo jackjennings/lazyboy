@@ -37,6 +37,7 @@ function makeTicket(overrides: Partial<TicketState>): TicketState {
     created: "",
     updated: "",
     body: "",
+    artifact: "pr",
     ...overrides,
   };
 }

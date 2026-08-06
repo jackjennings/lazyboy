@@ -191,7 +191,7 @@ export async function advancePhase(
     );
     const revisingArtifactSupplement = await loadArtifactPrompt(
       activePhase,
-      ticket.artifact ?? "pr",
+      ticket.artifact,
     );
     const revisingStatePrompt = await loadStatePrompt(
       activePhase,
@@ -248,7 +248,7 @@ export async function advancePhase(
     );
     const intakeArtifactSupplement = await loadArtifactPrompt(
       "intake",
-      ticket.artifact ?? "pr",
+      ticket.artifact,
     );
     const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
     const intakeStatePrompt = await loadStatePrompt(
@@ -585,7 +585,7 @@ export async function advancePhase(
     const supplement = await loadProviderPrompt(next, ticket.provider);
     const artifactSupplement = await loadArtifactPrompt(
       next,
-      ticket.artifact ?? "pr",
+      ticket.artifact,
     );
     const statePrompt = await loadStatePrompt(
       next,
@@ -703,6 +703,7 @@ export class TickService {
           created: Temporal.Now.instant().toString(),
           updated: Temporal.Now.instant().toString(),
           body: item.description,
+          artifact: "pr",
         });
       }
     }

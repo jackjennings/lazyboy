@@ -34,6 +34,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: "2026-07-01T00:00:00Z",
     updated: "2026-07-01T00:00:00Z",
     body: "",
+    artifact: "pr",
     ...overrides,
   };
 }
@@ -1013,14 +1014,14 @@ Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter
   }
 });
 
-Deno.test("writeTicket/readTicket: absent artifact reads as undefined", async () => {
+Deno.test("writeTicket/readTicket: absent artifact reads as 'pr' default", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await writeTicket(dir, makeTicket());
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
     assertFalse(raw.includes("artifact:"));
     const read = await readTicket(dir, "gh-1");
-    assertEquals(read.artifact, undefined);
+    assertEquals(read.artifact, "pr");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

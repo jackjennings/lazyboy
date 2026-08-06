@@ -1912,7 +1912,7 @@ Deno.test("resolvePhaseSessionId: returns sessionId from last matching phase-end
   const log = JSON.stringify({
     ts: "t1",
     event: "phase-end",
-    phase: "intake",
+    phase: "20260806T002625-intake",
     sessionId: "sess-abc",
   });
   assertEquals(resolvePhaseSessionId(log, "intake"), "sess-abc");
@@ -1922,7 +1922,7 @@ Deno.test("resolvePhaseSessionId: returns null when phase does not match", () =>
   const log = JSON.stringify({
     ts: "t1",
     event: "phase-end",
-    phase: "enrichment",
+    phase: "20260806T002625-enrichment",
     sessionId: "sess-abc",
   });
   assertEquals(resolvePhaseSessionId(log, "intake"), null);

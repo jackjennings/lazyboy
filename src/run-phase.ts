@@ -303,7 +303,7 @@ export function resolvePhaseSessionId(
       };
       if (
         entry.event === "phase-end" &&
-        entry.phase === phase &&
+        (entry.phase === phase || entry.phase?.endsWith(`-${phase}`)) &&
         typeof entry.sessionId === "string" &&
         entry.sessionId.length > 0
       ) {

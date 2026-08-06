@@ -2672,7 +2672,11 @@ Deno.test(
 Deno.test(
   "advancePhase: selfReview returning reason writes self-review output file",
   async () => {
-    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "running" });
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "intake",
+      status: "running",
+    });
     const writePhaseOutputCalls: Array<[string, string, string, string]> = [];
     const writePhaseOutputSpy = spy(
       (stateDir: string, id: string, file: string, content: string) => {

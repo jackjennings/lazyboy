@@ -2,6 +2,7 @@ import {
   assert,
   assertArrayIncludes,
   assertEquals,
+  assertExists,
   assertFalse,
   assertLess,
   assertRejects,
@@ -10,6 +11,7 @@ import {
 import { join } from "@std/path";
 import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
 import {
+  adjudicateImplementationModel,
   advancePhase,
   appendTickLog,
   resolvePhaseModel,
@@ -4693,3 +4695,243 @@ Deno.test(
     assertFalse(entries.some((e) => e.event === "prompt-too-long"));
   },
 );
+
+Deno.test(
+  "advancePhase: determineImplementationModel called with prompt when next is implementation",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "b" } },
+    });
+    let capturedPrompt: string | undefined;
+    const determineImplementationModelSpy = spy((p: string) => {
+      capturedPrompt = p;
+      return Promise.resolve(null);
+    });
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      determineImplementationModel: determineImplementationModelSpy,
+    });
+    assertSpyCalls(determineImplementationModelSpy, 1);
+    assertExists(capturedPrompt);
+  },
+);
+
+Deno.test(
+  "advancePhase: non-null determineImplementationModel result is merged into ticket before resolveModelConfig",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "b" } },
+    });
+    const adjudicatedModel = { model: "claude-opus-4-6", thinking: "max" };
+    let resolveModelConfigTicket: TicketState | undefined;
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      resolveModelConfig: (_phase, t) => {
+        resolveModelConfigTicket = t;
+        return { model: "claude-sonnet-4-6", thinking: "off" };
+      },
+      determineImplementationModel: () => Promise.resolve(adjudicatedModel),
+    });
+    assertEquals(
+      resolveModelConfigTicket?.phases?.["implementation"],
+      adjudicatedModel,
+    );
+    const overrideWrite = writtenTickets.find(
+      (t) =>
+        t.phases?.["implementation"] !== undefined && t.status !== "running",
+    );
+    assertExists(overrideWrite);
+  },
+);
+
+Deno.test(
+  "advancePhase: null determineImplementationModel result leaves ticket unchanged for resolveModelConfig",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "b" } },
+    });
+    let resolveModelConfigTicket: TicketState | undefined;
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      resolveModelConfig: (_phase, t) => {
+        resolveModelConfigTicket = t;
+        return { model: "claude-sonnet-4-6", thinking: "off" };
+      },
+      determineImplementationModel: () => Promise.resolve(null),
+    });
+    assertEquals(
+      resolveModelConfigTicket?.phases?.["implementation"],
+      undefined,
+    );
+  },
+);
+
+Deno.test(
+  "advancePhase: determineImplementationModel not called for non-implementation next phase",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+    });
+    const determineImplementationModelSpy = spy(() => Promise.resolve(null));
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      determineImplementationModel: determineImplementationModelSpy,
+    });
+    assertSpyCalls(determineImplementationModelSpy, 0);
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: valid response returns parsed model and thinking",
+  async () => {
+    const fetcher = spy((_url: string, _opts: RequestInit) => {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                text: JSON.stringify({
+                  model: "claude-opus-4-6",
+                  thinking: "high",
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+    const result = await adjudicateImplementationModel(
+      "implement something",
+      fetcher as unknown as typeof fetch,
+      "test-key",
+    );
+    assertEquals(result, { model: "claude-opus-4-6", thinking: "high" });
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: invalid model id returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [
+              { text: JSON.stringify({ model: "gpt-4", thinking: "high" }) },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    );
+    const result = await adjudicateImplementationModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: invalid thinking level returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                text: JSON.stringify({
+                  model: "claude-sonnet-4-6",
+                  thinking: "turbo",
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    );
+    const result = await adjudicateImplementationModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: non-200 response returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(new Response("", { status: 500 }))
+    );
+    const result = await adjudicateImplementationModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: JSON parse failure returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "not json" }] }),
+          { status: 200 },
+        ),
+      )
+    );
+    const result = await adjudicateImplementationModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
+  "adjudicateImplementationModel: network error returns null",
+  async () => {
+    const fetcher = spy(() => {
+      throw new Error("network error");
+    });
+    const result = await adjudicateImplementationModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test("plan.md does not contain model recommendation instructions", async () => {
+  const content = await Deno.readTextFile(
+    new URL("./phases/prompts/plan.md", import.meta.url).pathname,
+  );
+  assertFalse(content.includes("## Model recommendation"));
+});

@@ -54,35 +54,6 @@ Combine tasks that touch the same file unless each one introduces
 independently-verifiable behavior. A task that adds a five-line helper next to
 another five-line helper in the same file is one task, not two.
 
-## Model recommendation
-
-Before writing the plan, assess the complexity of the implementation work
-described in the spec and select an appropriate model and thinking level for the
-implementation phase agent.
-
-Edit `meta.md` directly by adding or merging a `phases` key into the YAML
-frontmatter. The result must look like this (without disturbing any existing
-keys):
-
-```yaml
-phases:
-  implementation:
-    model: <model-id>
-    thinking: <level>
-```
-
-Valid model IDs: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-5`,
-`claude-opus-4-6`.
-
-Valid thinking levels: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
-`max`.
-
-Use `high` or `xhigh` for tasks requiring complex multi-file refactors, subtle
-correctness reasoning, or coordination of many interdependent changes. Use `off`
-or `minimal` for straightforward, well-scoped changes. Use `claude-sonnet-4-6`
-as the default model; prefer `claude-opus-4-6` only for the most demanding
-tasks.
-
 ## Writing the plan
 
 This is the last thing you do. Write a step-by-step implementation plan

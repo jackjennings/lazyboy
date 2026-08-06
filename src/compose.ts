@@ -57,6 +57,7 @@ import {
 import { createMigrationRunner } from "./migrations/runner.ts";
 import type { Migration, StoreMigration } from "./migrations/types.ts";
 import {
+  adjudicateImplementationModel,
   appendTickLog,
   resolvePhaseModel,
   type TickServiceDeps,
@@ -723,6 +724,8 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
+      determineImplementationModel: (prompt) =>
+        adjudicateImplementationModel(prompt, fetch, anthropicApiKey),
       spawnOutlierAnalysis: async (
         ticketId,
         ticketDir,

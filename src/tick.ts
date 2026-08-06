@@ -112,6 +112,9 @@ export interface TickDeps {
     lazboyWorktreePath: string,
     phase: "implementation" | "plan",
   ) => Promise<void>;
+  determineImplementationModel?: (
+    prompt: string,
+  ) => Promise<{ model: string; thinking: string } | null>;
 }
 
 export interface TickServiceDeps {
@@ -648,8 +651,23 @@ export async function advancePhase(
         maxTokens: threshold,
       });
     }
+    let resolvedTicket = ticket;
+    if (next === "implementation" && deps.determineImplementationModel) {
+      try {
+        const override = await deps.determineImplementationModel(prompt);
+        if (override !== null) {
+          resolvedTicket = {
+            ...ticket,
+            phases: { ...ticket.phases, implementation: override },
+          };
+          await deps.writeTicket(stateDir, resolvedTicket);
+        }
+      } catch {
+        // silently skip — resolveModelConfig proceeds with original ticket state
+      }
+    }
     const { model: nextModel, thinking: nextThinking } = deps
-      .resolveModelConfig(next, ticket);
+      .resolveModelConfig(next, resolvedTicket);
     await deps.spawn({
       phase: next,
       ticketDir: join(stateDir, ticket.id),
@@ -661,7 +679,7 @@ export async function advancePhase(
       thinking: nextThinking,
     });
     await deps.writeTicket(stateDir, {
-      ...ticket,
+      ...resolvedTicket,
       phase: next,
       status: "running",
       updated: now,
@@ -859,5 +877,71 @@ export class TickService {
     await deps.scaffoldStatePrompts?.();
     await deps.commitState();
     await deps.runCeremonies?.();
+  }
+}
+
+const VALID_IMPLEMENTATION_MODEL_IDS = new Set([
+  "claude-haiku-4-5",
+  "claude-sonnet-4-6",
+  "claude-opus-4-5",
+  "claude-opus-4-6",
+]);
+
+const VALID_IMPLEMENTATION_THINKING_LEVELS = new Set([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+
+const IMPLEMENTATION_MODEL_SYSTEM_PROMPT =
+  `You are selecting the model and thinking level for an implementation phase agent. ` +
+  `Given the implementation prompt below, return a JSON object with exactly two fields: "model" and "thinking".\n\n` +
+  `Valid model values: "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-5", "claude-opus-4-6"\n` +
+  `Valid thinking values: "off", "minimal", "low", "medium", "high", "xhigh", "max"\n\n` +
+  `Guidelines:\n` +
+  `- Use "claude-sonnet-4-6" by default. Use "claude-opus-4-6" only for the most demanding tasks.\n` +
+  `- Use "high" or "xhigh" for complex multi-file refactors, subtle correctness reasoning, or coordination of many interdependent changes.\n` +
+  `- Use "off" or "minimal" for straightforward, well-scoped changes.\n\n` +
+  `Respond with only the JSON object and no surrounding prose.`;
+
+export async function adjudicateImplementationModel(
+  prompt: string,
+  fetcher: typeof fetch,
+  apiKey: string,
+): Promise<{ model: string; thinking: string } | null> {
+  try {
+    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        system: IMPLEMENTATION_MODEL_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = (data?.content?.[0]?.text ?? "").trim();
+    const parsed = JSON.parse(text);
+    if (
+      typeof parsed.model !== "string" ||
+      typeof parsed.thinking !== "string" ||
+      !VALID_IMPLEMENTATION_MODEL_IDS.has(parsed.model) ||
+      !VALID_IMPLEMENTATION_THINKING_LEVELS.has(parsed.thinking)
+    ) {
+      return null;
+    }
+    return { model: parsed.model, thinking: parsed.thinking };
+  } catch {
+    return null;
   }
 }

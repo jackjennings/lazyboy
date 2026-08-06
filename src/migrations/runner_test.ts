@@ -1,7 +1,7 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertArrayIncludes, assertEquals, assertRejects } from "@std/assert";
 import { createMigrationRunner } from "./runner.ts";
 import type { TicketState } from "../state/types.ts";
-import type { Migration } from "./types.ts";
+import type { Migration, StoreMigration } from "./types.ts";
 
 function makeTicket(id: string): TicketState {
   return {
@@ -178,4 +178,99 @@ Deno.test("createMigrationRunner: stateDir is passed to migration.run for each t
   });
   await runner("/my-state", [makeTicket("gh-1"), makeTicket("gh-2")]);
   assertEquals(capturedStateDirs, ["/my-state", "/my-state"]);
+});
+
+Deno.test("createMigrationRunner: store migration runs once and leaves tickets unchanged", async () => {
+  let storeRunCount = 0;
+  let capturedStateDir = "";
+  const storeMigration: StoreMigration = {
+    type: "store",
+    run: (stateDir: string) => {
+      storeRunCount++;
+      capturedStateDir = stateDir;
+      return Promise.resolve();
+    },
+  };
+  const runner = createMigrationRunner({
+    listMigrationFiles: () => Promise.resolve(["1000-setup-store.ts"]),
+    loadMigration: () => Promise.resolve(storeMigration),
+    readApplied: () => Promise.resolve([]),
+    writeApplied: () => Promise.resolve(),
+    writeTicket: () => Promise.resolve(),
+  });
+  const tickets = [makeTicket("gh-1"), makeTicket("gh-2")];
+  const result = await runner("/state", tickets);
+  assertEquals(storeRunCount, 1);
+  assertEquals(capturedStateDir, "/state");
+  assertEquals(result, tickets);
+});
+
+Deno.test("createMigrationRunner: store migration ID written to applied list", async () => {
+  let writtenApplied: string[] = [];
+  const storeMigration: StoreMigration = {
+    type: "store",
+    run: () => Promise.resolve(),
+  };
+  const runner = createMigrationRunner({
+    listMigrationFiles: () => Promise.resolve(["1000-setup-store.ts"]),
+    loadMigration: () => Promise.resolve(storeMigration),
+    readApplied: () => Promise.resolve([]),
+    writeApplied: (_dir, ids) => {
+      writtenApplied = ids;
+      return Promise.resolve();
+    },
+    writeTicket: () => Promise.resolve(),
+  });
+  await runner("/state", [makeTicket("gh-1")]);
+  assertArrayIncludes(writtenApplied, ["1000-setup-store.ts"]);
+});
+
+Deno.test("createMigrationRunner: store and per-ticket migrations run in filename-sort order", async () => {
+  const sequence: string[] = [];
+  const storeMigration: StoreMigration = {
+    type: "store",
+    run: () => {
+      sequence.push("store");
+      return Promise.resolve();
+    },
+  };
+  const ticketMigration: Migration = {
+    run: (ticket: TicketState, _stateDir: string) => {
+      sequence.push("ticket");
+      return Promise.resolve(ticket);
+    },
+  };
+  const migrations: Record<string, Migration | StoreMigration> = {
+    "1000-store.ts": storeMigration,
+    "2000-ticket.ts": ticketMigration,
+  };
+  const runner = createMigrationRunner({
+    listMigrationFiles: () =>
+      Promise.resolve(["1000-store.ts", "2000-ticket.ts"]),
+    loadMigration: (id) => Promise.resolve(migrations[id]),
+    readApplied: () => Promise.resolve([]),
+    writeApplied: () => Promise.resolve(),
+    writeTicket: () => Promise.resolve(),
+  });
+  await runner("/state", [makeTicket("gh-1")]);
+  assertEquals(sequence, ["store", "ticket"]);
+});
+
+Deno.test("createMigrationRunner: failing store migration throws with migration ID", async () => {
+  const storeMigration: StoreMigration = {
+    type: "store",
+    run: () => Promise.reject(new Error("disk full")),
+  };
+  const runner = createMigrationRunner({
+    listMigrationFiles: () => Promise.resolve(["1000-bad-store.ts"]),
+    loadMigration: () => Promise.resolve(storeMigration),
+    readApplied: () => Promise.resolve([]),
+    writeApplied: () => Promise.resolve(),
+    writeTicket: () => Promise.resolve(),
+  });
+  await assertRejects(
+    () => runner("/state", [makeTicket("gh-1")]),
+    Error,
+    "Migration 1000-bad-store.ts failed: disk full",
+  );
 });

@@ -55,7 +55,7 @@ import {
   runPiInstall,
 } from "./packages.ts";
 import { createMigrationRunner } from "./migrations/runner.ts";
-import type { Migration } from "./migrations/types.ts";
+import type { Migration, StoreMigration } from "./migrations/types.ts";
 import {
   appendTickLog,
   resolvePhaseModel,
@@ -780,7 +780,9 @@ export function composeTickDeps(
         }
         return files.sort();
       },
-      loadMigration: async (id: string): Promise<Migration> => {
+      loadMigration: async (
+        id: string,
+      ): Promise<Migration | StoreMigration> => {
         const module = await import(join(migrationsDir, id));
         return module.default;
       },

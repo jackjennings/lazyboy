@@ -408,15 +408,23 @@ is the ordering and identity key. Applied IDs are recorded globally in
 `<stateDir>/.migrations` (one per line); there is no per-ticket log and no
 rollback.
 
-`Migration.run(ticket, stateDir)` receives the `TicketState` and the state-repo
-path; use `stateDir` for filesystem or git-log operations. A migration that
-changes `ticket.id` must **move** the on-disk directory with `Deno.rename`
-(creating the parent via `Deno.mkdir(..., { recursive: true })` first), never
-`Deno.remove` — the runner only writes `meta.md` back, so every other file
-(`log.ndjson`, phase outputs, `.usage.json`) survives only because the migration
-moved it. Its test must assert file contents exist at the new path, not merely
-that the old directory is gone (a prior migration destroyed history because its
-test only checked the latter).
+Two migration interfaces exist in `src/migrations/types.ts`:
+
+- **`Migration`** — `run(ticket, stateDir)`: per-ticket; receives one
+  `TicketState` and returns an updated one. No `type` field required.
+- **`StoreMigration`** — `type: "store"; run(stateDir)`: whole-store; receives
+  only the stateDir path and returns `void`. Use when the change cannot be
+  scoped to a single ticket directory.
+
+The runner dispatches on `migration.type === "store"` after loading each file. A
+per-ticket migration that changes `ticket.id` must **move** the on-disk
+directory with `Deno.rename` (creating the parent via
+`Deno.mkdir(..., { recursive: true })` first), never `Deno.remove` — the runner
+only writes `meta.md` back, so every other file (`log.ndjson`, phase outputs,
+`.usage.json`) survives only because the migration moved it. Its test must
+assert file contents exist at the new path, not merely that the old directory is
+gone (a prior migration destroyed history because its test only checked the
+latter).
 
 ## Per-org GitHub credentials
 

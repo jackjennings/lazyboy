@@ -1,5 +1,5 @@
 import type { TicketState } from "../state/types.ts";
-import type { Migration } from "./types.ts";
+import type { Migration, StoreMigration } from "./types.ts";
 
 export type MigrationFn = (
   stateDir: string,
@@ -8,7 +8,7 @@ export type MigrationFn = (
 
 export interface MigrationRunnerDeps {
   listMigrationFiles(): Promise<string[]>;
-  loadMigration(id: string): Promise<Migration>;
+  loadMigration(id: string): Promise<Migration | StoreMigration>;
   readApplied(stateDir: string): Promise<string[]>;
   writeApplied(stateDir: string, ids: string[]): Promise<void>;
   writeTicket(stateDir: string, ticket: TicketState): Promise<void>;
@@ -26,19 +26,28 @@ export function createMigrationRunner(deps: MigrationRunnerDeps): MigrationFn {
     let current = [...tickets];
     for (const id of unapplied) {
       const migration = await deps.loadMigration(id);
-      const next: TicketState[] = [];
-      for (const ticket of current) {
+      if (migration.type === "store") {
         try {
-          next.push(await migration.run(ticket, stateDir));
+          await migration.run(stateDir);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          throw new Error(
-            `Migration ${id} failed on ticket ${ticket.id}: ${msg}`,
-            { cause: e },
-          );
+          throw new Error(`Migration ${id} failed: ${msg}`, { cause: e });
         }
+      } else {
+        const next: TicketState[] = [];
+        for (const ticket of current) {
+          try {
+            next.push(await migration.run(ticket, stateDir));
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            throw new Error(
+              `Migration ${id} failed on ticket ${ticket.id}: ${msg}`,
+              { cause: e },
+            );
+          }
+        }
+        current = next;
       }
-      current = next;
     }
 
     for (const ticket of current) {

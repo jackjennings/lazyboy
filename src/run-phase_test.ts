@@ -27,6 +27,7 @@ import {
   setupClaudeCodeDirectories,
   setupPiDirectories,
 } from "./run-phase.ts";
+import type { CommandRunner } from "./apfel.ts";
 import type { CodeAgent } from "./agents/types.ts";
 import type { AnthropicPricingCache } from "./anthropic-pricing.ts";
 
@@ -546,6 +547,70 @@ Deno.test("judgePrinciples: uses model claude-haiku-4-5", async () => {
   await judgePrinciples("- prefer X over Y", fetcher as typeof fetch);
   const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
   assertEquals(body.model, "claude-haiku-4-5");
+});
+
+Deno.test("judgePrinciples: uses apfel CLI when run provided, returns true on KEEP", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "KEEP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  assert(
+    await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run),
+  );
+  assertSpyCalls(fetcher, 0);
+});
+
+Deno.test("judgePrinciples: uses apfel CLI when run provided, returns false on SKIP", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "SKIP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  assertFalse(
+    await judgePrinciples(
+      "_(nothing meets the bar)_",
+      fetcher as typeof fetch,
+      run,
+    ),
+  );
+  assertSpyCalls(fetcher, 0);
+});
+
+Deno.test("judgePrinciples: falls back to Anthropic when apfel CLI returns non-zero", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 1, stdout: "" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  assert(
+    await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run),
+  );
+  assertSpyCalls(fetcher, 1);
+});
+
+Deno.test("judgePrinciples: passes body as last argument to apfel", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "KEEP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run);
+  const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
+  assertEquals(args[args.length - 1], "- prefer X over Y");
 });
 
 // ── dedupePrinciples ─────────────────────────────────────────────────────────

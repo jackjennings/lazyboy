@@ -9,6 +9,7 @@ import {
   type AnthropicPricingCache,
   calculateAnthropicCost,
 } from "./anthropic-pricing.ts";
+import type { CommandRunner } from "./apfel.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -326,10 +327,32 @@ export function extractPrinciples(content: string): string | null {
   return body;
 }
 
+const JUDGE_SYSTEM_PROMPT =
+  "You are evaluating whether content from an AI coding agent's Principles section contains substantive engineering guidance worth preserving. Reply with exactly KEEP if the content contains at least one concrete, reusable engineering principle or guideline — a lesson that could inform future engineering decisions. Reply with exactly SKIP if the content is a meta-commentary explaining why no principles were added, a placeholder, or otherwise lacks actionable engineering guidance.";
+
 export async function judgePrinciples(
   body: string,
   fetcher: typeof fetch,
+  run: CommandRunner | null = null,
 ): Promise<boolean> {
+  if (run !== null) {
+    try {
+      const { code, stdout } = await run([
+        "apfel",
+        "--quiet",
+        "--max-tokens",
+        "5",
+        "-s",
+        JUDGE_SYSTEM_PROMPT,
+        body,
+      ]);
+      if (code === 0) {
+        return stdout.trim().toUpperCase() === "KEEP";
+      }
+    } catch {
+      // apfel unavailable — fall through to Anthropic
+    }
+  }
   try {
     const response = await fetcher("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -341,8 +364,7 @@ export async function judgePrinciples(
       body: JSON.stringify({
         model: "claude-haiku-4-5",
         max_tokens: 5,
-        system:
-          "You are evaluating whether content from an AI coding agent's Principles section contains substantive engineering guidance worth preserving. Reply with exactly KEEP if the content contains at least one concrete, reusable engineering principle or guideline — a lesson that could inform future engineering decisions. Reply with exactly SKIP if the content is a meta-commentary explaining why no principles were added, a placeholder, or otherwise lacks actionable engineering guidance.",
+        system: JUDGE_SYSTEM_PROMPT,
         messages: [{ role: "user", content: body }],
       }),
     });

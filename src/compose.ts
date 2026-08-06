@@ -633,7 +633,11 @@ export function composeTickDeps(
         if (!config.tick.principles) return;
         const extracted = extractPrinciples(outputContent);
         if (!extracted) return;
-        const substantive = await judgePrinciples(extracted, fetch);
+        const substantive = await judgePrinciples(
+          extracted,
+          fetch,
+          captureCommandRunner(),
+        );
         if (!substantive) return;
         const principlesPath = join(sd, "principles.md");
         let existing = "";

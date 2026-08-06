@@ -570,7 +570,7 @@ export function composeTickDeps(
     new DocumentationGapsCeremony({
       stateDir,
       repoDir: new URL("../", import.meta.url).pathname,
-      fetch,
+      run: captureCommandRunner(),
       commitState: async () => {
         await ensureRunPidGitignored(stateDir);
         await commitState(stateDir, "ceremony: documentation-gaps");
@@ -656,7 +656,8 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
-      selfReview: (phase, ticketDir) => selfReview(phase, ticketDir, fetch),
+      selfReview: (phase, ticketDir) =>
+        selfReview(phase, ticketDir, captureCommandRunner()),
       readPhaseOutput: async (ticketDir, phase) => {
         const found = await findLatestPhaseOutput(ticketDir);
         if (!found || found.phaseName !== phase) return null;
@@ -668,7 +669,6 @@ export function composeTickDeps(
         if (!extracted) return;
         const substantive = await judgePrinciples(
           extracted,
-          fetch,
           captureCommandRunner(),
         );
         if (!substantive) return;
@@ -889,7 +889,11 @@ export function composeTickDeps(
             const currentContent = await Deno.readTextFile(targetPath).catch(
               () => "",
             );
-            const applied = await applyLearning(currentContent, intent, fetch);
+            const applied = await applyLearning(
+              currentContent,
+              intent,
+              captureCommandRunner(),
+            );
             if (applied === null) {
               throw new Error("applyLearning returned no content");
             }

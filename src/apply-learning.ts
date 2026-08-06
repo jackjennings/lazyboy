@@ -1,3 +1,5 @@
+import type { CommandRunner } from "./apfel.ts";
+
 const SYSTEM_PROMPT =
   `You are integrating a single learning into an existing Markdown document (a coding-agent prompt).
 
@@ -19,29 +21,26 @@ function extractDocument(text: string): string | null {
 export async function applyLearning(
   currentContent: string,
   intent: string,
-  fetcher: typeof fetch,
+  run: CommandRunner,
 ): Promise<string | null> {
   const userMessage =
     `## Learning to integrate\n\n${intent}\n\n## Current document\n\n${currentContent}`;
   try {
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 16384,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const text = data?.content?.[0]?.text ?? "";
-    return extractDocument(text);
+    const { code, stdout } = await run([
+      "claude",
+      userMessage,
+      "--print",
+      "--output-format",
+      "text",
+      "--system-prompt",
+      SYSTEM_PROMPT,
+      "--model",
+      "claude-sonnet-4-6",
+      "--tools",
+      "",
+    ]);
+    if (code !== 0) return null;
+    return extractDocument(stdout);
   } catch {
     return null;
   }

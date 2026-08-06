@@ -14,6 +14,7 @@ import { GeminiMeetingNotesCeremony } from "./ceremonies/gemini-meeting-notes.ts
 import { makeTicket } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
+import type { CommandRunner } from "./apfel.ts";
 
 const BASE = { title: "Ticket", url: "https://example.com" };
 
@@ -504,7 +505,7 @@ function makeDocumentationGaps(
   _outputDir: string,
   opts: {
     repoDir?: string;
-    fetch?: typeof globalThis.fetch;
+    run?: CommandRunner;
     commitState?: () => Promise<void>;
     notify?: (title: string, message: string) => Promise<void>;
   } = {},
@@ -512,8 +513,8 @@ function makeDocumentationGaps(
   return new DocumentationGapsCeremony({
     stateDir,
     repoDir: opts.repoDir ?? stateDir,
-    fetch: opts.fetch ??
-      (() => Promise.reject(new Error("fetch not expected"))),
+    run: opts.run ??
+      ((_args) => Promise.reject(new Error("run not expected"))),
     commitState: opts.commitState ?? (() => Promise.resolve()),
     notify: opts.notify,
   });
@@ -525,21 +526,21 @@ async function outputFiles(outputDir: string): Promise<string[]> {
   return files;
 }
 
-Deno.test("DocumentationGapsCeremony: no enrichment files writes no-gaps output without calling fetch", async () => {
+Deno.test("DocumentationGapsCeremony: no enrichment files writes no-gaps output without calling run", async () => {
   const stateDir = await Deno.makeTempDir();
   const outputDir = await Deno.makeTempDir();
   try {
-    let fetchCalled = false;
+    let runCalled = false;
     const commitState = spy(() => Promise.resolve());
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () => {
-        fetchCalled = true;
+      run: (_args) => {
+        runCalled = true;
         return Promise.reject(new Error("should not be called"));
       },
       commitState,
     });
     await ceremony.run(TEST_NOW, outputDir);
-    assertFalse(fetchCalled);
+    assertFalse(runCalled);
     assertSpyCalls(commitState, 1);
     const files = await outputFiles(outputDir);
     assertEquals(files.length, 1);
@@ -566,12 +567,7 @@ Deno.test("DocumentationGapsCeremony: LLM response written verbatim to output fi
     const llmResponse =
       "# Documentation Gap Report\n\n_1 cluster across 1 ticket_\n\n## Model Selection\n\n**Occurrences:** 1\n";
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ content: [{ text: llmResponse }] }), {
-            status: 200,
-          }),
-        ),
+      run: (_args) => Promise.resolve({ code: 0, stdout: llmResponse }),
     });
     await ceremony.run(TEST_NOW, outputDir);
     const files = await outputFiles(outputDir);
@@ -595,12 +591,7 @@ Deno.test("DocumentationGapsCeremony: LLM returning NO_GAPS writes no-gaps outpu
       "## Open Questions\n- Which model to use?\n",
     );
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
-            status: 200,
-          }),
-        ),
+      run: (_args) => Promise.resolve({ code: 0, stdout: "NO_GAPS" }),
     });
     await ceremony.run(TEST_NOW, outputDir);
     const files = await outputFiles(outputDir);
@@ -624,7 +615,7 @@ Deno.test("DocumentationGapsCeremony: LLM failure writes error output and still 
     );
     const commitState = spy(() => Promise.resolve());
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () => Promise.reject(new Error("network error")),
+      run: (_args) => Promise.reject(new Error("network error")),
       commitState,
     });
     await ceremony.run(TEST_NOW, outputDir);
@@ -650,8 +641,7 @@ Deno.test("DocumentationGapsCeremony: non-OK LLM response writes error output an
     );
     const commitState = spy(() => Promise.resolve());
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () =>
-        Promise.resolve(new Response("Unauthorized", { status: 401 })),
+      run: (_args) => Promise.resolve({ code: 1, stdout: "" }),
       commitState,
     });
     await ceremony.run(TEST_NOW, outputDir);
@@ -698,14 +688,9 @@ Deno.test("DocumentationGapsCeremony: prior report headings included in LLM user
     );
     let capturedUserMessage = "";
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: (_url, init) => {
-        const body = JSON.parse(init!.body as string);
-        capturedUserMessage = body.messages[0].content;
-        return Promise.resolve(
-          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
-            status: 200,
-          }),
-        );
+      run: (args) => {
+        capturedUserMessage = args[1] as string;
+        return Promise.resolve({ code: 0, stdout: "NO_GAPS" });
       },
     });
     await ceremony.run(TEST_NOW, outputDir);
@@ -735,14 +720,9 @@ Deno.test("DocumentationGapsCeremony: documentation corpus content included in L
     const ceremony = new DocumentationGapsCeremony({
       stateDir,
       repoDir,
-      fetch: (_url, init) => {
-        const body = JSON.parse(init!.body as string);
-        capturedUserMessage = body.messages[0].content;
-        return Promise.resolve(
-          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
-            status: 200,
-          }),
-        );
+      run: (args) => {
+        capturedUserMessage = args[1] as string;
+        return Promise.resolve({ code: 0, stdout: "NO_GAPS" });
       },
       commitState: () => Promise.resolve(),
     });
@@ -765,15 +745,15 @@ Deno.test("DocumentationGapsCeremony: enrichment file with empty Open Questions 
       join(ticketDir, "20260101T000000-enrichment.md"),
       "## Open Questions\n## Next Section\nSome content.\n",
     );
-    let fetchCalled = false;
+    let runCalled = false;
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
-      fetch: () => {
-        fetchCalled = true;
+      run: (_args) => {
+        runCalled = true;
         return Promise.reject(new Error("should not be called"));
       },
     });
     await ceremony.run(TEST_NOW, outputDir);
-    assertFalse(fetchCalled);
+    assertFalse(runCalled);
     const files = await outputFiles(outputDir);
     const content = await Deno.readTextFile(join(outputDir, files[0]));
     assertStringIncludes(content, "No uncovered gaps found.");

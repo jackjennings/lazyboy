@@ -147,9 +147,9 @@ ticket directory:
 ## Self-review
 
 `selfReview` (`src/self-review.ts`) is the only module that reads
-`*-self-review.md` prompts and makes self-approval Anthropic API calls — do not
-add automated-approval API calls anywhere else. When a prompt is present for a
-phase, an `APPROVE` response makes `advancePhase` append an `ApprovalEntry` with
+`*-self-review.md` prompts and makes automated-approval calls — do not add
+automated-approval calls anywhere else. When a prompt is present for a phase, an
+`APPROVE` response makes `advancePhase` append an `ApprovalEntry` with
 `actor: "agent"`; when absent, the ticket waits for human approval. To add
 support for a phase, create `src/phases/prompts/<phase>-self-review.md`
 instructing the model to answer exactly `APPROVE` or `REJECT` — no code change.
@@ -284,9 +284,11 @@ real git processes in tests for these three commands.
 Phase runtimes implement `CodeAgent` (`src/agents/types.ts`). Two adapters
 exist: `PiCodeAgent` (`src/agents/pi.ts`, shells to `pi`) and `ClaudeCodeAgent`
 (`src/agents/claude-code.ts`, shells to `claude`). The `pi` CLI must not be
-referenced by name outside `pi.ts`; the `claude` CLI must not be referenced
-outside `claude-code.ts`. New adapters go in `src/agents/<name>.ts` and
-implement `CodeAgent`.
+referenced by name outside `pi.ts`; the `claude` CLI must not be invoked via
+`Deno.Command` outside `claude-code.ts`. Ancillary helper functions
+(`judgePrinciples`, `selfReview`, `applyLearning`, `callLlm`) that shell to
+`claude` via an injected `CommandRunner` are exempt from this restriction. New
+CodeAgent adapters go in `src/agents/<name>.ts` and implement `CodeAgent`.
 
 - `[agent].type` (default `"pi"`) selects the adapter, orthogonal to
   `[pi].provider` (which applies only when `agent.type === "pi"`). Resolved once

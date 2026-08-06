@@ -1,11 +1,12 @@
 import { join } from "@std/path";
 import { compactTimestamp } from "../timestamp.ts";
 import type { Ceremony } from "./types.ts";
+import type { CommandRunner } from "../apfel.ts";
 
 export interface DocumentationGapsCeremonyDeps {
   stateDir: string;
   repoDir: string;
-  fetch: typeof globalThis.fetch;
+  run: CommandRunner;
   commitState(): Promise<void>;
   notify?: (title: string, message: string) => Promise<void>;
 }
@@ -127,7 +128,7 @@ async function callLlm(
   questions: Array<{ ticketId: string; questions: string }>,
   corpus: string,
   priorHeadings: string[],
-  fetcher: typeof globalThis.fetch,
+  run: CommandRunner,
 ): Promise<string> {
   const questionsBlock = questions
     .map((q) => `### ${q.ticketId}\n${q.questions}`)
@@ -143,28 +144,25 @@ async function callLlm(
   ].join("\n\n");
 
   try {
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    });
-    if (!response.ok) {
+    const { code, stdout } = await run([
+      "claude",
+      userMessage,
+      "--print",
+      "--output-format",
+      "text",
+      "--system-prompt",
+      SYSTEM_PROMPT,
+      "--model",
+      "claude-sonnet-4-6",
+      "--tools",
+      "",
+    ]);
+    if (code !== 0) {
       return "# Documentation Gap Report\n\nError: LLM call failed.\n";
     }
-    const data = await response.json();
-    const text = data?.content?.[0]?.text ?? "";
-    return text.trim() === "NO_GAPS"
+    return stdout.trim() === "NO_GAPS"
       ? "# Documentation Gap Report\n\nNo uncovered gaps found.\n"
-      : text;
+      : stdout;
   } catch {
     return "# Documentation Gap Report\n\nError: LLM call failed.\n";
   }
@@ -197,7 +195,7 @@ export class DocumentationGapsCeremony implements Ceremony {
         questions,
         corpus,
         priorHeadings,
-        this.#deps.fetch,
+        this.#deps.run,
       );
     }
 

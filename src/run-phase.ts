@@ -332,46 +332,40 @@ const JUDGE_SYSTEM_PROMPT =
 
 export async function judgePrinciples(
   body: string,
-  fetcher: typeof fetch,
-  run: CommandRunner | null = null,
+  run: CommandRunner,
 ): Promise<boolean> {
-  if (run !== null) {
-    try {
-      const { code, stdout } = await run([
-        "apfel",
-        "--quiet",
-        "--max-tokens",
-        "5",
-        "-s",
-        JUDGE_SYSTEM_PROMPT,
-        body,
-      ]);
-      if (code === 0) {
-        return stdout.trim().toUpperCase() === "KEEP";
-      }
-    } catch {
-      // apfel unavailable — fall through to Anthropic
+  try {
+    const { code, stdout } = await run([
+      "apfel",
+      "--quiet",
+      "--max-tokens",
+      "5",
+      "-s",
+      JUDGE_SYSTEM_PROMPT,
+      body,
+    ]);
+    if (code === 0) {
+      return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
     }
+  } catch {
+    // apfel unavailable — fall through to claude CLI
   }
   try {
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 5,
-        system: JUDGE_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: body }],
-      }),
-    });
-    if (!response.ok) return false;
-    const data = await response.json();
-    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
-    return result === "KEEP";
+    const { code, stdout } = await run([
+      "claude",
+      body,
+      "--print",
+      "--output-format",
+      "text",
+      "--system-prompt",
+      JUDGE_SYSTEM_PROMPT,
+      "--model",
+      "claude-haiku-4-5",
+      "--tools",
+      "",
+    ]);
+    if (code !== 0) return false;
+    return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
   } catch {
     return false;
   }

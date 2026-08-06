@@ -36,12 +36,16 @@ Follow these steps:
    the instruction in prose. Examples:
    - Enumerate all call sites before making edits when changing a function
      signature.
-   - Use a scripted pass (`sed -i` or `deno eval`) for repetitive same-file
-     changes rather than repeated Edit calls.
+   - Use a scripted pass (`sed -i`) for repetitive same-file changes rather than
+     repeated Edit calls.
    - Read a file once and hold its content in memory rather than re-reading it
      on each edit.
 
    Make the instruction concrete and actionable; avoid vague directives.
+
+   Write the improvement as a language-agnostic principle; abstract any
+   project-specific tool name to a generic equivalent (e.g. "the project's test
+   runner", not "deno task test"; "the project's formatter", not "deno fmt").
 
 6. Write a learning entry to `<State directory>/learnings/<YYYYMMDDTHHMMSS>.md`
    using the current UTC time for the filename slug. The file is Markdown with

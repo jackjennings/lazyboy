@@ -117,6 +117,9 @@ curly braces, kebab-case, no spaces); each is replaced with the contents of
 may use the same markers — partials always resolve from the built-in
 `src/phases/prompts/partials/` directory, never from the state dir.
 
+Do not write `_test.ts` files for prompt `.md` files. Prompt content is plain
+text with no executable logic to test.
+
 `advancePhase` appends up to three optional supplements (in order) when present,
 each loader returning `""` when absent so no code change is needed to add one:
 

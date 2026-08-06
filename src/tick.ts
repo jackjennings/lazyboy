@@ -29,6 +29,7 @@ import {
   type WorktreeInfo,
 } from "./state/types.ts";
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
+import { estimateTokenCount } from "tokenx";
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase | "conflict-resolution" | "ci-triage",
@@ -102,6 +103,7 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<number | null>;
+  maxPromptTokens?: number;
   readTicketLog?: (ticketDir: string) => Promise<string>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
@@ -210,6 +212,16 @@ export async function advancePhase(
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");
+    const threshold = deps.maxPromptTokens ?? 5_000;
+    const tokens = estimateTokenCount(prompt);
+    if (tokens > threshold) {
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "prompt-too-long",
+        phase: activePhase,
+        tokens,
+        maxTokens: threshold,
+      });
+    }
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
     let sessionId: string | undefined;
@@ -269,6 +281,16 @@ export async function advancePhase(
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");
+    const threshold = deps.maxPromptTokens ?? 5_000;
+    const tokens = estimateTokenCount(prompt);
+    if (tokens > threshold) {
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "prompt-too-long",
+        phase: "intake",
+        tokens,
+        maxTokens: threshold,
+      });
+    }
     const { model: intakeModel, thinking: intakeThinking } = deps
       .resolveModelConfig("intake", ticket);
     await deps.spawn({
@@ -599,6 +621,16 @@ export async function advancePhase(
     const prompt = [basePrompt, supplement, artifactSupplement, statePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
+    const threshold = deps.maxPromptTokens ?? 5_000;
+    const tokens = estimateTokenCount(prompt);
+    if (tokens > threshold) {
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "prompt-too-long",
+        phase: next,
+        tokens,
+        maxTokens: threshold,
+      });
+    }
     const { model: nextModel, thinking: nextThinking } = deps
       .resolveModelConfig(next, ticket);
     await deps.spawn({

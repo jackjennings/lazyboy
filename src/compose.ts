@@ -923,5 +923,11 @@ export function composeTickDeps(
       if (!available) return null;
       return apfelGenerateShortTitle(captureCommandRunner(), title, context);
     },
+    agentsMdPaths: config.tick.agentsMdMaxTokens > 0
+      ? config.codebase.roots.map(expandHome).map((r) => join(r, "AGENTS.md"))
+      : undefined,
+    agentsMdMaxTokens: config.tick.agentsMdMaxTokens > 0
+      ? config.tick.agentsMdMaxTokens
+      : undefined,
   };
 }

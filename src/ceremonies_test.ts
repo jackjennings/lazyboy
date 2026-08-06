@@ -9,6 +9,7 @@ import { join } from "@std/path";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import type { TicketState } from "./state/types.ts";
+import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
 
 function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -329,5 +330,308 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
     assertStringIncludes(written, "github/org/repo/2");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+function makeDocumentationGaps(
+  stateDir: string,
+  _outputDir: string,
+  opts: {
+    repoDir?: string;
+    fetch?: typeof globalThis.fetch;
+    commitState?: () => Promise<void>;
+    notify?: (title: string, message: string) => Promise<void>;
+  } = {},
+): DocumentationGapsCeremony {
+  return new DocumentationGapsCeremony({
+    stateDir,
+    repoDir: opts.repoDir ?? stateDir,
+    fetch: opts.fetch ??
+      (() => Promise.reject(new Error("fetch not expected"))),
+    commitState: opts.commitState ?? (() => Promise.resolve()),
+    notify: opts.notify,
+  });
+}
+
+async function outputFiles(outputDir: string): Promise<string[]> {
+  const files: string[] = [];
+  for await (const entry of Deno.readDir(outputDir)) files.push(entry.name);
+  return files;
+}
+
+Deno.test("DocumentationGapsCeremony: no enrichment files writes no-gaps output without calling fetch", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    let fetchCalled = false;
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () => {
+        fetchCalled = true;
+        return Promise.reject(new Error("should not be called"));
+      },
+      commitState,
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertFalse(fetchCalled);
+    assertSpyCalls(commitState, 1);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 1);
+    assert(files[0].startsWith("20260727"));
+    assert(files[0].endsWith("-documentation-gaps.md"));
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "No uncovered gaps found.");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: LLM response written verbatim to output file", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    const llmResponse =
+      "# Documentation Gap Report\n\n_1 cluster across 1 ticket_\n\n## Model Selection\n\n**Occurrences:** 1\n";
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ content: [{ text: llmResponse }] }), {
+            status: 200,
+          }),
+        ),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    const files = await outputFiles(outputDir);
+    assertEquals(files.length, 1);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertEquals(content, llmResponse);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: LLM returning NO_GAPS writes no-gaps output", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
+            status: 200,
+          }),
+        ),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    const files = await outputFiles(outputDir);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "No uncovered gaps found.");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: LLM failure writes error output and still calls commitState", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () => Promise.reject(new Error("network error")),
+      commitState,
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 1);
+    const files = await outputFiles(outputDir);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "Error:");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: non-OK LLM response writes error output and still calls commitState", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () =>
+        Promise.resolve(new Response("Unauthorized", { status: 401 })),
+      commitState,
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 1);
+    const files = await outputFiles(outputDir);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "Error:");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: notify failure does not abort ceremony", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const commitState = spy(() => Promise.resolve());
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      commitState,
+      notify: () => Promise.reject(new Error("osascript failed")),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertSpyCalls(commitState, 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: prior report headings included in LLM user message", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    await Deno.writeTextFile(
+      join(outputDir, "20260101T060000-documentation-gaps.md"),
+      "# Documentation Gap Report\n\n## Previously Reported Theme\n\n**Occurrences:** 3\n",
+    );
+    let capturedUserMessage = "";
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: (_url, init) => {
+        const body = JSON.parse(init!.body as string);
+        capturedUserMessage = body.messages[0].content;
+        return Promise.resolve(
+          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
+            status: 200,
+          }),
+        );
+      },
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertStringIncludes(capturedUserMessage, "Previously Reported Theme");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: documentation corpus content included in LLM user message", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  const repoDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n- Which model to use?\n",
+    );
+    await Deno.writeTextFile(
+      join(repoDir, "AGENTS.md"),
+      "# Agent Instructions\n\nSENTINEL_CORPUS_CONTENT\n",
+    );
+    let capturedUserMessage = "";
+    const ceremony = new DocumentationGapsCeremony({
+      stateDir,
+      repoDir,
+      fetch: (_url, init) => {
+        const body = JSON.parse(init!.body as string);
+        capturedUserMessage = body.messages[0].content;
+        return Promise.resolve(
+          new Response(JSON.stringify({ content: [{ text: "NO_GAPS" }] }), {
+            status: 200,
+          }),
+        );
+      },
+      commitState: () => Promise.resolve(),
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertStringIncludes(capturedUserMessage, "SENTINEL_CORPUS_CONTENT");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+    await Deno.remove(repoDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: enrichment file with empty Open Questions section skipped", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T000000-enrichment.md"),
+      "## Open Questions\n## Next Section\nSome content.\n",
+    );
+    let fetchCalled = false;
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      fetch: () => {
+        fetchCalled = true;
+        return Promise.reject(new Error("should not be called"));
+      },
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertFalse(fetchCalled);
+    const files = await outputFiles(outputDir);
+    const content = await Deno.readTextFile(join(outputDir, files[0]));
+    assertStringIncludes(content, "No uncovered gaps found.");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});
+
+Deno.test("DocumentationGapsCeremony: notify receives lazyboy title and Documentation gaps ready message", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const notifyCalls: [string, string][] = [];
+    const ceremony = makeDocumentationGaps(stateDir, outputDir, {
+      notify: (title, message) => {
+        notifyCalls.push([title, message]);
+        return Promise.resolve();
+      },
+    });
+    await ceremony.run(TEST_NOW, outputDir);
+    assertEquals(notifyCalls, [["lazyboy", "Documentation gaps ready"]]);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
   }
 });

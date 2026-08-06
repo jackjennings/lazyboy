@@ -7,6 +7,7 @@ import {
 import { stripAnsiCode } from "@std/fmt/colors";
 import type { TUI } from "@earendil-works/pi-tui";
 import { ScrollPane } from "./scroll-pane.ts";
+import { computeVisibleHeadingIndices, renderTocLines } from "./toc.ts";
 
 function makeTui(rows = 24, columns = 80): TUI {
   return { terminal: { rows, columns } } as unknown as TUI;
@@ -451,4 +452,83 @@ Deno.test("ScrollPane: render pads to getHeight lines when content is short", ()
     getHeight: () => 10,
   });
   assertEquals(pane.render(80).length, 11);
+});
+
+Deno.test("ScrollPane: pinnedSidebar receives scrollState with scrollOffset totalLines height", () => {
+  let capturedState:
+    | { scrollOffset: number; totalLines: number; height: number }
+    | undefined;
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+    pinnedSidebar: (_w, state) => {
+      capturedState = state;
+      return ["toc"];
+    },
+    pinnedSidebarWidth: (_w) => 20,
+  });
+  pane.render(100);
+  assertEquals(capturedState?.scrollOffset, 0);
+  assertEquals(capturedState?.totalLines, 20);
+  assertEquals(capturedState?.height, 5);
+});
+
+Deno.test("ScrollPane: pinnedSidebar scrollState reflects updated scrollOffset after scrolling", () => {
+  let capturedOffset = -1;
+  const content = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+    pinnedSidebar: (_w, state) => {
+      capturedOffset = state.scrollOffset;
+      return ["toc"];
+    },
+    pinnedSidebarWidth: (_w) => 20,
+  });
+  pane.handleInput(" ");
+  pane.render(100);
+  assertEquals(capturedOffset, 5);
+});
+
+Deno.test("ScrollPane: ┃ indicator appears for visible heading via computeVisibleHeadingIndices", () => {
+  const headings = [
+    { level: 1, title: "Section A", sourceLine: 0 },
+    { level: 1, title: "Section B", sourceLine: 50 },
+  ];
+  const totalSourceLines = 100;
+  const pane = new ScrollPane({
+    getLines: (_w) => Array.from({ length: 100 }, (_, i) => `line ${i}`),
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 10,
+    pinnedSidebar: (w, scrollState) =>
+      renderTocLines(
+        headings,
+        w,
+        computeVisibleHeadingIndices({
+          headings,
+          totalSourceLines,
+          ...scrollState,
+        }),
+      ),
+    pinnedSidebarWidth: (_w) => 25,
+  });
+  const rendered = pane.render(120);
+  // Section A occupies rendered lines [0, 50); viewport [0, 10) overlaps → ┃
+  assert(
+    rendered.some((l) =>
+      stripAnsiCode(l).includes("┃") && l.includes("Section A")
+    ),
+  );
+  // Section B occupies rendered lines [50, 100); viewport [0, 10) does not overlap → space
+  assertFalse(
+    rendered.some((l) =>
+      stripAnsiCode(l)[0] === "┃" && l.includes("Section B")
+    ),
+  );
 });

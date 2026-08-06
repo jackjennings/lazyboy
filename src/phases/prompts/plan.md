@@ -17,10 +17,13 @@ from an already-read file is needed while drafting, use `grep` or `bash` to
 fetch it — do not re-read the full file.
 
 When a file is too large to read in one pass, read consecutive pages to the end
-before moving to the next file. Do not skip a line range intending to return
-later — once you move on to a different file, all pages of the previous file are
-closed. A paginated re-read of an already-visited file during task drafting is
-the same violation as a full re-read.
+before moving to the next file. Do not skip a line range — the moment you stop
+reading consecutively (whether to jump ahead within the file or to move to
+another file), all unread portions are permanently closed. Do not use
+grep-located line numbers to jump to a specific offset within a file you are
+actively reading; use grep to confirm presence and continue reading consecutive
+pages from where you stopped. A paginated re-read of an already-visited file
+during task drafting is the same violation as a full re-read.
 
 When searching for test files, issue a single discovery command that covers all
 plausible naming conventions at once (e.g.,

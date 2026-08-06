@@ -32,13 +32,32 @@ export function plistContent(lazboyDir: string): string {
 `;
 }
 
-export async function detectLaunchdEnabled(): Promise<boolean> {
+export type LaunchctlRunner = (args: string[]) => Promise<{ code: number }>;
+
+async function defaultLaunchctlRunner(
+  args: string[],
+): Promise<{ code: number }> {
   const result = await new Deno.Command("launchctl", {
-    args: ["print", `gui/${Deno.uid()}/${LABEL}`],
+    args,
     stdout: "null",
     stderr: "null",
   }).output();
-  return result.code === 0;
+  return { code: result.code };
+}
+
+export async function detectLaunchdEnabled(
+  runLaunchctl: LaunchctlRunner = defaultLaunchctlRunner,
+): Promise<boolean> {
+  try {
+    const { code } = await runLaunchctl([
+      "print",
+      `gui/${Deno.uid()}/${LABEL}`,
+    ]);
+    return code === 0;
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) return false;
+    throw err;
+  }
 }
 
 export function isLaunchdEnabled(): Promise<boolean> {

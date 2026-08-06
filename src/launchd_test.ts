@@ -1,5 +1,6 @@
-import { assertFalse, assertStringIncludes } from "@std/assert";
-import { plistContent } from "./launchd.ts";
+import { assert, assertFalse, assertStringIncludes } from "@std/assert";
+import { detectLaunchdEnabled, plistContent } from "./launchd.ts";
+import type { LaunchctlRunner } from "./launchd.ts";
 
 Deno.test("plistContent: includes the label", () => {
   assertStringIncludes(
@@ -39,3 +40,30 @@ Deno.test("plistContent: does not contain StandardErrorPath", () => {
     plistContent("/home/user/.lazyboy").includes("StandardErrorPath"),
   );
 });
+
+Deno.test(
+  "detectLaunchdEnabled: returns false when launchctl is not found",
+  async () => {
+    const notFound: LaunchctlRunner = (_args) => {
+      throw new Deno.errors.NotFound("launchctl");
+    };
+    assertFalse(await detectLaunchdEnabled(notFound));
+  },
+);
+
+Deno.test(
+  "detectLaunchdEnabled: returns true when launchctl print exits 0",
+  async () => {
+    const success: LaunchctlRunner = (_args) => Promise.resolve({ code: 0 });
+    assert(await detectLaunchdEnabled(success));
+  },
+);
+
+Deno.test(
+  "detectLaunchdEnabled: returns false when launchctl print exits non-zero",
+  async () => {
+    const notLoaded: LaunchctlRunner = (_args) =>
+      Promise.resolve({ code: 113 });
+    assertFalse(await detectLaunchdEnabled(notLoaded));
+  },
+);

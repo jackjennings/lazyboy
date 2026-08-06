@@ -20,6 +20,14 @@ Make a concrete decision for each remaining ambiguous requirement. Do not
 present alternatives or options. Do not include implementation guidance, code
 examples, or algorithm options — those belong in the plan phase.
 
+After writing the spec, judge whether the implementation is trivial enough to
+skip planning. If the change is small, self-contained, and a planning phase
+would not surface new decisions, edit `meta.md` directly: set `skipPlan: true`
+in the YAML frontmatter, and add `phases.implementation` model and thinking
+overrides using the same frontmatter structure the plan agent uses — since the
+plan agent will not run, you must provide these. If planning is warranted, do
+not touch `meta.md`.
+
 Write your response directly to the output file path shown in your context using
 the Write tool. Begin your response directly with the first section heading. No
 preamble.

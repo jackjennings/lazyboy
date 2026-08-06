@@ -1,26 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import migration from "./1784650655-prurl-to-prs.ts";
-import type { TicketState } from "../src/state/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/x/y/1",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/x/y/issues/1",
-    phase: "merge",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../src/test-support.ts";
 
 async function writeMeta(dir: string, id: string, content: string) {
   const ticketDir = join(dir, ...id.split("/"));
@@ -31,6 +12,13 @@ async function writeMeta(dir: string, id: string, content: string) {
 Deno.test("migration prurl-to-prs: ticket already has prs — returns unchanged", async () => {
   const dir = await Deno.makeTempDir();
   const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
     prs: [{
       url: "https://github.com/x/y/pull/5",
       title: "existing",
@@ -51,7 +39,16 @@ Deno.test("migration prurl-to-prs: ticket already has prs — returns unchanged"
 
 Deno.test("migration prurl-to-prs: meta.md has prUrl — sets prs with single entry", async () => {
   const dir = await Deno.makeTempDir();
-  const ticket = makeTicket({ prs: undefined });
+  const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    prs: undefined,
+  });
   await writeMeta(
     dir,
     ticket.id,
@@ -69,7 +66,16 @@ Deno.test("migration prurl-to-prs: meta.md has prUrl — sets prs with single en
 
 Deno.test("migration prurl-to-prs: meta.md has no prUrl — returns unchanged", async () => {
   const dir = await Deno.makeTempDir();
-  const ticket = makeTicket({ prs: undefined });
+  const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    prs: undefined,
+  });
   await writeMeta(
     dir,
     ticket.id,
@@ -82,7 +88,16 @@ Deno.test("migration prurl-to-prs: meta.md has no prUrl — returns unchanged", 
 
 Deno.test("migration prurl-to-prs: meta.md not found — returns unchanged", async () => {
   const dir = await Deno.makeTempDir();
-  const ticket = makeTicket({ prs: undefined });
+  const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    worktrees: { "x/y": { path: "/wt/x/y", branch: "gh-1" } },
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    prs: undefined,
+  });
   const result = await migration.run(ticket, dir);
   assertEquals(result.prs, undefined);
   await Deno.remove(dir, { recursive: true });
@@ -91,6 +106,12 @@ Deno.test("migration prurl-to-prs: meta.md not found — returns unchanged", asy
 Deno.test("migration prurl-to-prs: worktreeKey is first key from ticket.worktrees", async () => {
   const dir = await Deno.makeTempDir();
   const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
     prs: undefined,
     worktrees: {
       "a/repo": { path: "/wt/a/repo", branch: "br" },
@@ -109,7 +130,16 @@ Deno.test("migration prurl-to-prs: worktreeKey is first key from ticket.worktree
 
 Deno.test("migration prurl-to-prs: worktreeKey is undefined when ticket has no worktrees", async () => {
   const dir = await Deno.makeTempDir();
-  const ticket = makeTicket({ prs: undefined, worktrees: {} });
+  const ticket = makeTicket({
+    id: "github/x/y/1",
+    url: "https://github.com/x/y/issues/1",
+    phase: "merge",
+    status: "waiting",
+    created: "2026-07-01T00:00:00Z",
+    updated: "2026-07-01T00:00:00Z",
+    prs: undefined,
+    worktrees: {},
+  });
   await writeMeta(
     dir,
     ticket.id,

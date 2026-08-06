@@ -739,6 +739,10 @@ export class TickService {
           body: item.description,
           artifact: "pr",
         });
+        await deps.tickDeps.appendLog(deps.stateDir, item.id, {
+          event: "ticket-captured",
+          title: item.title,
+        });
       }
     }
 

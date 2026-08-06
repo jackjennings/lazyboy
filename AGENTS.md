@@ -204,20 +204,21 @@ the runtime `tick.ndjson` above). Every entry is written by `appendTicketLog`
 `ts` (ISO 8601 UTC), an `event`, and event-specific fields. Reuse an existing
 event rather than coining a synonym:
 
-| `event`                                                                            | Written by / meaning                                       |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `phase-start` / `phase-end`                                                        | A phase subprocess is spawned / completes.                 |
-| `phase-transition`                                                                 | `phase` changes.                                           |
-| `status-transition`                                                                | `status` changes.                                          |
-| `needs-attention`                                                                  | Ticket parked for a human; carries a `reason`.             |
-| `phase-output-invalid`                                                             | Agent produced no/invalid output; carries a `reason`.      |
-| `phase-output-retry`                                                               | Recovery resume attempted after invalid output.            |
-| `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.             |
-| `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                             |
-| `branch-pushed`                                                                    | A worktree branch was successfully force-pushed to origin. |
-| `ci-triage-resolved`                                                               | A CI-triage run's verdict was applied.                     |
-| `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).             |
-| `error`                                                                            | An action or phase threw; carries the error message.       |
+| `event`                                                                            | Written by / meaning                                          |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `ticket-captured`                                                                  | A new ticket was written for the first time; carries `title`. |
+| `phase-start` / `phase-end`                                                        | A phase subprocess is spawned / completes.                    |
+| `phase-transition`                                                                 | `phase` changes.                                              |
+| `status-transition`                                                                | `status` changes.                                             |
+| `needs-attention`                                                                  | Ticket parked for a human; carries a `reason`.                |
+| `phase-output-invalid`                                                             | Agent produced no/invalid output; carries a `reason`.         |
+| `phase-output-retry`                                                               | Recovery resume attempted after invalid output.               |
+| `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.                |
+| `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                                |
+| `branch-pushed`                                                                    | A worktree branch was successfully force-pushed to origin.    |
+| `ci-triage-resolved`                                                               | A CI-triage run's verdict was applied.                        |
+| `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).                |
+| `error`                                                                            | An action or phase threw; carries the error message.          |
 
 A `reason` field, where present, is a lowercase kebab-case label naming the
 cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-worktrees`,

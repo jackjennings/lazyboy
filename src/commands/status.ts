@@ -5,7 +5,12 @@ import { expandHome, loadConfig } from "../config.ts";
 import { readUsageFiles } from "../usage.ts";
 import { isCronEnabled } from "../cron.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
-import type { ApprovalEntry, PrEntry, TicketState } from "../state/types.ts";
+import type {
+  ApprovalEntry,
+  PhaseUsage,
+  PrEntry,
+  TicketState,
+} from "../state/types.ts";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { Command } from "./types.ts";
 import { GitHubProvider } from "../providers/github.ts";
@@ -72,6 +77,137 @@ export async function readTicketCost(
   if (withCost.length === 0) return { cost: null, partial: false };
   const cost = withCost.reduce((sum, u) => sum + u.costUsd!, 0);
   return { cost, partial: withCost.length < files.length };
+}
+
+async function readNamedUsageFiles(
+  ticketDir: string,
+): Promise<{ name: string; usage: PhaseUsage }[] | null> {
+  const files: { name: string; usage: PhaseUsage }[] = [];
+  try {
+    for await (const entry of Deno.readDir(ticketDir)) {
+      if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
+      try {
+        const raw = await Deno.readTextFile(join(ticketDir, entry.name));
+        files.push({ name: entry.name, usage: JSON.parse(raw) as PhaseUsage });
+      } catch {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return files;
+}
+
+function groupPhaseKey(name: string): string {
+  const stem = name
+    .replace(/^\d{8}T\d{6}-/, "")
+    .replace(/\.usage\.json$/, "");
+  return stem.startsWith("ci-triage-") ? "ci-triage" : stem;
+}
+
+const KNOWN_BACKGROUND_PHASES = ["ci-triage", "conflict-resolution"];
+
+function comparePhaseKeys(a: string, b: string): number {
+  const ai = (FULL_PHASE_SEQUENCE as readonly string[]).indexOf(a);
+  const bi = (FULL_PHASE_SEQUENCE as readonly string[]).indexOf(b);
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1;
+  if (bi !== -1) return 1;
+  const aIsBackground = KNOWN_BACKGROUND_PHASES.includes(a);
+  const bIsBackground = KNOWN_BACKGROUND_PHASES.includes(b);
+  if (aIsBackground && !bIsBackground) return -1;
+  if (!aIsBackground && bIsBackground) return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+export type PhaseRow = {
+  key: string;
+  tokens: number;
+  turns: number | null;
+  revisions: number;
+};
+
+export function buildPhaseBreakdown(
+  files: { name: string; usage: PhaseUsage }[],
+): PhaseRow[] {
+  const groups = new Map<
+    string,
+    { tokens: number; turns: number | null; revisions: number }
+  >();
+  for (const { name, usage } of files) {
+    const key = groupPhaseKey(name);
+    let group = groups.get(key);
+    if (!group) {
+      group = { tokens: 0, turns: null, revisions: 0 };
+      groups.set(key, group);
+    }
+    group.tokens += usage.input + usage.output + usage.cacheRead +
+      usage.cacheWrite;
+    group.revisions++;
+    if (usage.turns !== undefined) {
+      group.turns = (group.turns ?? 0) + usage.turns;
+    }
+  }
+  return [...groups.entries()]
+    .map(([key, g]) => ({
+      key,
+      tokens: g.tokens,
+      turns: g.turns,
+      revisions: g.revisions,
+    }))
+    .sort((a, b) => comparePhaseKeys(a.key, b.key));
+}
+
+export function formatPhaseBreakdown(rows: PhaseRow[]): string {
+  if (rows.length === 0) return "";
+  const maxKeyLen = Math.max(...rows.map((r) => r.key.length));
+  const lines = ["Phases:"];
+  for (const row of rows) {
+    const name = row.key.padEnd(maxKeyLen);
+    const tokens = formatTokens(row.tokens).padStart(6);
+    const turns = row.turns !== null ? `${row.turns} turns` : "—";
+    const revisions = row.revisions === 1
+      ? "1 revision"
+      : `${row.revisions} revisions`;
+    lines.push(`  ${name}  ${tokens}  ${turns}  ${revisions}`);
+  }
+  return lines.join("\n");
+}
+
+type TicketUsageData = {
+  tokens: number | null;
+  costResult: { cost: number | null; partial: boolean };
+  phaseBreakdown: PhaseRow[] | null;
+};
+
+export async function readAllTicketUsage(
+  ticketDir: string,
+): Promise<TicketUsageData> {
+  const files = await readNamedUsageFiles(ticketDir);
+  if (!files || files.length === 0) {
+    return {
+      tokens: null,
+      costResult: { cost: null, partial: false },
+      phaseBreakdown: null,
+    };
+  }
+  const tokens = files.reduce(
+    (sum, { usage: u }) =>
+      sum + u.input + u.output + u.cacheRead + u.cacheWrite,
+    0,
+  );
+  const withCost = files.filter(({ usage: u }) => u.costUsd !== undefined);
+  const costResult = withCost.length === 0 ? { cost: null, partial: false } : {
+    cost: withCost.reduce((sum, { usage: u }) => sum + u.costUsd!, 0),
+    partial: withCost.length < files.length,
+  };
+  const rows = buildPhaseBreakdown(files);
+  return {
+    tokens,
+    costResult,
+    phaseBreakdown: rows.length > 0 ? rows : null,
+  };
 }
 
 function formatCost(
@@ -147,6 +283,7 @@ export function formatDetailView(
   tokens: number | null,
   costResult: { cost: number | null; partial: boolean },
   attentionReason?: string | null,
+  phaseBreakdown?: PhaseRow[] | null,
 ): string {
   const lines = [
     `${"Phase".padEnd(8)} ${ticket.phase}`,
@@ -157,6 +294,9 @@ export function formatDetailView(
   ];
   if (attentionReason) {
     lines.push(`${"Reason".padEnd(8)} ${attentionReason}`);
+  }
+  if (phaseBreakdown && phaseBreakdown.length > 0) {
+    lines.push(formatPhaseBreakdown(phaseBreakdown));
   }
   return lines.join("\n");
 }
@@ -216,15 +356,21 @@ export const status: Command = {
         throw e;
       }
       const ticketDir = join(stateDir, id);
-      const [tokens, costResult, attentionReason] = await Promise.all([
-        readTicketTokens(ticketDir),
-        readTicketCost(ticketDir),
-        ticket.status === "needs-attention"
-          ? readAttentionReason(ticketDir)
-          : Promise.resolve(null),
-      ]);
+      const [{ tokens, costResult, phaseBreakdown }, attentionReason] =
+        await Promise.all([
+          readAllTicketUsage(ticketDir),
+          ticket.status === "needs-attention"
+            ? readAttentionReason(ticketDir)
+            : Promise.resolve(null),
+        ]);
       console.log(
-        formatDetailView(ticket, tokens, costResult, attentionReason),
+        formatDetailView(
+          ticket,
+          tokens,
+          costResult,
+          attentionReason,
+          phaseBreakdown,
+        ),
       );
       return;
     }

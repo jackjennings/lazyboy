@@ -11,11 +11,15 @@ import { join } from "@std/path";
 import { STATUS_SEQUENCE } from "../state/types.ts";
 import type { TicketState, TicketStatus } from "../state/types.ts";
 import {
+  buildPhaseBreakdown,
   compareTickets,
   formatDetailView,
+  formatPhaseBreakdown,
   formatStatusHeader,
   formatStatusRow,
   formatTokens,
+  type PhaseRow,
+  readAllTicketUsage,
   readAttentionReason,
   readTicketCost,
   readTicketTokens,
@@ -761,3 +765,478 @@ Deno.test("formatDetailView: Reason is the last line", () => {
   const lines = out.split("\n");
   assert(lines[lines.length - 1].startsWith("Reason"));
 });
+
+// ── buildPhaseBreakdown ────────────────────────────────────────────────────────
+
+Deno.test("buildPhaseBreakdown: groups files by phase key and sums all token fields", () => {
+  const rows = buildPhaseBreakdown([
+    {
+      name: "20260806T050000-intake.usage.json",
+      usage: {
+        input: 10,
+        output: 5,
+        cacheRead: 100,
+        cacheWrite: 50,
+        model: "m",
+        durationMs: 0,
+      },
+    },
+    {
+      name: "20260806T160000-enrichment.usage.json",
+      usage: {
+        input: 20,
+        output: 8,
+        cacheRead: 200,
+        cacheWrite: 30,
+        model: "m",
+        durationMs: 0,
+      },
+    },
+  ]);
+  assertEquals(rows.length, 2);
+  assertEquals(rows[0].key, "intake");
+  assertEquals(rows[0].tokens, 165);
+  assertEquals(rows[0].revisions, 1);
+  assertEquals(rows[1].key, "enrichment");
+  assertEquals(rows[1].tokens, 258);
+});
+
+Deno.test(
+  "buildPhaseBreakdown: normalizes ci-triage-* stems to ci-triage and counts revisions",
+  () => {
+    const rows = buildPhaseBreakdown([
+      {
+        name: "20260806T050000-ci-triage-wf_abc123.usage.json",
+        usage: {
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+      {
+        name: "20260806T160000-ci-triage-wf_xyz789.usage.json",
+        usage: {
+          input: 20,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+    ]);
+    assertEquals(rows.length, 1);
+    assertEquals(rows[0].key, "ci-triage");
+    assertEquals(rows[0].revisions, 2);
+    assertEquals(rows[0].tokens, 43);
+  },
+);
+
+Deno.test("buildPhaseBreakdown: sums turns across files in a group", () => {
+  const rows = buildPhaseBreakdown([
+    {
+      name: "20260806T050000-implementation.usage.json",
+      usage: {
+        input: 10,
+        output: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+        model: "m",
+        durationMs: 0,
+        turns: 4,
+      },
+    },
+    {
+      name: "20260806T160000-implementation.usage.json",
+      usage: {
+        input: 20,
+        output: 8,
+        cacheRead: 0,
+        cacheWrite: 0,
+        model: "m",
+        durationMs: 0,
+        turns: 6,
+      },
+    },
+  ]);
+  assertEquals(rows[0].turns, 10);
+});
+
+Deno.test("buildPhaseBreakdown: turns is null when no file in the group defines it", () => {
+  const rows = buildPhaseBreakdown([
+    {
+      name: "20260806T050000-intake.usage.json",
+      usage: {
+        input: 10,
+        output: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+        model: "m",
+        durationMs: 0,
+      },
+    },
+  ]);
+  assertEquals(rows[0].turns, null);
+});
+
+Deno.test(
+  "buildPhaseBreakdown: files without turns contribute 0 when a sibling defines it",
+  () => {
+    const rows = buildPhaseBreakdown([
+      {
+        name: "20260806T050000-implementation.usage.json",
+        usage: {
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+          turns: 4,
+        },
+      },
+      {
+        name: "20260806T160000-implementation.usage.json",
+        usage: {
+          input: 20,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+    ]);
+    assertEquals(rows[0].turns, 4);
+  },
+);
+
+Deno.test(
+  "buildPhaseBreakdown: orders pipeline phases before background phases before unknown",
+  () => {
+    const rows = buildPhaseBreakdown([
+      {
+        name: "20260806T160000-ci-triage-wf_x.usage.json",
+        usage: {
+          input: 5,
+          output: 2,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+      {
+        name: "20260806T050000-intake.usage.json",
+        usage: {
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+      {
+        name: "20260806T070000-custom-phase.usage.json",
+        usage: {
+          input: 3,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+    ]);
+    assertEquals(rows[0].key, "intake");
+    assertEquals(rows[1].key, "ci-triage");
+    assertEquals(rows[2].key, "custom-phase");
+  },
+);
+
+Deno.test(
+  "buildPhaseBreakdown: orders FULL_PHASE_SEQUENCE phases in their canonical order",
+  () => {
+    const rows = buildPhaseBreakdown([
+      {
+        name: "20260806T160000-spec.usage.json",
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+      {
+        name: "20260806T050000-intake.usage.json",
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+      {
+        name: "20260806T070000-enrichment.usage.json",
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "m",
+          durationMs: 0,
+        },
+      },
+    ]);
+    assertEquals(rows.map((r) => r.key), ["intake", "enrichment", "spec"]);
+  },
+);
+
+// ── formatPhaseBreakdown ───────────────────────────────────────────────────────
+
+Deno.test("formatPhaseBreakdown: emits Phases: header and one row per entry", () => {
+  const rows: PhaseRow[] = [
+    { key: "intake", tokens: 88400, turns: 4, revisions: 1 },
+  ];
+  const out = formatPhaseBreakdown(rows);
+  assert(out.startsWith("Phases:"));
+  assertStringIncludes(out, "intake");
+});
+
+Deno.test("formatPhaseBreakdown: shows turn count and singular revision", () => {
+  const rows: PhaseRow[] = [
+    { key: "intake", tokens: 88400, turns: 4, revisions: 1 },
+  ];
+  const out = formatPhaseBreakdown(rows);
+  assertStringIncludes(out, "4 turns");
+  assertStringIncludes(out, "1 revision");
+  assertFalse(out.includes("1 revisions"));
+});
+
+Deno.test("formatPhaseBreakdown: shows em-dash for turns when null", () => {
+  const rows: PhaseRow[] = [
+    { key: "intake", tokens: 88400, turns: null, revisions: 1 },
+  ];
+  const out = formatPhaseBreakdown(rows);
+  assertStringIncludes(out, "—");
+});
+
+Deno.test("formatPhaseBreakdown: shows plural revisions for N > 1", () => {
+  const rows: PhaseRow[] = [
+    { key: "implementation", tokens: 500000, turns: 10, revisions: 2 },
+  ];
+  const out = formatPhaseBreakdown(rows);
+  assertStringIncludes(out, "2 revisions");
+});
+
+Deno.test("formatPhaseBreakdown: right-aligns tokens in a 6-character field", () => {
+  const rows: PhaseRow[] = [
+    { key: "intake", tokens: 88400, turns: 4, revisions: 1 },
+    { key: "enrichment", tokens: 675100, turns: 23, revisions: 1 },
+  ];
+  const out = formatPhaseBreakdown(rows);
+  const lines = out.split("\n");
+  assertStringIncludes(lines[1], " 88.4k");
+  assertStringIncludes(lines[2], "675.1k");
+});
+
+Deno.test("formatPhaseBreakdown: returns empty string for empty input", () => {
+  assertEquals(formatPhaseBreakdown([]), "");
+});
+
+// ── formatDetailView (phase breakdown) ───────────────────────────────────────
+
+Deno.test(
+  "formatDetailView: appends Phases section after existing fields when breakdown is provided",
+  () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const rows: PhaseRow[] = [
+      { key: "intake", tokens: 88400, turns: 4, revisions: 1 },
+      { key: "enrichment", tokens: 675100, turns: 23, revisions: 1 },
+    ];
+    const out = formatDetailView(
+      ticket,
+      763500,
+      { cost: null, partial: false },
+      null,
+      rows,
+    );
+    assertStringIncludes(out, "Phases:");
+    assertStringIncludes(out, "intake");
+    assertStringIncludes(out, "enrichment");
+  },
+);
+
+Deno.test("formatDetailView: omits Phases section when phaseBreakdown is null", () => {
+  const ticket = makeTicket({});
+  const out = formatDetailView(
+    ticket,
+    null,
+    { cost: null, partial: false },
+    null,
+    null,
+  );
+  assertFalse(out.includes("Phases:"));
+});
+
+Deno.test(
+  "formatDetailView: omits Phases section when phaseBreakdown is empty array",
+  () => {
+    const ticket = makeTicket({});
+    const out = formatDetailView(
+      ticket,
+      null,
+      { cost: null, partial: false },
+      null,
+      [],
+    );
+    assertFalse(out.includes("Phases:"));
+  },
+);
+
+Deno.test(
+  "formatDetailView: omits Phases section when phaseBreakdown is not passed",
+  () => {
+    const ticket = makeTicket({});
+    const out = formatDetailView(ticket, null, { cost: null, partial: false });
+    assertFalse(out.includes("Phases:"));
+  },
+);
+
+Deno.test(
+  "formatDetailView: Phases section appears after Reason line when both are present",
+  () => {
+    const ticket = makeTicket({ status: "needs-attention" });
+    const rows: PhaseRow[] = [
+      { key: "intake", tokens: 100, turns: 2, revisions: 1 },
+    ];
+    const out = formatDetailView(
+      ticket,
+      null,
+      { cost: null, partial: false },
+      "2026-08-06T00:00:00Z: needs-attention: reason=clone-failed",
+      rows,
+    );
+    const reasonIdx = out.indexOf("Reason");
+    const phasesIdx = out.indexOf("Phases:");
+    assertGreater(phasesIdx, reasonIdx);
+  },
+);
+
+// ── readAllTicketUsage ────────────────────────────────────────────────────────
+
+Deno.test(
+  "readAllTicketUsage: returns null for all fields when no usage files exist",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      const result = await readAllTicketUsage(tempDir);
+      assertEquals(result.tokens, null);
+      assertEquals(result.costResult, { cost: null, partial: false });
+      assertEquals(result.phaseBreakdown, null);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readAllTicketUsage: computes tokens, cost, and breakdown from one scan",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(tempDir, "20260806T050000-intake.usage.json"),
+        JSON.stringify({
+          input: 10,
+          output: 5,
+          cacheRead: 100,
+          cacheWrite: 50,
+          model: "claude-sonnet-4-6",
+          durationMs: 1000,
+          costUsd: 0.10,
+          turns: 4,
+        }),
+      );
+      await Deno.writeTextFile(
+        join(tempDir, "20260806T160000-enrichment.usage.json"),
+        JSON.stringify({
+          input: 20,
+          output: 8,
+          cacheRead: 200,
+          cacheWrite: 30,
+          model: "claude-sonnet-4-6",
+          durationMs: 2000,
+          costUsd: 0.15,
+          turns: 23,
+        }),
+      );
+      const result = await readAllTicketUsage(tempDir);
+      assertEquals(
+        result.tokens,
+        10 + 5 + 100 + 50 + 20 + 8 + 200 + 30,
+      );
+      assertEquals(result.costResult, { cost: 0.25, partial: false });
+      assertEquals(result.phaseBreakdown?.length, 2);
+      assertEquals(result.phaseBreakdown?.[0].key, "intake");
+      assertEquals(result.phaseBreakdown?.[0].turns, 4);
+      assertEquals(result.phaseBreakdown?.[1].key, "enrichment");
+      assertEquals(result.phaseBreakdown?.[1].turns, 23);
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readAllTicketUsage: partial cost when only some files have costUsd",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(tempDir, "20260806T050000-intake.usage.json"),
+        JSON.stringify({
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "claude-sonnet-4-6",
+          durationMs: 1000,
+          costUsd: 0.10,
+        }),
+      );
+      await Deno.writeTextFile(
+        join(tempDir, "20260806T160000-enrichment.usage.json"),
+        JSON.stringify({
+          input: 20,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+          model: "claude-sonnet-4-6",
+          durationMs: 2000,
+        }),
+      );
+      const result = await readAllTicketUsage(tempDir);
+      assertEquals(result.costResult, { cost: 0.10, partial: true });
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readAllTicketUsage: phaseBreakdown is null when directory scan fails",
+  async () => {
+    const result = await readAllTicketUsage("/nonexistent/path");
+    assertEquals(result.tokens, null);
+    assertEquals(result.phaseBreakdown, null);
+  },
+);

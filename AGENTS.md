@@ -528,6 +528,10 @@ Do not abbreviate words in identifiers, names, or user-visible strings. Write
 `DocumentationGapsCeremony`, not `DocGapsCeremony`;
 `"Documentation gaps ready"`, not `"Doc gaps ready"`.
 
+Functions with more than three parameters, or parameters whose positional
+ordering is non-obvious, take a single named-key options object rather than
+positional params.
+
 ## Formatting
 
 Run `deno fmt` and `deno lint` after writing all files and before committing,

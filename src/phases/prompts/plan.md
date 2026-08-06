@@ -13,10 +13,10 @@ the default page size covers most files in a single pass. Paginate only when a
 file genuinely exceeds the default; when it does, use the default page size per
 page, not 100- or 200-line increments. Complete your full codebase survey before
 writing any task. Do not re-read a file while drafting tasks — write from what
-you already loaded. When the spec cites a specific file as a reference pattern to
-copy (e.g. "same as X in file.ts"), extract the exact relevant lines from that
-file during the survey, before writing any tasks. If a specific symbol or line
-from an already-read file is needed while drafting, use `grep` or `bash` to
+you already loaded. When the spec cites a specific file as a reference pattern
+to copy (e.g. "same as X in file.ts"), extract the exact relevant lines from
+that file during the survey, before writing any tasks. If a specific symbol or
+line from an already-read file is needed while drafting, use `grep` or `bash` to
 fetch it — do not re-read the full file.
 
 When a file is too large to read in one pass, read consecutive pages to the end

@@ -557,6 +557,32 @@ including when the only files changed are Markdown (`.md`). `deno fmt` formats
 Markdown as well as source — do not skip it just because no `.ts` files changed.
 Do not manually adjust indentation or spacing — let the formatter handle it.
 
+## Commits
+
+All commits to the lazyboy source repo must use
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format:
+`<type>[(<scope>)][!]: <description>`
+
+Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
+`build`, `ci`, `chore`, `revert`
+
+`chore` is for changes that produce no functional change to the lazyboy
+executable (e.g. updating `.gitignore`); when any more specific type applies,
+use it instead.
+
+Description rules: imperative mood, lowercase after the colon, no trailing
+period, ≤72 characters on the subject line.
+
+Scope is optional; use it when it meaningfully narrows the context (e.g.
+`fix(tick): …`).
+
+`git revert`-generated subjects (`Revert "…"`) are exempt from the format. When
+manually authoring a revert commit, use `revert: …`.
+
+`scripts/commit-lint.sh` enforces this format and can be symlinked as
+`.git/hooks/commit-msg` for local enforcement. CI validates all commits on pull
+requests and direct pushes to main.
+
 ## Planning
 
 Every task in a plan must produce a code change and a commit. Do not create

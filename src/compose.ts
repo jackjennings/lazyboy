@@ -765,6 +765,7 @@ export function composeTickDeps(
           pidFile,
         });
       },
+      maxPromptTokens: config.tick.maxPromptTokens,
     },
     runMigrations: createMigrationRunner({
       listMigrationFiles: async () => {

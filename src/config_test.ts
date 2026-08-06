@@ -739,6 +739,71 @@ concurrency = 1
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("loadConfig parses tick.max_prompt_tokens", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+max_prompt_tokens = 8000
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.maxPromptTokens, 8000);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig defaults tick.maxPromptTokens to undefined when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.maxPromptTokens, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.max_prompt_tokens is not a number", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+max_prompt_tokens = "oops"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [tick].max_prompt_tokens must be a number",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("loadConfig throws when [github.orgs] references unknown account", async () => {
   const dir = await Deno.makeTempDir();
   Deno.env.set("GITHUB_TOKEN_PERSONAL", "tok");

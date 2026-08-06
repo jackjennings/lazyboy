@@ -4281,6 +4281,42 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: emits prompt-too-long for intake path when threshold exceeded",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "new" });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      maxPromptTokens: 1,
+    });
+    const entries = appendLogSpy.calls.map(
+      (c) => c.args[2] as Record<string, unknown>,
+    );
+    const warning = entries.find((e) => e.event === "prompt-too-long");
+    assert(warning !== undefined, "expected prompt-too-long event");
+    assertEquals(warning.event, "prompt-too-long");
+    assertEquals(warning.phase, "intake");
+    assertEquals(warning.maxTokens, 1);
+    assertLess(0, warning.tokens as number);
+  },
+);
+
+Deno.test(
   "TickService: no agents-md-too-large event when file token count is within threshold",
   async () => {
     const dir = await Deno.makeTempDir();
@@ -4353,6 +4389,41 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: emits prompt-too-long for revising path when threshold exceeded",
+  async () => {
+    const ticket = makeTicket({ phase: "enrichment", status: "revising" });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      maxPromptTokens: 1,
+    });
+    const entries = appendLogSpy.calls.map(
+      (c) => c.args[2] as Record<string, unknown>,
+    );
+    const warning = entries.find((e) => e.event === "prompt-too-long");
+    assert(warning !== undefined, "expected prompt-too-long event");
+    assertEquals(warning.phase, "enrichment");
+    assertEquals(warning.maxTokens, 1);
+    assertLess(0, warning.tokens as number);
+  },
+);
+
+Deno.test(
   "TickService: agents-md-too-large fires on each phase start while over threshold",
   async () => {
     const dir = await Deno.makeTempDir();
@@ -4376,5 +4447,109 @@ Deno.test(
       (e) => (e as Record<string, unknown>).event === "agents-md-too-large",
     );
     assertEquals(events.length, 2);
+  },
+);
+
+Deno.test(
+  "advancePhase: emits prompt-too-long for waiting+approved path when threshold exceeded",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{
+        timestamp: "2026-08-06T00:00:00Z",
+        actor: "human",
+        phase: "intake",
+      }],
+    });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      maxPromptTokens: 1,
+    });
+    const entries = appendLogSpy.calls.map(
+      (c) => c.args[2] as Record<string, unknown>,
+    );
+    const warning = entries.find((e) => e.event === "prompt-too-long");
+    assert(warning !== undefined, "expected prompt-too-long event");
+    assertEquals(warning.phase, "enrichment");
+    assertEquals(warning.maxTokens, 1);
+    assertLess(0, warning.tokens as number);
+  },
+);
+
+Deno.test(
+  "advancePhase: no prompt-too-long when prompt is within threshold",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "new" });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      maxPromptTokens: 100_000,
+    });
+    const entries = appendLogSpy.calls.map(
+      (c) => c.args[2] as Record<string, unknown>,
+    );
+    assertFalse(entries.some((e) => e.event === "prompt-too-long"));
+  },
+);
+
+Deno.test(
+  "advancePhase: no prompt-too-long with default threshold for real prompts",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "new" });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+    });
+    const entries = appendLogSpy.calls.map(
+      (c) => c.args[2] as Record<string, unknown>,
+    );
+    assertFalse(entries.some((e) => e.event === "prompt-too-long"));
   },
 );

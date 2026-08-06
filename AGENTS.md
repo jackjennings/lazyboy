@@ -33,6 +33,8 @@ deno run --allow-all src/index.ts status
 notion-fetch page <url>           # fetch a Notion page as Markdown (requires NOTION_TOKEN)
 notion-fetch database <url>       # fetch a Notion database as a Markdown table
 notion-fetch search <query>       # search the Notion workspace
+notion-fetch create <parent-url> <title>  # create a child Notion page (prints new URL)
+notion-fetch append <page-url>            # append Markdown from stdin to a Notion page
 ```
 
 Every new subcommand must have a 3-character zsh alias (`l` + first two unique
@@ -122,6 +124,9 @@ each loader returning `""` when absent so no code change is needed to add one:
   files must not contain `gh pr create` — the implementation-revision path
   reuses the same supplement and handles PR creation differently. Currently only
   `github-implementation.md` exists.
+- **Artifact** (`<artifact>-<phase>.md`, via `loadArtifactPrompt`). Loaded after
+  the provider supplement. Currently only `notion-{spec,plan,implementation}.md`
+  exist.
 - **State dir** (`{stateDir}/prompts/{phase}.md`, via `loadStatePrompt`),
   appended last. For `implementation` the same file applies to both the normal
   and revision runs.

@@ -79,6 +79,8 @@ export interface TicketState {
   updated: string;
   body: string;
   phases?: PhaseModelConfig;
+  artifact?: "pr" | "notion";
+  notionPages?: { url: string; title: string }[];
 }
 
 export function isApproved(ticket: TicketState): boolean {

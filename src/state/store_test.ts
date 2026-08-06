@@ -1000,3 +1000,41 @@ Deno.test("removeLearning: is a no-op when file not found", async () => {
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticket = makeTicket({ artifact: "notion" });
+    await writeTicket(dir, ticket);
+    const read = await readTicket(dir, ticket.id);
+    assertEquals(read.artifact, "notion");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("writeTicket/readTicket: absent artifact reads as undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await writeTicket(dir, makeTicket());
+    const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
+    assertFalse(raw.includes("artifact:"));
+    const read = await readTicket(dir, "gh-1");
+    assertEquals(read.artifact, undefined);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("writeTicket/readTicket: notionPages round-trips through YAML frontmatter", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const pages = [{ url: "https://notion.so/abc", title: "Doc" }];
+    const ticket = makeTicket({ artifact: "notion", notionPages: pages });
+    await writeTicket(dir, ticket);
+    const read = await readTicket(dir, ticket.id);
+    assertEquals(read.notionPages, pages);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});

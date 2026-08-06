@@ -15,3 +15,19 @@ notion-fetch search <query>   search the workspace for pages and databases by to
 
 Use `search` when no direct URL is available. The tool returns a 404 error for
 pages the integration has not been granted access to.
+
+```
+notion-fetch create <parent-page-url> <title>
+```
+
+Creates a new child page under `<parent-page-url>` with the given `<title>`.
+Prints the new page URL to stdout. Exits 0 on success.
+
+```
+notion-fetch append <page-url>
+```
+
+Reads Markdown from stdin. Converts it to Notion blocks and appends them to the
+page at `<page-url>`. Exits 0 on success. Supported elements: paragraphs,
+headings H1–H3, bulleted and numbered list items, fenced code blocks, block
+quotes, horizontal rules.

@@ -7,6 +7,7 @@ import {
   resolveRevisionSessionId,
 } from "./run-phase.ts";
 import {
+  loadArtifactPrompt,
   loadPrompt,
   loadPromptFile,
   loadProviderPrompt,
@@ -188,13 +189,22 @@ export async function advancePhase(
       activePhase,
       ticket.provider,
     );
+    const revisingArtifactSupplement = await loadArtifactPrompt(
+      activePhase,
+      ticket.artifact ?? "pr",
+    );
     const revisingStatePrompt = await loadStatePrompt(
       activePhase,
       stateDir,
       ticket.provider,
       ticket.id,
     );
-    const prompt = [basePrompt, revisingSupplement, revisingStatePrompt]
+    const prompt = [
+      basePrompt,
+      revisingSupplement,
+      revisingArtifactSupplement,
+      revisingStatePrompt,
+    ]
       .filter((part) => part.length > 0)
       .join("\n\n");
     const { model: revisingModel, thinking: revisingThinking } = deps
@@ -236,6 +246,10 @@ export async function advancePhase(
       "intake",
       ticket.provider,
     );
+    const intakeArtifactSupplement = await loadArtifactPrompt(
+      "intake",
+      ticket.artifact ?? "pr",
+    );
     const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
     const intakeStatePrompt = await loadStatePrompt(
       "intake",
@@ -243,7 +257,13 @@ export async function advancePhase(
       ticket.provider,
       ticket.id,
     );
-    const prompt = [intakeBase, intakeSupplement, corpusText, intakeStatePrompt]
+    const prompt = [
+      intakeBase,
+      intakeSupplement,
+      intakeArtifactSupplement,
+      corpusText,
+      intakeStatePrompt,
+    ]
       .filter((part) => part.length > 0)
       .join("\n\n");
     const { model: intakeModel, thinking: intakeThinking } = deps
@@ -382,7 +402,11 @@ export async function advancePhase(
         return;
       }
 
-      if (ticket.phase === "implementation" && !(ticket.prs?.length)) {
+      if (
+        ticket.phase === "implementation" &&
+        ticket.artifact !== "notion" &&
+        !(ticket.prs?.length)
+      ) {
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
           status: "needs-attention",
@@ -487,6 +511,20 @@ export async function advancePhase(
     ticket.status === "waiting" &&
     isApproved(ticket)
   ) {
+    if (ticket.artifact === "notion") {
+      await deps.writeTicket(stateDir, {
+        ...ticket,
+        phase: "merge",
+        status: "done",
+        updated: now,
+      });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "phase-transition",
+        from: ticket.phase,
+        to: "merge",
+      });
+      return;
+    }
     const unmergedUrls = (ticket.prs ?? [])
       .filter((pr) => !pr.merged)
       .map((pr) => pr.url);
@@ -526,6 +564,7 @@ export async function advancePhase(
     if (next === "done") return;
     if (
       next === "implementation" &&
+      ticket.artifact !== "notion" &&
       Object.keys(ticket.worktrees).length === 0
     ) {
       await deps.writeTicket(stateDir, {
@@ -544,13 +583,17 @@ export async function advancePhase(
     }
     const basePrompt = await loadPrompt(next);
     const supplement = await loadProviderPrompt(next, ticket.provider);
+    const artifactSupplement = await loadArtifactPrompt(
+      next,
+      ticket.artifact ?? "pr",
+    );
     const statePrompt = await loadStatePrompt(
       next,
       stateDir,
       ticket.provider,
       ticket.id,
     );
-    const prompt = [basePrompt, supplement, statePrompt]
+    const prompt = [basePrompt, supplement, artifactSupplement, statePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
     const { model: nextModel, thinking: nextThinking } = deps

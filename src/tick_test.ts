@@ -4114,3 +4114,131 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "advancePhase: notion ticket in implementation/running with no PRs moves to waiting",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "running",
+        artifact: "notion",
+      });
+      const statuses: string[] = [];
+      await advancePhase(ticket, stateDir, {
+        spawn: () => Promise.resolve(),
+        isProcessAlive: () => false,
+        writeTicket: (_dir, t) => {
+          statuses.push(t.status);
+          return Promise.resolve();
+        },
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve("output content"),
+        appendPrinciples: () => Promise.resolve(),
+        readPhaseExitCode: () => Promise.resolve(null),
+      });
+      assertArrayIncludes(statuses, ["waiting"]);
+      assertFalse(statuses.includes("needs-attention"));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: notion ticket in plan/waiting/approved with no worktrees spawns implementation",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "plan",
+        status: "waiting",
+        artifact: "notion",
+        approvals: [{
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human",
+          phase: "plan",
+        }],
+        worktrees: {},
+      });
+      let spawnedPhase: string | undefined;
+      await advancePhase(ticket, stateDir, {
+        spawn: (opts) => {
+          spawnedPhase = opts.phase;
+          return Promise.resolve();
+        },
+        isProcessAlive: () => false,
+        writeTicket: () => Promise.resolve(),
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: () => Promise.resolve(),
+        readPhaseOutput: () => Promise.resolve(null),
+        appendPrinciples: () => Promise.resolve(),
+        readPhaseExitCode: () => Promise.resolve(null),
+      });
+      assertEquals(spawnedPhase, "implementation");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: notion ticket in implementation/waiting/approved transitions to merge/done without calling markPRsReady",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "waiting",
+        artifact: "notion",
+        approvals: [{
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human",
+          phase: "implementation",
+        }],
+      });
+      let writtenPhase: string | undefined;
+      let writtenStatus: string | undefined;
+      const markPRsReadySpy = spy(() => Promise.resolve());
+      await advancePhase(ticket, stateDir, {
+        spawn: () => Promise.resolve(),
+        isProcessAlive: () => false,
+        writeTicket: (_dir, t) => {
+          writtenPhase = t.phase;
+          writtenStatus = t.status;
+          return Promise.resolve();
+        },
+        writePhaseOutput: () => Promise.resolve(),
+        appendLog: () => Promise.resolve(),
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        selfReview: () => Promise.resolve({ approved: false, reason: null }),
+        markPRsReady: markPRsReadySpy,
+        readPhaseOutput: () => Promise.resolve(null),
+        appendPrinciples: () => Promise.resolve(),
+        readPhaseExitCode: () => Promise.resolve(null),
+      });
+      assertEquals(writtenPhase, "merge");
+      assertEquals(writtenStatus, "done");
+      assertSpyCalls(markPRsReadySpy, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

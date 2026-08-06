@@ -38,8 +38,7 @@ function makeRunner(
     appendTickLog?: (entry: object) => Promise<void>;
     now?: () => Temporal.ZonedDateTime;
     ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
-    anthropicApiKey?: string;
-    fetch?: typeof globalThis.fetch;
+    runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
   } = {},
 ): CeremonyRunner {
   return new CeremonyRunner(
@@ -47,8 +46,7 @@ function makeRunner(
       stateDir,
       appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
       now: opts.now,
-      anthropicApiKey: opts.anthropicApiKey ?? "",
-      fetch: opts.fetch,
+      runClaude: opts.runClaude,
     },
     opts.ceremonies ?? [],
   );
@@ -433,15 +431,7 @@ Deno.test("CeremonyRunner: prompt ceremony dir runs PromptCeremony", async () =>
 
     await makeRunner(stateDir, {
       now: () => TEST_NOW,
-      fetch: () =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              content: [{ type: "text", text: "Gaps found." }],
-            }),
-            { status: 200 },
-          ),
-        ),
+      runClaude: () => Promise.resolve({ stdout: "Gaps found.\n", code: 0 }),
     }).run();
 
     const outputDir = join(stateDir, "ceremonies", "docs-gap", "output");

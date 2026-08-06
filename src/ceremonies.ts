@@ -8,10 +8,9 @@ export type { Ceremony } from "./ceremonies/types.ts";
 
 export interface CeremonyRunnerDeps {
   stateDir: string;
-  anthropicApiKey: string;
   appendTickLog(entry: object): Promise<void>;
   now?: () => Temporal.ZonedDateTime;
-  fetch?: typeof globalThis.fetch;
+  runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
 }
 
 function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
@@ -76,9 +75,8 @@ export class CeremonyRunner {
         ceremony = new PromptCeremony({
           name: entry.name,
           stateDir: this.#deps.stateDir,
-          anthropicApiKey: this.#deps.anthropicApiKey,
           appendTickLog: this.#deps.appendTickLog,
-          fetch: this.#deps.fetch,
+          runClaude: this.#deps.runClaude,
         });
       }
       await this.#runCeremony(ceremony, join(ceremoniesDir, entry.name));

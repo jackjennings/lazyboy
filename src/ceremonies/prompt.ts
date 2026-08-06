@@ -3,12 +3,21 @@ import { parse } from "@std/toml";
 import { compactTimestamp } from "../timestamp.ts";
 import type { Ceremony } from "./types.ts";
 
+const EFFORT_LEVELS = new Set([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+
 export interface PromptCeremonyDeps {
   name: string;
   stateDir: string;
-  anthropicApiKey: string;
   appendTickLog(entry: object): Promise<void>;
-  fetch?: typeof globalThis.fetch;
+  runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
 }
 
 export class PromptCeremony implements Ceremony {
@@ -21,26 +30,27 @@ export class PromptCeremony implements Ceremony {
   }
 
   async run(now: Temporal.ZonedDateTime, outputDir: string): Promise<void> {
-    const fetcher = this.#deps.fetch ?? globalThis.fetch;
     const ceremonyDir = join(this.#deps.stateDir, "ceremonies", this.name);
 
     let model = "claude-sonnet-4-6";
-    let thinkingBudget = 0;
+    let thinking = "off";
     try {
       const raw = await Deno.readTextFile(join(ceremonyDir, "config.toml"));
       const config = parse(raw) as Record<string, unknown>;
       if (typeof config.model === "string") model = config.model;
-      const t = config.thinking;
-      if (typeof t === "number" && Number.isInteger(t) && t > 0) {
-        thinkingBudget = t;
+      if (
+        typeof config.thinking === "string" &&
+        EFFORT_LEVELS.has(config.thinking)
+      ) {
+        thinking = config.thinking;
       }
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
 
-    let prompt: string;
+    let promptContent: string;
     try {
-      prompt = await Deno.readTextFile(join(ceremonyDir, "prompt.md"));
+      promptContent = await Deno.readTextFile(join(ceremonyDir, "prompt.md"));
     } catch (e) {
       if (e instanceof Deno.errors.NotFound) {
         await this.#deps.appendTickLog({
@@ -57,41 +67,34 @@ export class PromptCeremony implements Ceremony {
     const isoDate = `${d.year}-${String(d.month).padStart(2, "0")}-${
       String(d.day).padStart(2, "0")
     }`;
+    const prompt =
+      `You are a lazyboy ceremony runner. Today is ${isoDate}.\n\n${promptContent}`;
 
-    const body: Record<string, unknown> = {
+    const args = [
+      prompt,
+      "--print",
+      "--dangerously-skip-permissions",
+      "--model",
       model,
-      max_tokens: thinkingBudget > 0 ? thinkingBudget + 8192 : 8192,
-      system: `You are a lazyboy ceremony runner. Today is ${isoDate}.`,
-      messages: [{ role: "user", content: prompt }],
-    };
-    if (thinkingBudget > 0) {
-      body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    ];
+
+    if (thinking !== "off" && thinking !== "minimal") {
+      args.push("--effort", thinking);
     }
 
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": this.#deps.anthropicApiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const runClaude = this.#deps.runClaude ?? defaultRunClaude;
+    const result = await runClaude(args);
 
-    if (!response.ok) {
+    if (result.code !== 0) {
       await this.#deps.appendTickLog({
         event: "ceremony-warning",
         ceremony: this.name,
-        reason: "api-error",
+        reason: "claude-failed",
       });
       return;
     }
 
-    const data = await response.json();
-    const textBlock = (data?.content ?? []).find(
-      (b: Record<string, unknown>) => b.type === "text",
-    );
-    const text: string = textBlock?.text ?? "";
+    const text = result.stdout.trim();
 
     if (!text) {
       await this.#deps.appendTickLog({
@@ -108,4 +111,18 @@ export class PromptCeremony implements Ceremony {
       text,
     );
   }
+}
+
+async function defaultRunClaude(
+  args: string[],
+): Promise<{ stdout: string; code: number }> {
+  const result = await new Deno.Command("claude", {
+    args,
+    stdout: "piped",
+    stderr: "null",
+  }).output();
+  return {
+    stdout: new TextDecoder().decode(result.stdout),
+    code: result.code,
+  };
 }

@@ -1,4 +1,4 @@
-import { assertEquals, assertFalse } from "@std/assert";
+import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { PromptCeremony } from "./prompt.ts";
 
@@ -6,28 +6,19 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
   "2026-07-27T10:00:00[America/New_York]",
 );
 
-function makeResponse(content: unknown[], status = 200): Response {
-  return new Response(JSON.stringify({ content }), { status });
-}
-
-function textResponse(text: string): Response {
-  return makeResponse([{ type: "text", text }]);
-}
-
 function makeCeremony(
   stateDir: string,
   opts: {
     name?: string;
     appendTickLog?: (entry: object) => Promise<void>;
-    fetch?: typeof globalThis.fetch;
+    runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
   } = {},
 ): PromptCeremony {
   return new PromptCeremony({
     name: opts.name ?? "docs-gap",
     stateDir,
-    anthropicApiKey: "test-key",
     appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
-    fetch: opts.fetch,
+    runClaude: opts.runClaude,
   });
 }
 
@@ -46,7 +37,7 @@ Deno.test("PromptCeremony: writes output file with correct name and content", as
     const outputDir = join(ceremonyDir, "output");
     await makeCeremony(stateDir, {
       name,
-      fetch: () => Promise.resolve(textResponse("Output content")),
+      runClaude: () => Promise.resolve({ stdout: "Output content\n", code: 0 }),
     }).run(TEST_NOW, outputDir);
 
     const files: string[] = [];
@@ -102,7 +93,7 @@ Deno.test("PromptCeremony: missing prompt.md logs ceremony-warning and writes no
   }
 });
 
-Deno.test("PromptCeremony: non-2xx API response logs ceremony-warning and writes no output", async () => {
+Deno.test("PromptCeremony: non-zero claude exit logs ceremony-warning and writes no output", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     const name = "docs-gap";
@@ -122,16 +113,17 @@ Deno.test("PromptCeremony: non-2xx API response logs ceremony-warning and writes
         warnings.push(entry);
         return Promise.resolve();
       },
-      fetch: () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ error: "bad" }), { status: 500 }),
-        ),
+      runClaude: () => Promise.resolve({ stdout: "", code: 1 }),
     }).run(TEST_NOW, outputDir);
 
     assertEquals(warnings.length, 1);
     assertEquals(
       (warnings[0] as Record<string, unknown>).event,
       "ceremony-warning",
+    );
+    assertEquals(
+      (warnings[0] as Record<string, unknown>).reason,
+      "claude-failed",
     );
     let outputExists = true;
     try {
@@ -145,7 +137,7 @@ Deno.test("PromptCeremony: non-2xx API response logs ceremony-warning and writes
   }
 });
 
-Deno.test("PromptCeremony: model key in config.toml overrides default in API request", async () => {
+Deno.test("PromptCeremony: model key in config.toml passed to claude as --model arg", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     const name = "docs-gap";
@@ -157,22 +149,23 @@ Deno.test("PromptCeremony: model key in config.toml overrides default in API req
       'time = "09:00"\nmodel = "claude-haiku-4-5"',
     );
 
-    let sentModel: string | undefined;
+    let capturedArgs: string[] = [];
     await makeCeremony(stateDir, {
       name,
-      fetch: (_url, init) => {
-        sentModel = JSON.parse(init?.body as string).model;
-        return Promise.resolve(textResponse("output"));
+      runClaude: (args) => {
+        capturedArgs = args;
+        return Promise.resolve({ stdout: "output\n", code: 0 });
       },
     }).run(TEST_NOW, join(ceremonyDir, "output"));
 
-    assertEquals(sentModel, "claude-haiku-4-5");
+    const modelIdx = capturedArgs.indexOf("--model");
+    assertEquals(capturedArgs[modelIdx + 1], "claude-haiku-4-5");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
 });
 
-Deno.test("PromptCeremony: thinking = 8000 sets thinking block and max_tokens = 16192", async () => {
+Deno.test("PromptCeremony: thinking = high passes --effort high to claude", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     const name = "docs-gap";
@@ -181,26 +174,26 @@ Deno.test("PromptCeremony: thinking = 8000 sets thinking block and max_tokens = 
     await Deno.writeTextFile(join(ceremonyDir, "prompt.md"), "Think about it.");
     await Deno.writeTextFile(
       join(ceremonyDir, "config.toml"),
-      'time = "09:00"\nthinking = 8000',
+      'time = "09:00"\nthinking = "high"',
     );
 
-    let sentBody: Record<string, unknown> | undefined;
+    let capturedArgs: string[] = [];
     await makeCeremony(stateDir, {
       name,
-      fetch: (_url, init) => {
-        sentBody = JSON.parse(init?.body as string);
-        return Promise.resolve(textResponse("output"));
+      runClaude: (args) => {
+        capturedArgs = args;
+        return Promise.resolve({ stdout: "output\n", code: 0 });
       },
     }).run(TEST_NOW, join(ceremonyDir, "output"));
 
-    assertEquals(sentBody?.thinking, { type: "enabled", budget_tokens: 8000 });
-    assertEquals(sentBody?.max_tokens, 16192);
+    const effortIdx = capturedArgs.indexOf("--effort");
+    assertEquals(capturedArgs[effortIdx + 1], "high");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
 });
 
-Deno.test("PromptCeremony: no thinking key in config omits thinking from request and uses max_tokens 8192", async () => {
+Deno.test("PromptCeremony: no thinking key omits --effort from claude args", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     const name = "docs-gap";
@@ -212,55 +205,44 @@ Deno.test("PromptCeremony: no thinking key in config omits thinking from request
       'time = "09:00"',
     );
 
-    let sentBody: Record<string, unknown> | undefined;
+    let capturedArgs: string[] = [];
     await makeCeremony(stateDir, {
       name,
-      fetch: (_url, init) => {
-        sentBody = JSON.parse(init?.body as string);
-        return Promise.resolve(textResponse("output"));
+      runClaude: (args) => {
+        capturedArgs = args;
+        return Promise.resolve({ stdout: "output\n", code: 0 });
       },
     }).run(TEST_NOW, join(ceremonyDir, "output"));
 
-    assertFalse("thinking" in (sentBody ?? {}));
-    assertEquals(sentBody?.max_tokens, 8192);
+    assertFalse(capturedArgs.includes("--effort"));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
 });
 
-Deno.test("PromptCeremony: only text block content written when thinking blocks present", async () => {
+Deno.test("PromptCeremony: prompt includes today's date and prompt.md content", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     const name = "docs-gap";
     const ceremonyDir = join(stateDir, "ceremonies", name);
     await Deno.mkdir(ceremonyDir, { recursive: true });
-    await Deno.writeTextFile(join(ceremonyDir, "prompt.md"), "Think deeply.");
+    await Deno.writeTextFile(join(ceremonyDir, "prompt.md"), "List the gaps.");
     await Deno.writeTextFile(
       join(ceremonyDir, "config.toml"),
-      'time = "09:00"\nthinking = 8000',
+      'time = "09:00"',
     );
 
-    const outputDir = join(ceremonyDir, "output");
+    let capturedPrompt = "";
     await makeCeremony(stateDir, {
       name,
-      fetch: () =>
-        Promise.resolve(
-          makeResponse([
-            { type: "thinking", thinking: "internal reasoning" },
-            { type: "text", text: "Final answer." },
-          ]),
-        ),
-    }).run(TEST_NOW, outputDir);
+      runClaude: (args) => {
+        capturedPrompt = args[0];
+        return Promise.resolve({ stdout: "result\n", code: 0 });
+      },
+    }).run(TEST_NOW, join(ceremonyDir, "output"));
 
-    const files: string[] = [];
-    for await (const entry of Deno.readDir(outputDir)) {
-      files.push(entry.name);
-    }
-    assertEquals(files.length, 1);
-    assertEquals(
-      await Deno.readTextFile(join(outputDir, files[0])),
-      "Final answer.",
-    );
+    assertStringIncludes(capturedPrompt, "2026-07-27");
+    assertStringIncludes(capturedPrompt, "List the gaps.");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

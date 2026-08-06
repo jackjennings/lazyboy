@@ -688,7 +688,6 @@ export function composeTickDeps(
     {
       stateDir,
       appendTickLog,
-      anthropicApiKey,
     },
     [
       new StandupCeremony({

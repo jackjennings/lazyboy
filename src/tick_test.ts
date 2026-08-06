@@ -4259,6 +4259,7 @@ Deno.test(
     const deps = makeFakeServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
       appendTickLog: (entry) => {
         captured.push(entry);
         return Promise.resolve();
@@ -4306,6 +4307,7 @@ Deno.test(
     const deps = makeFakeServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 100000,
+      listTickets: () => Promise.resolve(["gh-1"]),
       appendTickLog: (entry) => {
         captured.push(entry);
         return Promise.resolve();
@@ -4328,6 +4330,7 @@ Deno.test(
     const deps = makeFakeServiceDeps({
       agentsMdPaths: ["/nonexistent/path/AGENTS.md"],
       agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
       commitState: commitStateSpy,
     });
     await new TickService(deps).run();
@@ -4349,6 +4352,7 @@ Deno.test(
     const deps = makeFakeServiceDeps({
       agentsMdPaths: [path1, path2],
       agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
       appendTickLog: (entry) => {
         captured.push(entry);
         return Promise.resolve();
@@ -4366,7 +4370,7 @@ Deno.test(
 );
 
 Deno.test(
-  "TickService: agents-md-too-large fires on every tick while over threshold",
+  "TickService: agents-md-too-large fires on each phase start while over threshold",
   async () => {
     const dir = await Deno.makeTempDir();
     const agentsMdPath = join(dir, "AGENTS.md");
@@ -4379,6 +4383,7 @@ Deno.test(
     const deps = makeFakeServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 10,
+      listTickets: () => Promise.resolve(["gh-1"]),
       appendTickLog,
     });
     await new TickService(deps).run();

@@ -9,6 +9,7 @@ import {
   type AnthropicPricingCache,
   calculateAnthropicCost,
 } from "./anthropic-pricing.ts";
+import type { CommandRunner } from "./apfel.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -322,7 +323,58 @@ export function extractPrinciples(content: string): string | null {
   );
   if (!match) return null;
   const body = match[1].trim();
-  return body.length > 0 ? body : null;
+  if (body.length === 0) return null;
+  return body;
+}
+
+const JUDGE_SYSTEM_PROMPT =
+  "You are evaluating whether content from an AI coding agent's Principles section contains substantive engineering guidance worth preserving. Reply with exactly KEEP if the content contains at least one concrete, reusable engineering principle or guideline — a lesson that could inform future engineering decisions. Reply with exactly SKIP if the content is a meta-commentary explaining why no principles were added, a placeholder, or otherwise lacks actionable engineering guidance.";
+
+export async function judgePrinciples(
+  body: string,
+  fetcher: typeof fetch,
+  run: CommandRunner | null = null,
+): Promise<boolean> {
+  if (run !== null) {
+    try {
+      const { code, stdout } = await run([
+        "apfel",
+        "--quiet",
+        "--max-tokens",
+        "5",
+        "-s",
+        JUDGE_SYSTEM_PROMPT,
+        body,
+      ]);
+      if (code === 0) {
+        return stdout.trim().toUpperCase() === "KEEP";
+      }
+    } catch {
+      // apfel unavailable — fall through to Anthropic
+    }
+  }
+  try {
+    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 5,
+        system: JUDGE_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: body }],
+      }),
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    const result = (data?.content?.[0]?.text ?? "").trim().toUpperCase();
+    return result === "KEEP";
+  } catch {
+    return false;
+  }
 }
 
 function parsePrincipleEntries(

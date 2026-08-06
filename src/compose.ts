@@ -20,7 +20,11 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
-import { dedupePrinciples, extractPrinciples } from "./run-phase.ts";
+import {
+  dedupePrinciples,
+  extractPrinciples,
+  judgePrinciples,
+} from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
@@ -629,6 +633,12 @@ export function composeTickDeps(
         if (!config.tick.principles) return;
         const extracted = extractPrinciples(outputContent);
         if (!extracted) return;
+        const substantive = await judgePrinciples(
+          extracted,
+          fetch,
+          captureCommandRunner(),
+        );
+        if (!substantive) return;
         const principlesPath = join(sd, "principles.md");
         let existing = "";
         try {

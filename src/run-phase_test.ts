@@ -8,6 +8,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
@@ -20,11 +21,13 @@ import {
   extractSessionId,
   extractUsageAndText,
   getPiEnvironmentVariables,
+  judgePrinciples,
   resolvePhaseSessionId,
   resolveRevisionSessionId,
   setupClaudeCodeDirectories,
   setupPiDirectories,
 } from "./run-phase.ts";
+import type { CommandRunner } from "./apfel.ts";
 import type { CodeAgent } from "./agents/types.ts";
 import type { AnthropicPricingCache } from "./anthropic-pricing.ts";
 
@@ -457,9 +460,157 @@ Deno.test("extractPrinciples: captures content to end of string when no followin
   assertEquals(extractPrinciples(output), "- only learning");
 });
 
-Deno.test("extractPrinciples: trims surrounding whitespace from body", () => {
+Deno.test("extractPrinciples: trims surrounding whitespace", () => {
   const output = `## Principles\n\n\n  trimmed  \n\n`;
   assertEquals(extractPrinciples(output), "trimmed");
+});
+
+// ── judgePrinciples ───────────────────────────────────────────────────────────
+
+Deno.test("judgePrinciples: returns true when fetch responds KEEP", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  assert(await judgePrinciples("- prefer X over Y", fetcher as typeof fetch));
+  assertSpyCalls(fetcher, 1);
+});
+
+Deno.test("judgePrinciples: returns false when fetch responds SKIP", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "SKIP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  assertFalse(
+    await judgePrinciples(
+      "_(Nothing from this ticket meets the bar.)_",
+      fetcher as typeof fetch,
+    ),
+  );
+});
+
+Deno.test("judgePrinciples: returns false on non-2xx response", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 500 })),
+  );
+  assertFalse(
+    await judgePrinciples("- some principle", fetcher as typeof fetch),
+  );
+});
+
+Deno.test("judgePrinciples: returns false when fetch throws", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.reject(new Error("network error")),
+  );
+  assertFalse(
+    await judgePrinciples("- some principle", fetcher as typeof fetch),
+  );
+});
+
+Deno.test("judgePrinciples: sends body as user message content", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.messages[0].content, "- prefer X over Y");
+});
+
+Deno.test("judgePrinciples: uses model claude-haiku-4-5", async () => {
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch);
+  const body = JSON.parse(fetcher.calls[0].args[1]!.body as string);
+  assertEquals(body.model, "claude-haiku-4-5");
+});
+
+Deno.test("judgePrinciples: uses apfel CLI when run provided, returns true on KEEP", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "KEEP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  assert(
+    await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run),
+  );
+  assertSpyCalls(fetcher, 0);
+});
+
+Deno.test("judgePrinciples: uses apfel CLI when run provided, returns false on SKIP", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "SKIP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  assertFalse(
+    await judgePrinciples(
+      "_(nothing meets the bar)_",
+      fetcher as typeof fetch,
+      run,
+    ),
+  );
+  assertSpyCalls(fetcher, 0);
+});
+
+Deno.test("judgePrinciples: falls back to Anthropic when apfel CLI returns non-zero", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 1, stdout: "" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ text: "KEEP" }] }),
+          { status: 200 },
+        ),
+      ),
+  );
+  assert(
+    await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run),
+  );
+  assertSpyCalls(fetcher, 1);
+});
+
+Deno.test("judgePrinciples: passes body as last argument to apfel", async () => {
+  const run: CommandRunner = spy((_args: string[]) =>
+    Promise.resolve({ code: 0, stdout: "KEEP" })
+  );
+  const fetcher = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response("", { status: 200 })),
+  );
+  await judgePrinciples("- prefer X over Y", fetcher as typeof fetch, run);
+  const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
+  assertEquals(args[args.length - 1], "- prefer X over Y");
 });
 
 // ── dedupePrinciples ─────────────────────────────────────────────────────────

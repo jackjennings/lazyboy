@@ -16,6 +16,12 @@ file during the survey, before writing any tasks. If a specific symbol or line
 from an already-read file is needed while drafting, use `grep` or `bash` to
 fetch it — do not re-read the full file.
 
+When a file is too large to read in one pass, read consecutive pages to the end
+before moving to the next file. Do not skip a line range intending to return
+later — once you move on to a different file, all pages of the previous file are
+closed. A paginated re-read of an already-visited file during task drafting is
+the same violation as a full re-read.
+
 When searching for test files, issue a single discovery command that covers all
 plausible naming conventions at once (e.g.,
 `find src \( -name '*_test.ts' -o -name '*.test.ts' \) | head -20`). Do not

@@ -135,6 +135,7 @@ export interface Config {
     resolveCIFailures: boolean;
     principles: boolean;
     agentsMdMaxTokens: number;
+    maxPromptTokens?: number;
   };
   codebase: { roots: string[] };
   packages: { enabled: string[] };

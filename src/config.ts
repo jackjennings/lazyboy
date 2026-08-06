@@ -76,6 +76,13 @@ export async function loadConfig(path?: string): Promise<Config> {
       );
     }
   }
+  const maxPromptTokensRaw = tickRaw?.max_prompt_tokens;
+  if (
+    maxPromptTokensRaw !== undefined &&
+    typeof maxPromptTokensRaw !== "number"
+  ) {
+    throw new Error("config.toml: [tick].max_prompt_tokens must be a number");
+  }
 
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
@@ -132,6 +139,7 @@ export async function loadConfig(path?: string): Promise<Config> {
       resolveCIFailures: (resolveCIFailuresRaw as boolean | undefined) ?? true,
       principles: (principlesRaw as boolean | undefined) ?? true,
       agentsMdMaxTokens: (agentsMdMaxTokensRaw as number | undefined) ?? 8000,
+      maxPromptTokens: maxPromptTokensRaw as number | undefined,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },

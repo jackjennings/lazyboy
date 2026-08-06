@@ -6,25 +6,7 @@ import {
 } from "@std/assert";
 import { jiraDoneAction } from "./jira-done.ts";
 import type { TicketState } from "../state/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "jira/PROJ-42",
-    provider: "jira",
-    title: "T",
-    url: "https://myorg.atlassian.net/browse/PROJ-42",
-    phase: "merge",
-    status: "done",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../test-support.ts";
 
 function makeAction(
   overrides: Partial<Parameters<typeof jiraDoneAction>[0]> = {},
@@ -56,37 +38,49 @@ const successFetch = makeTransitionsFetch([
   { id: "41", to: { statusCategory: { key: "done" } } },
 ]);
 
+const BASE = {
+  id: "jira/PROJ-42",
+  provider: "jira" as const,
+  url: "https://myorg.atlassian.net/browse/PROJ-42",
+  phase: "merge" as const,
+  status: "done" as const,
+  created: "2026-07-01T00:00:00Z",
+  updated: "2026-07-01T00:00:00Z",
+};
+
 Deno.test("jiraDoneAction: applies when provider jira, phase merge, status done, providerDone not set", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("jiraDoneAction: does not apply when providerDone is true", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ providerDone: true })),
+    makeAction().applies(makeTicket({ ...BASE, providerDone: true })),
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when provider is not jira", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ provider: "github" })),
+    makeAction().applies(makeTicket({ ...BASE, provider: "github" })),
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when phase is not merge", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ phase: "implementation" as const })),
+    makeAction().applies(
+      makeTicket({ ...BASE, phase: "implementation" as const }),
+    ),
   );
 });
 
 Deno.test("jiraDoneAction: does not apply when status is not done", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ status: "waiting" })),
+    makeAction().applies(makeTicket({ ...BASE, status: "waiting" })),
   );
 });
 
 Deno.test("jiraDoneAction: run returns ticket with providerDone: true on success", async () => {
   const result = await makeAction({ _fetch: successFetch }).run(
-    makeTicket(),
+    makeTicket(BASE),
     "/state",
   );
   assert(result?.providerDone);
@@ -100,7 +94,7 @@ Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on succ
       written.push({ id: t.id, providerDone: t.providerDone });
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(written.length, 1);
   assertEquals(written[0].id, "jira/PROJ-42");
   assert(written[0].providerDone);
@@ -129,7 +123,7 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
         ),
       );
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[0].method, "GET");
   assertEquals(calls[1].method, "POST");
@@ -148,7 +142,7 @@ Deno.test("jiraDoneAction: run logs error and returns null when transition throw
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(logged.length, 1);
   assertEquals((logged[0] as Record<string, string>).event, "error");
@@ -164,6 +158,6 @@ Deno.test("jiraDoneAction: run does not call writeTicket when transition throws"
       written.push(t);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(written.length, 0);
 });

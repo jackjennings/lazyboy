@@ -2,28 +2,20 @@ import { assert, assertEquals, assertFalse } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { cleanOrphanedWorktreesAction } from "./clean-orphaned-worktrees.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-42",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/myorg/myrepo/issues/42",
-    phase: "merge",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {
-      "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },
-    },
-    prs: [],
-    created: "2026-06-23T00:00:00Z",
-    updated: "2026-06-23T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = {
+  id: "gh-42",
+  url: "https://github.com/myorg/myrepo/issues/42",
+  phase: "merge" as const,
+  status: "waiting" as const,
+  worktrees: {
+    "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },
+  },
+  prs: [] as [],
+  created: "2026-06-23T00:00:00Z",
+  updated: "2026-06-23T00:00:00Z",
+};
 
 function makeAction(
   overrides: Partial<Parameters<typeof cleanOrphanedWorktreesAction>[0]> = {},
@@ -40,25 +32,26 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("cleanOrphanedWorktreesAction: applies when prs defined with orphaned worktree", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("cleanOrphanedWorktreesAction: applies for implementation/waiting phase", () => {
   assert(
     makeAction().applies(
-      makeTicket({ phase: "implementation", status: "waiting" }),
+      makeTicket({ ...BASE, phase: "implementation", status: "waiting" }),
     ),
   );
 });
 
 Deno.test("cleanOrphanedWorktreesAction: does not apply when prs is undefined", () => {
-  assertFalse(makeAction().applies(makeTicket({ prs: undefined })));
+  assertFalse(makeAction().applies(makeTicket({ ...BASE, prs: undefined })));
 });
 
 Deno.test("cleanOrphanedWorktreesAction: does not apply when all worktrees have live PRs", () => {
   assertFalse(
     makeAction().applies(
       makeTicket({
+        ...BASE,
         prs: [{
           url: "https://github.com/myorg/myrepo/pull/1",
           title: "feat",
@@ -73,7 +66,7 @@ Deno.test("cleanOrphanedWorktreesAction: does not apply when all worktrees have 
 
 Deno.test("cleanOrphanedWorktreesAction: does not apply when phase agent is running", () => {
   assertFalse(
-    makeAction({ isProcessAlive: () => true }).applies(makeTicket()),
+    makeAction({ isProcessAlive: () => true }).applies(makeTicket(BASE)),
   );
 });
 
@@ -81,6 +74,7 @@ Deno.test("cleanOrphanedWorktreesAction: closed: true PR does not keep its workt
   assert(
     makeAction().applies(
       makeTicket({
+        ...BASE,
         prs: [{
           url: "https://github.com/myorg/myrepo/pull/1",
           title: "feat",
@@ -98,6 +92,7 @@ Deno.test("cleanOrphanedWorktreesAction: merged PR does not keep its worktree al
   assert(
     makeAction().applies(
       makeTicket({
+        ...BASE,
         prs: [{
           url: "https://github.com/myorg/myrepo/pull/1",
           title: "feat",
@@ -124,7 +119,7 @@ Deno.test("cleanOrphanedWorktreesAction: removes orphaned worktree from disk and
       written.push(t);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(cleanups, ["/wt/myorg/myrepo"]);
   assertEquals(result?.worktrees["myorg/myrepo"], undefined);
   assertEquals(written.length, 1);
@@ -138,7 +133,7 @@ Deno.test("cleanOrphanedWorktreesAction: logs orphaned-worktree-removed event", 
       logged.push(entry);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   const events = (logged as Record<string, string>[]).filter((e) =>
     e.event === "orphaned-worktree-removed"
   );
@@ -162,6 +157,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "myorg/a": { path: "/wt/a", branch: "a" },
           "myorg/b": { path: "/wt/b", branch: "b" },
@@ -186,7 +182,10 @@ Deno.test(
 
 Deno.test("cleanOrphanedWorktreesAction: writeTicket called exactly once", async () => {
   const writeTicketSpy = spy(() => Promise.resolve());
-  await makeAction({ writeTicket: writeTicketSpy }).run(makeTicket(), "/state");
+  await makeAction({ writeTicket: writeTicketSpy }).run(
+    makeTicket(BASE),
+    "/state",
+  );
   assertSpyCalls(writeTicketSpy, 1);
 });
 
@@ -201,6 +200,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "myorg/live": { path: "/wt/live", branch: "live" },
           "myorg/orphan": { path: "/wt/orphan", branch: "orphan" },

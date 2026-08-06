@@ -1,26 +1,9 @@
 import { assert, assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { makeNotify } from "./notify.ts";
-import type { TicketState } from "./state/types.ts";
+import { makeTicket } from "./test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/jackjennings/lazyboy/8",
-    provider: "github",
-    title: "Fix login",
-    url: "u",
-    phase: "implementation",
-    status: "needs-attention",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-07-25T00:00:00Z",
-    updated: "2026-07-25T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = { id: "github/jackjennings/lazyboy/8" as const };
 
 Deno.test("makeNotify: calls osascript with ticket title and phase", async () => {
   const commandArgs: string[][] = [];
@@ -32,7 +15,9 @@ Deno.test("makeNotify: calls osascript with ticket title and phase", async () =>
       return Promise.resolve({ code: 0 });
     },
   });
-  await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+  await notify(
+    makeTicket({ ...BASE, title: "Fix login", phase: "implementation" }),
+  );
   assertEquals(commandArgs.length, 1);
   assertEquals(commandArgs[0][0], "osascript");
   assertEquals(
@@ -169,7 +154,9 @@ Deno.test(
         return Promise.resolve({ code: 0 });
       },
     });
-    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    await notify(
+      makeTicket({ ...BASE, title: "Fix login", phase: "implementation" }),
+    );
     assertEquals(
       commandArgs[0][2],
       'display notification "Fix login (implementation): clone-failed" with title "github/jackjennings/lazyboy/8"',
@@ -195,7 +182,9 @@ Deno.test(
         return Promise.resolve({ code: 0 });
       },
     });
-    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    await notify(
+      makeTicket({ ...BASE, title: "Fix login", phase: "implementation" }),
+    );
     assertEquals(
       commandArgs[0][2],
       'display notification "Fix login (implementation)" with title "github/jackjennings/lazyboy/8"',
@@ -227,7 +216,9 @@ Deno.test(
         return Promise.resolve({ code: 0 });
       },
     });
-    await notify(makeTicket({ title: "Fix login", phase: "implementation" }));
+    await notify(
+      makeTicket({ ...BASE, title: "Fix login", phase: "implementation" }),
+    );
     assertEquals(
       commandArgs[0][2],
       'display notification "Fix login (implementation): worktree-creation-failed" with title "github/jackjennings/lazyboy/8"',

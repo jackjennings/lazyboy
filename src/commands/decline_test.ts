@@ -7,27 +7,8 @@ import {
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
-import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 import { performDecline } from "./decline.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/test/repo/1",
-    provider: "github",
-    title: "Test ticket",
-    url: "https://github.com/test/repo/issues/1",
-    phase: "spec",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "Original body",
-    artifact: "pr",
-    ...overrides,
-  };
-}
 
 Deno.test("performDecline: transitions ticket to wont-do/done", async () => {
   const ticket = makeTicket({ phase: "plan", status: "waiting" });

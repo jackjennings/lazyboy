@@ -2,34 +2,26 @@ import { assert, assertEquals, assertFalse } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { checkMergedPRAction } from "./check-merged-pr.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-42",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/myorg/myrepo/issues/42",
-    phase: "merge",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {
-      "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },
-    },
-    prs: [{
-      url: "https://github.com/myorg/myrepo/pull/99",
-      title: "feat: my change",
-      dependsOn: [],
-      merged: false,
-      worktreeKey: "myorg/myrepo",
-    }],
-    created: "2026-06-23T00:00:00Z",
-    updated: "2026-06-23T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = {
+  id: "gh-42",
+  url: "https://github.com/myorg/myrepo/issues/42",
+  phase: "merge" as const,
+  status: "waiting" as const,
+  worktrees: {
+    "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42" },
+  },
+  prs: [{
+    url: "https://github.com/myorg/myrepo/pull/99",
+    title: "feat: my change",
+    dependsOn: [],
+    merged: false,
+    worktreeKey: "myorg/myrepo",
+  }],
+  created: "2026-06-23T00:00:00Z",
+  updated: "2026-06-23T00:00:00Z",
+};
 
 function makeAction(
   overrides: Partial<Parameters<typeof checkMergedPRAction>[0]> = {},
@@ -47,21 +39,21 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("checkMergedPRAction: applies when merge/waiting with prs array", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("checkMergedPRAction: does not apply when prs is undefined", () => {
-  assertFalse(makeAction().applies(makeTicket({ prs: undefined })));
+  assertFalse(makeAction().applies(makeTicket({ ...BASE, prs: undefined })));
 });
 
 Deno.test("checkMergedPRAction: does not apply when prs is empty", () => {
-  assertFalse(makeAction().applies(makeTicket({ prs: [] })));
+  assertFalse(makeAction().applies(makeTicket({ ...BASE, prs: [] })));
 });
 
 Deno.test("checkMergedPRAction: does not apply when not merge/waiting", () => {
   assertFalse(
     makeAction().applies(
-      makeTicket({ phase: "implementation", status: "running" }),
+      makeTicket({ ...BASE, phase: "implementation", status: "running" }),
     ),
   );
 });
@@ -76,7 +68,7 @@ Deno.test("checkMergedPRAction: PR not merged → null, no cleanup", async () =>
       cleanups.push(wt.path);
       return Promise.resolve();
     },
-  }).run(makeTicket(), "/state");
+  }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(cleanups, []);
 });
@@ -98,7 +90,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result, null);
     assertEquals(cleanups, []);
     assertEquals(logged.length, 1);
@@ -131,7 +123,7 @@ Deno.test(
         written.push(t);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result?.status, "done");
     assertEquals(cleanups, ["/wt/myorg/myrepo"]);
     assertEquals(written.length, 1);
@@ -152,7 +144,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result?.status, "done");
     const errors = (logged as Record<string, string>[]).filter((e) =>
       e.event === "error"
@@ -173,7 +165,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     const transitions = (logged as Record<string, string>[]).filter((e) =>
       e.event === "phase-transition"
     );
@@ -193,7 +185,7 @@ Deno.test(
         closedUrls.push(url);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result?.status, "done");
     assertEquals(closedUrls, ["https://github.com/myorg/myrepo/issues/42"]);
   },
@@ -212,7 +204,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result?.status, "done");
     const errors = (logged as Record<string, string>[]).filter((e) =>
       e.event === "error"
@@ -236,6 +228,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         prs: [{
           url: "https://github.com/myorg/myrepo/pull/99",
           title: "",
@@ -263,6 +256,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         prs: [
           {
             url: "https://github.com/myorg/myrepo/pull/1",
@@ -304,6 +298,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42-a" },
           "myorg/myrepo-b": {
@@ -353,6 +348,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "myorg/myrepo-b": {
             path: "/wt/myorg/myrepo-b",
@@ -394,6 +390,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-42-a" },
           "myorg/myrepo-b": {
@@ -442,6 +439,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         prs: [
           {
             url: "https://github.com/myorg/myrepo/pull/1",
@@ -473,7 +471,7 @@ Deno.test(
     await makeAction({
       isPRMerged: () => Promise.resolve(true),
       writeTicket: writeTicketSpy,
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertSpyCalls(writeTicketSpy, 1);
   },
 );

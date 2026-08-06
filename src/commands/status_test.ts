@@ -9,7 +9,8 @@ import {
 } from "@std/assert";
 import { join } from "@std/path";
 import { STATUS_SEQUENCE } from "../state/types.ts";
-import type { TicketState, TicketStatus } from "../state/types.ts";
+import type { TicketStatus } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 import {
   buildPhaseBreakdown,
   compareTickets,
@@ -26,25 +27,6 @@ import {
   shouldHideTicket,
   status,
 } from "./status.ts";
-
-function makeTicket(overrides: Partial<TicketState>): TicketState {
-  return {
-    id: "github/a/repo/1",
-    provider: "github",
-    title: "test",
-    url: "",
-    phase: "intake",
-    status: "running",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "",
-    updated: "",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
 
 // ── compareTickets ────────────────────────────────────────────────────────────
 

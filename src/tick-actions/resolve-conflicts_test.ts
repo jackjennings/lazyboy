@@ -7,27 +7,19 @@ import {
 } from "@std/assert";
 import { resolveConflictsAction } from "./resolve-conflicts.ts";
 import type { TicketState } from "../state/types.ts";
+import { makeTicket } from "../test-support.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-7",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/myorg/myrepo/issues/7",
-    phase: "implementation",
-    status: "running",
-    approvals: [],
-    scope: [],
-    worktrees: {
-      "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
-    },
-    created: "2026-06-30T00:00:00Z",
-    updated: "2026-06-30T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = {
+  id: "gh-7",
+  url: "https://github.com/myorg/myrepo/issues/7",
+  phase: "implementation" as const,
+  status: "running" as const,
+  worktrees: {
+    "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
+  },
+  created: "2026-06-30T00:00:00Z",
+  updated: "2026-06-30T00:00:00Z",
+};
 
 function makeAction(
   overrides: Partial<Parameters<typeof resolveConflictsAction>[0]> = {},
@@ -47,18 +39,18 @@ function makeAction(
 // ── applies ──────────────────────────────────────────────────────────────────
 
 Deno.test("resolveConflictsAction: applies when running, pid dead", () => {
-  assert(makeAction().applies(makeTicket()));
+  assert(makeAction().applies(makeTicket(BASE)));
 });
 
 Deno.test("resolveConflictsAction: does not apply when pid is alive", () => {
   assertFalse(
-    makeAction({ isProcessAlive: () => true }).applies(makeTicket()),
+    makeAction({ isProcessAlive: () => true }).applies(makeTicket(BASE)),
   );
 });
 
 Deno.test("resolveConflictsAction: does not apply when status is not running", () => {
   assertFalse(
-    makeAction().applies(makeTicket({ status: "waiting" })),
+    makeAction().applies(makeTicket({ ...BASE, status: "waiting" })),
   );
 });
 
@@ -71,7 +63,7 @@ Deno.test(
       readDir: async function* () {
         yield { name: "plan.md", isFile: true };
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result, null);
   },
 );
@@ -85,7 +77,7 @@ Deno.test(
       readDir: async function* () {
         yield { name: "conflict-context-gh-7.md", isFile: true };
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(result, null);
   },
 );
@@ -130,7 +122,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assert(gitCalls.some((a) => a[0] === "push"));
     assertGreater(removed.length, 0);
@@ -182,6 +174,7 @@ Deno.test(
       },
     }).run(
       makeTicket({
+        ...BASE,
         worktrees: {
           "a/repo": { path: "/wt/a/repo", branch: "a-repo" },
           "b/repo": { path: "/wt/b/repo", branch: "b-repo" },
@@ -194,7 +187,6 @@ Deno.test(
     assertFalse(
       gitCalls.some((c) => c.cwd === "/wt/b/repo"),
     );
-    // (no pid assertion — pid field removed from TicketState)
     const resolvedEntries = (logged as Record<string, unknown>[]).filter(
       (e) => e.event === "conflict-resolved",
     );
@@ -245,7 +237,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assert(
       gitCalls.some((a) => a[0] === "rebase" && a[1] === "--abort"),
@@ -304,7 +296,7 @@ Deno.test(
         logged.push(entry);
         return Promise.resolve();
       },
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
 
     assertEquals(result?.status, "needs-attention");
 

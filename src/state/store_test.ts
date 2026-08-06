@@ -17,27 +17,10 @@ import {
   writeLearning,
   writeTicket,
 } from "./store.ts";
-import { withLazyboyDir } from "../test-support.ts";
+import { makeTicket, withLazyboyDir } from "../test-support.ts";
 import type { LearningState, TicketState } from "./types.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/x/y/issues/1",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = { id: "gh-1" };
 
 async function initGitRepo(dir: string): Promise<void> {
   const run = (cmd: string[]) =>
@@ -618,7 +601,7 @@ Deno.test("writeTicket: round-trips prs array through meta.md", async () => {
 Deno.test("writeTicket: does not write approved key to frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    await writeTicket(dir, makeTicket({ approvals: [] }));
+    await writeTicket(dir, makeTicket({ ...BASE, approvals: [] }));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
     assertFalse(raw.includes("approved:"));
     assertStringIncludes(raw, "approvals:");
@@ -773,7 +756,7 @@ updated: "2026-01-01T00:00:00Z"
 Deno.test("writeTicket/readTicket: outputRetries round-trips through YAML frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    const ticket = makeTicket({ outputRetries: 1 });
+    const ticket = makeTicket({ ...BASE, outputRetries: 1 });
     await writeTicket(dir, ticket);
     const read = await readTicket(dir, "gh-1");
     assertEquals(read.outputRetries, 1);
@@ -785,7 +768,7 @@ Deno.test("writeTicket/readTicket: outputRetries round-trips through YAML frontm
 Deno.test("writeTicket/readTicket: outputRetries absent when undefined", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    await writeTicket(dir, makeTicket());
+    await writeTicket(dir, makeTicket(BASE));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
     assertFalse(raw.includes("outputRetries"));
     const read = await readTicket(dir, "gh-1");
@@ -1017,7 +1000,7 @@ Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter
 Deno.test("writeTicket/readTicket: absent artifact reads as 'pr' default", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    await writeTicket(dir, makeTicket());
+    await writeTicket(dir, makeTicket(BASE));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
     assertFalse(raw.includes("artifact:"));
     const read = await readTicket(dir, "gh-1");

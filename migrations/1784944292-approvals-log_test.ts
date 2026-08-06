@@ -1,26 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import migration from "./1784944292-approvals-log.ts";
-import type { TicketState } from "../src/state/types.ts";
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/x/y/1",
-    provider: "github",
-    title: "T",
-    url: "https://github.com/x/y/issues/1",
-    phase: "intake",
-    status: "waiting",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-07-01T00:00:00Z",
-    updated: "2026-07-20T10:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+import { makeTicket } from "../src/test-support.ts";
 
 async function writeMeta(dir: string, id: string, content: string) {
   const ticketDir = join(dir, ...id.split("/"));
@@ -32,6 +13,11 @@ Deno.test("migration approvals-log: already has approvals — returns unchanged"
   const stateDir = await Deno.makeTempDir();
   try {
     const ticket = makeTicket({
+      id: "github/x/y/1",
+      url: "https://github.com/x/y/issues/1",
+      status: "waiting",
+      created: "2026-07-01T00:00:00Z",
+      updated: "2026-07-20T10:00:00Z",
       approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
     });
     const result = await migration.run(ticket, stateDir);
@@ -45,7 +31,14 @@ Deno.test("migration approvals-log: approved false — sets approvals to []", as
   const stateDir = await Deno.makeTempDir();
   try {
     const id = "github/x/y/1";
-    const ticket = makeTicket({ id, approvals: undefined as unknown as [] });
+    const ticket = makeTicket({
+      id,
+      url: "https://github.com/x/y/issues/1",
+      status: "waiting",
+      created: "2026-07-01T00:00:00Z",
+      updated: "2026-07-20T10:00:00Z",
+      approvals: undefined as unknown as [],
+    });
     await writeMeta(
       stateDir,
       id,
@@ -62,7 +55,14 @@ Deno.test("migration approvals-log: approved true — creates unknown entry at t
   const stateDir = await Deno.makeTempDir();
   try {
     const id = "github/x/y/1";
-    const ticket = makeTicket({ id, approvals: undefined as unknown as [] });
+    const ticket = makeTicket({
+      id,
+      url: "https://github.com/x/y/issues/1",
+      status: "waiting",
+      created: "2026-07-01T00:00:00Z",
+      updated: "2026-07-20T10:00:00Z",
+      approvals: undefined as unknown as [],
+    });
     await writeMeta(
       stateDir,
       id,
@@ -81,7 +81,14 @@ Deno.test("migration approvals-log: approved true — creates unknown entry at t
 Deno.test("migration approvals-log: missing meta file — sets approvals to []", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
-    const ticket = makeTicket({ approvals: undefined as unknown as [] });
+    const ticket = makeTicket({
+      id: "github/x/y/1",
+      url: "https://github.com/x/y/issues/1",
+      status: "waiting",
+      created: "2026-07-01T00:00:00Z",
+      updated: "2026-07-20T10:00:00Z",
+      approvals: undefined as unknown as [],
+    });
     const result = await migration.run(ticket, stateDir);
     assertEquals(result.approvals, []);
   } finally {

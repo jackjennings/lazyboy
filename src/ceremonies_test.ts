@@ -8,27 +8,11 @@ import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
-import type { TicketState } from "./state/types.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
+import { makeTicket } from "./test-support.ts";
+import type { TicketState } from "./state/types.ts";
 
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "github/org/repo/1",
-    provider: "github",
-    title: "Ticket",
-    url: "https://example.com",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-01-01T00:00:00Z",
-    updated: "2026-01-01T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
+const BASE = { title: "Ticket", url: "https://example.com" };
 
 const TEST_NOW = Temporal.ZonedDateTime.from(
   "2026-07-27T10:00:00[America/New_York]",
@@ -273,9 +257,24 @@ Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion",
 Deno.test("renderStandup: active tickets grouped by phase in order", () => {
   const now = TEST_NOW;
   const tickets = [
-    makeTicket({ id: "github/org/repo/2", phase: "spec", status: "running" }),
-    makeTicket({ id: "github/org/repo/1", phase: "intake", status: "new" }),
-    makeTicket({ id: "github/org/repo/3", phase: "intake", status: "waiting" }),
+    makeTicket({
+      ...BASE,
+      id: "github/org/repo/2",
+      phase: "spec",
+      status: "running",
+    }),
+    makeTicket({
+      ...BASE,
+      id: "github/org/repo/1",
+      phase: "intake",
+      status: "new",
+    }),
+    makeTicket({
+      ...BASE,
+      id: "github/org/repo/3",
+      phase: "intake",
+      status: "waiting",
+    }),
   ];
   const output = renderStandup(now, tickets);
   assertEquals(
@@ -287,7 +286,12 @@ Deno.test("renderStandup: active tickets grouped by phase in order", () => {
 Deno.test("renderStandup: omits empty phase sections", () => {
   const now = TEST_NOW;
   const tickets = [
-    makeTicket({ id: "github/org/repo/1", phase: "plan", status: "running" }),
+    makeTicket({
+      ...BASE,
+      id: "github/org/repo/1",
+      phase: "plan",
+      status: "running",
+    }),
   ];
   const output = renderStandup(now, tickets);
   assertFalse(output.includes("## intake"));
@@ -313,8 +317,18 @@ Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
       'time = "09:00"',
     );
     const tickets = [
-      makeTicket({ id: "github/org/repo/1", phase: "merge", status: "done" }),
-      makeTicket({ id: "github/org/repo/2", phase: "intake", status: "new" }),
+      makeTicket({
+        ...BASE,
+        id: "github/org/repo/1",
+        phase: "merge",
+        status: "done",
+      }),
+      makeTicket({
+        ...BASE,
+        id: "github/org/repo/2",
+        phase: "intake",
+        status: "new",
+      }),
     ];
     let written = "";
     const standup = makeStandup({

@@ -20,29 +20,10 @@ import type { TickDeps, TickServiceDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
 import type { Config, TicketState } from "./state/types.ts";
 import { loadPromptFile } from "./phases/runners.ts";
-import { withLazyboyDir } from "./test-support.ts";
+import { makeTicket, withLazyboyDir } from "./test-support.ts";
 import type { Provider, WorkItem } from "./providers/types.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
-
-function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
-  return {
-    id: "gh-1",
-    provider: "github",
-    title: "T",
-    url: "u",
-    phase: "intake",
-    status: "new",
-    approvals: [],
-    scope: [],
-    worktrees: {},
-    created: "2026-06-15T00:00:00Z",
-    updated: "2026-06-15T00:00:00Z",
-    body: "",
-    artifact: "pr",
-    ...overrides,
-  };
-}
 
 Deno.test("advancePhase: new ticket starts intake", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
@@ -2691,7 +2672,7 @@ Deno.test(
 Deno.test(
   "advancePhase: selfReview returning reason writes self-review output file",
   async () => {
-    const ticket = makeTicket({ phase: "intake", status: "running" });
+    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "running" });
     const writePhaseOutputCalls: Array<[string, string, string, string]> = [];
     const writePhaseOutputSpy = spy(
       (stateDir: string, id: string, file: string, content: string) => {
@@ -3175,6 +3156,7 @@ Deno.test(
   "advancePhase: implementation/running with dead PID calls spawnOutlierAnalysis with ticket id, dir, worktree path, and phase",
   async () => {
     const ticket = makeTicket({
+      id: "gh-1",
       phase: "implementation",
       status: "running",
       prs: [{ url: "u", title: "T", dependsOn: [], merged: false }],
@@ -3262,6 +3244,7 @@ Deno.test(
   'advancePhase: plan/running with dead PID calls spawnOutlierAnalysis with phase "plan"',
   async () => {
     const ticket = makeTicket({
+      id: "gh-1",
       phase: "plan",
       status: "running",
       worktrees: {

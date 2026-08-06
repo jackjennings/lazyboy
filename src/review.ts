@@ -425,6 +425,11 @@ export async function review(id: string): Promise<void> {
     Deno.exit(1);
   }
 
+  if (ticket.status === "done") {
+    console.error(`ticket ${id} is done`);
+    Deno.exit(1);
+  }
+
   const found = await findLatestPhaseOutput(ticketDir);
   if (!found) {
     console.error(`No phase output found for ${id}`);

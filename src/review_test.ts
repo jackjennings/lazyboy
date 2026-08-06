@@ -1203,3 +1203,40 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "review: exits with code 1 and prints error when ticket is done",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/3";
+      await writeTicket(
+        stateDir,
+        makeTicket({ id: ticketId, phase: "merge", status: "done" }),
+      );
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId);
+        } catch {
+          // expected: exitStub throws
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 1);
+        assertSpyCalls(errorStub, 1);
+        assertEquals(
+          errorStub.calls[0].args[0],
+          `ticket ${ticketId} is done`,
+        );
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

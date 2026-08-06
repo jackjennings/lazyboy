@@ -2,31 +2,69 @@ import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 export function extractHeadings(
   markdown: string,
-): { level: number; title: string }[] {
-  const results: { level: number; title: string }[] = [];
+): { level: number; title: string; sourceLine: number }[] {
+  const results: { level: number; title: string; sourceLine: number }[] = [];
   for (const match of markdown.matchAll(/^(#{1,6})\s+(.+)$/gm)) {
+    const sourceLine =
+      (markdown.slice(0, match.index).match(/\n/g) ?? []).length;
     results.push({
       level: match[1].length,
       title: match[2].trim().replace(/[*_`]/g, ""),
+      sourceLine,
     });
   }
   return results;
 }
 
+export function computeVisibleHeadingIndices({
+  headings,
+  scrollOffset,
+  height,
+  totalLines,
+  totalSourceLines,
+}: {
+  headings: { sourceLine: number }[];
+  scrollOffset: number;
+  height: number;
+  totalLines: number;
+  totalSourceLines: number;
+}): Set<number> {
+  const visible = new Set<number>();
+  if (totalSourceLines === 0 || totalLines === 0) return visible;
+  for (let i = 0; i < headings.length; i++) {
+    const start = Math.floor(
+      (headings[i].sourceLine / totalSourceLines) * totalLines,
+    );
+    const end = i + 1 < headings.length
+      ? Math.floor(
+        (headings[i + 1].sourceLine / totalSourceLines) * totalLines,
+      )
+      : totalLines;
+    if (end <= start) continue;
+    if (end > scrollOffset && start < scrollOffset + height) {
+      visible.add(i);
+    }
+  }
+  return visible;
+}
+
 export function renderTocLines(
   headings: { level: number; title: string }[],
   tocWidth: number,
+  visibleHeadingIndices?: Set<number>,
 ): string[] {
   const lines: string[] = [];
-  for (const { level, title } of headings) {
+  for (let h = 0; h < headings.length; h++) {
+    const { level, title } = headings[h];
+    const indicator = visibleHeadingIndices?.has(h) ? "┃" : " ";
     const indent = "  ".repeat(level - 1);
     const prefix = `${indent}• `;
-    const available = Math.max(1, tocWidth - prefix.length);
+    const available = Math.max(1, tocWidth - 1 - prefix.length);
     const wrapped = wrapTextWithAnsi(title, available);
-    lines.push(`${prefix}${wrapped[0] ?? ""}`);
+    lines.push(`${indicator}${prefix}${wrapped[0] ?? ""}`);
     const contIndent = `${indent}  `;
     for (let i = 1; i < wrapped.length; i++) {
-      lines.push(`${contIndent}${wrapped[i]}`);
+      lines.push(`${indicator}${contIndent}${wrapped[i]}`);
     }
   }
   return lines;

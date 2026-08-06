@@ -1,8 +1,9 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals, assertFalse, assertGreater } from "@std/assert";
 import { stripAnsiCode } from "@std/fmt/colors";
 import {
   buildCompositedGetLines,
   compositeSideBySide,
+  computeVisibleHeadingIndices,
   extractHeadings,
   renderTocLines,
 } from "./toc.ts";
@@ -17,8 +18,8 @@ Deno.test("extractHeadings: extracts H1 through H6", () => {
   const md = "# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6";
   const headings = extractHeadings(md);
   assertEquals(headings.length, 6);
-  assertEquals(headings[0], { level: 1, title: "H1" });
-  assertEquals(headings[5], { level: 6, title: "H6" });
+  assertEquals(headings[0], { level: 1, title: "H1", sourceLine: 0 });
+  assertEquals(headings[5], { level: 6, title: "H6", sourceLine: 5 });
 });
 
 Deno.test("extractHeadings: captures level as hash count", () => {
@@ -45,6 +46,13 @@ Deno.test("extractHeadings: requires space after hashes", () => {
   assertEquals(extractHeadings("##NoSpace"), []);
 });
 
+Deno.test("extractHeadings: records 0-indexed source line number", () => {
+  const md = "text\n# H1\n## H2";
+  const headings = extractHeadings(md);
+  assertEquals(headings[0].sourceLine, 1);
+  assertEquals(headings[1].sourceLine, 2);
+});
+
 // ── renderTocLines ────────────────────────────────────────────────────────────
 
 Deno.test("renderTocLines: returns empty array for empty headings", () => {
@@ -53,27 +61,27 @@ Deno.test("renderTocLines: returns empty array for empty headings", () => {
 
 Deno.test("renderTocLines: H1 has no indentation", () => {
   const lines = renderTocLines([{ level: 1, title: "Top" }], 40);
-  assertEquals(lines[0], "• Top");
+  assertEquals(lines[0], " • Top");
 });
 
 Deno.test("renderTocLines: H2 has 2-space indent", () => {
   const lines = renderTocLines([{ level: 2, title: "Sub" }], 40);
-  assertEquals(lines[0], "  • Sub");
+  assertEquals(lines[0], "   • Sub");
 });
 
 Deno.test("renderTocLines: H3 has 4-space indent", () => {
   const lines = renderTocLines([{ level: 3, title: "Deep" }], 40);
-  assertEquals(lines[0], "    • Deep");
+  assertEquals(lines[0], "     • Deep");
 });
 
 Deno.test("renderTocLines: H6 has 10-space indent", () => {
   const lines = renderTocLines([{ level: 6, title: "Six" }], 40);
-  assertEquals(lines[0], "          • Six");
+  assertEquals(lines[0], "           • Six");
 });
 
 Deno.test("renderTocLines: uses bullet character •", () => {
   const lines = renderTocLines([{ level: 1, title: "X" }], 40);
-  assertEquals(lines[0].includes("•"), true);
+  assert(lines[0].includes("•"));
 });
 
 Deno.test("renderTocLines: long title wraps to continuation line", () => {
@@ -87,13 +95,103 @@ Deno.test("renderTocLines: continuation lines aligned with text after bullet", (
   const title =
     "A very long heading title that will not fit on one line at all";
   const lines = renderTocLines([{ level: 2, title }], 20);
-  // H2 indent = 2 spaces, continuation = indent + 2 spaces = 4 spaces
-  assertEquals(lines.every((l, i) => i === 0 || l.startsWith("    ")), true);
+  // H2 indent = 2 spaces, continuation = indent + 2 spaces = 4 spaces, plus indicator = 5
+  assert(lines.every((l, i) => i === 0 || l.startsWith("     ")));
 });
 
 Deno.test("renderTocLines: applies no styling to entries", () => {
   const lines = renderTocLines([{ level: 1, title: "Plain" }], 40);
   assertEquals(stripAnsiCode(lines[0]), lines[0]);
+});
+
+Deno.test("renderTocLines: non-visible heading shows space indicator", () => {
+  const lines = renderTocLines([{ level: 1, title: "A" }], 40);
+  assertEquals(lines[0][0], " ");
+});
+
+Deno.test("renderTocLines: visible heading shows ┃ indicator", () => {
+  const lines = renderTocLines([{ level: 1, title: "A" }], 40, new Set([0]));
+  assertEquals(lines[0][0], "┃");
+});
+
+Deno.test("renderTocLines: continuation lines carry the same indicator as their heading", () => {
+  const title =
+    "A very long heading title that will not fit on one line at all";
+  const lines = renderTocLines([{ level: 1, title }], 20, new Set([0]));
+  assertGreater(lines.length, 1);
+  assert(lines.every((l) => l[0] === "┃"));
+});
+
+Deno.test("renderTocLines: non-visible continuation lines show space indicator", () => {
+  const title =
+    "A very long heading title that will not fit on one line at all";
+  const lines = renderTocLines([{ level: 1, title }], 20);
+  assertGreater(lines.length, 1);
+  assert(lines.every((l) => l[0] === " "));
+});
+
+Deno.test("renderTocLines: no line exceeds tocWidth characters", () => {
+  const title = "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const lines = renderTocLines([{ level: 1, title }], 10);
+  assert(lines.every((l) => stripAnsiCode(l).length <= 10));
+});
+
+// ── computeVisibleHeadingIndices ──────────────────────────────────────────────
+
+Deno.test("computeVisibleHeadingIndices: returns empty set when totalSourceLines is 0", () => {
+  const result = computeVisibleHeadingIndices({
+    headings: [{ sourceLine: 0 }],
+    scrollOffset: 0,
+    height: 10,
+    totalLines: 100,
+    totalSourceLines: 0,
+  });
+  assertEquals(result.size, 0);
+});
+
+Deno.test("computeVisibleHeadingIndices: returns empty set when totalLines is 0", () => {
+  const result = computeVisibleHeadingIndices({
+    headings: [{ sourceLine: 0 }],
+    scrollOffset: 0,
+    height: 10,
+    totalLines: 0,
+    totalSourceLines: 100,
+  });
+  assertEquals(result.size, 0);
+});
+
+Deno.test("computeVisibleHeadingIndices: heading whose section overlaps viewport is visible", () => {
+  const result = computeVisibleHeadingIndices({
+    headings: [{ sourceLine: 0 }],
+    scrollOffset: 0,
+    height: 10,
+    totalLines: 100,
+    totalSourceLines: 100,
+  });
+  assert(result.has(0));
+});
+
+Deno.test("computeVisibleHeadingIndices: heading whose section is fully above viewport is not visible", () => {
+  const result = computeVisibleHeadingIndices({
+    headings: [{ sourceLine: 0 }, { sourceLine: 10 }],
+    scrollOffset: 20,
+    height: 10,
+    totalLines: 100,
+    totalSourceLines: 100,
+  });
+  assertFalse(result.has(0));
+  assert(result.has(1));
+});
+
+Deno.test("computeVisibleHeadingIndices: zero-height section is never visible", () => {
+  const result = computeVisibleHeadingIndices({
+    headings: [{ sourceLine: 0 }, { sourceLine: 1 }],
+    scrollOffset: 0,
+    height: 10,
+    totalLines: 2,
+    totalSourceLines: 100,
+  });
+  assertFalse(result.has(0));
 });
 
 // ── compositeSideBySide ───────────────────────────────────────────────────────

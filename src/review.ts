@@ -47,7 +47,11 @@ import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { diffLines } from "diff";
 import { ScrollPane } from "./ui/scroll-pane.ts";
-import { extractHeadings, renderTocLines } from "./ui/toc.ts";
+import {
+  computeVisibleHeadingIndices,
+  extractHeadings,
+  renderTocLines,
+} from "./ui/toc.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -477,7 +481,8 @@ export async function review(id: string): Promise<void> {
 
   let contentGetLines: (width: number) => string[];
   let contentOnInvalidate: (() => void) | undefined;
-  let headings: { level: number; title: string }[] = [];
+  let headings: { level: number; title: string; sourceLine: number }[] = [];
+  let totalSourceLines = 0;
   if (Array.isArray(paneContent)) {
     contentGetLines = (w) => wrapDiffLines(paneContent, w);
     contentOnInvalidate = undefined;
@@ -485,6 +490,7 @@ export async function review(id: string): Promise<void> {
     const md = new Markdown(paneContent, 1, 0, markdownTheme);
     const baseGetLines = (w: number) => md.render(w);
     headings = extractHeadings(paneContent);
+    totalSourceLines = paneContent.split("\n").length;
     contentGetLines = baseGetLines;
     contentOnInvalidate = () => md.invalidate();
   }
@@ -512,7 +518,16 @@ export async function review(id: string): Promise<void> {
     onInvalidate: contentOnInvalidate,
     pinnedSidebar: Array.isArray(paneContent)
       ? undefined
-      : (w) => renderTocLines(headings, w),
+      : (w, scrollState) =>
+        renderTocLines(
+          headings,
+          w,
+          computeVisibleHeadingIndices({
+            headings,
+            totalSourceLines,
+            ...scrollState,
+          }),
+        ),
     pinnedSidebarWidth: Array.isArray(paneContent)
       ? undefined
       : (w) => (headings.length === 0 || w < 100 ? 0 : Math.floor(w / 3)),

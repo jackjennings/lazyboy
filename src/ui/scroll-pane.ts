@@ -14,7 +14,10 @@ const SIDEBAR_SEP_WIDTH = 1;
 export class ScrollPane implements Component, Focusable {
   private getLinesFn: (width: number) => string[];
   private onInvalidateFn?: () => void;
-  private pinnedSidebar?: (sidebarWidth: number) => string[];
+  private pinnedSidebar?: (
+    sidebarWidth: number,
+    scrollState: { scrollOffset: number; totalLines: number; height: number },
+  ) => string[];
   private pinnedSidebarWidth?: (totalWidth: number) => number;
   scrollOffset = 0;
   focused = true;
@@ -28,7 +31,10 @@ export class ScrollPane implements Component, Focusable {
     title: string;
     getHeight: () => number;
     onInvalidate?: () => void;
-    pinnedSidebar?: (sidebarWidth: number) => string[];
+    pinnedSidebar?: (
+      sidebarWidth: number,
+      scrollState: { scrollOffset: number; totalLines: number; height: number },
+    ) => string[];
     pinnedSidebarWidth?: (totalWidth: number) => number;
   }) {
     this.getLinesFn = options.getLines;
@@ -123,7 +129,11 @@ export class ScrollPane implements Component, Focusable {
     const sliced = lines.slice(this.scrollOffset, this.scrollOffset + height);
     while (sliced.length < height) sliced.push("");
     if (sw > 0 && this.pinnedSidebar) {
-      const tocLines = this.pinnedSidebar(sw);
+      const tocLines = this.pinnedSidebar(sw, {
+        scrollOffset: this.scrollOffset,
+        totalLines: lines.length,
+        height,
+      });
       return [
         this.header(width),
         ...compositeSideBySide(sliced, cw, tocLines, SIDEBAR_SEP),

@@ -8,14 +8,23 @@ import { join } from "@std/path";
 import { aggregateUsage, formatUsageOutput, usage } from "./usage.ts";
 import type { PhaseUsage } from "../state/types.ts";
 
-function makeUsage(
-  model: string,
-  input: number,
-  output: number,
-  cacheRead: number,
-  cacheWrite: number,
-  costUsd?: number,
-): PhaseUsage {
+function makeUsage({
+  model,
+  input,
+  output,
+  cacheRead,
+  cacheWrite,
+  costUsd,
+  tools,
+}: {
+  model: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  costUsd?: number;
+  tools?: Record<string, number>;
+}): PhaseUsage {
   return {
     input,
     output,
@@ -24,6 +33,7 @@ function makeUsage(
     model,
     durationMs: 0,
     costUsd,
+    tools,
   };
 }
 
@@ -35,7 +45,13 @@ Deno.test("aggregateUsage: returns empty map for empty input", () => {
 
 Deno.test("aggregateUsage: strips date suffix from model name", () => {
   const result = aggregateUsage([
-    makeUsage("claude-haiku-4-5-20251001", 1, 1, 0, 0),
+    makeUsage({
+      model: "claude-haiku-4-5-20251001",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
   ]);
   assert(result.has("claude-haiku-4-5"));
   assertFalse(result.has("claude-haiku-4-5-20251001"));
@@ -43,8 +59,20 @@ Deno.test("aggregateUsage: strips date suffix from model name", () => {
 
 Deno.test("aggregateUsage: groups by stripped model name and sums token fields", () => {
   const result = aggregateUsage([
-    makeUsage("claude-haiku-4-5-20251001", 10, 5, 100, 50),
-    makeUsage("claude-haiku-4-5-20260101", 20, 8, 200, 30),
+    makeUsage({
+      model: "claude-haiku-4-5-20251001",
+      input: 10,
+      output: 5,
+      cacheRead: 100,
+      cacheWrite: 50,
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5-20260101",
+      input: 20,
+      output: 8,
+      cacheRead: 200,
+      cacheWrite: 30,
+    }),
   ]);
   assertEquals(result.size, 1);
   const g = result.get("claude-haiku-4-5")!;
@@ -55,7 +83,15 @@ Deno.test("aggregateUsage: groups by stripped model name and sums token fields",
 });
 
 Deno.test("aggregateUsage: tracks costCount — none have cost", () => {
-  const result = aggregateUsage([makeUsage("claude-haiku-4-5", 1, 1, 0, 0)]);
+  const result = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
   const g = result.get("claude-haiku-4-5")!;
   assertEquals(g.count, 1);
   assertEquals(g.costCount, 0);
@@ -63,8 +99,22 @@ Deno.test("aggregateUsage: tracks costCount — none have cost", () => {
 
 Deno.test("aggregateUsage: tracks costCount — all have cost", () => {
   const result = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0, 0.50),
-    makeUsage("claude-haiku-4-5", 2, 2, 0, 0, 0.75),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 0.50,
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 2,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 0.75,
+    }),
   ]);
   const g = result.get("claude-haiku-4-5")!;
   assertEquals(g.count, 2);
@@ -74,12 +124,84 @@ Deno.test("aggregateUsage: tracks costCount — all have cost", () => {
 
 Deno.test("aggregateUsage: tracks costCount — some have cost", () => {
   const result = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0, 0.50),
-    makeUsage("claude-haiku-4-5", 2, 2, 0, 0),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 0.50,
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 2,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
   ]);
   const g = result.get("claude-haiku-4-5")!;
   assertEquals(g.count, 2);
   assertEquals(g.costCount, 1);
+});
+
+Deno.test("aggregateUsage: sums tool counts across records for the same tool name", () => {
+  const result = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 10 },
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 5, bash: 2 },
+    }),
+  ]);
+  const g = result.get("claude-haiku-4-5")!;
+  assertEquals(g.tools, { read: 15, bash: 2 });
+});
+
+Deno.test("aggregateUsage: records without tools contribute nothing to tool counts", () => {
+  const result = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 3 },
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
+  const g = result.get("claude-haiku-4-5")!;
+  assertEquals(g.tools, { read: 3 });
+});
+
+Deno.test("aggregateUsage: initializes tools to empty object when no record has tools", () => {
+  const result = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
+  const g = result.get("claude-haiku-4-5")!;
+  assertEquals(g.tools, {});
 });
 
 // ── formatUsageOutput ──────────────────────────────────────────────────────────
@@ -89,13 +211,28 @@ Deno.test("formatUsageOutput: empty state line when no groups", () => {
 });
 
 Deno.test("formatUsageOutput: em-dash total cost when no records have cost", () => {
-  const groups = aggregateUsage([makeUsage("claude-haiku-4-5", 541, 23, 0, 0)]);
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 541,
+      output: 23,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
   assertStringIncludes(formatUsageOutput(groups).split("\n")[0], "—");
 });
 
 Deno.test("formatUsageOutput: exact total cost when all records have cost", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 541, 23, 0, 0, 8.71),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 541,
+      output: 23,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 8.71,
+    }),
   ]);
   const line0 = formatUsageOutput(groups).split("\n")[0];
   assertStringIncludes(line0, "$8.71");
@@ -104,16 +241,43 @@ Deno.test("formatUsageOutput: exact total cost when all records have cost", () =
 
 Deno.test("formatUsageOutput: tilde total cost when some records have cost", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0, 1.00),
-    makeUsage("claude-opus-4-8", 1, 1, 0, 0),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 1.00,
+    }),
+    makeUsage({
+      model: "claude-opus-4-8",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
   ]);
   assertStringIncludes(formatUsageOutput(groups).split("\n")[0], "~$1.00");
 });
 
 Deno.test("formatUsageOutput: aligns value column at max name length + 7", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5-20251001", 541, 23, 0, 0, 0.50),
-    makeUsage("claude-opus-4-8-20261001", 86, 90900, 2200000, 853600, 8.21),
+    makeUsage({
+      model: "claude-haiku-4-5-20251001",
+      input: 541,
+      output: 23,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 0.50,
+    }),
+    makeUsage({
+      model: "claude-opus-4-8-20261001",
+      input: 86,
+      output: 90900,
+      cacheRead: 2200000,
+      cacheWrite: 853600,
+      costUsd: 8.21,
+    }),
   ]);
   const lines = formatUsageOutput(groups).split("\n");
   assertEquals(lines[0], "Total cost:            $8.71");
@@ -121,8 +285,22 @@ Deno.test("formatUsageOutput: aligns value column at max name length + 7", () =>
 
 Deno.test("formatUsageOutput: right-aligns shorter model names within max width", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5-20251001", 541, 23, 0, 0, 0.50),
-    makeUsage("claude-opus-4-8-20261001", 86, 0, 0, 0, 8.21),
+    makeUsage({
+      model: "claude-haiku-4-5-20251001",
+      input: 541,
+      output: 23,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 0.50,
+    }),
+    makeUsage({
+      model: "claude-opus-4-8-20261001",
+      input: 86,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 8.21,
+    }),
   ]);
   const lines = formatUsageOutput(groups).split("\n");
   assertStringIncludes(lines[2], "    claude-haiku-4-5:  ");
@@ -131,8 +309,20 @@ Deno.test("formatUsageOutput: right-aligns shorter model names within max width"
 
 Deno.test("formatUsageOutput: sorts models alphabetically", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-opus-4-8", 1, 1, 0, 0),
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0),
+    makeUsage({
+      model: "claude-opus-4-8",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
   ]);
   const lines = formatUsageOutput(groups).split("\n");
   assertStringIncludes(lines[2], "claude-haiku-4-5");
@@ -141,29 +331,134 @@ Deno.test("formatUsageOutput: sorts models alphabetically", () => {
 
 Deno.test("formatUsageOutput: exact per-model cost when all records have cost", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0, 1.23),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 1.23,
+    }),
   ]);
   assertStringIncludes(formatUsageOutput(groups), "($1.23)");
 });
 
 Deno.test("formatUsageOutput: tilde per-model cost when some records lack cost", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0, 1.23),
-    makeUsage("claude-haiku-4-5", 1, 1, 0, 0),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 1.23,
+    }),
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
   ]);
   assertStringIncludes(formatUsageOutput(groups), "(~$1.23)");
 });
 
 Deno.test("formatUsageOutput: em-dash per-model cost when no records have cost", () => {
-  const groups = aggregateUsage([makeUsage("claude-haiku-4-5", 1, 1, 0, 0)]);
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
   assertStringIncludes(formatUsageOutput(groups), "(—)");
 });
 
 Deno.test("formatUsageOutput: m suffix for million-range token counts", () => {
   const groups = aggregateUsage([
-    makeUsage("claude-opus-4-8", 0, 0, 2_200_000, 0),
+    makeUsage({
+      model: "claude-opus-4-8",
+      input: 0,
+      output: 0,
+      cacheRead: 2_200_000,
+      cacheWrite: 0,
+    }),
   ]);
   assertStringIncludes(formatUsageOutput(groups), "2.2m cache read");
+});
+
+Deno.test("formatUsageOutput: appends Tool usage section when tools are present", () => {
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 10, bash: 2, write: 1 },
+    }),
+  ]);
+  assertStringIncludes(
+    formatUsageOutput(groups),
+    "Tool usage:\n    bash: 2\n    read: 10\n    write: 1",
+  );
+});
+
+Deno.test("formatUsageOutput: omits Tool usage section when no records have tools", () => {
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    }),
+  ]);
+  assertFalse(formatUsageOutput(groups).includes("Tool usage:"));
+});
+
+Deno.test("formatUsageOutput: sums tools cross-model in Tool usage section", () => {
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 10 },
+    }),
+    makeUsage({
+      model: "claude-opus-4-8",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      tools: { read: 5, bash: 2 },
+    }),
+  ]);
+  const output = formatUsageOutput(groups);
+  assertStringIncludes(output, "    bash: 2");
+  assertStringIncludes(output, "    read: 15");
+});
+
+Deno.test("formatUsageOutput: existing sections are unchanged when tools are present", () => {
+  const groups = aggregateUsage([
+    makeUsage({
+      model: "claude-haiku-4-5",
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      costUsd: 1.23,
+      tools: { read: 5 },
+    }),
+  ]);
+  const lines = formatUsageOutput(groups).split("\n");
+  assertStringIncludes(lines[0], "$1.23");
+  assertEquals(lines[1], "Usage by model:");
 });
 
 // ── usage command ─────────────────────────────────────────────────────────────
@@ -180,7 +475,16 @@ Deno.test("usage command reads usage files from all ticket directories", async (
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
     await Deno.writeTextFile(
       join(ticketDir, "20260715T190000-intake.usage.json"),
-      JSON.stringify(makeUsage("claude-haiku-4-5-20251001", 10, 5, 0, 0, 0.01)),
+      JSON.stringify(
+        makeUsage({
+          model: "claude-haiku-4-5-20251001",
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+          costUsd: 0.01,
+        }),
+      ),
     );
 
     const originalEnv = Deno.env.get("HOME");

@@ -13,6 +13,7 @@ type ModelGroup = {
   cost: number;
   count: number;
   costCount: number;
+  tools: Record<string, number>;
 };
 
 export function aggregateUsage(records: PhaseUsage[]): Map<string, ModelGroup> {
@@ -29,6 +30,7 @@ export function aggregateUsage(records: PhaseUsage[]): Map<string, ModelGroup> {
         cost: 0,
         count: 0,
         costCount: 0,
+        tools: {},
       };
       groups.set(key, g);
     }
@@ -41,6 +43,9 @@ export function aggregateUsage(records: PhaseUsage[]): Map<string, ModelGroup> {
       g.cost += r.costUsd;
       g.costCount++;
     }
+    for (const [name, count] of Object.entries(r.tools ?? {})) {
+      g.tools[name] = (g.tools[name] ?? 0) + count;
+    }
   }
   return groups;
 }
@@ -52,6 +57,7 @@ export function formatUsageOutput(groups: Map<string, ModelGroup>): string {
   const maxLen = Math.max(...names.map((n) => n.length));
   const col = maxLen + 7;
 
+  const toolTotals: Record<string, number> = {};
   let totalCost = 0;
   let totalCount = 0;
   let totalCostCount = 0;
@@ -59,6 +65,9 @@ export function formatUsageOutput(groups: Map<string, ModelGroup>): string {
     totalCost += g.cost;
     totalCount += g.count;
     totalCostCount += g.costCount;
+    for (const [name, count] of Object.entries(g.tools)) {
+      toolTotals[name] = (toolTotals[name] ?? 0) + count;
+    }
   }
 
   const totalCostStr = totalCostCount === 0
@@ -86,6 +95,14 @@ export function formatUsageOutput(groups: Map<string, ModelGroup>): string {
       ? `($${g.cost.toFixed(2)})`
       : `(~$${g.cost.toFixed(2)})`;
     lines.push(`    ${name.padStart(maxLen)}:  ${tokens} ${costStr}`);
+  }
+
+  const toolNames = Object.keys(toolTotals).sort();
+  if (toolNames.length > 0) {
+    lines.push("Tool usage:");
+    for (const name of toolNames) {
+      lines.push(`    ${name}: ${toolTotals[name]}`);
+    }
   }
 
   return lines.join("\n");

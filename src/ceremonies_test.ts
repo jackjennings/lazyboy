@@ -20,6 +20,18 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
   "2026-07-27T10:00:00[America/New_York]",
 );
 
+const JIRA_BASE = {
+  provider: "jira",
+  id: "jira/FOO-1",
+  url: "https://jira.example.com/browse/FOO-1",
+  title: "My Feature",
+};
+
+// Tuesday; last workday = Monday 2026-07-21
+const TUESDAY_NOW = Temporal.ZonedDateTime.from(
+  "2026-07-22T10:00:00[America/New_York]",
+);
+
 function makeRunner(
   stateDir: string,
   opts: {
@@ -404,99 +416,224 @@ Deno.test("CeremonyRunner: interval ceremony runs when no prior output file exis
   }
 });
 
-Deno.test("renderStandup: active tickets grouped by phase in order", () => {
-  const now = TEST_NOW;
-  const tickets = [
-    makeTicket({
-      ...BASE,
-      id: "github/org/repo/2",
-      phase: "spec",
-      status: "running",
-    }),
-    makeTicket({
-      ...BASE,
-      id: "github/org/repo/1",
-      phase: "intake",
-      status: "new",
-    }),
-    makeTicket({
-      ...BASE,
-      id: "github/org/repo/3",
-      phase: "intake",
-      status: "waiting",
-    }),
-  ];
-  const output = renderStandup(now, tickets);
-  assertEquals(
-    output,
-    "# Standup — 2026-07-27\n\n## intake\n- [github/org/repo/1] Ticket (new)\n- [github/org/repo/3] Ticket (waiting)\n\n## spec\n- [github/org/repo/2] Ticket (running)\n",
-  );
-});
-
-Deno.test("renderStandup: omits empty phase sections", () => {
-  const now = TEST_NOW;
-  const tickets = [
-    makeTicket({
-      ...BASE,
-      id: "github/org/repo/1",
+Deno.test(
+  "renderStandup: Jira ticket updated last workday (non-Monday) appears in Y:",
+  () => {
+    const ticket = makeTicket({
+      ...JIRA_BASE,
       phase: "plan",
       status: "running",
-    }),
-  ];
-  const output = renderStandup(now, tickets);
-  assertFalse(output.includes("## intake"));
-  assertStringIncludes(output, "## plan");
+      updated: "2026-07-21T14:00:00Z",
+    });
+    const output = renderStandup(TUESDAY_NOW, [ticket]);
+    assertStringIncludes(output, "Y:");
+    assertStringIncludes(output, "Worked on plan for");
+  },
+);
+
+Deno.test(
+  "renderStandup: Jira ticket updated Friday appears in Y: when today is Monday",
+  () => {
+    // TEST_NOW = Monday 2026-07-27; last workday = Friday 2026-07-24
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "plan",
+      status: "running",
+      updated: "2026-07-24T14:00:00Z",
+    });
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertStringIncludes(output, "Y:");
+    assertStringIncludes(output, "Worked on plan for");
+  },
+);
+
+Deno.test("renderStandup: Jira ticket updated today appears in T:", () => {
+  const ticket = makeTicket({
+    ...JIRA_BASE,
+    phase: "spec",
+    status: "running",
+    updated: "2026-07-27T14:00:00Z",
+  });
+  const output = renderStandup(TEST_NOW, [ticket]);
+  assertStringIncludes(output, "T:");
+  assertStringIncludes(output, "Work on specifications for");
+  assertFalse(output.includes("Y:"));
 });
 
-Deno.test("renderStandup: no active tickets yields no active tickets message", () => {
-  const output = renderStandup(TEST_NOW, []);
-  assertEquals(
+Deno.test(
+  "renderStandup: merge+done uses Merged pull request for in Y:",
+  () => {
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "merge",
+      status: "done",
+      updated: "2026-07-24T14:00:00Z",
+    });
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertStringIncludes(output, "Merged pull request for");
+  },
+);
+
+Deno.test(
+  "renderStandup: merge+done uses Merged pull request for in T:",
+  () => {
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "merge",
+      status: "done",
+      updated: "2026-07-27T14:00:00Z",
+    });
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertStringIncludes(output, "Merged pull request for");
+  },
+);
+
+Deno.test("renderStandup: non-Jira tickets are excluded", () => {
+  const ticket = makeTicket({
+    ...BASE,
+    id: "github/org/repo/1",
+    phase: "plan",
+    status: "running",
+    updated: "2026-07-27T14:00:00Z",
+  });
+  const output = renderStandup(TEST_NOW, [ticket]);
+  assertStringIncludes(output, "No Jira tickets.");
+  assertFalse(output.includes("github/org/repo/1"));
+});
+
+Deno.test(
+  "renderStandup: done non-merge tickets appear in the correct section",
+  () => {
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "spec",
+      status: "done",
+      updated: "2026-07-27T14:00:00Z",
+    });
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertStringIncludes(output, "T:");
+    assertStringIncludes(output, "Work on specifications for");
+  },
+);
+
+Deno.test("renderStandup: empty Y: section omits Y: header", () => {
+  const ticket = makeTicket({
+    ...JIRA_BASE,
+    phase: "spec",
+    status: "running",
+    updated: "2026-07-27T14:00:00Z",
+  });
+  const output = renderStandup(TEST_NOW, [ticket]);
+  assertFalse(output.includes("Y:"));
+  assertStringIncludes(output, "T:");
+});
+
+Deno.test("renderStandup: empty T: section omits T: header", () => {
+  const ticket = makeTicket({
+    ...JIRA_BASE,
+    phase: "spec",
+    status: "running",
+    updated: "2026-07-24T14:00:00Z",
+  });
+  const output = renderStandup(TEST_NOW, [ticket]);
+  assertFalse(output.includes("T:"));
+  assertStringIncludes(output, "Y:");
+});
+
+Deno.test(
+  "renderStandup: no Jira tickets in window yields No Jira tickets message",
+  () => {
+    // Thursday 2026-07-23 is neither today (Mon 2026-07-27) nor last workday (Fri 2026-07-24)
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "plan",
+      status: "running",
+      updated: "2026-07-23T14:00:00Z",
+    });
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertEquals(output, "# Standup — 2026-07-27\n\nNo Jira tickets.\n");
+  },
+);
+
+Deno.test("renderStandup: Jira key rendered as markdown link", () => {
+  const ticket = makeTicket({
+    ...JIRA_BASE,
+    phase: "plan",
+    status: "running",
+    updated: "2026-07-27T14:00:00Z",
+  });
+  const output = renderStandup(TEST_NOW, [ticket]);
+  assertStringIncludes(
     output,
-    "# Standup — 2026-07-27\n\nNo active tickets.\n",
+    "([FOO-1](https://jira.example.com/browse/FOO-1))",
   );
 });
 
-Deno.test("CeremonyRunner: standup excludes done tickets", async () => {
-  const stateDir = await Deno.makeTempDir();
-  try {
-    await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
-      recursive: true,
+Deno.test(
+  "renderStandup: ticket updated two days ago is excluded from output",
+  () => {
+    // Monday today; last workday = Friday 2026-07-24; Thursday 2026-07-23 is excluded
+    const ticket = makeTicket({
+      ...JIRA_BASE,
+      phase: "plan",
+      status: "running",
+      updated: "2026-07-23T14:00:00Z",
     });
-    await Deno.writeTextFile(
-      join(stateDir, "ceremonies", "standup", "config.toml"),
-      'time = "09:00"',
-    );
-    const tickets = [
-      makeTicket({
-        ...BASE,
-        id: "github/org/repo/1",
-        phase: "merge",
-        status: "done",
-      }),
-      makeTicket({
-        ...BASE,
-        id: "github/org/repo/2",
-        phase: "intake",
-        status: "new",
-      }),
-    ];
-    let written = "";
-    const standup = makeStandup({
-      listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
-      readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
-    });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
-      .run();
-    const outputDir = join(stateDir, "ceremonies", "standup", "output");
-    for await (const entry of Deno.readDir(outputDir)) {
-      written = await Deno.readTextFile(join(outputDir, entry.name));
+    const output = renderStandup(TEST_NOW, [ticket]);
+    assertStringIncludes(output, "No Jira tickets.");
+  },
+);
+
+Deno.test(
+  "CeremonyRunner: standup includes done Jira tickets, excludes non-Jira",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        join(stateDir, "ceremonies", "standup", "config.toml"),
+        'time = "09:00"',
+      );
+      const tickets = [
+        makeTicket({
+          provider: "jira",
+          id: "jira/FOO-99",
+          url: "https://jira.example.com/browse/FOO-99",
+          title: "Done Feature",
+          phase: "merge",
+          status: "done",
+          updated: "2026-07-27T14:00:00Z",
+        }),
+        makeTicket({
+          ...BASE,
+          id: "github/org/repo/1",
+          phase: "intake",
+          status: "new",
+          updated: "2026-07-27T14:00:00Z",
+        }),
+      ];
+      let written = "";
+      const standup = makeStandup({
+        listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
+        readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
+      });
+      await makeRunner(stateDir, {
+        now: () => TEST_NOW,
+        ceremonies: [standup],
+      }).run();
+      const outputDir = join(stateDir, "ceremonies", "standup", "output");
+      for await (const entry of Deno.readDir(outputDir)) {
+        written = await Deno.readTextFile(join(outputDir, entry.name));
+      }
+      assertStringIncludes(written, "FOO-99");
+      assertFalse(written.includes("github/org/repo/1"));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
     }
-    assertFalse(written.includes("github/org/repo/1"));
-    assertStringIncludes(written, "github/org/repo/2");
-  } finally {
-    await Deno.remove(stateDir, { recursive: true });
-  }
-});
+  },
+);
 
 function makeDocumentationGaps(
   stateDir: string,

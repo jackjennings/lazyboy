@@ -495,21 +495,29 @@ Deno.test("judgePrinciples: returns false when claude CLI throws", async () => {
 });
 
 Deno.test("judgePrinciples: passes body as second arg to claude CLI", async () => {
-  const run: CommandRunner = spy((_args: string[]) =>
-    Promise.resolve({ code: 0, stdout: "KEEP" })
+  const run: CommandRunner = spy((args: string[]) =>
+    Promise.resolve(
+      args[0] === "apfel"
+        ? { code: 1, stdout: "" }
+        : { code: 0, stdout: "KEEP" },
+    )
   );
   await judgePrinciples("- prefer X over Y", run);
-  const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
+  const args = (run as ReturnType<typeof spy>).calls[1].args[0] as string[];
   assertEquals(args[0], "claude");
   assertEquals(args[1], "- prefer X over Y");
 });
 
 Deno.test("judgePrinciples: passes --model claude-haiku-4-5 to claude CLI", async () => {
-  const run: CommandRunner = spy((_args: string[]) =>
-    Promise.resolve({ code: 0, stdout: "KEEP" })
+  const run: CommandRunner = spy((args: string[]) =>
+    Promise.resolve(
+      args[0] === "apfel"
+        ? { code: 1, stdout: "" }
+        : { code: 0, stdout: "KEEP" },
+    )
   );
   await judgePrinciples("- prefer X over Y", run);
-  const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
+  const args = (run as ReturnType<typeof spy>).calls[1].args[0] as string[];
   const modelIdx = args.indexOf("--model");
   assertNotEquals(modelIdx, -1);
   assertEquals(args[modelIdx + 1], "claude-haiku-4-5");

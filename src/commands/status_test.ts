@@ -619,7 +619,30 @@ Deno.test("readAttentionReason: formats needs-attention event with reason", asyn
   }
 });
 
-Deno.test("readAttentionReason: formats conflict-resolution-failed with reason and branch, omits worktreePath", async () => {
+Deno.test("readAttentionReason: formats conflict-resolution-failed with reason, branch, and sessionId", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "log.ndjson"),
+      JSON.stringify({
+        ts: "2026-07-31T19:45:22Z",
+        event: "conflict-resolution-failed",
+        reason: "agent-failed",
+        branch: "github/jackjennings/lazyboy/271",
+        worktreePath: "/some/long/path",
+        sessionId: "sess_abc123",
+      }) + "\n",
+    );
+    assertEquals(
+      await readAttentionReason(tempDir),
+      "2026-07-31T19:45:22Z: conflict-resolution-failed: reason=agent-failed, branch=github/jackjennings/lazyboy/271, sessionId=sess_abc123",
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("readAttentionReason: formats conflict-resolution-failed without sessionId when absent", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(

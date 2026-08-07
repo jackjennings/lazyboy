@@ -250,7 +250,9 @@ function formatAttentionEntry(e: LogEntry): string {
   } else if (e.event === "needs-attention") {
     fields = `reason=${e.reason}`;
   } else if (e.event === "conflict-resolution-failed") {
-    fields = `reason=${e.reason}, branch=${e.branch}`;
+    fields = `reason=${e.reason}, branch=${e.branch}${
+      typeof e.sessionId === "string" ? `, sessionId=${e.sessionId}` : ""
+    }`;
   } else {
     fields = `reason=${e.reason}, runId=${e.runId}`;
   }

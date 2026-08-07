@@ -22,6 +22,7 @@ import {
   extractUsageAndText,
   getPiEnvironmentVariables,
   judgePrinciples,
+  lastPhaseRunCompleted,
   resolvePhaseSessionId,
   resolveRevisionSessionId,
   setupClaudeCodeDirectories,
@@ -2067,6 +2068,75 @@ Deno.test("resolvePhaseSessionId: returns sessionId from the last qualifying ent
     }),
   ].join("\n");
   assertEquals(resolvePhaseSessionId(log, "spec"), "second");
+});
+
+// ── lastPhaseRunCompleted ────────────────────────────────────────────────────
+
+Deno.test("lastPhaseRunCompleted: true when the last phase-start has a matching phase-end", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-start",
+      phase: "20260806T230129-spec",
+    }),
+    JSON.stringify({
+      ts: "t2",
+      event: "phase-end",
+      phase: "20260806T230129-spec",
+    }),
+  ].join("\n");
+  assert(lastPhaseRunCompleted(log, "spec"));
+});
+
+Deno.test("lastPhaseRunCompleted: false when the last phase-start has no phase-end", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-start",
+    phase: "20260807T014211-spec",
+  });
+  assertFalse(lastPhaseRunCompleted(log, "spec"));
+});
+
+Deno.test("lastPhaseRunCompleted: false when a newer run started but never ended", () => {
+  const log = [
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-start",
+      phase: "20260806T230129-spec",
+    }),
+    JSON.stringify({
+      ts: "t2",
+      event: "phase-end",
+      phase: "20260806T230129-spec",
+    }),
+    JSON.stringify({
+      ts: "t3",
+      event: "phase-start",
+      phase: "20260807T014211-spec",
+    }),
+  ].join("\n");
+  assertFalse(lastPhaseRunCompleted(log, "spec"));
+});
+
+Deno.test("lastPhaseRunCompleted: true when no phase-start exists for the phase", () => {
+  const log = JSON.stringify({
+    ts: "t1",
+    event: "phase-start",
+    phase: "20260806T230129-intake",
+  });
+  assert(lastPhaseRunCompleted(log, "spec"));
+});
+
+Deno.test("lastPhaseRunCompleted: skips malformed lines", () => {
+  const log = [
+    "not-json",
+    JSON.stringify({
+      ts: "t1",
+      event: "phase-start",
+      phase: "20260807T014211-plan",
+    }),
+  ].join("\n");
+  assertFalse(lastPhaseRunCompleted(log, "plan"));
 });
 
 // ── resolveRevisionSessionId ─────────────────────────────────────────────────

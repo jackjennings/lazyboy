@@ -333,6 +333,85 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "advancePhase: running phase whose subprocess died before phase-end → needs-attention, no self-review",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const written: TicketState[] = [];
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      written.push(t);
+      return Promise.resolve();
+    });
+    const logEntries: object[] = [];
+    const appendLogSpy = spy((_dir: string, _id: string, entry: object) => {
+      logEntries.push(entry);
+      return Promise.resolve();
+    });
+    const selfReviewSpy = spy(() =>
+      Promise.resolve({ approved: false, reason: null })
+    );
+    const log = JSON.stringify({
+      event: "phase-start",
+      phase: "20260807T014211-spec",
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: writeTicketSpy,
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: selfReviewSpy,
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("stale spec"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+      readTicketLog: () => Promise.resolve(log),
+    });
+    const last = written.at(-1)!;
+    assertEquals(last.status, "needs-attention");
+    assertSpyCalls(selfReviewSpy, 0);
+    assertArrayIncludes(logEntries as Record<string, unknown>[], [
+      { event: "phase-output-invalid", phase: "spec", reason: "incomplete" },
+    ]);
+  },
+);
+
+Deno.test(
+  "advancePhase: running phase whose subprocess wrote phase-end proceeds to self-review",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const selfReviewSpy = spy(() =>
+      Promise.resolve({ approved: false, reason: null })
+    );
+    const log = [
+      JSON.stringify({ event: "phase-start", phase: "20260807T014211-spec" }),
+      JSON.stringify({ event: "phase-end", phase: "20260807T014211-spec" }),
+    ].join("\n");
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: selfReviewSpy,
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("fresh spec"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+      readTicketLog: () => Promise.resolve(log),
+    });
+    assertSpyCalls(selfReviewSpy, 1);
+  },
+);
+
 Deno.test("advancePhase: implementation phase receives ticket worktrees", async () => {
   const ticket = makeTicket({
     phase: "plan",

@@ -20,6 +20,13 @@ Deno.test("plistContent: RunAtLoad is true", () => {
   assertStringIncludes(plistContent("/home/user/.lazyboy"), "<true/>");
 });
 
+Deno.test("plistContent: sets AbandonProcessGroup so detached phase agents survive tick exit", () => {
+  assertStringIncludes(
+    plistContent("/home/user/.lazyboy"),
+    "<key>AbandonProcessGroup</key>",
+  );
+});
+
 Deno.test("plistContent: references tick.sh at lazboyDir", () => {
   assertStringIncludes(
     plistContent("/home/user/.lazyboy"),

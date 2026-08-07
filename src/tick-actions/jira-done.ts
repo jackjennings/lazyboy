@@ -1,8 +1,7 @@
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 import { jiraTransition } from "./jira-transition.ts";
-
-type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+import { HttpClient } from "../http-client.ts";
 
 export interface JiraDoneDeps {
   baseUrl: string;
@@ -10,7 +9,7 @@ export interface JiraDoneDeps {
   apiToken: string;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
-  _fetch?: FetchFn;
+  http: HttpClient;
 }
 
 export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
@@ -35,7 +34,7 @@ export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
           apiToken: opts.apiToken,
           issueKey,
           targetStatusCategoryKey: "done",
-          fetch: opts._fetch,
+          http: opts.http,
         });
       } catch (e) {
         await opts.appendLog(stateDir, ticket.id, {

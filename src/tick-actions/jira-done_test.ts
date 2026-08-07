@@ -7,6 +7,7 @@ import {
 import { jiraDoneAction } from "./jira-done.ts";
 import type { TicketState } from "../state/types.ts";
 import { makeTicket } from "../test-support.ts";
+import { HttpClient } from "../http-client.ts";
 
 function makeAction(
   overrides: Partial<Parameters<typeof jiraDoneAction>[0]> = {},
@@ -17,6 +18,7 @@ function makeAction(
     apiToken: "token",
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    http: new HttpClient(),
     ...overrides,
   });
 }
@@ -24,8 +26,11 @@ function makeAction(
 function makeTransitionsFetch(
   transitions: Array<{ id: string; to: { statusCategory: { key: string } } }>,
 ) {
-  return (_url: string, init: RequestInit) => {
-    if (init.method === "POST") {
+  return (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    if (init?.method === "POST") {
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return Promise.resolve(
@@ -79,7 +84,7 @@ Deno.test("jiraDoneAction: does not apply when status is not done", () => {
 });
 
 Deno.test("jiraDoneAction: run returns ticket with providerDone: true on success", async () => {
-  const result = await makeAction({ _fetch: successFetch }).run(
+  const result = await makeAction({ http: new HttpClient(successFetch) }).run(
     makeTicket(BASE),
     "/state",
   );
@@ -89,7 +94,7 @@ Deno.test("jiraDoneAction: run returns ticket with providerDone: true on success
 Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on success", async () => {
   const written: Partial<TicketState>[] = [];
   await makeAction({
-    _fetch: successFetch,
+    http: new HttpClient(successFetch),
     writeTicket: (_dir, t) => {
       written.push({ id: t.id, providerDone: t.providerDone });
       return Promise.resolve();
@@ -103,13 +108,13 @@ Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on succ
 Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for correct issue key", async () => {
   const calls: Array<{ url: string; method: string; body?: string }> = [];
   await makeAction({
-    _fetch: (url, init) => {
+    http: new HttpClient((url, init) => {
       calls.push({
-        url,
-        method: init.method ?? "GET",
-        body: init.body as string | undefined,
+        url: url as string,
+        method: init?.method ?? "GET",
+        body: init?.body as string | undefined,
       });
-      if (init.method === "POST") {
+      if (init?.method === "POST") {
         return Promise.resolve(new Response(null, { status: 204 }));
       }
       return Promise.resolve(
@@ -122,7 +127,7 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
           { status: 200 },
         ),
       );
-    },
+    }),
   }).run(makeTicket(BASE), "/state");
   assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[0].method, "GET");
@@ -136,8 +141,9 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
 Deno.test("jiraDoneAction: run logs error and returns null when transition throws", async () => {
   const logged: object[] = [];
   const result = await makeAction({
-    _fetch: (_url, _init) =>
-      Promise.resolve(new Response("Error", { status: 500 })),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response("Error", { status: 500 }))
+    ),
     appendLog: (_stateDir, _id, entry) => {
       logged.push(entry);
       return Promise.resolve();
@@ -152,8 +158,9 @@ Deno.test("jiraDoneAction: run logs error and returns null when transition throw
 Deno.test("jiraDoneAction: run does not call writeTicket when transition throws", async () => {
   const written: unknown[] = [];
   await makeAction({
-    _fetch: (_url, _init) =>
-      Promise.resolve(new Response("Error", { status: 500 })),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response("Error", { status: 500 }))
+    ),
     writeTicket: (_dir, t) => {
       written.push(t);
       return Promise.resolve();

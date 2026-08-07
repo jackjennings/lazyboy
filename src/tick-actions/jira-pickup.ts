@@ -1,15 +1,14 @@
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 import { jiraTransition } from "./jira-transition.ts";
-
-type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+import { HttpClient } from "../http-client.ts";
 
 export interface JiraPickupDeps {
   baseUrl: string;
   email: string;
   apiToken: string;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
-  _fetch?: FetchFn;
+  http: HttpClient;
 }
 
 export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
@@ -29,7 +28,7 @@ export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
           apiToken: opts.apiToken,
           issueKey,
           targetStatusCategoryKey: "in-progress",
-          fetch: opts._fetch,
+          http: opts.http,
         });
       } catch (e) {
         await opts.appendLog(stateDir, ticket.id, {

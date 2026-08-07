@@ -529,3 +529,40 @@ Deno.test(
     );
   },
 );
+
+Deno.test(
+  "checkConflictsAction: clears phaseSessionIds.implementation on conflict-resolution-started",
+  async () => {
+    const written: TicketState[] = [];
+
+    await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({ code: 1, stdout: "", stderr: "CONFLICT" });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({
+            code: 0,
+            stdout: "foo.ts",
+            stderr: "",
+          });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      spawn: () => Promise.resolve(),
+      writeContextFile: (_ticketDir, branch) =>
+        Promise.resolve(`20260727T202535-conflict-context-${branch}.md`),
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+      appendLog: () => Promise.resolve(),
+    }).run(
+      makeTicket({ ...BASE, phaseSessionIds: { implementation: "sess-abc" } }),
+      "/state",
+    );
+
+    const updated = written[written.length - 1];
+    assertEquals(updated?.phaseSessionIds?.implementation, undefined);
+  },
+);

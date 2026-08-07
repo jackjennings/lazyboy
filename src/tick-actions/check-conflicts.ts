@@ -133,6 +133,9 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
           ...ticket,
           status: "running",
           updated: now,
+          phaseSessionIds: ticket.phaseSessionIds
+            ? { ...ticket.phaseSessionIds, implementation: undefined }
+            : undefined,
         };
         await deps.writeTicket(stateDir, updated);
         await deps.appendLog(stateDir, ticket.id, {

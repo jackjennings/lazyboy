@@ -3,7 +3,6 @@ import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 import { sanitizeBranchForFilename } from "./check-conflicts.ts";
 import { deleteRunPid } from "../executor.ts";
-import { resolvePhaseSessionId } from "../run-phase.ts";
 
 export interface ResolveConflictsDeps {
   runGit: (
@@ -18,7 +17,10 @@ export interface ResolveConflictsDeps {
     path: string,
   ) => AsyncIterable<{ name: string; isFile: boolean }>;
   remove: (path: string) => Promise<void>;
-  readTicketLog: (ticketDir: string) => Promise<string>;
+  readPhaseSessionId: (
+    ticketDir: string,
+    phase: string,
+  ) => Promise<string | null>;
 }
 
 export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
@@ -52,9 +54,8 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
 
       if (contextFiles.length === 0) return null;
 
-      const ticketLogContent = await deps.readTicketLog(ticketDir);
-      const sessionId = resolvePhaseSessionId(
-        ticketLogContent,
+      const sessionId = await deps.readPhaseSessionId(
+        ticketDir,
         "conflict-resolution",
       );
 

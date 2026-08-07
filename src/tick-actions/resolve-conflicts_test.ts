@@ -32,7 +32,7 @@ function makeAction(
     stat: () => Promise.resolve(false),
     readDir: async function* () {},
     remove: () => Promise.resolve(),
-    readTicketLog: () => Promise.resolve(""),
+    readPhaseSessionId: () => Promise.resolve(null),
     ...overrides,
   });
 }
@@ -206,15 +206,8 @@ Deno.test(
     const gitCalls: string[][] = [];
     const removed: string[] = [];
 
-    const phaseEndLog = JSON.stringify({
-      ts: "2026-01-01T00:00:00Z",
-      event: "phase-end",
-      phase: "20260101T000000-conflict-resolution",
-      sessionId: "sess_agent_failed",
-    });
-
     const result = await makeAction({
-      readTicketLog: () => Promise.resolve(phaseEndLog),
+      readPhaseSessionId: () => Promise.resolve("sess_agent_failed"),
       runGit: (args) => {
         gitCalls.push(args);
         if (args[0] === "rev-parse") {
@@ -272,15 +265,8 @@ Deno.test(
     const written: TicketState[] = [];
     const gitCalls: string[][] = [];
 
-    const phaseEndLog = JSON.stringify({
-      ts: "2026-01-01T00:00:00Z",
-      event: "phase-end",
-      phase: "20260101T000000-conflict-resolution",
-      sessionId: "sess_push_failed",
-    });
-
     const result = await makeAction({
-      readTicketLog: () => Promise.resolve(phaseEndLog),
+      readPhaseSessionId: () => Promise.resolve("sess_push_failed"),
       runGit: (args) => {
         gitCalls.push(args);
         if (args[0] === "push") {
@@ -327,15 +313,15 @@ Deno.test(
   },
 );
 
-// ── failure path: no matching phase-end → sessionId absent ───────────────────
+// ── failure path: no session sidecar → sessionId absent ──────────────────────
 
 Deno.test(
-  "resolveConflictsAction: failure — no matching phase-end → sessionId absent from log entry",
+  "resolveConflictsAction: failure — no session sidecar → sessionId absent from log entry",
   async () => {
     const logged: object[] = [];
 
     await makeAction({
-      readTicketLog: () => Promise.resolve(""),
+      readPhaseSessionId: () => Promise.resolve(null),
       runGit: (args) => {
         if (args[0] === "rev-parse") {
           return Promise.resolve({ code: 0, stdout: "/wt/.git\n", stderr: "" });

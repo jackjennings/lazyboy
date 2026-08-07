@@ -24,6 +24,7 @@ import {
   dedupePrinciples,
   extractPrinciples,
   judgePrinciples,
+  readPhaseSessionId,
 } from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
@@ -268,8 +269,7 @@ export function composeTickDeps(
       stat,
       readDir,
       remove,
-      readTicketLog: (ticketDir) =>
-        readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
+      readPhaseSessionId,
     }),
     checkConflictsAction({
       runGit,
@@ -723,8 +723,7 @@ export function composeTickDeps(
           }
         }
       },
-      readTicketLog: (ticketDir) =>
-        readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
+      readPhaseSessionId,
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),
@@ -911,10 +910,7 @@ export function composeTickDeps(
           }
         },
       }),
-    notify: makeNotify(stateDir, {
-      readLog: (sd, id) =>
-        readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),
-      appendLog: appendTicketLog,
+    notify: makeNotify({
       runCommand: defaultCommandRunner(),
     }),
     notifyTickFailure: async (error: string) => {

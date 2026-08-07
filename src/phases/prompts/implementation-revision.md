@@ -66,6 +66,11 @@ shown in your context. Write your response to the output file path using the
 Write tool. Begin your response directly with the first section heading. No
 preamble.
 
+If a prior implementation output file is present in your context, use it as the
+base for your response. Copy all existing sections verbatim into your output,
+then update only the sections directly affected by the changes made in this
+revision. Do not drop any section, even if it was not touched by this revision.
+
 Your response must contain:
 
 ## Changes Made

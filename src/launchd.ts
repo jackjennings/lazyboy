@@ -27,6 +27,8 @@ export function plistContent(lazboyDir: string): string {
   <integer>300</integer>
   <key>RunAtLoad</key>
   <true/>
+  <key>AbandonProcessGroup</key>
+  <true/>
 </dict>
 </plist>
 `;

@@ -22,9 +22,6 @@ import {
   extractUsageAndText,
   getPiEnvironmentVariables,
   judgePrinciples,
-  lastPhaseRunCompleted,
-  resolvePhaseSessionId,
-  resolveRevisionSessionId,
   setupClaudeCodeDirectories,
   setupPiDirectories,
 } from "./run-phase.ts";
@@ -1114,6 +1111,87 @@ Deno.test("executePhase: .exit sidecar write failure does not suppress returned 
   }
 });
 
+Deno.test("executePhase: writes .session sidecar with session ID when present", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const outputFile = "20260101T120000-intake.md";
+    const sessionLine = JSON.stringify({
+      type: "session",
+      version: 3,
+      id: "sess-abc",
+    });
+    const agent: CodeAgent = {
+      runPhase: () =>
+        Promise.resolve({ stdout: sessionLine, stderr: "", code: 0 }),
+    };
+    await executePhase(
+      {
+        ticketDir,
+        stateDir: ticketDir,
+        outputFile,
+        phase: "intake",
+        scopeDirs: [],
+        prompt: "p",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+      },
+      agent,
+    );
+    const sidecar = await Deno.readTextFile(
+      join(ticketDir, outputFile + ".session"),
+    );
+    assertEquals(sidecar, "sess-abc");
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
+Deno.test("executePhase: does not write .session sidecar when no session ID in output", async () => {
+  const ticketDir = await Deno.makeTempDir();
+  const homeDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const outputFile = "20260101T120000-intake.md";
+    const agent: CodeAgent = {
+      runPhase: () => Promise.resolve({ stdout: "", stderr: "", code: 0 }),
+    };
+    await executePhase(
+      {
+        ticketDir,
+        stateDir: ticketDir,
+        outputFile,
+        phase: "intake",
+        scopeDirs: [],
+        prompt: "p",
+        worktrees: {},
+        homeDir,
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+        agentType: "pi",
+      },
+      agent,
+    );
+    let exists = true;
+    try {
+      await Deno.stat(join(ticketDir, outputFile + ".session"));
+    } catch {
+      exists = false;
+    }
+    assertFalse(exists);
+  } finally {
+    await Deno.remove(ticketDir, { recursive: true });
+    await Deno.remove(homeDir, { recursive: true });
+  }
+});
+
 // ── extractUsageAndText ──────────────────────────────────────────────────────
 
 const singleTurnNdjson = [
@@ -2015,256 +2093,6 @@ Deno.test(
     }
   },
 );
-
-// ── resolvePhaseSessionId ────────────────────────────────────────────────────
-
-Deno.test("resolvePhaseSessionId: returns sessionId from last matching phase-end", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-end",
-    phase: "20260806T002625-intake",
-    sessionId: "sess-abc",
-  });
-  assertEquals(resolvePhaseSessionId(log, "intake"), "sess-abc");
-});
-
-Deno.test("resolvePhaseSessionId: returns null when phase does not match", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-end",
-    phase: "20260806T002625-enrichment",
-    sessionId: "sess-abc",
-  });
-  assertEquals(resolvePhaseSessionId(log, "intake"), null);
-});
-
-Deno.test("resolvePhaseSessionId: returns null when phase-end has no sessionId", () => {
-  const log = JSON.stringify({ ts: "t1", event: "phase-end", phase: "spec" });
-  assertEquals(resolvePhaseSessionId(log, "spec"), null);
-});
-
-Deno.test("resolvePhaseSessionId: returns null for empty log", () => {
-  assertEquals(resolvePhaseSessionId("", "intake"), null);
-});
-
-Deno.test("resolvePhaseSessionId: skips malformed lines", () => {
-  const log = [
-    "not-json",
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "plan",
-      sessionId: "sess-xyz",
-    }),
-  ].join("\n");
-  assertEquals(resolvePhaseSessionId(log, "plan"), "sess-xyz");
-});
-
-Deno.test("resolvePhaseSessionId: returns sessionId from the last qualifying entry", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "spec",
-      sessionId: "first",
-    }),
-    JSON.stringify({
-      ts: "t2",
-      event: "phase-end",
-      phase: "spec",
-      sessionId: "second",
-    }),
-  ].join("\n");
-  assertEquals(resolvePhaseSessionId(log, "spec"), "second");
-});
-
-// ── lastPhaseRunCompleted ────────────────────────────────────────────────────
-
-Deno.test("lastPhaseRunCompleted: true when the last phase-start has a matching phase-end", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-start",
-      phase: "20260806T230129-spec",
-    }),
-    JSON.stringify({
-      ts: "t2",
-      event: "phase-end",
-      phase: "20260806T230129-spec",
-    }),
-  ].join("\n");
-  assert(lastPhaseRunCompleted(log, "spec"));
-});
-
-Deno.test("lastPhaseRunCompleted: false when the last phase-start has no phase-end", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-start",
-    phase: "20260807T014211-spec",
-  });
-  assertFalse(lastPhaseRunCompleted(log, "spec"));
-});
-
-Deno.test("lastPhaseRunCompleted: false when a newer run started but never ended", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-start",
-      phase: "20260806T230129-spec",
-    }),
-    JSON.stringify({
-      ts: "t2",
-      event: "phase-end",
-      phase: "20260806T230129-spec",
-    }),
-    JSON.stringify({
-      ts: "t3",
-      event: "phase-start",
-      phase: "20260807T014211-spec",
-    }),
-  ].join("\n");
-  assertFalse(lastPhaseRunCompleted(log, "spec"));
-});
-
-Deno.test("lastPhaseRunCompleted: true when no phase-start exists for the phase", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-start",
-    phase: "20260806T230129-intake",
-  });
-  assert(lastPhaseRunCompleted(log, "spec"));
-});
-
-Deno.test("lastPhaseRunCompleted: skips malformed lines", () => {
-  const log = [
-    "not-json",
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-start",
-      phase: "20260807T014211-plan",
-    }),
-  ].join("\n");
-  assertFalse(lastPhaseRunCompleted(log, "plan"));
-});
-
-// ── resolveRevisionSessionId ─────────────────────────────────────────────────
-
-Deno.test("resolveRevisionSessionId: returns sessionId from a qualifying phase-end", () => {
-  const log = [
-    JSON.stringify({ ts: "t1", event: "phase-start", phase: "implementation" }),
-    JSON.stringify({
-      ts: "t2",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "abc123",
-    }),
-  ].join("\n");
-  assertEquals(resolveRevisionSessionId(log), "abc123");
-});
-
-Deno.test("resolveRevisionSessionId: returns null when no phase-end with sessionId exists", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-end",
-    phase: "implementation",
-    exitCode: 0,
-    output: "",
-  });
-  assertEquals(resolveRevisionSessionId(log), null);
-});
-
-Deno.test("resolveRevisionSessionId: returns null when phase-end is for a non-implementation phase", () => {
-  const log = JSON.stringify({
-    ts: "t1",
-    event: "phase-end",
-    phase: "spec",
-    exitCode: 0,
-    output: "",
-    sessionId: "abc",
-  });
-  assertEquals(resolveRevisionSessionId(log), null);
-});
-
-Deno.test("resolveRevisionSessionId: returns null when conflict-resolution-started follows the last qualifying phase-end", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "abc123",
-    }),
-    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
-  ].join("\n");
-  assertEquals(resolveRevisionSessionId(log), null);
-});
-
-Deno.test("resolveRevisionSessionId: returns sessionId from the last qualifying phase-end in a multi-cycle log", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "first",
-    }),
-    JSON.stringify({
-      ts: "t2",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "second",
-    }),
-  ].join("\n");
-  assertEquals(resolveRevisionSessionId(log), "second");
-});
-
-Deno.test("resolveRevisionSessionId: ignores conflict-resolution-started before the last qualifying phase-end", () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "first",
-    }),
-    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
-    JSON.stringify({
-      ts: "t3",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "second",
-    }),
-  ].join("\n");
-  assertEquals(resolveRevisionSessionId(log), "second");
-});
-
-Deno.test("resolveRevisionSessionId: returns null for an empty log", () => {
-  assertEquals(resolveRevisionSessionId(""), null);
-});
-
-Deno.test("resolveRevisionSessionId: skips malformed NDJSON lines without throwing", () => {
-  const log = [
-    "not-json",
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "abc",
-    }),
-  ].join("\n");
-  assertEquals(resolveRevisionSessionId(log), "abc");
-});
 
 // ── extractUsageAndText: tool counting ───────────────────────────────────────
 

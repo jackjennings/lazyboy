@@ -256,88 +256,6 @@ export function extractClaudeCodeUsageAndText(
   };
 }
 
-export function resolveRevisionSessionId(logContent: string): string | null {
-  const parsed: { event: string; phase?: string; sessionId?: string }[] = [];
-  for (const line of logContent.split("\n").filter(Boolean)) {
-    try {
-      parsed.push(JSON.parse(line));
-    } catch {
-      // skip malformed lines
-    }
-  }
-
-  let lastIdx = -1;
-  let lastSessionId: string | null = null;
-  for (let i = 0; i < parsed.length; i++) {
-    const entry = parsed[i];
-    if (
-      entry.event === "phase-end" &&
-      entry.phase === "implementation" &&
-      typeof entry.sessionId === "string" &&
-      entry.sessionId.length > 0
-    ) {
-      lastIdx = i;
-      lastSessionId = entry.sessionId;
-    }
-  }
-
-  if (lastIdx === -1) return null;
-
-  for (let i = lastIdx + 1; i < parsed.length; i++) {
-    if (parsed[i].event === "conflict-resolution-started") return null;
-  }
-
-  return lastSessionId;
-}
-
-export function resolvePhaseSessionId(
-  logContent: string,
-  phase: string,
-): string | null {
-  let last: string | null = null;
-  for (const line of logContent.split("\n").filter(Boolean)) {
-    try {
-      const entry = JSON.parse(line) as {
-        event?: string;
-        phase?: string;
-        sessionId?: string;
-      };
-      if (
-        entry.event === "phase-end" &&
-        (entry.phase === phase || entry.phase?.endsWith(`-${phase}`)) &&
-        typeof entry.sessionId === "string" &&
-        entry.sessionId.length > 0
-      ) {
-        last = entry.sessionId;
-      }
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return last;
-}
-
-export function lastPhaseRunCompleted(
-  logContent: string,
-  phase: string,
-): boolean {
-  let lastStartBase: string | null = null;
-  const endBases = new Set<string>();
-  for (const line of logContent.split("\n").filter(Boolean)) {
-    try {
-      const entry = JSON.parse(line) as { event?: string; phase?: string };
-      if (typeof entry.phase !== "string") continue;
-      if (!entry.phase.endsWith(`-${phase}`)) continue;
-      if (entry.event === "phase-start") lastStartBase = entry.phase;
-      else if (entry.event === "phase-end") endBases.add(entry.phase);
-    } catch {
-      // skip malformed lines
-    }
-  }
-  if (lastStartBase === null) return true;
-  return endBases.has(lastStartBase);
-}
-
 export function extractPrinciples(content: string): string | null {
   const match = content.match(
     /(?:^|\n)## Principles\n([\s\S]*?)(?=\n## |\n*$)/,
@@ -555,6 +473,17 @@ export async function executePhase(
     );
   } catch {
     // sidecar write failure does not affect the returned exit code
+  }
+
+  if (sessionId !== null) {
+    try {
+      await Deno.writeTextFile(
+        join(opts.ticketDir, opts.outputFile + ".session"),
+        sessionId,
+      );
+    } catch {
+      // sidecar write failure does not affect the returned exit code
+    }
   }
 
   return result.code;

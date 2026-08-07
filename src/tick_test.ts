@@ -45,7 +45,7 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "intake");
@@ -69,7 +69,7 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "intake");
@@ -98,7 +98,7 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
@@ -121,7 +121,7 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(writeTicketSpy, 0);
 });
@@ -148,7 +148,7 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "enrichment");
@@ -172,7 +172,7 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(spawnSpy, 0);
 });
@@ -212,7 +212,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(written.phase, "merge");
@@ -245,7 +245,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 0);
   },
@@ -284,7 +284,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("valid output"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const last = written.at(-1)!;
     assertEquals(last.phase, "implementation");
@@ -327,90 +327,11 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("valid output"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const last = written.at(-1)!;
     assertEquals(last.phase, "implementation");
     assertEquals(last.status, "needs-attention");
-  },
-);
-
-Deno.test(
-  "advancePhase: running phase whose subprocess died before phase-end → needs-attention, no self-review",
-  async () => {
-    const ticket = makeTicket({ phase: "spec", status: "running" });
-    const written: TicketState[] = [];
-    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
-      written.push(t);
-      return Promise.resolve();
-    });
-    const logEntries: object[] = [];
-    const appendLogSpy = spy((_dir: string, _id: string, entry: object) => {
-      logEntries.push(entry);
-      return Promise.resolve();
-    });
-    const selfReviewSpy = spy(() =>
-      Promise.resolve({ approved: false, reason: null })
-    );
-    const log = JSON.stringify({
-      event: "phase-start",
-      phase: "20260807T014211-spec",
-    });
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: selfReviewSpy,
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("stale spec"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      readTicketLog: () => Promise.resolve(log),
-    });
-    const last = written.at(-1)!;
-    assertEquals(last.status, "needs-attention");
-    assertSpyCalls(selfReviewSpy, 0);
-    assertArrayIncludes(logEntries as Record<string, unknown>[], [
-      { event: "phase-output-invalid", phase: "spec", reason: "incomplete" },
-    ]);
-  },
-);
-
-Deno.test(
-  "advancePhase: running phase whose subprocess wrote phase-end proceeds to self-review",
-  async () => {
-    const ticket = makeTicket({ phase: "spec", status: "running" });
-    const selfReviewSpy = spy(() =>
-      Promise.resolve({ approved: false, reason: null })
-    );
-    const log = [
-      JSON.stringify({ event: "phase-start", phase: "20260807T014211-spec" }),
-      JSON.stringify({ event: "phase-end", phase: "20260807T014211-spec" }),
-    ].join("\n");
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: selfReviewSpy,
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("fresh spec"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      readTicketLog: () => Promise.resolve(log),
-    });
-    assertSpyCalls(selfReviewSpy, 1);
   },
 );
 
@@ -439,7 +360,7 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
@@ -472,7 +393,7 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
@@ -502,7 +423,7 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
@@ -531,7 +452,7 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
@@ -554,7 +475,7 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(appendLogSpy, 0);
   assertSpyCalls(appendLogSpy, 1);
@@ -582,7 +503,7 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(appendLogSpy, 0);
   assertEquals(appendLogSpy.calls[0].args[2], {
@@ -617,7 +538,7 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
@@ -644,7 +565,7 @@ Deno.test("advancePhase: live PID does not log", async () => {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 0);
 });
@@ -673,7 +594,7 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
@@ -717,7 +638,7 @@ Deno.test(
       markPRsReady: markPRsReadySpy,
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(markPRsReadySpy, 0, {
       args: [["https://github.com/o/r/pull/1"]],
@@ -745,7 +666,7 @@ Deno.test(
       markPRsReady: markPRsReadySpy,
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(markPRsReadySpy, 0);
   },
@@ -772,7 +693,7 @@ Deno.test(
       markPRsReady: markPRsReadySpy,
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(markPRsReadySpy, 0);
   },
@@ -806,7 +727,7 @@ Deno.test(
       markPRsReady: markPRsReadySpy,
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(markPRsReadySpy, 0);
   },
@@ -851,7 +772,7 @@ Deno.test(
       markPRsReady: () => Promise.reject(new Error("API error")),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(writtenTickets[0].phase, "merge");
@@ -897,7 +818,7 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
@@ -932,7 +853,7 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
@@ -963,7 +884,7 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertFalse("ts" in logEntries[0]);
@@ -987,7 +908,7 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile));
@@ -1014,7 +935,7 @@ Deno.test("advancePhase: revising status transitions to running", async () => {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(writtenTickets[0].status, "running");
@@ -1040,7 +961,7 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
@@ -1069,7 +990,7 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""));
@@ -1093,7 +1014,7 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile));
@@ -1121,7 +1042,7 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-enrichment\.md$/.test(spawnedOutputFile ?? ""));
@@ -1153,7 +1074,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve(null),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
@@ -1161,174 +1082,6 @@ Deno.test(
       (e) => (e as Record<string, unknown>).event === "phase-output-invalid",
     );
     assertEquals((invalidLog as Record<string, unknown>).reason, "missing");
-  },
-);
-
-Deno.test(
-  "advancePhase: missing output with sessionId in log spawns recovery and stays running",
-  async () => {
-    const recoveryLog = JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "spec",
-      sessionId: "sess-recover",
-    });
-    const ticket = makeTicket({ phase: "spec", status: "running" });
-    const writtenTickets: TicketState[] = [];
-    const logs: object[] = [];
-    let spawnedSessionId: string | undefined;
-    let spawnedScope: string[] | undefined;
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnedSessionId = opts.sessionId;
-        spawnedScope = opts.scope;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readTicketLog: () => Promise.resolve(recoveryLog),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
-    const final = writtenTickets[writtenTickets.length - 1];
-    assertEquals(final.status, "running");
-    assertEquals(final.outputRetries, 1);
-    assertEquals(spawnedSessionId, "sess-recover");
-    assertEquals(spawnedScope, []);
-    const retryLog = logs.find(
-      (e) => (e as Record<string, unknown>).event === "phase-output-retry",
-    );
-    assertEquals((retryLog as Record<string, unknown>).phase, "spec");
-    assertEquals((retryLog as Record<string, unknown>).attempt, 1);
-  },
-);
-
-Deno.test(
-  "advancePhase: missing output with outputRetries=1 goes to needs-attention without spawning",
-  async () => {
-    const ticket = makeTicket({
-      phase: "spec",
-      status: "running",
-      outputRetries: 1,
-    });
-    const writtenTickets: TicketState[] = [];
-    const logs: object[] = [];
-    let spawned = false;
-    await advancePhase(ticket, "/state", {
-      spawn: () => {
-        spawned = true;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readTicketLog: () =>
-        Promise.resolve(
-          JSON.stringify({
-            ts: "t1",
-            event: "phase-end",
-            phase: "spec",
-            sessionId: "s",
-          }),
-        ),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
-    assertEquals(spawned, false);
-    const final = writtenTickets[writtenTickets.length - 1];
-    assertEquals(final.status, "needs-attention");
-    const invalidLog = logs.find(
-      (e) => (e as Record<string, unknown>).event === "phase-output-invalid",
-    );
-    assertEquals((invalidLog as Record<string, unknown>).reason, "missing");
-  },
-);
-
-Deno.test(
-  "advancePhase: missing output without readTicketLog dep goes to needs-attention",
-  async () => {
-    const ticket = makeTicket({ phase: "spec", status: "running" });
-    const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
-    const final = writtenTickets[writtenTickets.length - 1];
-    assertEquals(final.status, "needs-attention");
-  },
-);
-
-Deno.test(
-  "advancePhase: missing output with no matching sessionId in log goes to needs-attention",
-  async () => {
-    const ticket = makeTicket({ phase: "spec", status: "running" });
-    const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
-      }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readTicketLog: () => Promise.resolve(""),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
-    const final = writtenTickets[writtenTickets.length - 1];
-    assertEquals(final.status, "needs-attention");
   },
 );
 
@@ -1358,7 +1111,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
     assertEquals(waitingWrite?.outputRetries, undefined);
@@ -1391,7 +1144,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("   \n  "),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
@@ -1424,7 +1177,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "waiting");
@@ -1470,6 +1223,321 @@ Deno.test(
       appendPrinciples: appendPrinciplesSpy,
     });
     assertSpyCalls(appendPrinciplesSpy, 0);
+  },
+);
+
+Deno.test(
+  "advancePhase: null readPhaseExitCode → needs-attention with reason incomplete",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const writtenTickets: TicketState[] = [];
+    const logs: object[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logs.push(entry);
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("some content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+    });
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "needs-attention");
+    const invalidLog = logs.find(
+      (e) => (e as Record<string, unknown>).event === "phase-output-invalid",
+    );
+    assertEquals((invalidLog as Record<string, unknown>).reason, "incomplete");
+  },
+);
+
+Deno.test(
+  "advancePhase: running→waiting stores session ID from sidecar in phaseSessionIds",
+  async () => {
+    const ticket = makeTicket({ phase: "spec", status: "running" });
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+      readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-xyz"),
+    });
+    const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
+    assertEquals(waitingWrite?.phaseSessionIds?.["spec"], "sess-xyz");
+  },
+);
+
+Deno.test(
+  "advancePhase: implementation revision passes phaseSessionIds.implementation as sessionId to spawn",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+      phaseSessionIds: { implementation: "sess-impl" },
+    });
+    let spawnedSessionId: string | undefined;
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedSessionId = opts.sessionId;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedSessionId, "sess-impl");
+  },
+);
+
+Deno.test(
+  "advancePhase: implementation revision with no phaseSessionIds spawns without sessionId",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+    });
+    let spawnedSessionId: string | undefined = "sentinel";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedSessionId = opts.sessionId;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedSessionId, undefined);
+  },
+);
+
+Deno.test(
+  "advancePhase: non-implementation revision spawns without sessionId regardless of phaseSessionIds",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "revising",
+      phaseSessionIds: { implementation: "sess-impl" },
+    });
+    let spawnedSessionId: string | undefined = "sentinel";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedSessionId = opts.sessionId;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedSessionId, undefined);
+  },
+);
+
+Deno.test(
+  "advancePhase: merge revision passes phaseSessionIds.implementation as sessionId to spawn",
+  async () => {
+    const ticket = makeTicket({
+      phase: "merge",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+      phaseSessionIds: { implementation: "sess-merge-impl" },
+    });
+    let spawnedSessionId: string | undefined;
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedSessionId = opts.sessionId;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedSessionId, "sess-merge-impl");
+  },
+);
+
+Deno.test(
+  "advancePhase: merge revision with no phaseSessionIds spawns without sessionId",
+  async () => {
+    const ticket = makeTicket({
+      phase: "merge",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+    });
+    let spawnedSessionId: string | undefined = "sentinel";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedSessionId = opts.sessionId;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedSessionId, undefined);
+  },
+);
+
+Deno.test(
+  "advancePhase: missing output with phaseSessionIds spawns recovery and stays running",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "running",
+      phaseSessionIds: { spec: "sess-recover" },
+    });
+    const writtenTickets: TicketState[] = [];
+    const logs: object[] = [];
+    let spawnedSessionId: string | undefined;
+    let spawnedScope: string[] | undefined;
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnedSessionId = opts.sessionId;
+        spawnedScope = opts.scope;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logs.push(entry);
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({
+        model: "claude-sonnet-4-6",
+        thinking: "off",
+      }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+      readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-recover"),
+    });
+    const final = writtenTickets[writtenTickets.length - 1];
+    assertEquals(final.status, "running");
+    assertEquals(final.outputRetries, 1);
+    assertEquals(spawnedSessionId, "sess-recover");
+    assertEquals(spawnedScope, []);
+    const retryLog = logs.find(
+      (e) => (e as Record<string, unknown>).event === "phase-output-retry",
+    );
+    assertEquals((retryLog as Record<string, unknown>).phase, "spec");
+    assertEquals((retryLog as Record<string, unknown>).attempt, 1);
+  },
+);
+
+Deno.test(
+  "advancePhase: revising→running clears notifiedNeedsAttention",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "revising",
+      notifiedNeedsAttention: true,
+    });
+    const writtenTickets: TicketState[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    const runningWrite = writtenTickets.find((t) => t.status === "running");
+    assertEquals(runningWrite?.notifiedNeedsAttention, false);
   },
 );
 
@@ -1537,7 +1605,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: null exit code (missing sidecar) with empty output falls through to empty guard",
+  "advancePhase: empty output with exit code 0 goes to needs-attention with reason empty",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
@@ -1559,7 +1627,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve(""),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertEquals(
       writtenTickets[writtenTickets.length - 1].status,
@@ -1624,7 +1692,7 @@ function makeFakeTickDeps(): TickDeps {
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   };
 }
 
@@ -1970,7 +2038,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       },
       writeLastWorked: writeLastWorkedSpy,
       concurrency: 2,
@@ -2214,7 +2282,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       },
     });
     await new TickService(deps).run();
@@ -2267,7 +2335,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       },
     });
     await new TickService(deps).run();
@@ -2569,7 +2637,7 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedModel, "claude-opus-4-7");
@@ -2597,7 +2665,7 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertEquals(resolvedPhase, "enrichment");
 });
@@ -2626,7 +2694,7 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
@@ -2658,7 +2726,7 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
     markPRsReady: () => Promise.resolve(),
     readPhaseOutput: () => Promise.resolve("content"),
     appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
+    readPhaseExitCode: () => Promise.resolve(0),
   });
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
@@ -2691,7 +2759,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 2);
     assertEquals(writtenTickets[0].status, "waiting");
@@ -2738,7 +2806,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 1);
     assertEquals(writtenTickets[0].approvals, []);
@@ -2773,7 +2841,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 1);
     assertSpyCalls(appendLogSpy, 1);
@@ -2800,7 +2868,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 1);
     assertEquals(writtenTickets[0].approvals, []);
@@ -2837,7 +2905,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writePhaseOutputSpy, 1);
     assertEquals(writePhaseOutputCalls[0][0], "/state");
@@ -2867,7 +2935,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writePhaseOutputSpy, 0);
   },
@@ -2899,7 +2967,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertEquals(capturedPhase, "intake");
     assertEquals(
@@ -2940,7 +3008,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(spawnSpy, 0);
     const supplement = await Deno.readTextFile(
@@ -2981,7 +3049,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(spawnSpy, 0);
     const supplement = await Deno.readTextFile(
@@ -3026,7 +3094,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("implementation.md");
@@ -3061,7 +3129,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("intake.md");
@@ -3096,7 +3164,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       buildRepoCorpusText: () =>
         Promise.resolve(
           "## Available Repositories\n\n- myorg/frontend (checked out at /code/myorg/frontend)\n",
@@ -3140,7 +3208,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("intake.md");
@@ -3261,6 +3329,54 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: skips notification when notifiedNeedsAttention is true",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+      notifiedNeedsAttention: true,
+    });
+    const notifySpy = spy((_t: TicketState) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      notify: notifySpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(notifySpy, 0);
+  },
+);
+
+Deno.test(
+  "TickService: sets notifiedNeedsAttention after notifying",
+  async () => {
+    const ticket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const writtenTickets: TicketState[] = [];
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      notify: (_t) => Promise.resolve(),
+      writeTicket: (t) => {
+        writtenTickets.push(t);
+        return Promise.resolve();
+      },
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    const notifiedWrite = writtenTickets.find((t) =>
+      t.notifiedNeedsAttention === true
+    );
+    assertEquals(notifiedWrite?.id, "gh-1");
+  },
+);
+
+Deno.test(
   "TickService: refreshAnthropicPricing called before installPackages",
   async () => {
     const sequence: string[] = [];
@@ -3329,7 +3445,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
@@ -3368,7 +3484,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
@@ -3416,7 +3532,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
@@ -3454,7 +3570,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
@@ -3484,7 +3600,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
     });
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
@@ -3516,7 +3632,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     assertSpyCalls(writeTicketSpy, 1);
   },
@@ -3549,7 +3665,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE INTAKE CONTEXT");
@@ -3590,7 +3706,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE ENRICHMENT CONTEXT");
@@ -3633,7 +3749,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE IMPL CONTEXT");
@@ -3667,7 +3783,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertSpyCall(spawnSpy, 0);
       assertFalse(spawnedPrompt.includes("\n\n\n"));
@@ -3697,7 +3813,7 @@ Deno.test(
           markPRsReady: () => Promise.resolve(),
           readPhaseOutput: () => Promise.resolve("content"),
           appendPrinciples: () => Promise.resolve(),
-          readPhaseExitCode: () => Promise.resolve(null),
+          readPhaseExitCode: () => Promise.resolve(0),
         })
       );
     } finally {
@@ -3705,316 +3821,6 @@ Deno.test(
     }
   },
 );
-
-// ── advancePhase: implementation revision session ID ─────────────────────────
-
-function makeRevisionLog(sessionId: string): string {
-  return JSON.stringify({
-    ts: "t1",
-    event: "phase-end",
-    phase: "implementation",
-    exitCode: 0,
-    output: "",
-    sessionId,
-  });
-}
-
-Deno.test("advancePhase: implementation revision passes sessionId from log to spawn", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined;
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-abc")),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, "sess-abc");
-});
-
-Deno.test("advancePhase: implementation revision with no qualifying log entry spawns without sessionId", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined = "sentinel";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-    readTicketLog: () => Promise.resolve(""),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, undefined);
-});
-
-Deno.test("advancePhase: implementation revision with conflict-resolution-started after phase-end spawns without sessionId", async () => {
-  const log = [
-    JSON.stringify({
-      ts: "t1",
-      event: "phase-end",
-      phase: "implementation",
-      exitCode: 0,
-      output: "",
-      sessionId: "sess-stale",
-    }),
-    JSON.stringify({ ts: "t2", event: "conflict-resolution-started" }),
-  ].join("\n");
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined = "sentinel";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-    readTicketLog: () => Promise.resolve(log),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, undefined);
-});
-
-Deno.test("advancePhase: non-implementation revision spawns without sessionId regardless of log", async () => {
-  const ticket = makeTicket({ phase: "spec", status: "revising" });
-  let spawnedSessionId: string | undefined = "sentinel";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-abc")),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, undefined);
-});
-
-Deno.test("advancePhase: merge/revising spawns with ticket.worktrees", async () => {
-  const ticket = makeTicket({
-    phase: "merge",
-    status: "revising",
-    worktrees: {
-      "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
-    },
-  });
-  let spawnedWorktrees: Record<string, unknown> = {};
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedWorktrees = opts.worktrees;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedWorktrees, {
-    "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
-  });
-});
-
-Deno.test("advancePhase: merge/revising spawns with phase implementation", async () => {
-  const ticket = makeTicket({
-    phase: "merge",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedPhase: string | undefined;
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedPhase = opts.phase;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedPhase, "implementation");
-});
-
-Deno.test("advancePhase: merge/revising outputFile has merge suffix", async () => {
-  const ticket = makeTicket({
-    phase: "merge",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedOutputFile: string | undefined;
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedOutputFile = opts.outputFile;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assert(spawnedOutputFile?.endsWith("-merge.md"));
-});
-
-Deno.test("advancePhase: merge revision passes sessionId from log to spawn", async () => {
-  const ticket = makeTicket({
-    phase: "merge",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined;
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readTicketLog: () => Promise.resolve(makeRevisionLog("sess-merge")),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, "sess-merge");
-});
-
-Deno.test("advancePhase: merge revision with no qualifying log entry spawns without sessionId", async () => {
-  const ticket = makeTicket({
-    phase: "merge",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined = "sentinel";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readTicketLog: () => Promise.resolve(""),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, undefined);
-});
-
-Deno.test("advancePhase: implementation revision with absent readTicketLog dep spawns without sessionId", async () => {
-  const ticket = makeTicket({
-    phase: "implementation",
-    status: "revising",
-    worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
-  });
-  let spawnedSessionId: string | undefined = "sentinel";
-  const spawnSpy = spy((opts: SpawnOpts) => {
-    spawnedSessionId = opts.sessionId;
-    return Promise.resolve();
-  });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(null),
-  });
-  assertSpyCall(spawnSpy, 0);
-  assertEquals(spawnedSessionId, undefined);
-});
 
 Deno.test("TickService: processLearnings called once per run", async () => {
   const processLearningsSpy = spy((): Promise<void> => Promise.resolve());
@@ -4237,7 +4043,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertEquals(capturedPrompt.includes("github intake supplement"), true);
     } finally {
@@ -4274,7 +4080,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve("output content"),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertArrayIncludes(statuses, ["waiting"]);
       assertFalse(statuses.includes("needs-attention"));
@@ -4318,7 +4124,7 @@ Deno.test(
         markPRsReady: () => Promise.resolve(),
         readPhaseOutput: () => Promise.resolve(null),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertEquals(spawnedPhase, "implementation");
     } finally {
@@ -4363,7 +4169,7 @@ Deno.test(
         markPRsReady: markPRsReadySpy,
         readPhaseOutput: () => Promise.resolve(null),
         appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(0),
       });
       assertEquals(writtenPhase, "merge");
       assertEquals(writtenStatus, "done");
@@ -4443,7 +4249,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       maxPromptTokens: 1,
     });
     const entries = appendLogSpy.calls.map(
@@ -4551,7 +4357,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       maxPromptTokens: 1,
     });
     const entries = appendLogSpy.calls.map(
@@ -4621,7 +4427,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       maxPromptTokens: 1,
     });
     const entries = appendLogSpy.calls.map(
@@ -4656,7 +4462,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
       maxPromptTokens: 100_000,
     });
     const entries = appendLogSpy.calls.map(
@@ -4687,7 +4493,7 @@ Deno.test(
       markPRsReady: () => Promise.resolve(),
       readPhaseOutput: () => Promise.resolve("content"),
       appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
+      readPhaseExitCode: () => Promise.resolve(0),
     });
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,

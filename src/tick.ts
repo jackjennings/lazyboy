@@ -3,12 +3,7 @@ import { estimateTokenCount } from "tokenx";
 import { lazyboyDir } from "./paths.ts";
 import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import { deleteRunPid } from "./executor.ts";
-import {
-  extractPrinciples,
-  lastPhaseRunCompleted,
-  resolvePhaseSessionId,
-  resolveRevisionSessionId,
-} from "./run-phase.ts";
+import { extractPrinciples } from "./run-phase.ts";
 import {
   loadArtifactPrompt,
   loadPrompt,
@@ -104,8 +99,11 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<number | null>;
+  readPhaseSessionId?: (
+    ticketDir: string,
+    phase: string,
+  ) => Promise<string | null>;
   maxPromptTokens?: number;
-  readTicketLog?: (ticketDir: string) => Promise<string>;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
     ticketId: string,
@@ -229,10 +227,9 @@ export async function advancePhase(
     const { model: revisingModel, thinking: revisingThinking } = deps
       .resolveModelConfig(activePhase, ticket);
     let sessionId: string | undefined;
-    if (isImplementationRevision && deps.readTicketLog) {
-      const logContent = await deps.readTicketLog(join(stateDir, ticket.id));
-      const resolved = resolveRevisionSessionId(logContent);
-      if (resolved !== null) sessionId = resolved;
+    if (isImplementationRevision) {
+      const stored = ticket.phaseSessionIds?.["implementation"];
+      if (stored) sessionId = stored;
     }
     await deps.spawn({
       phase: activePhase,
@@ -249,6 +246,7 @@ export async function advancePhase(
       ...ticket,
       status: "running",
       updated: now,
+      notifiedNeedsAttention: false,
     });
     await deps.appendLog(stateDir, ticket.id, {
       event: "status-transition",
@@ -325,11 +323,18 @@ export async function advancePhase(
   if (ticket.status === "running") {
     if (!deps.isProcessAlive(ticket.id)) {
       await deleteRunPid(join(stateDir, ticket.id));
+      const sessionIdFromSidecar = deps.readPhaseSessionId
+        ? await deps.readPhaseSessionId(join(stateDir, ticket.id), ticket.phase)
+        : null;
+      const phaseSessionIds = sessionIdFromSidecar !== null
+        ? { ...ticket.phaseSessionIds, [ticket.phase]: sessionIdFromSidecar }
+        : ticket.phaseSessionIds;
       const waitingTicket: TicketState = {
         ...ticket,
         outputRetries: undefined,
         status: "waiting",
         updated: now,
+        phaseSessionIds,
       };
       await deps.writeTicket(stateDir, waitingTicket);
       await deps.appendLog(stateDir, ticket.id, {
@@ -339,28 +344,24 @@ export async function advancePhase(
         to: "waiting",
       });
 
-      if (deps.readTicketLog) {
-        const logContent = await deps.readTicketLog(join(stateDir, ticket.id));
-        if (!lastPhaseRunCompleted(logContent, ticket.phase)) {
-          await deps.writeTicket(stateDir, {
-            ...waitingTicket,
-            status: "needs-attention",
-            updated: now,
-          });
-          await deps.appendLog(stateDir, ticket.id, {
-            event: "phase-output-invalid",
-            phase: ticket.phase,
-            reason: "incomplete",
-          });
-          return;
-        }
-      }
-
       const exitCode = await deps.readPhaseExitCode(
         join(stateDir, ticket.id),
         ticket.phase,
       );
-      if (exitCode !== null && exitCode !== 0) {
+      if (exitCode === null) {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "phase-output-invalid",
+          phase: ticket.phase,
+          reason: "incomplete",
+        });
+        return;
+      }
+      if (exitCode !== 0) {
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
           status: "needs-attention",
@@ -380,11 +381,8 @@ export async function advancePhase(
       );
       if (outputContent === null) {
         const retries = ticket.outputRetries ?? 0;
-        if (retries < 1 && deps.readTicketLog) {
-          const logContent = await deps.readTicketLog(
-            join(stateDir, ticket.id),
-          );
-          const sessionId = resolvePhaseSessionId(logContent, ticket.phase);
+        if (retries < 1) {
+          const sessionId = waitingTicket.phaseSessionIds?.[ticket.phase];
           if (sessionId) {
             const outputFile = `${
               compactTimestamp(zonedNow)
@@ -806,9 +804,15 @@ export class TickService {
       }
     }
 
-    for (const ticket of processedTickets) {
-      if (ticket.status === "needs-attention") {
+    for (let i = 0; i < processedTickets.length; i++) {
+      const ticket = processedTickets[i];
+      if (
+        ticket.status === "needs-attention" && !ticket.notifiedNeedsAttention
+      ) {
         await deps.notify?.(ticket);
+        const updated = { ...ticket, notifiedNeedsAttention: true };
+        await deps.writeTicket(updated);
+        processedTickets[i] = updated;
       }
     }
 

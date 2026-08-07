@@ -716,8 +716,30 @@ export function composeTickDeps(
           }
         }
       },
-      readTicketLog: (ticketDir) =>
-        readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
+      readPhaseSessionId: async (ticketDir, phase) => {
+        const pattern = new RegExp(
+          `^\\d{8}T\\d{6}-${phase}\\.md\\.session$`,
+        );
+        const matches: string[] = [];
+        try {
+          for await (const entry of Deno.readDir(ticketDir)) {
+            if (entry.isFile && pattern.test(entry.name)) {
+              matches.push(entry.name);
+            }
+          }
+        } catch {
+          // dir missing
+        }
+        if (matches.length === 0) return null;
+        matches.sort();
+        try {
+          return await Deno.readTextFile(
+            join(ticketDir, matches[matches.length - 1]),
+          );
+        } catch {
+          return null;
+        }
+      },
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),
@@ -904,10 +926,7 @@ export function composeTickDeps(
           }
         },
       }),
-    notify: makeNotify(stateDir, {
-      readLog: (sd, id) =>
-        readTextFile(join(sd, id, "log.ndjson")).catch(() => ""),
-      appendLog: appendTicketLog,
+    notify: makeNotify({
       runCommand: defaultCommandRunner(),
     }),
     notifyTickFailure: async (error: string) => {

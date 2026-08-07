@@ -90,7 +90,7 @@ export function isApproved(ticket: TicketState): boolean {
 }
 
 export type PhaseModelConfig = Partial<
-  Record<string, { model?: string; thinking?: string }>
+  Record<string, { model?: string; thinking?: string; skip?: boolean }>
 >;
 
 export interface PhaseUsage {

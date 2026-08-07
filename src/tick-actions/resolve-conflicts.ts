@@ -3,6 +3,7 @@ import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
 import { sanitizeBranchForFilename } from "./check-conflicts.ts";
 import { deleteRunPid } from "../executor.ts";
+import { resolvePhaseSessionId } from "../run-phase.ts";
 
 export interface ResolveConflictsDeps {
   runGit: (
@@ -17,6 +18,7 @@ export interface ResolveConflictsDeps {
     path: string,
   ) => AsyncIterable<{ name: string; isFile: boolean }>;
   remove: (path: string) => Promise<void>;
+  readTicketLog: (ticketDir: string) => Promise<string>;
 }
 
 export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
@@ -49,6 +51,12 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
       }
 
       if (contextFiles.length === 0) return null;
+
+      const ticketLogContent = await deps.readTicketLog(ticketDir);
+      const sessionId = resolvePhaseSessionId(
+        ticketLogContent,
+        "conflict-resolution",
+      );
 
       const resolvingWorktrees = Object.values(ticket.worktrees).filter(
         (wt) => {
@@ -97,6 +105,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
             worktreePath: wt.path,
             branch: wt.branch,
             reason: "agent-failed",
+            ...(sessionId !== null ? { sessionId } : {}),
           });
         }
         return updated;
@@ -123,6 +132,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
             worktreePath: wt.path,
             branch: wt.branch,
             reason: "push-failed",
+            ...(sessionId !== null ? { sessionId } : {}),
           });
           return updated;
         }

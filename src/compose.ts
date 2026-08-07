@@ -263,6 +263,8 @@ export function composeTickDeps(
       stat,
       readDir,
       remove,
+      readTicketLog: (ticketDir) =>
+        readTextFile(join(ticketDir, "log.ndjson")).catch(() => ""),
     }),
     checkConflictsAction({
       runGit,

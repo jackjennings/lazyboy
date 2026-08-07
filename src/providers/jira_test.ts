@@ -7,6 +7,7 @@ import {
 } from "@std/assert";
 import { JiraProvider } from "./jira.ts";
 import { compareSortKeys } from "./types.ts";
+import { HttpClient } from "../http-client.ts";
 
 const BASE_URL = "https://myorg.atlassian.net";
 
@@ -31,13 +32,14 @@ Deno.test("fetchNew returns all items when knownIds is empty", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue One")] }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
@@ -53,7 +55,7 @@ Deno.test("fetchNew filters known IDs", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -64,7 +66,8 @@ Deno.test("fetchNew filters known IDs", async () => {
           }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set(["jira/PROJ-1"]));
   assertEquals(items.length, 1);
@@ -77,13 +80,14 @@ Deno.test("fetchNew does not re-create an issue tracked under its legacy jira-<K
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({ issues: [makeIssue("PROJ-1", "One")] }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set(["jira-PROJ-1"]));
   assertEquals(items.length, 0);
@@ -97,13 +101,13 @@ Deno.test("fetchNew uses POST to /rest/api/3/search/jql", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (url, init) => {
-      capturedUrl = url;
-      capturedMethod = init.method ?? "GET";
+    http: new HttpClient((url, init) => {
+      capturedUrl = url as string;
+      capturedMethod = init?.method ?? "GET";
       return Promise.resolve(
         new Response(JSON.stringify({ issues: [] }), { status: 200 }),
       );
-    },
+    }),
   });
   await provider.fetchNew(new Set());
   assertEquals(capturedUrl, `${BASE_URL}/rest/api/3/search/jql`);
@@ -116,8 +120,9 @@ Deno.test("fetchNew throws on non-2xx response", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
-      Promise.resolve(new Response("Unauthorized", { status: 401 })),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response("Unauthorized", { status: 401 }))
+    ),
   });
   await assertRejects(
     () => provider.fetchNew(new Set()),
@@ -132,7 +137,7 @@ Deno.test("fetchNew skips issues with missing fields", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -143,7 +148,8 @@ Deno.test("fetchNew skips issues with missing fields", async () => {
           }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
@@ -156,13 +162,14 @@ Deno.test("fetchNew description is empty string when fields.description is null"
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({ issues: [makeIssue("PROJ-1", "T", null)] }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items[0].description, "");
@@ -174,7 +181,7 @@ Deno.test("fetchNew description is empty string when fields.description is undef
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -182,7 +189,8 @@ Deno.test("fetchNew description is empty string when fields.description is undef
           }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items[0].description, "");
@@ -195,9 +203,13 @@ Deno.test("close transitions the issue to the done status category", async () =>
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (url, init) => {
-      requests.push({ url, method: init.method, body: init.body as string });
-      if (!init.method) {
+    http: new HttpClient((url, init) => {
+      requests.push({
+        url: url as string,
+        method: init?.method,
+        body: init?.body as string,
+      });
+      if (init?.method !== "POST") {
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -210,7 +222,7 @@ Deno.test("close transitions the issue to the done status category", async () =>
         );
       }
       return Promise.resolve(new Response(null, { status: 204 }));
-    },
+    }),
   });
   await provider.close(`${BASE_URL}/browse/PROJ-1`);
   assertEquals(
@@ -227,6 +239,7 @@ Deno.test("close throws on unrecognized URL", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    http: new HttpClient(),
   });
   await assertRejects(
     () => provider.close("https://example.com/not-a-jira-issue"),
@@ -248,7 +261,7 @@ Deno.test("fetchNew description is Markdown when fields.description is an ADF ob
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -256,7 +269,8 @@ Deno.test("fetchNew description is Markdown when fields.description is an ADF ob
           }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items[0].description, "Hello world");
@@ -296,8 +310,8 @@ Deno.test("fetchNew appends parent context when issue has one parent", async () 
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (url, _init) => {
-      if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+    http: new HttpClient((url, _init) => {
+      if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -315,7 +329,7 @@ Deno.test("fetchNew appends parent context when issue has one parent", async () 
           { status: 200 },
         ),
       );
-    },
+    }),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
@@ -334,8 +348,8 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
-      _fetch: (url, _init) => {
-        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+      http: new HttpClient((url, _init) => {
+        if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
             new Response(
               JSON.stringify({
@@ -345,7 +359,7 @@ Deno.test(
             ),
           );
         }
-        if (url.includes("/issue/STORY-10")) {
+        if ((url as string).includes("/issue/STORY-10")) {
           return Promise.resolve(
             new Response(
               JSON.stringify({
@@ -367,7 +381,7 @@ Deno.test(
             { status: 200 },
           ),
         );
-      },
+      }),
     });
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);
@@ -391,13 +405,14 @@ Deno.test("fetchNew description is unchanged when issue has no parent", async ()
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
-    _fetch: (_url, _init) =>
+    http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
           JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue One")] }),
           { status: 200 },
         ),
-      ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items[0].description, "");
@@ -411,8 +426,8 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
-      _fetch: (url, _init) => {
-        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+      http: new HttpClient((url, _init) => {
+        if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
             new Response(
               JSON.stringify({
@@ -423,7 +438,7 @@ Deno.test(
           );
         }
         return Promise.resolve(new Response("Not Found", { status: 404 }));
-      },
+      }),
     });
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);
@@ -440,8 +455,8 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
-      _fetch: (url, _init) => {
-        if (url === `${BASE_URL}/rest/api/3/search/jql`) {
+      http: new HttpClient((url, _init) => {
+        if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
             new Response(
               JSON.stringify({
@@ -452,7 +467,7 @@ Deno.test(
           );
         }
         return Promise.resolve(new Response("Forbidden", { status: 403 }));
-      },
+      }),
     });
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);

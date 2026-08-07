@@ -1,4 +1,4 @@
-type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+import { HttpClient } from "../http-client.ts";
 
 export async function jiraTransition(opts: {
   baseUrl: string;
@@ -6,9 +6,8 @@ export async function jiraTransition(opts: {
   apiToken: string;
   issueKey: string;
   targetStatusCategoryKey: string;
-  fetch?: FetchFn;
+  http: HttpClient;
 }): Promise<void> {
-  const fetchFn: FetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
   const auth = btoa(`${opts.email}:${opts.apiToken}`);
   const headers = {
     Authorization: `Basic ${auth}`,
@@ -18,7 +17,7 @@ export async function jiraTransition(opts: {
 
   const transitionsUrl =
     `${opts.baseUrl}/rest/api/3/issue/${opts.issueKey}/transitions`;
-  const res = await fetchFn(transitionsUrl, { headers });
+  const res = await opts.http.get(transitionsUrl, { headers });
   if (!res.ok) {
     throw new Error(`Jira API error: ${res.status} ${transitionsUrl}`);
   }
@@ -37,8 +36,7 @@ export async function jiraTransition(opts: {
     );
   }
 
-  const postRes = await fetchFn(transitionsUrl, {
-    method: "POST",
+  const postRes = await opts.http.post(transitionsUrl, {
     headers,
     body: JSON.stringify({ transition: { id: transition.id } }),
   });

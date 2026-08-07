@@ -6,6 +6,7 @@ import {
 } from "@std/assert";
 import { jiraPickupAction } from "./jira-pickup.ts";
 import { makeTicket } from "../test-support.ts";
+import { HttpClient } from "../http-client.ts";
 
 function makeAction(
   overrides: Partial<Parameters<typeof jiraPickupAction>[0]> = {},
@@ -15,6 +16,7 @@ function makeAction(
     email: "test@example.com",
     apiToken: "token",
     appendLog: () => Promise.resolve(),
+    http: new HttpClient(),
     ...overrides,
   });
 }
@@ -22,8 +24,11 @@ function makeAction(
 function makeTransitionsFetch(
   transitions: Array<{ id: string; to: { statusCategory: { key: string } } }>,
 ) {
-  return (_url: string, init: RequestInit) => {
-    if (init.method === "POST") {
+  return (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    if (init?.method === "POST") {
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return Promise.resolve(
@@ -59,13 +64,13 @@ Deno.test("jiraPickupAction: does not apply when status is not new", () => {
 Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progress id for correct issue key", async () => {
   const calls: Array<{ url: string; method: string; body?: string }> = [];
   const result = await makeAction({
-    _fetch: (url, init) => {
+    http: new HttpClient((url, init) => {
       calls.push({
-        url,
-        method: init.method ?? "GET",
-        body: init.body as string | undefined,
+        url: url as string,
+        method: init?.method ?? "GET",
+        body: init?.body as string | undefined,
       });
-      if (init.method === "POST") {
+      if (init?.method === "POST") {
         return Promise.resolve(new Response(null, { status: 204 }));
       }
       return Promise.resolve(
@@ -78,7 +83,7 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
           { status: 200 },
         ),
       );
-    },
+    }),
   }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
   assertEquals(calls.length, 2);
@@ -94,9 +99,9 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
 
 Deno.test("jiraPickupAction: run returns null on success", async () => {
   const result = await makeAction({
-    _fetch: makeTransitionsFetch([
+    http: new HttpClient(makeTransitionsFetch([
       { id: "31", to: { statusCategory: { key: "in-progress" } } },
-    ]),
+    ])),
   }).run(makeTicket(BASE), "/state");
   assertEquals(result, null);
 });
@@ -104,8 +109,9 @@ Deno.test("jiraPickupAction: run returns null on success", async () => {
 Deno.test("jiraPickupAction: run logs error and returns null when transition throws", async () => {
   const logged: object[] = [];
   const result = await makeAction({
-    _fetch: (_url, _init) =>
-      Promise.resolve(new Response("Forbidden", { status: 403 })),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response("Forbidden", { status: 403 }))
+    ),
     appendLog: (_stateDir, _id, entry) => {
       logged.push(entry);
       return Promise.resolve();
@@ -120,9 +126,9 @@ Deno.test("jiraPickupAction: run logs error and returns null when transition thr
 Deno.test("jiraPickupAction: run logs error when no matching transition found", async () => {
   const logged: object[] = [];
   await makeAction({
-    _fetch: makeTransitionsFetch([
+    http: new HttpClient(makeTransitionsFetch([
       { id: "10", to: { statusCategory: { key: "done" } } },
-    ]),
+    ])),
     appendLog: (_stateDir, _id, entry) => {
       logged.push(entry);
       return Promise.resolve();

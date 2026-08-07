@@ -81,7 +81,6 @@ export interface TicketState {
   phases?: PhaseModelConfig;
   artifact: "pr" | "notion";
   notionPages?: { url: string; title: string }[];
-  skipPlan?: boolean;
 }
 
 export function isApproved(ticket: TicketState): boolean {
@@ -91,7 +90,7 @@ export function isApproved(ticket: TicketState): boolean {
 }
 
 export type PhaseModelConfig = Partial<
-  Record<string, { model?: string; thinking?: string }>
+  Record<string, { model?: string; thinking?: string; skip?: boolean }>
 >;
 
 export interface PhaseUsage {

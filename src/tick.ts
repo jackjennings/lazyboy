@@ -609,7 +609,7 @@ export async function advancePhase(
     const next = nextPhase(activePhase);
     if (next === "done") return;
     const effectiveNext: ActivePhase = activePhase === "spec" &&
-        ticket.skipPlan === true &&
+        ticket.phases?.plan?.skip === true &&
         next === "plan"
       ? nextPhase("plan") as ActivePhase
       : next;

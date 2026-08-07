@@ -4593,13 +4593,13 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: spec/waiting + approved + skipPlan skips plan, advances to implementation",
+  "advancePhase: spec/waiting + approved + phases.plan.skip skips plan, advances to implementation",
   async () => {
     const ticket = makeTicket({
       phase: "spec",
       status: "waiting",
       approvals: [{ timestamp: "t", actor: "human", phase: "spec" }],
-      skipPlan: true,
+      phases: { plan: { skip: true } },
       worktrees: {
         "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
       },

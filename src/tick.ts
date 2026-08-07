@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import { estimateTokenCount } from "tokenx";
 import { lazyboyDir } from "./paths.ts";
+import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import { deleteRunPid } from "./executor.ts";
 import {
   extractPrinciples,
@@ -112,6 +113,9 @@ export interface TickDeps {
     lazboyWorktreePath: string,
     phase: "implementation" | "plan",
   ) => Promise<void>;
+  adjudicatePhaseModel?: (
+    prompt: string,
+  ) => Promise<{ model: string; thinking: string } | null>;
 }
 
 export interface TickServiceDeps {
@@ -648,8 +652,23 @@ export async function advancePhase(
         maxTokens: threshold,
       });
     }
+    let resolvedTicket = ticket;
+    if (next === "implementation" && deps.adjudicatePhaseModel) {
+      try {
+        const override = await deps.adjudicatePhaseModel(prompt);
+        if (override !== null) {
+          resolvedTicket = {
+            ...ticket,
+            phases: { ...ticket.phases, implementation: override },
+          };
+          await deps.writeTicket(stateDir, resolvedTicket);
+        }
+      } catch {
+        // silently skip — resolveModelConfig proceeds with original ticket state
+      }
+    }
     const { model: nextModel, thinking: nextThinking } = deps
-      .resolveModelConfig(next, ticket);
+      .resolveModelConfig(next, resolvedTicket);
     await deps.spawn({
       phase: next,
       ticketDir: join(stateDir, ticket.id),
@@ -661,7 +680,7 @@ export async function advancePhase(
       thinking: nextThinking,
     });
     await deps.writeTicket(stateDir, {
-      ...ticket,
+      ...resolvedTicket,
       phase: next,
       status: "running",
       updated: now,
@@ -861,3 +880,5 @@ export class TickService {
     await deps.runCeremonies?.();
   }
 }
+
+export { adjudicatePhaseModel };

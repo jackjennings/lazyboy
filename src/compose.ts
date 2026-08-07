@@ -61,6 +61,7 @@ import {
   resolvePhaseModel,
   type TickServiceDeps,
 } from "./tick.ts";
+import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import {
   captureCommandRunner,
   checkApfelAvailable,
@@ -723,6 +724,8 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
+      adjudicatePhaseModel: (prompt) =>
+        adjudicatePhaseModel(prompt, fetch, anthropicApiKey),
       spawnOutlierAnalysis: async (
         ticketId,
         ticketDir,

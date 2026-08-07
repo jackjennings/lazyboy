@@ -1,9 +1,7 @@
 import { assertEquals } from "@std/assert";
-import { assertSpyCalls, spy } from "@std/testing/mock";
 import {
   deriveOrgFromTicketDir,
   ensureStatePrompts,
-  resolveFailingOutput,
   resolveGitHubAccount,
 } from "./compose.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
@@ -311,125 +309,5 @@ Deno.test(
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
-  },
-);
-
-function makeOkFetcher(body: string) {
-  return spy(() => Promise.resolve(new Response(body, { status: 200 })));
-}
-
-Deno.test(
-  "resolveFailingOutput: fetches log when external_id present",
-  async () => {
-    const fetcher = makeOkFetcher("build output here");
-    const result = await resolveFailingOutput(
-      "42",
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcher as unknown as typeof fetch,
-    );
-    assertEquals(result, "build output here");
-    assertSpyCalls(fetcher, 1);
-  },
-);
-
-Deno.test("resolveFailingOutput: truncates log to last 20480 chars", async () => {
-  const long = "a".repeat(30000);
-  const fetcher = makeOkFetcher(long);
-  const result = await resolveFailingOutput(
-    "42",
-    "ci",
-    "owner/repo",
-    "tok",
-    fetcher as unknown as typeof fetch,
-  );
-  assertEquals(result, "a".repeat(20480));
-});
-
-Deno.test(
-  "resolveFailingOutput: returns name when log fetch returns non-2xx",
-  async () => {
-    const fetcherSpy = spy(() =>
-      Promise.resolve(new Response("", { status: 403 }))
-    );
-    const result = await resolveFailingOutput(
-      "42",
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcherSpy as unknown as typeof fetch,
-    );
-    assertEquals(result, "ci");
-  },
-);
-
-Deno.test("resolveFailingOutput: returns name when log fetch throws", async () => {
-  const fetcherSpy = spy(() => Promise.reject(new Error("network")));
-  const result = await resolveFailingOutput(
-    "42",
-    "ci",
-    "owner/repo",
-    "tok",
-    fetcherSpy as unknown as typeof fetch,
-  );
-  assertEquals(result, "ci");
-});
-
-Deno.test(
-  "resolveFailingOutput: returns name when external_id absent, fetcher not called",
-  async () => {
-    const fetcherSpy = spy(() =>
-      Promise.resolve(new Response("", { status: 200 }))
-    );
-    const result = await resolveFailingOutput(
-      undefined,
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcherSpy as unknown as typeof fetch,
-    );
-    assertEquals(result, "ci");
-    assertSpyCalls(fetcherSpy, 0);
-  },
-);
-
-Deno.test(
-  "resolveFailingOutput: returns name when external_id is empty string, fetcher not called",
-  async () => {
-    const fetcherSpy = spy(() =>
-      Promise.resolve(new Response("", { status: 200 }))
-    );
-    const result = await resolveFailingOutput(
-      "",
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcherSpy as unknown as typeof fetch,
-    );
-    assertEquals(result, "ci");
-    assertSpyCalls(fetcherSpy, 0);
-  },
-);
-
-Deno.test(
-  "resolveFailingOutput: requests correct Actions API URL",
-  async () => {
-    let calledUrl = "";
-    const fetcherSpy = spy((url: string | URL | Request) => {
-      calledUrl = String(url);
-      return Promise.resolve(new Response("log", { status: 200 }));
-    });
-    await resolveFailingOutput(
-      "99",
-      "ci",
-      "owner/repo",
-      "tok",
-      fetcherSpy as unknown as typeof fetch,
-    );
-    assertEquals(
-      calledUrl,
-      "https://api.github.com/repos/owner/repo/actions/jobs/99/logs",
-    );
   },
 );

@@ -166,35 +166,6 @@ export function deriveOrgFromTicketDir(
   return parts[1] ?? "";
 }
 
-export async function resolveFailingOutput(
-  externalId: string | undefined,
-  name: string,
-  repoSlug: string,
-  token: string,
-  fetcher: typeof fetch = fetch,
-): Promise<string> {
-  if (externalId) {
-    try {
-      const res = await fetcher(
-        `https://api.github.com/repos/${repoSlug}/actions/jobs/${externalId}/logs`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-          },
-        },
-      );
-      if (res.ok) {
-        const text = await res.text();
-        return text.slice(-20480);
-      }
-    } catch {
-      // fall through to name fallback
-    }
-  }
-  return name;
-}
-
 export function composeTickDeps(
   config: Config,
 ): TickServiceDeps {
@@ -469,19 +440,13 @@ export function composeTickDeps(
               runs as Array<{
                 conclusion: string;
                 name: string;
-                external_id?: string;
               }>
             ).find((r) => r.conclusion === "failure");
             const stepName = failing?.name ?? "";
             return {
               runId: String(suite.id),
               conclusion: suite.conclusion as "failure" | "action_required",
-              failingOutput: await resolveFailingOutput(
-                failing?.external_id,
-                stepName,
-                repoSlug,
-                token,
-              ),
+              failingOutput: stepName,
             };
           },
           getPRDiffFiles: async (prUrl) => {
@@ -529,7 +494,11 @@ export function composeTickDeps(
               opts.contextFile.indexOf("-ci-triage-context-"),
             );
             const prompt =
-              `You are triaging a CI failure. Read the context file for the CI output and PR diff. ` +
+              `You are triaging a CI failure. Read the context file for the PR URL, repo, and PR diff. ` +
+              `The ## CI Output section contains only the name of the failing check — not the full log. ` +
+              `Use \`gh pr checks <PR-URL>\` to locate the failing workflow run, then ` +
+              `\`gh run view --repo <Repo> <run-id> --log-failed\` to fetch the actual failure output. ` +
+              `Use that log in your analysis.\n\n` +
               `Decide whether the failure was caused by the PR's changes (PR_CAUSED) or by an ` +
               `infrastructure problem unrelated to the PR (INFRA). Infrastructure failures are: ` +
               `network errors, rate limits, runner timeouts, package download failures, transient ` +

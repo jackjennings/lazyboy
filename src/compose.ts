@@ -266,23 +266,7 @@ export function composeTickDeps(
         files.sort();
         return readTextFile(join(ticketDir, files[files.length - 1]));
       },
-      getPRInfo: async (url: string) => {
-        const result = await new Deno.Command("gh", {
-          args: [
-            "pr",
-            "view",
-            url,
-            "--json",
-            "url,title,baseRefName,headRefName",
-          ],
-        }).output();
-        if (result.code !== 0) {
-          throw new Error(
-            `gh pr view failed: ${new TextDecoder().decode(result.stderr)}`,
-          );
-        }
-        return JSON.parse(new TextDecoder().decode(result.stdout));
-      },
+      getPRInfo: (url: string) => githubProvider.prMetadata(url),
       writeTicket,
       appendLog: appendTicketLog,
     }),

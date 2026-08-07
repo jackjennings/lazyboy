@@ -2,6 +2,14 @@ import type { Provider, WorkItem } from "./types.ts";
 import { HttpClient } from "../http-client.ts";
 
 type AccountResolver = (org: string) => { token: string; login: string };
+
+export interface PrMetadata {
+  url: string;
+  title: string;
+  baseRefName: string;
+  headRefName: string;
+}
+
 type CloneFn = (
   slug: string,
   destDir: string,
@@ -154,6 +162,36 @@ export class GitHubProvider implements Provider {
     if (data.merged) return "merged";
     if (String(data.state) === "closed") return "closed";
     return "open";
+  }
+
+  async prMetadata(prUrl: string): Promise<PrMetadata> {
+    const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+    if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+    const [, slug, number] = match;
+    const { token } = this.accountResolver(slug.split("/")[0]);
+    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}`;
+    const res = await this.http.get(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!res.ok) {
+      throw new Error(
+        formatGitHubApiError(
+          res.status,
+          apiUrl,
+          await res.text().catch(() => ""),
+        ),
+      );
+    }
+    const data = await res.json();
+    return {
+      url: String(data.html_url),
+      title: String(data.title),
+      baseRefName: String(data.base?.ref ?? ""),
+      headRefName: String(data.head?.ref ?? ""),
+    };
   }
 
   async close(url: string): Promise<void> {

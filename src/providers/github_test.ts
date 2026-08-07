@@ -431,6 +431,58 @@ Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to http.get merg
   assertEquals(receivedToken, "tok_org");
 });
 
+Deno.test("GitHubProvider.prMetadata: passes org-resolved token and correct endpoint", async () => {
+  let receivedToken = "";
+  let calledUrl = "";
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: (org) => ({
+      token: org === "myorg" ? "tok_org" : "tok_default",
+      login: "user",
+    }),
+    http: new HttpClient((url, init) => {
+      calledUrl = url as string;
+      const authHeader =
+        (init?.headers as Record<string, string>)?.["Authorization"] ?? "";
+      receivedToken = authHeader.replace("Bearer ", "");
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            html_url: "https://github.com/myorg/myrepo/pull/42",
+            title: "feat: x",
+            base: { ref: "main" },
+            head: { ref: "gh-42" },
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+  });
+  const meta = await provider.prMetadata(
+    "https://github.com/myorg/myrepo/pull/42",
+  );
+  assertEquals(receivedToken, "tok_org");
+  assertEquals(calledUrl, "https://api.github.com/repos/myorg/myrepo/pulls/42");
+  assertEquals(meta.headRefName, "gh-42");
+});
+
+Deno.test("GitHubProvider.prMetadata: throws on unrecognized PR URL", async () => {
+  const provider = new GitHubProvider({
+    repos: [],
+    accountResolver: fixedResolver("fake", "user"),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({}), { status: 200 }),
+      )
+    ),
+  });
+  await assertRejects(
+    () => provider.prMetadata("https://example.com/not-a-pr"),
+    Error,
+    "Cannot parse PR URL",
+  );
+});
+
 Deno.test("toSortable: non-numeric suffix falls back to [id]", () => {
   assertEquals(
     GitHubProvider.toSortable("github/jackjennings/lazyboy/abc"),

@@ -19,6 +19,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: "2026-06-23T00:00:00Z",
     updated: "2026-06-23T00:00:00Z",
     body: "",
+    artifact: "pr",
     ...overrides,
   };
 }
@@ -99,7 +100,7 @@ Deno.test(
 // ── no-PR cases → needs-attention ────────────────────────────────────────────
 
 Deno.test(
-  "reconcilePRsAction: missing implementation output → needs-attention with no-prs-in-output",
+  "reconcilePRsAction: missing implementation output → needs-attention with no-prs",
   async () => {
     const written: TicketState[] = [];
     const logged: object[] = [];
@@ -120,7 +121,7 @@ Deno.test(
     const attention = (logged as Record<string, string>[]).find((e) =>
       e.event === "needs-attention"
     );
-    assertEquals(attention?.reason, "no-prs-in-output");
+    assertEquals(attention?.reason, "no-prs");
   },
 );
 
@@ -140,10 +141,10 @@ Deno.test(
   },
 );
 
-// ── getPRInfo error → null ────────────────────────────────────────────────────
+// ── getPRInfo error → parks ──────────────────────────────────────────────────
 
 Deno.test(
-  "reconcilePRsAction: getPRInfo throws → null, no writeTicket call",
+  "reconcilePRsAction: getPRInfo throws → parks needs-attention with pr-fetch-failed",
   async () => {
     const written: TicketState[] = [];
     const logged: object[] = [];
@@ -162,13 +163,18 @@ Deno.test(
         return Promise.resolve();
       },
     }).run(makeTicket(), "/state");
-    assertEquals(result, null);
-    assertEquals(written.length, 0);
+    assertEquals(result?.status, "needs-attention");
+    assertEquals(written.length, 1);
+    assertEquals(written[0].status, "needs-attention");
     const errors = (logged as Record<string, string>[]).filter((e) =>
       e.event === "error"
     );
     assertEquals(errors.length, 1);
     assertEquals(errors[0].context, "reconcilePRs");
+    const attention = (logged as Record<string, string>[]).find((e) =>
+      e.event === "needs-attention"
+    );
+    assertEquals(attention?.reason, "pr-fetch-failed");
   },
 );
 
@@ -351,6 +357,33 @@ Deno.test(
       result?.prs?.[1].url,
       "https://github.com/myorg/myrepo/pull/2",
     );
+  },
+);
+
+Deno.test(
+  "reconcilePRsAction: cyclic base/head chain terminates instead of hanging",
+  async () => {
+    const result = await makeAction({
+      readImplementationOutput: () =>
+        Promise.resolve(
+          "https://github.com/myorg/myrepo/pull/1\nhttps://github.com/myorg/myrepo/pull/2",
+        ),
+      getPRInfo: (url) =>
+        url.endsWith("/1")
+          ? Promise.resolve({
+            url,
+            title: "A",
+            baseRefName: "b",
+            headRefName: "a",
+          })
+          : Promise.resolve({
+            url,
+            title: "B",
+            baseRefName: "a",
+            headRefName: "b",
+          }),
+    }).run(makeTicket(), "/state");
+    assertEquals(result?.prs?.length, 2);
   },
 );
 

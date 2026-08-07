@@ -42,7 +42,9 @@ function topoSort(
   const withDepth = infos.map((p) => {
     let depth = 0;
     let base = p.baseRefName;
-    while (headToUrl.has(base)) {
+    const visited = new Set<string>();
+    while (headToUrl.has(base) && !visited.has(base)) {
+      visited.add(base);
       depth++;
       const parent = infos.find((q) => q.headRefName === base)!;
       base = parent.baseRefName;
@@ -81,7 +83,7 @@ export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
         await deps.writeTicket(stateDir, updated);
         await deps.appendLog(stateDir, ticket.id, {
           event: "needs-attention",
-          reason: "no-prs-in-output",
+          reason: "no-prs",
         });
         return updated;
       }
@@ -101,7 +103,17 @@ export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
             context: "reconcilePRs",
             message: String(e),
           });
-          return null;
+          const parked: TicketState = {
+            ...ticket,
+            status: "needs-attention",
+            updated: now,
+          };
+          await deps.writeTicket(stateDir, parked);
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "needs-attention",
+            reason: "pr-fetch-failed",
+          });
+          return parked;
         }
       }
 

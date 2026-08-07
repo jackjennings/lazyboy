@@ -2,7 +2,6 @@ import { existsSync } from "@std/fs";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
-import { GeminiMeetingNotesCeremony } from "./ceremonies/gemini-meeting-notes.ts";
 import { join } from "@std/path";
 import {
   detectImplementationOutlier,
@@ -574,38 +573,6 @@ export function composeTickDeps(
       commitState: async () => {
         await ensureRunPidGitignored(stateDir);
         await commitState(stateDir, "ceremony: documentation-gaps");
-      },
-      notify: async (title, message) => {
-        await defaultCommandRunner()([
-          "osascript",
-          "-e",
-          `display notification "${message}" with title "${title}"`,
-        ]);
-      },
-    }),
-    new GeminiMeetingNotesCeremony({
-      stateDir,
-      listTickets: () => listTickets(stateDir),
-      readTicket: (id) => readTicket(stateDir, id),
-      fetch,
-      runClaude: async (prompt) => {
-        const result = await new Deno.Command("claude", {
-          args: ["--print", "--output-format", "text", prompt],
-          stdout: "piped",
-          stderr: "piped",
-        }).output();
-        if (!result.success) {
-          throw new Error(
-            `claude exited ${result.code}: ${
-              new TextDecoder().decode(result.stderr)
-            }`,
-          );
-        }
-        return new TextDecoder().decode(result.stdout);
-      },
-      commitState: async () => {
-        await ensureRunPidGitignored(stateDir);
-        await commitState(stateDir, "ceremony: gemini-meeting-notes");
       },
       notify: async (title, message) => {
         await defaultCommandRunner()([

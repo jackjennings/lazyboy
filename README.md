@@ -206,29 +206,6 @@ named ceremony. The directory contains a `config.toml` with scheduling keys:
 | `interval_hours` | no       | Run repeatedly, at most once per this many hours after `time`; omit for once-per-day |
 | `workdays_only`  | no       | When `true`, skip Saturday and Sunday (default `false`)                              |
 
-### Gemini Meeting Notes
-
-Queries Google Drive for documents whose names contain `"Meeting notes"`,
-downloads any not yet seen, and asks Claude to assess how each summary affects
-the active ticket queue. Output is a Markdown file written to the ceremony's
-`output/` directory.
-
-**Setup:**
-
-1. Create `{stateDir}/ceremonies/gemini-meeting-notes/config.toml`:
-
-   ```toml
-   time = "09:00"
-   interval_hours = 2
-   workdays_only = true
-   ```
-
-2. Set `GOOGLE_ACCESS_TOKEN` in the environment to a valid OAuth 2.0 token with
-   Drive read scope (`https://www.googleapis.com/auth/drive.readonly`). If the
-   token is absent or returns a 401, the ceremony exits silently without writing
-   output. Seen document IDs are persisted to
-   `{stateDir}/ceremonies/gemini-meeting-notes/seen.json` across runs.
-
 A particularly valuable ceremony type is **meta-review**: a recurring analysis
 of recently completed tickets that extracts learnings and writes them to
 `principles.md` in the state repo. Each completed ticket already produces a

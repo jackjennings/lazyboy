@@ -606,8 +606,13 @@ export async function advancePhase(
     const activePhase = ticket.phase as ActivePhase;
     const next = nextPhase(activePhase);
     if (next === "done") return;
+    const effectiveNext: ActivePhase = activePhase === "spec" &&
+        ticket.phases?.plan?.skip === true &&
+        next === "plan"
+      ? nextPhase("plan") as ActivePhase
+      : next;
     if (
-      next === "implementation" &&
+      effectiveNext === "implementation" &&
       ticket.artifact !== "notion" &&
       Object.keys(ticket.worktrees).length === 0
     ) {
@@ -625,14 +630,14 @@ export async function advancePhase(
       });
       return;
     }
-    const basePrompt = await loadPrompt(next);
-    const supplement = await loadProviderPrompt(next, ticket.provider);
+    const basePrompt = await loadPrompt(effectiveNext);
+    const supplement = await loadProviderPrompt(effectiveNext, ticket.provider);
     const artifactSupplement = await loadArtifactPrompt(
-      next,
+      effectiveNext,
       ticket.artifact,
     );
     const statePrompt = await loadStatePrompt(
-      next,
+      effectiveNext,
       stateDir,
       ticket.provider,
       ticket.id,
@@ -666,27 +671,27 @@ export async function advancePhase(
       }
     }
     const { model: nextModel, thinking: nextThinking } = deps
-      .resolveModelConfig(next, resolvedTicket);
+      .resolveModelConfig(effectiveNext, resolvedTicket);
     await deps.spawn({
-      phase: next,
+      phase: effectiveNext,
       ticketDir: join(stateDir, ticket.id),
       prompt,
       scope: ticket.scope,
-      worktrees: next === "implementation" ? ticket.worktrees : {},
-      outputFile: `${compactTimestamp(zonedNow)}-${next}.md`,
+      worktrees: effectiveNext === "implementation" ? ticket.worktrees : {},
+      outputFile: `${compactTimestamp(zonedNow)}-${effectiveNext}.md`,
       model: nextModel,
       thinking: nextThinking,
     });
     await deps.writeTicket(stateDir, {
       ...resolvedTicket,
-      phase: next,
+      phase: effectiveNext,
       status: "running",
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
       event: "phase-transition",
       from: ticket.phase,
-      to: next,
+      to: effectiveNext,
     });
     return;
   }

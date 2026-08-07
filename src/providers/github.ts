@@ -1,13 +1,7 @@
 import type { Provider, WorkItem } from "./types.ts";
+import { HttpClient } from "../http-client.ts";
 
 type AccountResolver = (org: string) => { token: string; login: string };
-type FetchFn = (url: string, token: string) => Promise<unknown[]>;
-type PatchFn = (url: string, body: unknown, token: string) => Promise<void>;
-type MergeCheckFn = (url: string, token: string) => Promise<{ status: number }>;
-type PrFetchFn = (
-  url: string,
-  token: string,
-) => Promise<{ merged: boolean; state: string }>;
 type CloneFn = (
   slug: string,
   destDir: string,
@@ -63,58 +57,21 @@ export function formatGitHubApiError(
 export class GitHubProvider implements Provider {
   private repos: string[];
   private accountResolver: AccountResolver;
-  private _fetch: FetchFn;
-  private _patch: PatchFn;
-  private _mergeCheck: MergeCheckFn;
-  private _prFetch: PrFetchFn;
+  private http: HttpClient;
   private _clone: CloneFn;
 
   constructor(
     opts: {
       repos: string[];
       accountResolver: AccountResolver;
-      _fetch?: FetchFn;
-      _patch?: PatchFn;
-      _mergeCheck?: MergeCheckFn;
-      _prFetch?: PrFetchFn;
+      http: HttpClient;
       _clone?: CloneFn;
     },
   ) {
     this.repos = opts.repos;
     this.accountResolver = opts.accountResolver;
-    this._fetch = opts._fetch ?? this.defaultFetch.bind(this);
-    this._patch = opts._patch ?? this.defaultPatch.bind(this);
-    this._mergeCheck = opts._mergeCheck ?? this.defaultMergeCheck.bind(this);
-    this._prFetch = opts._prFetch ?? this.defaultPrFetch.bind(this);
+    this.http = opts.http;
     this._clone = opts._clone ?? this.defaultClone.bind(this);
-  }
-
-  private async defaultFetch(url: string, token: string): Promise<unknown[]> {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-    if (!res.ok) {
-      throw new Error(
-        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
-      );
-    }
-    return res.json();
-  }
-
-  private async defaultMergeCheck(
-    url: string,
-    token: string,
-  ): Promise<{ status: number }> {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-    return { status: res.status };
   }
 
   private async defaultClone(
@@ -160,32 +117,16 @@ export class GitHubProvider implements Provider {
     if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
     const [, slug, number] = match;
     const { token } = this.accountResolver(slug.split("/")[0]);
-    const { status } = await this._mergeCheck(
-      `https://api.github.com/repos/${slug}/pulls/${number}/merge`,
-      token,
-    );
-    if (status === 204) return true;
-    if (status === 404) return false;
-    throw new Error(`Unexpected GitHub API status: ${status} for ${prUrl}`);
-  }
-
-  private async defaultPrFetch(
-    url: string,
-    token: string,
-  ): Promise<{ merged: boolean; state: string }> {
-    const res = await fetch(url, {
+    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}/merge`;
+    const res = await this.http.get(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
       },
     });
-    if (!res.ok) {
-      throw new Error(
-        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
-      );
-    }
-    const data = await res.json();
-    return { merged: Boolean(data.merged), state: String(data.state) };
+    if (res.status === 204) return true;
+    if (res.status === 404) return false;
+    throw new Error(`Unexpected GitHub API status: ${res.status} for ${prUrl}`);
   }
 
   async prState(prUrl: string): Promise<"merged" | "closed" | "open"> {
@@ -193,34 +134,26 @@ export class GitHubProvider implements Provider {
     if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
     const [, slug, number] = match;
     const { token } = this.accountResolver(slug.split("/")[0]);
-    const { merged, state } = await this._prFetch(
-      `https://api.github.com/repos/${slug}/pulls/${number}`,
-      token,
-    );
-    if (merged) return "merged";
-    if (state === "closed") return "closed";
-    return "open";
-  }
-
-  private async defaultPatch(
-    url: string,
-    body: unknown,
-    token: string,
-  ): Promise<void> {
-    const res = await fetch(url, {
-      method: "PATCH",
+    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}`;
+    const res = await this.http.get(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
     });
     if (!res.ok) {
       throw new Error(
-        formatGitHubApiError(res.status, url, await res.text().catch(() => "")),
+        formatGitHubApiError(
+          res.status,
+          apiUrl,
+          await res.text().catch(() => ""),
+        ),
       );
     }
+    const data = await res.json();
+    if (data.merged) return "merged";
+    if (String(data.state) === "closed") return "closed";
+    return "open";
   }
 
   async close(url: string): Promise<void> {
@@ -230,11 +163,25 @@ export class GitHubProvider implements Provider {
     }
     const [, owner, repo, number] = match;
     const { token } = this.accountResolver(owner);
-    await this._patch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${number}`,
-      { state: "closed", state_reason: "completed" },
-      token,
-    );
+    const apiUrl =
+      `https://api.github.com/repos/${owner}/${repo}/issues/${number}`;
+    const res = await this.http.patch(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ state: "closed", state_reason: "completed" }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        formatGitHubApiError(
+          res.status,
+          apiUrl,
+          await res.text().catch(() => ""),
+        ),
+      );
+    }
   }
 
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
@@ -244,7 +191,22 @@ export class GitHubProvider implements Provider {
       const { token, login } = this.accountResolver(org);
       const url =
         `https://api.github.com/repos/${repo}/issues?assignee=${login}&state=open&per_page=50`;
-      const issues = await this._fetch(url, token) as GitHubIssue[];
+      const res = await this.http.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!res.ok) {
+        throw new Error(
+          formatGitHubApiError(
+            res.status,
+            url,
+            await res.text().catch(() => ""),
+          ),
+        );
+      }
+      const issues = (await res.json()) as GitHubIssue[];
       for (const issue of issues) {
         const id = `github/${repo}/${issue.number}`;
         const legacyId = `gh-${issue.number}`;

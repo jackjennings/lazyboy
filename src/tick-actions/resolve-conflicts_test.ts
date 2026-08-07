@@ -32,6 +32,7 @@ function makeAction(
     stat: () => Promise.resolve(false),
     readDir: async function* () {},
     remove: () => Promise.resolve(),
+    readPhaseSessionId: () => Promise.resolve(null),
     ...overrides,
   });
 }
@@ -206,6 +207,7 @@ Deno.test(
     const removed: string[] = [];
 
     const result = await makeAction({
+      readPhaseSessionId: () => Promise.resolve("sess_agent_failed"),
       runGit: (args) => {
         gitCalls.push(args);
         if (args[0] === "rev-parse") {
@@ -250,6 +252,7 @@ Deno.test(
     );
     assertNotEquals(failed, undefined);
     assertEquals(failed!.reason, "agent-failed");
+    assertEquals(failed!.sessionId, "sess_agent_failed");
   },
 );
 
@@ -263,6 +266,7 @@ Deno.test(
     const gitCalls: string[][] = [];
 
     const result = await makeAction({
+      readPhaseSessionId: () => Promise.resolve("sess_push_failed"),
       runGit: (args) => {
         gitCalls.push(args);
         if (args[0] === "push") {
@@ -305,5 +309,47 @@ Deno.test(
     );
     assertNotEquals(failed, undefined);
     assertEquals(failed!.reason, "push-failed");
+    assertEquals(failed!.sessionId, "sess_push_failed");
+  },
+);
+
+// ── failure path: no session sidecar → sessionId absent ──────────────────────
+
+Deno.test(
+  "resolveConflictsAction: failure — no session sidecar → sessionId absent from log entry",
+  async () => {
+    const logged: object[] = [];
+
+    await makeAction({
+      readPhaseSessionId: () => Promise.resolve(null),
+      runGit: (args) => {
+        if (args[0] === "rev-parse") {
+          return Promise.resolve({ code: 0, stdout: "/wt/.git\n", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      stat: (path) => {
+        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(true);
+        return Promise.resolve(false);
+      },
+      readDir: async function* () {
+        yield {
+          name: "20260101T000000-conflict-context-gh-7.md",
+          isFile: true,
+        };
+      },
+      remove: () => Promise.resolve(),
+      writeTicket: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    const failed = (logged as Record<string, unknown>[]).find(
+      (e) => e.event === "conflict-resolution-failed",
+    );
+    assertNotEquals(failed, undefined);
+    assertFalse("sessionId" in failed!);
   },
 );

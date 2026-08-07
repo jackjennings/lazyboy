@@ -1022,3 +1022,33 @@ Deno.test("writeTicket/readTicket: notionPages round-trips through YAML frontmat
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test(
+  "writeTicket/readTicket: round-trips phases.plan.skip: true",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const ticket = makeTicket({
+      id: "gh-5",
+      phases: { plan: { skip: true } },
+    });
+    await writeTicket(dir, ticket);
+    const { data } = matter(
+      await Deno.readTextFile(join(dir, "gh-5", "meta.md")),
+    );
+    assertEquals(data.phases?.plan?.skip, true);
+    const read = await readTicket(dir, "gh-5");
+    assertEquals(read.phases?.plan?.skip, true);
+    await Deno.remove(dir, { recursive: true });
+  },
+);
+
+Deno.test("writeTicket: omits phases.plan.skip when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket = makeTicket({ id: "gh-5" });
+  await writeTicket(dir, ticket);
+  const { data } = matter(
+    await Deno.readTextFile(join(dir, "gh-5", "meta.md")),
+  );
+  assertFalse(data.phases?.plan?.skip === true);
+  await Deno.remove(dir, { recursive: true });
+});

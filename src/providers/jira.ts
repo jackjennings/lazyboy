@@ -1,8 +1,7 @@
 import { adf2markdown } from "adf2markdown";
 import type { Provider, WorkItem } from "./types.ts";
 import { jiraTransition } from "../tick-actions/jira-transition.ts";
-
-type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+import { HttpClient } from "../http-client.ts";
 
 interface JiraIssue {
   id: string;
@@ -19,20 +18,20 @@ export class JiraProvider implements Provider {
   private email: string;
   private apiToken: string;
   private project: string;
-  private _fetch: FetchFn;
+  private http: HttpClient;
 
   constructor(opts: {
     baseUrl: string;
     email: string;
     apiToken: string;
     project: string;
-    _fetch?: FetchFn;
+    http: HttpClient;
   }) {
     this.baseUrl = opts.baseUrl;
     this.email = opts.email;
     this.apiToken = opts.apiToken;
     this.project = opts.project;
-    this._fetch = opts._fetch ?? ((url, init) => fetch(url, init));
+    this.http = opts.http;
   }
 
   async close(url: string): Promise<void> {
@@ -46,14 +45,14 @@ export class JiraProvider implements Provider {
       apiToken: this.apiToken,
       issueKey: match[1],
       targetStatusCategoryKey: "done",
-      fetch: this._fetch,
+      http: this.http,
     });
   }
 
   private async fetchAncestors(key: string, auth: string): Promise<string> {
     const url =
       `${this.baseUrl}/rest/api/3/issue/${key}?fields=summary,description,parent`;
-    const res = await this._fetch(url, {
+    const res = await this.http.get(url, {
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",
@@ -86,8 +85,7 @@ export class JiraProvider implements Provider {
       `assignee = currentUser() AND project = ${this.project} AND statusCategory != Done`;
     const url = `${this.baseUrl}/rest/api/3/search/jql`;
     const auth = btoa(`${this.email}:${this.apiToken}`);
-    const res = await this._fetch(url, {
-      method: "POST",
+    const res = await this.http.post(url, {
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",

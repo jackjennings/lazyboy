@@ -489,6 +489,32 @@ export async function executePhase(
   return result.code;
 }
 
+export async function readPhaseSessionId(
+  ticketDir: string,
+  phase: string,
+): Promise<string | null> {
+  const pattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md\\.session$`);
+  const matches: string[] = [];
+  try {
+    for await (const entry of Deno.readDir(ticketDir)) {
+      if (entry.isFile && pattern.test(entry.name)) {
+        matches.push(entry.name);
+      }
+    }
+  } catch {
+    // dir missing
+  }
+  if (matches.length === 0) return null;
+  matches.sort();
+  try {
+    return await Deno.readTextFile(
+      join(ticketDir, matches[matches.length - 1]),
+    );
+  } catch {
+    return null;
+  }
+}
+
 if (import.meta.main) {
   const args = parseArgs(Deno.args, {
     string: [

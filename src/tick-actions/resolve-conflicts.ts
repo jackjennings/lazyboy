@@ -17,6 +17,10 @@ export interface ResolveConflictsDeps {
     path: string,
   ) => AsyncIterable<{ name: string; isFile: boolean }>;
   remove: (path: string) => Promise<void>;
+  readPhaseSessionId: (
+    ticketDir: string,
+    phase: string,
+  ) => Promise<string | null>;
 }
 
 export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
@@ -49,6 +53,11 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
       }
 
       if (contextFiles.length === 0) return null;
+
+      const sessionId = await deps.readPhaseSessionId(
+        ticketDir,
+        "conflict-resolution",
+      );
 
       const resolvingWorktrees = Object.values(ticket.worktrees).filter(
         (wt) => {
@@ -97,6 +106,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
             worktreePath: wt.path,
             branch: wt.branch,
             reason: "agent-failed",
+            ...(sessionId !== null ? { sessionId } : {}),
           });
         }
         return updated;
@@ -123,6 +133,7 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
             worktreePath: wt.path,
             branch: wt.branch,
             reason: "push-failed",
+            ...(sessionId !== null ? { sessionId } : {}),
           });
           return updated;
         }

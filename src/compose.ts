@@ -24,6 +24,7 @@ import {
   dedupePrinciples,
   extractPrinciples,
   judgePrinciples,
+  readPhaseSessionId,
 } from "./run-phase.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
@@ -78,6 +79,7 @@ import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
 import { readDir, readTextFile, remove, stat } from "./fs.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
+import { HttpClient } from "./http-client.ts";
 
 export async function ensureStatePrompts(
   stateDir: string,
@@ -173,9 +175,12 @@ export function composeTickDeps(
   const piProvider = config.pi.provider;
   const agentType = config.agent.type;
 
+  const http = new HttpClient();
+
   const githubProvider = new GitHubProvider({
     repos: config.github.repos,
     accountResolver: (org) => resolveGitHubAccount(org, config),
+    http,
   });
 
   const providers: Provider[] = [githubProvider];
@@ -187,6 +192,7 @@ export function composeTickDeps(
         email: Deno.env.get("JIRA_EMAIL") ?? "",
         apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
         project: config.jira.project,
+        http,
       }),
     );
   }
@@ -263,6 +269,7 @@ export function composeTickDeps(
       stat,
       readDir,
       remove,
+      readPhaseSessionId,
     }),
     checkConflictsAction({
       runGit,
@@ -351,10 +358,9 @@ export function composeTickDeps(
               repo.split("/")[0],
               config,
             );
-            const res = await fetch(
+            const res = await http.post(
               `https://api.github.com/repos/${repo}/issues`,
               {
-                method: "POST",
                 headers: {
                   Authorization: `Bearer ${token}`,
                   Accept: "application/vnd.github+json",
@@ -379,7 +385,7 @@ export function composeTickDeps(
               repoSlug.split("/")[0],
               config,
             );
-            const prRes = await fetch(
+            const prRes = await http.get(
               `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}`,
               {
                 headers: {
@@ -392,7 +398,7 @@ export function composeTickDeps(
             const prData = await prRes.json();
             if (prData.state === "closed") return null;
             const headSha: string = prData.head.sha;
-            const suiteRes = await fetch(
+            const suiteRes = await http.get(
               `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-suites`,
               {
                 headers: {
@@ -419,7 +425,7 @@ export function composeTickDeps(
                 failingOutput: "",
               };
             }
-            const runsRes = await fetch(
+            const runsRes = await http.get(
               `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-runs`,
               {
                 headers: {
@@ -452,7 +458,7 @@ export function composeTickDeps(
               repoSlug.split("/")[0],
               config,
             );
-            const res = await fetch(
+            const res = await http.get(
               `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}/files`,
               {
                 headers: {
@@ -536,6 +542,7 @@ export function composeTickDeps(
           email: Deno.env.get("JIRA_EMAIL") ?? "",
           apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
           appendLog: appendTicketLog,
+          http,
         }),
         jiraDoneAction({
           baseUrl: config.jira.baseUrl,
@@ -543,6 +550,7 @@ export function composeTickDeps(
           apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
           writeTicket,
           appendLog: appendTicketLog,
+          http,
         }),
       ]
       : []),
@@ -682,7 +690,7 @@ export function composeTickDeps(
           if (!match) throw new Error(`Cannot parse PR URL: ${url}`);
           const [, slug, number] = match;
           const { token } = resolveGitHubAccount(slug.split("/")[0], config);
-          const restRes = await fetch(
+          const restRes = await http.get(
             `https://api.github.com/repos/${slug}/pulls/${number}`,
             {
               headers: {
@@ -697,8 +705,7 @@ export function composeTickDeps(
             );
           }
           const { node_id: nodeId } = await restRes.json();
-          const graphqlRes = await fetch("https://api.github.com/graphql", {
-            method: "POST",
+          const graphqlRes = await http.post("https://api.github.com/graphql", {
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
@@ -716,30 +723,7 @@ export function composeTickDeps(
           }
         }
       },
-      readPhaseSessionId: async (ticketDir, phase) => {
-        const pattern = new RegExp(
-          `^\\d{8}T\\d{6}-${phase}\\.md\\.session$`,
-        );
-        const matches: string[] = [];
-        try {
-          for await (const entry of Deno.readDir(ticketDir)) {
-            if (entry.isFile && pattern.test(entry.name)) {
-              matches.push(entry.name);
-            }
-          }
-        } catch {
-          // dir missing
-        }
-        if (matches.length === 0) return null;
-        matches.sort();
-        try {
-          return await Deno.readTextFile(
-            join(ticketDir, matches[matches.length - 1]),
-          );
-        } catch {
-          return null;
-        }
-      },
+      readPhaseSessionId,
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),

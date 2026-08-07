@@ -8,6 +8,7 @@ import {
 } from "@std/assert";
 import { formatGitHubApiError, GitHubProvider } from "./github.ts";
 import { compareSortKeys } from "./types.ts";
+import { HttpClient } from "../http-client.ts";
 
 function fixedResolver(token: string, login: string) {
   return (_org: string) => ({ token, login });
@@ -17,21 +18,27 @@ Deno.test("fetchNew filters out known IDs", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
     accountResolver: fixedResolver("fake", "jackjennings"),
-    _fetch: (_url, _token) =>
-      Promise.resolve([
-        {
-          number: 1,
-          title: "One",
-          body: "desc",
-          html_url: "https://github.com/jackjennings/lazyboy/issues/1",
-        },
-        {
-          number: 2,
-          title: "Two",
-          body: "desc2",
-          html_url: "https://github.com/jackjennings/lazyboy/issues/2",
-        },
-      ]),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              number: 1,
+              title: "One",
+              body: "desc",
+              html_url: "https://github.com/jackjennings/lazyboy/issues/1",
+            },
+            {
+              number: 2,
+              title: "Two",
+              body: "desc2",
+              html_url: "https://github.com/jackjennings/lazyboy/issues/2",
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+    ),
   });
   const items = await provider.fetchNew(
     new Set(["github/jackjennings/lazyboy/1"]),
@@ -46,15 +53,21 @@ Deno.test("fetchNew does not re-create an issue tracked under its legacy gh-<n> 
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
     accountResolver: fixedResolver("fake", "jackjennings"),
-    _fetch: (_url, _token) =>
-      Promise.resolve([
-        {
-          number: 18,
-          title: "Retry subcommand",
-          body: "desc",
-          html_url: "https://github.com/jackjennings/lazyboy/issues/18",
-        },
-      ]),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              number: 18,
+              title: "Retry subcommand",
+              body: "desc",
+              html_url: "https://github.com/jackjennings/lazyboy/issues/18",
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set(["gh-18"]));
   assertEquals(items.length, 0);
@@ -64,22 +77,28 @@ Deno.test("fetchNew returns all when knownIds is empty", async () => {
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy"],
     accountResolver: fixedResolver("fake", "jackjennings"),
-    _fetch: (_url, _token) =>
-      Promise.resolve([
-        {
-          number: 1,
-          title: "One",
-          body: "desc",
-          html_url: "https://github.com/jackjennings/lazyboy/issues/1",
-        },
-      ]),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              number: 1,
+              title: "One",
+              body: "desc",
+              html_url: "https://github.com/jackjennings/lazyboy/issues/1",
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+    ),
   });
   const items = await provider.fetchNew(new Set());
   assertEquals(items.length, 1);
   assertEquals(items[0].id, "github/jackjennings/lazyboy/1");
 });
 
-Deno.test("fetchNew passes org-resolved token and login to _fetch", async () => {
+Deno.test("fetchNew passes org-resolved token and login to http.get", async () => {
   const receivedArgs: Array<{ url: string; token: string }> = [];
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy", "workorg/app"],
@@ -90,10 +109,17 @@ Deno.test("fetchNew passes org-resolved token and login to _fetch", async () => 
       if (org === "workorg") return { token: "tok_work", login: "work-user" };
       return { token: "tok_default", login: "default" };
     },
-    _fetch: (url, token) => {
-      receivedArgs.push({ url, token });
-      return Promise.resolve([]);
-    },
+    http: new HttpClient((url, init) => {
+      const authHeader =
+        (init?.headers as Record<string, string>)?.["Authorization"] ?? "";
+      receivedArgs.push({
+        url: url as string,
+        token: authHeader.replace("Bearer ", ""),
+      });
+      return Promise.resolve(
+        new Response(JSON.stringify([]), { status: 200 }),
+      );
+    }),
   });
   await provider.fetchNew(new Set());
   assertEquals(receivedArgs.length, 2);
@@ -138,17 +164,17 @@ Deno.test("formatGitHubApiError: unknown status omits the hint", () => {
   assertFalse(msg.includes("authentication failed"));
 });
 
-Deno.test("GitHubProvider.close calls _patch with correct API URL and body", async () => {
+Deno.test("GitHubProvider.close calls http.patch with correct API URL and body", async () => {
   let patchedUrl = "";
   let patchedBody: unknown;
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _patch: async (url, body, _token) => {
-      patchedUrl = url;
-      patchedBody = body;
-      await Promise.resolve();
-    },
+    http: new HttpClient((url, init) => {
+      patchedUrl = url as string;
+      patchedBody = JSON.parse(init?.body as string);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }),
   });
   await provider.close("https://github.com/myorg/myrepo/issues/42");
   assertEquals(
@@ -158,7 +184,7 @@ Deno.test("GitHubProvider.close calls _patch with correct API URL and body", asy
   assertEquals(patchedBody, { state: "closed", state_reason: "completed" });
 });
 
-Deno.test("GitHubProvider.close passes org-resolved token to _patch", async () => {
+Deno.test("GitHubProvider.close passes org-resolved token to http.patch", async () => {
   let receivedToken = "";
   const provider = new GitHubProvider({
     repos: [],
@@ -166,10 +192,12 @@ Deno.test("GitHubProvider.close passes org-resolved token to _patch", async () =
       token: org === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
-    _patch: async (_url, _body, token) => {
-      receivedToken = token;
-      await Promise.resolve();
-    },
+    http: new HttpClient((_url, init) => {
+      const authHeader =
+        (init?.headers as Record<string, string>)?.["Authorization"] ?? "";
+      receivedToken = authHeader.replace("Bearer ", "");
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }),
   });
   await provider.close("https://github.com/myorg/myrepo/issues/42");
   assertEquals(receivedToken, "tok_org");
@@ -179,7 +207,7 @@ Deno.test("GitHubProvider.close throws on unrecognized URL", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _patch: async () => {},
+    http: new HttpClient(),
   });
   await assertRejects(
     () => provider.close("https://example.com/not-a-github-issue"),
@@ -187,13 +215,13 @@ Deno.test("GitHubProvider.close throws on unrecognized URL", async () => {
   );
 });
 
-Deno.test("GitHubProvider.close propagates _patch error", async () => {
+Deno.test("GitHubProvider.close propagates http.patch error", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _patch: async () => {
+    http: new HttpClient(async () => {
       return await Promise.reject(new Error("network failure"));
-    },
+    }),
   });
   await assertRejects(
     () => provider.close("https://github.com/myorg/myrepo/issues/42"),
@@ -226,7 +254,9 @@ Deno.test("GitHubProvider.isPRMerged: returns true for HTTP 204", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _mergeCheck: (_url, _token) => Promise.resolve({ status: 204 }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response(null, { status: 204 }))
+    ),
   });
   assert(await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"));
 });
@@ -235,7 +265,9 @@ Deno.test("GitHubProvider.isPRMerged: returns false for HTTP 404", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _mergeCheck: (_url, _token) => Promise.resolve({ status: 404 }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response(null, { status: 404 }))
+    ),
   });
   assertFalse(
     await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
@@ -246,7 +278,9 @@ Deno.test("GitHubProvider.isPRMerged: throws on unexpected status code", async (
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _mergeCheck: (_url, _token) => Promise.resolve({ status: 500 }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response(null, { status: 500 }))
+    ),
   });
   await assertRejects(
     () => provider.isPRMerged("https://github.com/myorg/myrepo/pull/42"),
@@ -259,7 +293,9 @@ Deno.test("GitHubProvider.isPRMerged: throws on unrecognized PR URL", async () =
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _mergeCheck: (_url, _token) => Promise.resolve({ status: 204 }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(new Response(null, { status: 204 }))
+    ),
   });
   await assertRejects(
     () => provider.isPRMerged("https://example.com/not-a-pr"),
@@ -268,15 +304,15 @@ Deno.test("GitHubProvider.isPRMerged: throws on unrecognized PR URL", async () =
   );
 });
 
-Deno.test("GitHubProvider.isPRMerged: calls the correct merge-check endpoint", async () => {
+Deno.test("GitHubProvider.isPRMerged: calls http.get for merge check endpoint", async () => {
   let calledUrl = "";
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _mergeCheck: (url, _token) => {
-      calledUrl = url;
-      return Promise.resolve({ status: 204 });
-    },
+    http: new HttpClient((url, _init) => {
+      calledUrl = url as string;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }),
   });
   await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42");
   assertEquals(
@@ -289,8 +325,13 @@ Deno.test("GitHubProvider.prState: returns merged when the PR is merged", async 
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _prFetch: (_url, _token) =>
-      Promise.resolve({ merged: true, state: "closed" }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({ merged: true, state: "closed" }), {
+          status: 200,
+        }),
+      )
+    ),
   });
   assertEquals(
     await provider.prState("https://github.com/myorg/myrepo/pull/42"),
@@ -302,8 +343,13 @@ Deno.test("GitHubProvider.prState: returns closed when the PR is closed unmerged
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _prFetch: (_url, _token) =>
-      Promise.resolve({ merged: false, state: "closed" }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({ merged: false, state: "closed" }), {
+          status: 200,
+        }),
+      )
+    ),
   });
   assertEquals(
     await provider.prState("https://github.com/myorg/myrepo/pull/42"),
@@ -315,8 +361,13 @@ Deno.test("GitHubProvider.prState: returns open when the PR is still open", asyn
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _prFetch: (_url, _token) =>
-      Promise.resolve({ merged: false, state: "open" }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({ merged: false, state: "open" }), {
+          status: 200,
+        }),
+      )
+    ),
   });
   assertEquals(
     await provider.prState("https://github.com/myorg/myrepo/pull/42"),
@@ -324,15 +375,19 @@ Deno.test("GitHubProvider.prState: returns open when the PR is still open", asyn
   );
 });
 
-Deno.test("GitHubProvider.prState: calls the correct pulls endpoint", async () => {
+Deno.test("GitHubProvider.prState: calls http.get for PR state endpoint", async () => {
   let calledUrl = "";
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _prFetch: (url, _token) => {
-      calledUrl = url;
-      return Promise.resolve({ merged: true, state: "closed" });
-    },
+    http: new HttpClient((url, _init) => {
+      calledUrl = url as string;
+      return Promise.resolve(
+        new Response(JSON.stringify({ merged: true, state: "closed" }), {
+          status: 200,
+        }),
+      );
+    }),
   });
   await provider.prState("https://github.com/myorg/myrepo/pull/42");
   assertEquals(calledUrl, "https://api.github.com/repos/myorg/myrepo/pulls/42");
@@ -342,8 +397,13 @@ Deno.test("GitHubProvider.prState: throws on unrecognized PR URL", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
-    _prFetch: (_url, _token) =>
-      Promise.resolve({ merged: false, state: "open" }),
+    http: new HttpClient((_url, _init) =>
+      Promise.resolve(
+        new Response(JSON.stringify({ merged: false, state: "open" }), {
+          status: 200,
+        }),
+      )
+    ),
   });
   await assertRejects(
     () => provider.prState("https://example.com/not-a-pr"),
@@ -352,7 +412,7 @@ Deno.test("GitHubProvider.prState: throws on unrecognized PR URL", async () => {
   );
 });
 
-Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to _mergeCheck", async () => {
+Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to http.get merge check", async () => {
   let receivedToken = "";
   const provider = new GitHubProvider({
     repos: [],
@@ -360,10 +420,12 @@ Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to _mergeCheck",
       token: org === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
-    _mergeCheck: (_url, token) => {
-      receivedToken = token;
-      return Promise.resolve({ status: 204 });
-    },
+    http: new HttpClient((_url, init) => {
+      const authHeader =
+        (init?.headers as Record<string, string>)?.["Authorization"] ?? "";
+      receivedToken = authHeader.replace("Bearer ", "");
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }),
   });
   await provider.isPRMerged("https://github.com/myorg/myrepo/pull/42");
   assertEquals(receivedToken, "tok_org");
@@ -386,6 +448,7 @@ Deno.test("GitHubProvider.clone: calls _clone with slug, destDir, cwd, and resol
       token: org === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
+    http: new HttpClient(),
     _clone: (slug, destDir, cwd, token) => {
       captured = { slug, destDir, cwd, token };
       return Promise.resolve();
@@ -404,6 +467,7 @@ Deno.test("GitHubProvider.clone: propagates _clone error", async () => {
   const provider = new GitHubProvider({
     repos: [],
     accountResolver: fixedResolver("fake", "user"),
+    http: new HttpClient(),
     _clone: () => Promise.reject(new Error("clone failed")),
   });
   await assertRejects(

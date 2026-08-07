@@ -317,6 +317,27 @@ export function resolvePhaseSessionId(
   return last;
 }
 
+export function lastPhaseRunCompleted(
+  logContent: string,
+  phase: string,
+): boolean {
+  let lastStartBase: string | null = null;
+  const endBases = new Set<string>();
+  for (const line of logContent.split("\n").filter(Boolean)) {
+    try {
+      const entry = JSON.parse(line) as { event?: string; phase?: string };
+      if (typeof entry.phase !== "string") continue;
+      if (!entry.phase.endsWith(`-${phase}`)) continue;
+      if (entry.event === "phase-start") lastStartBase = entry.phase;
+      else if (entry.event === "phase-end") endBases.add(entry.phase);
+    } catch {
+      // skip malformed lines
+    }
+  }
+  if (lastStartBase === null) return true;
+  return endBases.has(lastStartBase);
+}
+
 export function extractPrinciples(content: string): string | null {
   const match = content.match(
     /(?:^|\n)## Principles\n([\s\S]*?)(?=\n## |\n*$)/,

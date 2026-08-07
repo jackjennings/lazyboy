@@ -4,6 +4,7 @@ import { lazyboyDir } from "./paths.ts";
 import { deleteRunPid } from "./executor.ts";
 import {
   extractPrinciples,
+  lastPhaseRunCompleted,
   resolvePhaseSessionId,
   resolveRevisionSessionId,
 } from "./run-phase.ts";
@@ -333,6 +334,23 @@ export async function advancePhase(
         from: "running",
         to: "waiting",
       });
+
+      if (deps.readTicketLog) {
+        const logContent = await deps.readTicketLog(join(stateDir, ticket.id));
+        if (!lastPhaseRunCompleted(logContent, ticket.phase)) {
+          await deps.writeTicket(stateDir, {
+            ...waitingTicket,
+            status: "needs-attention",
+            updated: now,
+          });
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "phase-output-invalid",
+            phase: ticket.phase,
+            reason: "incomplete",
+          });
+          return;
+        }
+      }
 
       const exitCode = await deps.readPhaseExitCode(
         join(stateDir, ticket.id),

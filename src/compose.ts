@@ -440,14 +440,13 @@ export function composeTickDeps(
               runs as Array<{
                 conclusion: string;
                 name: string;
-                output?: { text?: string };
               }>
             ).find((r) => r.conclusion === "failure");
             const stepName = failing?.name ?? "";
             return {
               runId: String(suite.id),
               conclusion: suite.conclusion as "failure" | "action_required",
-              failingOutput: failing?.output?.text ?? stepName,
+              failingOutput: stepName,
             };
           },
           getPRDiffFiles: async (prUrl) => {
@@ -495,7 +494,11 @@ export function composeTickDeps(
               opts.contextFile.indexOf("-ci-triage-context-"),
             );
             const prompt =
-              `You are triaging a CI failure. Read the context file for the CI output and PR diff. ` +
+              `You are triaging a CI failure. Read the context file for the PR URL, repo, and PR diff. ` +
+              `The ## CI Output section contains only the name of the failing check — not the full log. ` +
+              `Use \`gh pr checks <PR-URL>\` to locate the failing workflow run, then ` +
+              `\`gh run view --repo <Repo> <run-id> --log-failed\` to fetch the actual failure output. ` +
+              `Use that log in your analysis.\n\n` +
               `Decide whether the failure was caused by the PR's changes (PR_CAUSED) or by an ` +
               `infrastructure problem unrelated to the PR (INFRA). Infrastructure failures are: ` +
               `network errors, rate limits, runner timeouts, package download failures, transient ` +

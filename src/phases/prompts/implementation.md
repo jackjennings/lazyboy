@@ -5,7 +5,10 @@ inside the repository worktree — your working directory is the repo root. Your
 first tool calls must be a single parallel batch of Read calls covering every
 source file the plan specifies — all files in one turn. Do not read files one
 per turn; each sequential read adds a full turn to session length for zero
-benefit.
+benefit. Your very first response must contain the Read tool calls themselves —
+do not open with a text-only turn that announces what you plan to read and then
+issue the calls in subsequent responses. Combine the intent with the tool calls
+in one response.
 
 meta.md, spec.md, plan.md, and all prior phase output files (intake.md,
 enrichment.md, and any others already present in your context) are already

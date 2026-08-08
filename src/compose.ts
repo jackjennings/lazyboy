@@ -46,6 +46,7 @@ import {
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import { cleanOrphanedWorktreesAction } from "./tick-actions/clean-orphaned-worktrees.ts";
+import { reconcilePRsAction } from "./tick-actions/reconcile-prs.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import { spawnCITriageAction } from "./tick-actions/spawn-ci-triage.ts";
@@ -245,6 +246,29 @@ export function composeTickDeps(
           );
         }
       },
+    }),
+    reconcilePRsAction({
+      readImplementationOutput: async (ticketDir: string) => {
+        const files: string[] = [];
+        try {
+          for await (const entry of readDir(ticketDir)) {
+            if (
+              entry.isFile &&
+              /^\d{8}T\d{6}-implementation\.md$/.test(entry.name)
+            ) {
+              files.push(entry.name);
+            }
+          }
+        } catch {
+          return null;
+        }
+        if (files.length === 0) return null;
+        files.sort();
+        return readTextFile(join(ticketDir, files[files.length - 1]));
+      },
+      getPRInfo: (url: string) => githubProvider.prMetadata(url),
+      writeTicket,
+      appendLog: appendTicketLog,
     }),
     checkMergedPRAction({
       isPRMerged: (url) => githubProvider.isPRMerged(url),

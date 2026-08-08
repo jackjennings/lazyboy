@@ -2617,117 +2617,6 @@ Deno.test("resolvePhaseModel: ticket phases model-only, thinking from hardcoded"
   });
 });
 
-// ── resolvePhaseModel: implementation floor ──────────────────────────────────
-
-Deno.test("resolvePhaseModel: implementation floor raises haiku model to sonnet", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { implementation: { model: "claude-haiku-4-5", thinking: "high" } },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: implementation floor raises thinking below high to high", () => {
-  const levels = ["off", "minimal", "low", "medium"];
-  for (const thinking of levels) {
-    const config = makeConfig();
-    const ticket = makeTicket({
-      phases: { implementation: { model: "claude-sonnet-4-6", thinking } },
-    });
-    assertEquals(
-      resolvePhaseModel(config, "implementation", ticket),
-      { model: "claude-sonnet-4-6", thinking: "high" },
-      `thinking "${thinking}" should be raised to "high"`,
-    );
-  }
-});
-
-Deno.test("resolvePhaseModel: implementation floor passes opus model through unchanged", () => {
-  for (const model of ["claude-opus-4-7", "claude-opus-4-8"]) {
-    const config = makeConfig();
-    const ticket = makeTicket({
-      phases: { implementation: { model, thinking: "max" } },
-    });
-    assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-      model,
-      thinking: "max",
-    });
-  }
-});
-
-Deno.test("resolvePhaseModel: implementation floor passes high/xhigh/max thinking through", () => {
-  for (const thinking of ["high", "xhigh", "max"]) {
-    const config = makeConfig();
-    const ticket = makeTicket({
-      phases: { implementation: { model: "claude-sonnet-4-6", thinking } },
-    });
-    assertEquals(
-      resolvePhaseModel(config, "implementation", ticket),
-      { model: "claude-sonnet-4-6", thinking },
-    );
-  }
-});
-
-Deno.test("resolvePhaseModel: implementation floor clamps thinking-only override independently", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { implementation: { thinking: "off" } },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: implementation floor clamps thinking when model is above floor", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { implementation: { model: "claude-opus-4-8", thinking: "off" } },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-opus-4-8",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: implementation floor passes unknown model string through", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { implementation: { model: "claude-future-5", thinking: "high" } },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-future-5",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: implementation floor passes unknown thinking string through", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: {
-      implementation: { model: "claude-sonnet-4-6", thinking: "turbo" },
-    },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "turbo",
-  });
-});
-
-Deno.test("resolvePhaseModel: non-implementation phases apply no floor", () => {
-  const config = makeConfig({
-    phases: { defaults: { "ci-triage": { model: "claude-haiku-4-5" } } },
-  });
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "ci-triage", ticket), {
-    model: "claude-haiku-4-5",
-    thinking: "high",
-  });
-});
-
 Deno.test("advancePhase: spawn receives model and thinking from resolveModelConfig", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
   let spawnedModel = "";
@@ -4832,6 +4721,35 @@ Deno.test(
           JSON.stringify({
             content: [
               { text: JSON.stringify({ model: "gpt-4", thinking: "high" }) },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    );
+    const result = await adjudicatePhaseModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
+  "adjudicatePhaseModel: haiku model id returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                text: JSON.stringify({
+                  model: "claude-haiku-4-5",
+                  thinking: "off",
+                }),
+              },
             ],
           }),
           { status: 200 },

@@ -1,5 +1,4 @@
 const VALID_MODEL_IDS = new Set([
-  "claude-haiku-4-5",
   "claude-sonnet-4-6",
   "claude-opus-4-5",
   "claude-opus-4-6",
@@ -18,7 +17,7 @@ const VALID_THINKING_LEVELS = new Set([
 const SYSTEM_PROMPT =
   `You are selecting the model and thinking level for an implementation phase agent. ` +
   `Given the implementation prompt below, return a JSON object with exactly two fields: "model" and "thinking".\n\n` +
-  `Valid model values: "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-5", "claude-opus-4-6"\n` +
+  `Valid model values: "claude-sonnet-4-6", "claude-opus-4-5", "claude-opus-4-6"\n` +
   `Valid thinking values: "off", "minimal", "low", "medium", "high", "xhigh", "max"\n\n` +
   `Guidelines:\n` +
   `- Use "claude-sonnet-4-6" by default. Use "claude-opus-4-6" only for the most demanding tasks.\n` +

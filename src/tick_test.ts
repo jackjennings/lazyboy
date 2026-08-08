@@ -9,7 +9,7 @@ import {
   assertStringIncludes,
 } from "@std/assert";
 import { join } from "@std/path";
-import { assertSpyCall, assertSpyCalls, spy } from "@std/testing/mock";
+import { assertSpyCall, assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   advancePhase,
   appendTickLog,
@@ -4683,164 +4683,185 @@ Deno.test(
   },
 );
 
+type MockCommandOutput = {
+  code: number;
+  stdout: Uint8Array;
+  stderr: Uint8Array;
+};
+type MockCommandFactory = (
+  _cmd: string,
+  _opts?: Deno.CommandOptions,
+) => { output: () => Promise<MockCommandOutput> };
+type DenoWithMockCommand = Omit<typeof Deno, "Command"> & {
+  Command: MockCommandFactory;
+};
+
+function stubDenoCommand(factory: MockCommandFactory) {
+  return stub(
+    Deno as unknown as DenoWithMockCommand,
+    "Command",
+    factory,
+  );
+}
+
 Deno.test(
   "adjudicatePhaseModel: valid response returns parsed model and thinking",
   async () => {
-    const fetcher = spy((_url: string, _opts: RequestInit) => {
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            content: [
-              {
-                text: JSON.stringify({
-                  model: "claude-opus-4-6",
-                  thinking: "high",
-                }),
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-      );
-    });
-    const result = await adjudicatePhaseModel(
-      "implement something",
-      fetcher as unknown as typeof fetch,
-      "test-key",
-    );
-    assertEquals(result, { model: "claude-opus-4-6", thinking: "high" });
+    const encoder = new TextEncoder();
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 0,
+          stdout: encoder.encode(
+            JSON.stringify({
+              structured_output: { model: "claude-opus-4-6", thinking: "high" },
+            }),
+          ),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("implement something");
+      assertEquals(result, { model: "claude-opus-4-6", thinking: "high" });
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
   "adjudicatePhaseModel: invalid model id returns null",
   async () => {
-    const fetcher = spy(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            content: [
-              { text: JSON.stringify({ model: "gpt-4", thinking: "high" }) },
-            ],
-          }),
-          { status: 200 },
-        ),
-      )
-    );
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+    const encoder = new TextEncoder();
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 0,
+          stdout: encoder.encode(
+            JSON.stringify({
+              structured_output: { model: "gpt-4", thinking: "high" },
+            }),
+          ),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
   "adjudicatePhaseModel: haiku model id returns null",
   async () => {
-    const fetcher = spy(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            content: [
-              {
-                text: JSON.stringify({
-                  model: "claude-haiku-4-5",
-                  thinking: "off",
-                }),
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-      )
-    );
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+    const encoder = new TextEncoder();
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 0,
+          stdout: encoder.encode(
+            JSON.stringify({
+              structured_output: { model: "claude-haiku-4-5", thinking: "off" },
+            }),
+          ),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
   "adjudicatePhaseModel: invalid thinking level returns null",
   async () => {
-    const fetcher = spy(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            content: [
-              {
-                text: JSON.stringify({
-                  model: "claude-sonnet-4-6",
-                  thinking: "turbo",
-                }),
+    const encoder = new TextEncoder();
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 0,
+          stdout: encoder.encode(
+            JSON.stringify({
+              structured_output: {
+                model: "claude-sonnet-4-6",
+                thinking: "turbo",
               },
-            ],
-          }),
-          { status: 200 },
-        ),
-      )
-    );
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+            }),
+          ),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
-  "adjudicatePhaseModel: non-200 response returns null",
+  "adjudicatePhaseModel: non-zero exit code returns null",
   async () => {
-    const fetcher = spy(() =>
-      Promise.resolve(new Response("", { status: 500 }))
-    );
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 1,
+          stdout: new Uint8Array(),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
-  "adjudicatePhaseModel: JSON parse failure returns null",
+  "adjudicatePhaseModel: malformed JSON in stdout returns null",
   async () => {
-    const fetcher = spy(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({ content: [{ text: "not json" }] }),
-          { status: 200 },
-        ),
-      )
-    );
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+    const encoder = new TextEncoder();
+    const commandStub = stubDenoCommand(() => ({
+      output: () =>
+        Promise.resolve({
+          code: 0,
+          stdout: encoder.encode("not json"),
+          stderr: new Uint8Array(),
+        }),
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 
 Deno.test(
-  "adjudicatePhaseModel: network error returns null",
+  "adjudicatePhaseModel: command throws returns null",
   async () => {
-    const fetcher = spy(() => {
-      throw new Error("network error");
-    });
-    const result = await adjudicatePhaseModel(
-      "p",
-      fetcher as unknown as typeof fetch,
-      "k",
-    );
-    assertEquals(result, null);
+    const commandStub = stubDenoCommand(() => ({
+      output: () => {
+        throw new Error("command failed");
+      },
+    }));
+    try {
+      const result = await adjudicatePhaseModel("p");
+      assertEquals(result, null);
+    } finally {
+      commandStub.restore();
+    }
   },
 );
 

@@ -757,8 +757,7 @@ export function composeTickDeps(
           config.github.repos,
         )
           .then(formatRepoCorpus),
-      adjudicatePhaseModel: (prompt) =>
-        adjudicatePhaseModel(prompt, fetch, anthropicApiKey),
+      adjudicatePhaseModel,
       spawnOutlierAnalysis: async (
         ticketId,
         ticketDir,

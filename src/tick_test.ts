@@ -4737,6 +4737,35 @@ Deno.test(
 );
 
 Deno.test(
+  "adjudicatePhaseModel: haiku model id returns null",
+  async () => {
+    const fetcher = spy(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                text: JSON.stringify({
+                  model: "claude-haiku-4-5",
+                  thinking: "off",
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    );
+    const result = await adjudicatePhaseModel(
+      "p",
+      fetcher as unknown as typeof fetch,
+      "k",
+    );
+    assertEquals(result, null);
+  },
+);
+
+Deno.test(
   "adjudicatePhaseModel: invalid thinking level returns null",
   async () => {
     const fetcher = spy(() =>

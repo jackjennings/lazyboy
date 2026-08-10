@@ -35,14 +35,23 @@ passed in as `@/path` arguments.
 
 `lazyboy` runs `tick` every 5 minutes as a background job. Tickets advance
 automatically until they hit a gate, then wait for `lazyboy approve <id>`.
-Phases can self-approve or be skipped under certain circumstances, depending on the work being performed; this is dictated by a default prompt for each phase, each of which can be extended by the user.
+Phases can self-approve or be skipped under certain circumstances, depending on
+the work being performed; this is dictated by a default prompt for each phase,
+each of which can be extended by the user.
 
-`scripts/tick.sh` handles GitHub token capture and env setup. To override env vars
-(e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
+`scripts/tick.sh` handles GitHub token capture and env setup. To override env
+vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
 
-`lazyboy` tracks state in a git repository, storing a log of each ticket and all related outputs. This same git repository stores user-manintained prompts that extend the default set bundled with `lazyboy`.
+`lazyboy` tracks state in a git repository, storing a log of each ticket and all
+related outputs. This same git repository stores user-manintained prompts that
+extend the default set bundled with `lazyboy`.
 
-As work moves through phases, `lazyboy` will self-reflect on tasks that were more difficult than expected, or required user intervention to get right. This self-reflection results automated updates to prompts in the state repository (scoped either to a specific repository, organization, or globally), as well as proposals to update the documentation or AGENT.md instructions of projects under modification.
+As work moves through phases, `lazyboy` will self-reflect on tasks that were
+more difficult than expected, or required user intervention to get right. This
+self-reflection results automated updates to prompts in the state repository
+(scoped either to a specific repository, organization, or globally), as well as
+proposals to update the documentation or AGENT.md instructions of projects under
+modification.
 
 ## Usage
 
@@ -79,74 +88,41 @@ concurrency = 2
 enabled = ["agent-browser"]
 
 [codebase]
+# List of directories the intake phase can look through when proposing scope.
+# A top-level directory listing of each root is passed to the intake agent so
+# it can propose paths that actually exist rather than plausible-sounding guesses.
+# Without this, intake proposes scope from ticket text alone — still useful,
+# but the human approval gate will more often need to correct wrong directory names.
 roots = ["~/code"]
 
 [agent]
+# Selects which CLI runs every phase — `"pi"` (default) for the `pi` CLI, or
+# `"claude-code"` to run the `claude` CLI instead. This is orthogonal to
+# `[pi].provider` below, which only takes effect when `agent.type` is `"pi"`.
 type = "pi"
 
 [pi]
+# Selects which backend `pi` talks to for every phase — `"anthropic"` (default)
+# for the direct Console API, or `"bedrock"` for Amazon Bedrock. When using 
+# `"bedrock"`, model IDs configured under `[phases.defaults]` must already carry
+# Bedrock's `anthropic.` prefix (e.g. `anthropic.claude-opus-4-8`, not
+# `claude-opus-4-8`), and `AWS_REGION` plus AWS credentials must be available in
+# lazyboy's own environment (env vars, a shared profile, or an instance role) — 
+# lazyboy does not manage AWS auth itself. Every phase must be explicitly
+# configured under `[phases.defaults]` when using Bedrock — any phase left
+# unconfigured falls back to lazyboy's built-in default model IDs, which are
+# unprefixed and will fail against Bedrock. This includes the conflict-resolution
+# phase (triggered by rebase conflicts), configurable under
+# `[phases.defaults."conflict-resolution"]` like any other phase.
 provider = "anthropic"
 
+# Adds a local [todo.txt](https://todotxt.org) file as a work provider. Every
+# non-completed task becomes a ticket. When a ticket closes, the task is marked
+# done in-place with an `x YYYY-MM-DD` prefix. The `file` key is required when
+# the section is present; `~/` is expanded to the home directory.
 [todo_txt]
 file = "~/todo.txt"
 ```
-
-`[todo_txt]` adds a local [todo.txt](https://todotxt.org) file as a work
-provider. Every non-completed task becomes a ticket. When a ticket closes, the
-task is marked done in-place with an `x YYYY-MM-DD` prefix. The `file` key is
-required when the section is present; `~/` is expanded to the home directory.
-
-`[agent].type` selects which CLI runs every phase — `"pi"` (default) for the
-`pi` CLI, or `"claude-code"` to run the `claude` CLI instead. This is orthogonal
-to `[pi].provider` below, which only takes effect when `agent.type` is `"pi"`.
-
-`[pi].provider` selects which backend `pi` talks to for every phase —
-`"anthropic"` (default) for the direct Console API, or `"bedrock"` for Amazon
-Bedrock. When using `"bedrock"`, model IDs configured under `[phases.defaults]`
-must already carry Bedrock's `anthropic.` prefix (e.g.
-`anthropic.claude-opus-4-8`, not `claude-opus-4-8`), and `AWS_REGION` plus AWS
-credentials must be available in lazyboy's own environment (env vars, a shared
-profile, or an instance role) — lazyboy does not manage AWS auth itself. Every
-phase must be explicitly configured under `[phases.defaults]` when using Bedrock
-— any phase left unconfigured falls back to lazyboy's built-in default model
-IDs, which are unprefixed and will fail against Bedrock. This includes the
-conflict-resolution phase (triggered by rebase conflicts), configurable under
-`[phases.defaults."conflict-resolution"]` like any other phase.
-
-`codebase.roots` is a list of directories the intake phase can look through when
-proposing scope. A top-level directory listing of each root is passed to the
-intake agent so it can propose paths that actually exist rather than
-plausible-sounding guesses. Without this, intake proposes scope from ticket text
-alone — still useful, but the human approval gate will more often need to
-correct wrong directory names.
-
-Intake also proposes which **external sources** a ticket needs — Notion pages,
-Slack channels, GitHub repos not cloned locally, external documentation URLs.
-These appear as a third section in `intake.md` alongside the filesystem scope,
-and are approved at the same human gate. Available external sources are declared
-in config:
-
-```toml
-[sources]
-notion = true
-slack = true
-github_orgs = ["myorg"]
-```
-
-External source access does not require MCP. Three approaches, in order of
-preference for the near term:
-
-1. **Host-side pre-fetch (recommended now):** before spawning the enrichment
-   phase, the tick fetches approved external sources on the host — where
-   credentials already live — and writes the results into the ticket directory
-   as static files. Pi reads them like any other context file. No credentials
-   passed to the agent, no new tooling required.
-2. **CLI tools at agent runtime:** the agent invokes Slack CLI, `curl` against
-   Notion's API, `gh` for GitHub directly via its bash tool. The enrichment
-   prompt tells the agent which tools are available. Works today but exposes
-   host credentials to the agent.
-3. **MCP (future):** the cleanest long-term answer but blocked on Pi gaining MCP
-   client support.
 
 ## Artifacts
 

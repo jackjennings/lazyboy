@@ -1,8 +1,19 @@
 # lazyboy
 
 Automates software development so human time is spent only on tasks requiring
-judgement. Polls for assigned work, runs each ticket through a phase pipeline
-via an AI agent, and pauses at each phase boundary for human approval.
+specialized judgement. Polls for assigned work, runs each ticket through a phase
+pipeline via an AI agent, and pauses at each phase boundary that requires human
+approval.
+
+The goal of `lazyboy` is aim an engineer's focus at tasks that require expertise
+or taste, and allow the coding agent to handle all rote tasks in between.
+
+> [!NOTE]
+> This software is under active development, and should be considered an alpha
+> release at best. lazyboy is currently dogfooding itself, which means the code
+> quality is limited by the small number of controls currently built into the
+> tool. As the ability for the harness to self-improve itself improves, expect
+> the quality of the code, prompts, documentation, etc. to be fixed.
 
 ## How it works
 
@@ -14,25 +25,31 @@ Each ticket moves through six phases:
 | **enrichment**     | Gathers context from the codebase                              | Review context  |
 | **spec**           | Writes a precise specification                                 | Validate spec   |
 | **plan**           | Writes a TDD implementation plan                               | Approve plan    |
-| **implementation** | Writes the code                                                | Review diff     |
+| **implementation** | Creates the artifact (code / document)                         | Review diff     |
 | **merge**          | Calls GitHub API to merge PR, removes worktree, deletes branch | Authorize merge |
 
-Each phase runs [pi](https://pi.dev) as a host subprocess with `cwd` set to the
-ticket directory or approved worktree, and the relevant context files passed in
-as `@/path` arguments.
+Each phase runs the configured agent (either [pi](https://pi.dev) or
+[claude-code](https://claude.com/product/claude-code)) as a host subprocess with
+`cwd` set to the worktree(s) under development, and the relevant context files
+passed in as `@/path` arguments.
 
-lazyboy runs `tick` every 5 minutes as a background job. Tickets advance
+`lazyboy` runs `tick` every 5 minutes as a background job. Tickets advance
 automatically until they hit a gate, then wait for `lazyboy approve <id>`.
+Phases can self-approve or be skipped under certain circumstances, depending on the work being performed; this is dictated by a default prompt for each phase, each of which can be extended by the user.
 
-`scripts/tick.sh` handles token capture and env setup. To override env vars
+`scripts/tick.sh` handles GitHub token capture and env setup. To override env vars
 (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
+
+`lazyboy` tracks state in a git repository, storing a log of each ticket and all related outputs. This same git repository stores user-manintained prompts that extend the default set bundled with `lazyboy`.
+
+As work moves through phases, `lazyboy` will self-reflect on tasks that were more difficult than expected, or required user intervention to get right. This self-reflection results automated updates to prompts in the state repository (scoped either to a specific repository, organization, or globally), as well as proposals to update the documentation or AGENT.md instructions of projects under modification.
 
 ## Usage
 
 ```bash
-lazyboy tick                # advance all active tickets (run automatically)
-lazyboy approve <id>        # approve the current phase gate
-lazyboy status             # show all active tickets
+lazyboy tick               # advance all active tickets (run automatically)
+lazyboy approve <id>       # approve the current phase gate
+lazyboy status [id]        # show all active tickets or the status of a single ticket
 lazyboy hud                # live status display
 lazyboy retry <id>         # reset a needs-attention ticket
 lazyboy decline <id> [why] # permanently exclude a ticket from the queue
@@ -42,46 +59,7 @@ lazyboy tail [id]          # stream the tick log or a ticket's event log
 lazyboy enable             # start the scheduler
 lazyboy disable            # stop the scheduler
 lazyboy update             # pull latest lazyboy source
-lazyboy completion zsh     # print zsh completion script
 ```
-
-### Zsh plugin
-
-The `plugin/lazyboy.plugin.zsh` file defines three-character aliases and sources
-tab completions automatically. To install:
-
-**Oh My Zsh:**
-
-```zsh
-git clone https://github.com/jackjennings/lazyboy \
-  ~/.oh-my-zsh/custom/plugins/lazyboy
-```
-
-Then add `lazyboy` to the `plugins` array in `~/.zshrc`:
-
-```zsh
-plugins=(... lazyboy)
-```
-
-The plugin sources `lazyboy completion zsh` at shell startup, so no separate
-completion setup is needed when using the plugin.
-
-| Alias | Command              |
-| ----- | -------------------- |
-| `ltk` | `lazyboy tick`       |
-| `lap` | `lazyboy approve`    |
-| `lst` | `lazyboy status`     |
-| `len` | `lazyboy enable`     |
-| `ldi` | `lazyboy disable`    |
-| `lco` | `lazyboy completion` |
-| `lrt` | `lazyboy retry`      |
-| `ldc` | `lazyboy decline`    |
-| `lrv` | `lazyboy review`     |
-| `lsh` | `lazyboy shell`      |
-| `lta` | `lazyboy tail`       |
-| `lup` | `lazyboy update`     |
-| `lhd` | `lazyboy hud`        |
-| `lus` | `lazyboy usage`      |
 
 ## Config
 
@@ -175,11 +153,11 @@ preference for the near term:
 Not all tickets produce pull requests. The `artifact` field in `meta.md`
 controls what the implementation phase produces and what "merge" means:
 
-| Value          | Implementation produces               | Merge step                              |
-| -------------- | ------------------------------------- | --------------------------------------- |
-| `pr` (default) | Code diff                             | Opens GitHub PR                         |
-| `document`     | Written document (RFC, proposal, ADR) | Posts to destination (Confluence, etc.) |
-| `none`         | No artifact                           | Closes ticket                           |
+| Value          | Implementation produces               | Merge step                                   |
+| -------------- | ------------------------------------- | -------------------------------------------- |
+| `pr` (default) | Code diff                             | Opens GitHub PR                              |
+| `notion`       | Written document (RFC, proposal, ADR) | Posts to Notion                              |
+| `work` (TODO)  | New work tickets                      | Posts to ticket tracker (Jira, Linear, etc.) |
 
 ## Ceremonies
 
@@ -216,10 +194,6 @@ additions to `principles.md` as improved LLM instructions for future runs. This
 closes the learning loop automatically rather than requiring per-ticket
 curation.
 
-## Tech stack
-
-Deno, TypeScript, pi (AI agent), GitHub REST API.
-
 ### Prior art
 
 - [Devin](https://devin.ai) — commercial autonomous coding agent; assigns via
@@ -232,14 +206,43 @@ Deno, TypeScript, pi (AI agent), GitHub REST API.
   MCP-based extensibility and semantic codebase understanding. Runs
   interactively or headlessly; no built-in phase gates or pipeline model.
 
-### Pi vs Claude Code
+## Zsh plugin
 
-Pi has the same dedicated file-editing tools as Claude Code (`read`, `edit`,
-`write`, `bash`) and a richer hooks system (`tool_call`, `tool_result`,
-`before_agent_start`, etc.). The one meaningful gap is MCP — Claude Code
-supports it natively, Pi does not. For lazyboy's use case this doesn't matter:
-external services are pre-fetched on the host and passed to the agent as static
-context files. Pi is the primary and only planned agent.
+The `plugin/lazyboy.plugin.zsh` file defines three-character aliases and sources
+tab completions automatically. To install:
+
+**Oh My Zsh:**
+
+```zsh
+git clone https://github.com/jackjennings/lazyboy \
+  ~/.oh-my-zsh/custom/plugins/lazyboy
+```
+
+Then add `lazyboy` to the `plugins` array in `~/.zshrc`:
+
+```zsh
+plugins=(... lazyboy)
+```
+
+The plugin sources `lazyboy completion zsh` at shell startup, so no separate
+completion setup is needed when using the plugin.
+
+| Alias | Command              |
+| ----- | -------------------- |
+| `ltk` | `lazyboy tick`       |
+| `lap` | `lazyboy approve`    |
+| `lst` | `lazyboy status`     |
+| `len` | `lazyboy enable`     |
+| `ldi` | `lazyboy disable`    |
+| `lco` | `lazyboy completion` |
+| `lrt` | `lazyboy retry`      |
+| `ldc` | `lazyboy decline`    |
+| `lrv` | `lazyboy review`     |
+| `lsh` | `lazyboy shell`      |
+| `lta` | `lazyboy tail`       |
+| `lup` | `lazyboy update`     |
+| `lhd` | `lazyboy hud`        |
+| `lus` | `lazyboy usage`      |
 
 ---
 

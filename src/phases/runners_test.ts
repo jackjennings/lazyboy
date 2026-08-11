@@ -6,10 +6,12 @@ import {
   assertStringIncludes,
 } from "@std/assert";
 import { join } from "@std/path";
+import { stub } from "@std/testing/mock";
 import {
   loadArtifactPrompt,
   loadPromptFile,
   loadProviderPrompt,
+  loadRevisionPrompt,
   loadStatePrompt,
 } from "./runners.ts";
 
@@ -37,6 +39,8 @@ Deno.test("phase prompts: no prompt instructs the agent to print its response", 
     "plan",
     "implementation",
     "implementation-revision",
+    "spec-revision",
+    "plan-revision",
   ];
   for (const phase of phases) {
     const content = await loadPromptFile(`${phase}.md`);
@@ -404,5 +408,37 @@ Deno.test(
   async () => {
     const result = await loadArtifactPrompt("implementation", "notion");
     assertGreater(result.length, 0);
+  },
+);
+
+Deno.test(
+  "loadRevisionPrompt: returns file content when revision file exists",
+  async () => {
+    const result = await loadRevisionPrompt("spec");
+    assertGreater(result.length, 0);
+  },
+);
+
+Deno.test(
+  "loadRevisionPrompt: returns empty string when no revision file exists",
+  async () => {
+    const result = await loadRevisionPrompt("unknown-xyz-revision-test");
+    assertEquals(result, "");
+  },
+);
+
+Deno.test(
+  "loadRevisionPrompt: propagates non-NotFound errors",
+  async () => {
+    const error = new Deno.errors.PermissionDenied("test");
+    const readStub = stub(Deno, "readTextFile", () => Promise.reject(error));
+    try {
+      await assertRejects(
+        () => loadRevisionPrompt("spec"),
+        Deno.errors.PermissionDenied,
+      );
+    } finally {
+      readStub.restore();
+    }
   },
 );

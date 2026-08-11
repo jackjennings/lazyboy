@@ -4870,3 +4870,69 @@ Deno.test("plan.md does not contain model recommendation instructions", async ()
   );
   assertFalse(content.includes("## Model recommendation"));
 });
+
+Deno.test(
+  "advancePhase: spec revising uses revision prompt when spec-revision.md exists",
+  async () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      status: "revising",
+      provider: "jira",
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const revisionPrompt = await Deno.readTextFile(
+      new URL("./phases/prompts/spec-revision.md", import.meta.url).pathname,
+    );
+    assertStringIncludes(spawnedPrompt, revisionPrompt.trim());
+  },
+);
+
+Deno.test(
+  "advancePhase: intake revising uses authoring prompt when no revision file exists",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "revising",
+      provider: "jira",
+    });
+    let spawnedPrompt = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPrompt = opts.prompt;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      spawn: spawnSpy,
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertSpyCall(spawnSpy, 0);
+    const authoringPrompt = await loadPromptFile("intake.md");
+    assertStringIncludes(spawnedPrompt, authoringPrompt.trim());
+  },
+);

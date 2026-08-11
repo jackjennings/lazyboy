@@ -2,6 +2,7 @@ import { adf2markdown } from "adf2markdown";
 import type { Provider, WorkItem } from "./types.ts";
 import { jiraTransition } from "../tick-actions/jira-transition.ts";
 import { HttpClient } from "../http-client.ts";
+import { captureCommandRunner, type CommandRunner } from "../apfel.ts";
 
 interface JiraIssue {
   id: string;
@@ -13,12 +14,63 @@ interface JiraIssue {
   };
 }
 
+interface JiraComment {
+  author: { displayName: string };
+  body: unknown;
+  created: string;
+}
+
+const COMMENT_JUDGE_SYSTEM_PROMPT =
+  'You are evaluating whether a Jira comment contains information useful for understanding or implementing a software ticket. Reply with exactly KEEP if the comment contains substantive technical context, requirements clarification, decisions, constraints, repro steps, or relevant background. Reply with exactly SKIP if the comment is a status update request ("any update?", "when will this be done?"), a simple acknowledgement (+1, thanks, LGTM), a bot-generated notification, or an @-mention ping with no technical content.';
+
+async function judgeComment(
+  body: string,
+  run: CommandRunner,
+): Promise<boolean> {
+  try {
+    const { code, stdout } = await run([
+      "apfel",
+      "--quiet",
+      "--max-tokens",
+      "5",
+      "-s",
+      COMMENT_JUDGE_SYSTEM_PROMPT,
+      body,
+    ]);
+    if (code === 0) {
+      return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
+    }
+  } catch {
+    // apfel unavailable — fall through to claude CLI
+  }
+  try {
+    const { code, stdout } = await run([
+      "claude",
+      body,
+      "--print",
+      "--output-format",
+      "text",
+      "--system-prompt",
+      COMMENT_JUDGE_SYSTEM_PROMPT,
+      "--model",
+      "claude-haiku-4-5",
+      "--tools",
+      "",
+    ]);
+    if (code !== 0) return true;
+    return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
+  } catch {
+    return true;
+  }
+}
+
 export class JiraProvider implements Provider {
   private baseUrl: string;
   private email: string;
   private apiToken: string;
   private project: string;
   private http: HttpClient;
+  private run: CommandRunner;
 
   constructor(opts: {
     baseUrl: string;
@@ -26,12 +78,14 @@ export class JiraProvider implements Provider {
     apiToken: string;
     project: string;
     http: HttpClient;
+    run?: CommandRunner;
   }) {
     this.baseUrl = opts.baseUrl;
     this.email = opts.email;
     this.apiToken = opts.apiToken;
     this.project = opts.project;
     this.http = opts.http;
+    this.run = opts.run ?? captureCommandRunner();
   }
 
   async close(url: string): Promise<void> {
@@ -80,6 +134,22 @@ export class JiraProvider implements Provider {
     return block;
   }
 
+  private async fetchComments(
+    key: string,
+    auth: string,
+  ): Promise<JiraComment[]> {
+    const url = `${this.baseUrl}/rest/api/3/issue/${key}/comment?maxResults=50`;
+    const res = await this.http.get(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { comments: JiraComment[] };
+    return data.comments ?? [];
+  }
+
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const jql =
       `assignee = currentUser() AND project = ${this.project} AND statusCategory != Done`;
@@ -123,6 +193,35 @@ export class JiraProvider implements Provider {
             auth,
           );
           if (ancestors) description = `${description}\n\n---\n\n${ancestors}`;
+        }
+        const comments = await this.fetchComments(issue.key, auth);
+        const keptComments: Array<{
+          displayName: string;
+          date: string;
+          body: string;
+        }> = [];
+        for (const comment of comments) {
+          const commentBody = comment.body == null ||
+              typeof comment.body !== "object"
+            ? ""
+            // deno-lint-ignore no-explicit-any
+            : adf2markdown(comment.body as any).trim();
+          if (!commentBody) continue;
+          const keep = await judgeComment(commentBody, this.run);
+          if (keep) {
+            keptComments.push({
+              displayName: comment.author.displayName,
+              date: comment.created.slice(0, 10),
+              body: commentBody,
+            });
+          }
+        }
+        if (keptComments.length > 0) {
+          const commentSection = "## Comments\n\n" +
+            keptComments
+              .map((c) => `**${c.displayName}** (${c.date})\n\n${c.body}`)
+              .join("\n\n");
+          description = `${description}\n\n---\n\n${commentSection}`;
         }
         items.push({
           id,

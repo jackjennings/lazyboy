@@ -1,7 +1,12 @@
 import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
 import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
-import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
+import {
+  Input,
+  matchesKey,
+  ProcessTerminal,
+  TUI,
+} from "@earendil-works/pi-tui";
 import { expandHome, loadConfig } from "../config.ts";
 import { isLaunchdEnabled } from "../launchd.ts";
 import { isPhaseAlive } from "../executor.ts";
@@ -16,6 +21,21 @@ import {
 import { listTickets, readTicket } from "../state/store.ts";
 import { ScrollPane } from "../ui/scroll-pane.ts";
 import type { Command } from "./types.ts";
+
+const BLOCKED_COMMANDS = new Set(["hud", "shell", "tail", "review"]);
+
+export function isBlockedCommand(name: string): boolean {
+  return BLOCKED_COMMANDS.has(name);
+}
+
+export function parseCommand(
+  input: string,
+): { name: string; args: string[] } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(/\s+/);
+  return { name: parts[0], args: parts.slice(1) };
+}
 
 export function formatTickLogLine(raw: string): string {
   let entry: Record<string, unknown>;
@@ -122,6 +142,7 @@ export const hud: Command = {
   name: "hud",
   description: "live status display",
   async run(_args) {
+    const { commands } = await import("./registry.ts");
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
     const parentDir = lazyboyDir();
@@ -137,7 +158,7 @@ export const hud: Command = {
       getLines: (_w) => currentStatusLines,
       tui,
       title: "status",
-      getHeight: () => Math.ceil((tui.terminal.rows - 1) / 2),
+      getHeight: () => Math.ceil((tui.terminal.rows - 2) / 2),
     });
 
     const logPane = new ScrollPane({
@@ -145,7 +166,7 @@ export const hud: Command = {
       tui,
       title: "log",
       getHeight: () =>
-        tui.terminal.rows - 1 - Math.ceil((tui.terminal.rows - 1) / 2),
+        tui.terminal.rows - 2 - Math.ceil((tui.terminal.rows - 2) / 2),
     });
 
     let headerLine = "";
@@ -156,12 +177,17 @@ export const hud: Command = {
       invalidate() {},
     };
 
+    let commandRunning = false;
+    const commandInput = new Input();
+
     tui.addChild(headerComponent);
     tui.addChild(statusPane);
     tui.addChild(logPane);
+    tui.addChild(commandInput);
     tui.setFocus(statusPane);
     statusPane.focused = true;
     logPane.focused = false;
+    commandInput.focused = false;
 
     async function refresh() {
       const logWasAtEnd = logPane.isAtEnd(tui.terminal.columns);
@@ -186,6 +212,67 @@ export const hud: Command = {
 
       tui.requestRender(true);
     }
+
+    commandInput.onEscape = () => {
+      commandInput.setValue("");
+      commandInput.focused = false;
+      statusPane.focused = true;
+      logPane.focused = false;
+      tui.setFocus(statusPane);
+      tui.requestRender(true);
+    };
+
+    commandInput.onSubmit = async (value: string) => {
+      if (commandRunning) return;
+      const parsed = parseCommand(value);
+      if (!parsed) return;
+      const { name, args } = parsed;
+      if (isBlockedCommand(name)) {
+        headerLine = `Blocked: ${name}`;
+        tui.requestRender(true);
+        return;
+      }
+      if (!commands.find((c) => c.name === name)) {
+        headerLine = `Unknown command: ${name}`;
+        tui.requestRender(true);
+        return;
+      }
+      commandInput.setValue("");
+      commandInput.focused = false;
+      statusPane.focused = true;
+      logPane.focused = false;
+      tui.setFocus(statusPane);
+      commandRunning = true;
+      const label = args.length > 0 ? `${name} ${args.join(" ")}` : name;
+      headerLine = `Running: ${label}`;
+      tui.requestRender(true);
+      const scriptPath = new URL("../index.ts", import.meta.url).pathname;
+      const proc = new Deno.Command("deno", {
+        args: ["run", "--allow-all", scriptPath, name, ...args],
+        stdin: "null",
+        stdout: "piped",
+        stderr: "piped",
+      });
+      const result = await proc.output();
+      const combined = [
+        new TextDecoder().decode(result.stdout),
+        new TextDecoder().decode(result.stderr),
+      ].join("\n");
+      const lines = combined
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      let display: string;
+      if (lines.length === 0) {
+        display = result.code === 0 ? "OK" : `Error (exit ${result.code})`;
+      } else {
+        display = lines[0];
+      }
+      headerLine = display;
+      tui.requestRender(true);
+      commandRunning = false;
+      setTimeout(() => refresh(), 3000);
+    };
 
     await refresh();
     logPane.scrollToEnd();
@@ -223,12 +310,26 @@ export const hud: Command = {
         if (statusPane.focused) {
           statusPane.focused = false;
           logPane.focused = true;
+          commandInput.focused = false;
           tui.setFocus(logPane);
-        } else {
+        } else if (logPane.focused) {
           logPane.focused = false;
+          commandInput.focused = true;
+          statusPane.focused = false;
+          tui.setFocus(commandInput);
+        } else {
+          commandInput.focused = false;
           statusPane.focused = true;
+          logPane.focused = false;
           tui.setFocus(statusPane);
         }
+        tui.requestRender(true);
+      }
+      if (matchesKey(data, "super+k")) {
+        statusPane.focused = false;
+        logPane.focused = false;
+        commandInput.focused = true;
+        tui.setFocus(commandInput);
         tui.requestRender(true);
       }
     });

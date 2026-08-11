@@ -194,6 +194,7 @@ export function composeTickDeps(
         apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
         project: config.jira.project,
         http,
+        run: captureCommandRunner(),
       }),
     );
   }

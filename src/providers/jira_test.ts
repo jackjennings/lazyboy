@@ -26,6 +26,14 @@ function makeIssue(
   return { id: "10001", key, fields };
 }
 
+function adfText(text: string) {
+  return {
+    type: "doc",
+    version: 1,
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  };
+}
+
 Deno.test("fetchNew returns all items when knownIds is empty", async () => {
   const provider = new JiraProvider({
     baseUrl: BASE_URL,
@@ -472,5 +480,388 @@ Deno.test(
     const items = await provider.fetchNew(new Set());
     assertEquals(items.length, 1);
     assertFalse(items[0].description.includes("Parent context"));
+  },
+);
+
+Deno.test("fetchNew fetches comments from the Jira comment endpoint", async () => {
+  const commentUrls: string[] = [];
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (urlStr.includes("/comment")) {
+        commentUrls.push(urlStr);
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ comments: [] }), { status: 200 }),
+      );
+    }),
+    run: (_args) => Promise.resolve({ code: 1, stdout: "" }),
+  });
+  await provider.fetchNew(new Set());
+  assertEquals(commentUrls.length, 1);
+  assertEquals(
+    commentUrls[0],
+    `${BASE_URL}/rest/api/3/issue/PROJ-1/comment?maxResults=50`,
+  );
+});
+
+Deno.test("fetchNew appends kept comments to description", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            comments: [{
+              author: { displayName: "Alice" },
+              body: adfText("Useful technical info"),
+              created: "2025-01-15T10:30:00Z",
+            }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+    run: (args) =>
+      Promise.resolve(
+        args[0] === "apfel" ? { code: 0, stdout: "KEEP" } : {
+          code: 1,
+          stdout: "",
+        },
+      ),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertStringIncludes(items[0].description, "---\n\n## Comments");
+  assertStringIncludes(items[0].description, "**Alice** (2025-01-15)");
+  assertStringIncludes(items[0].description, "Useful technical info");
+});
+
+Deno.test("fetchNew omits rejected comments from description", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            comments: [{
+              author: { displayName: "Bob" },
+              body: adfText("Any update on this?"),
+              created: "2025-01-15T10:30:00Z",
+            }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+    run: (args) =>
+      Promise.resolve(
+        args[0] === "apfel" ? { code: 0, stdout: "SKIP" } : {
+          code: 1,
+          stdout: "",
+        },
+      ),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertFalse(items[0].description.includes("## Comments"));
+  assertFalse(items[0].description.includes("Any update on this?"));
+});
+
+Deno.test("fetchNew appends no Comments section when issue has no comments", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ comments: [] }), { status: 200 }),
+      );
+    }),
+    run: (_args) => Promise.resolve({ code: 1, stdout: "" }),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertFalse(items[0].description.includes("## Comments"));
+});
+
+Deno.test("fetchNew formats comment date as YYYY-MM-DD", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            comments: [{
+              author: { displayName: "Alice" },
+              body: adfText("Some comment"),
+              created: "2025-06-20T14:55:00.000Z",
+            }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+    run: (args) =>
+      Promise.resolve(
+        args[0] === "apfel" ? { code: 0, stdout: "KEEP" } : {
+          code: 1,
+          stdout: "",
+        },
+      ),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertStringIncludes(items[0].description, "(2025-06-20)");
+});
+
+Deno.test("fetchNew separates multiple kept comments with blank lines", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            comments: [
+              {
+                author: { displayName: "Alice" },
+                body: adfText("First comment"),
+                created: "2025-01-10T00:00:00Z",
+              },
+              {
+                author: { displayName: "Bob" },
+                body: adfText("Second comment"),
+                created: "2025-01-11T00:00:00Z",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+    run: (args) =>
+      Promise.resolve(
+        args[0] === "apfel" ? { code: 0, stdout: "KEEP" } : {
+          code: 1,
+          stdout: "",
+        },
+      ),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertStringIncludes(
+    items[0].description,
+    "**Alice** (2025-01-10)\n\nFirst comment\n\n**Bob** (2025-01-11)\n\nSecond comment",
+  );
+});
+
+Deno.test("fetchNew fail-open: includes all comments when judge throws", async () => {
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    http: new HttpClient((url, _init) => {
+      const urlStr = url as string;
+      if (urlStr.includes("/rest/api/3/search")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            comments: [{
+              author: { displayName: "Alice" },
+              body: adfText("Relevant info"),
+              created: "2025-01-15T00:00:00Z",
+            }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+    run: (_args) => Promise.reject(new Error("judge unavailable")),
+  });
+  const items = await provider.fetchNew(new Set());
+  assertStringIncludes(items[0].description, "## Comments");
+  assertStringIncludes(items[0].description, "Relevant info");
+});
+
+Deno.test(
+  "fetchNew fail-open: includes all comments when both judge calls return non-zero",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      http: new HttpClient((url, _init) => {
+        const urlStr = url as string;
+        if (urlStr.includes("/rest/api/3/search")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              comments: [{
+                author: { displayName: "Alice" },
+                body: adfText("Relevant info"),
+                created: "2025-01-15T00:00:00Z",
+              }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }),
+      run: (_args) => Promise.resolve({ code: 1, stdout: "" }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertStringIncludes(items[0].description, "## Comments");
+    assertStringIncludes(items[0].description, "Relevant info");
+  },
+);
+
+function makeCommentHttp() {
+  return new HttpClient((url, _init) => {
+    const urlStr = url as string;
+    if (urlStr.includes("/rest/api/3/search")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+          { status: 200 },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          comments: [{
+            author: { displayName: "Alice" },
+            body: adfText("Useful technical info"),
+            created: "2025-01-15T00:00:00Z",
+          }],
+        }),
+        { status: 200 },
+      ),
+    );
+  });
+}
+
+Deno.test(
+  "fetchNew appends kept comments via claude JSON schema when apfel unavailable",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      http: makeCommentHttp(),
+      run: (args) =>
+        args[0] === "apfel"
+          ? Promise.resolve({ code: 1, stdout: "" })
+          : Promise.resolve({
+            code: 0,
+            stdout: JSON.stringify({ structured_output: { verdict: "KEEP" } }),
+          }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertStringIncludes(items[0].description, "## Comments");
+    assertStringIncludes(items[0].description, "Useful technical info");
+  },
+);
+
+Deno.test(
+  "fetchNew omits rejected comments via claude JSON schema when apfel unavailable",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      http: makeCommentHttp(),
+      run: (args) =>
+        args[0] === "apfel"
+          ? Promise.resolve({ code: 1, stdout: "" })
+          : Promise.resolve({
+            code: 0,
+            stdout: JSON.stringify({ structured_output: { verdict: "SKIP" } }),
+          }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertFalse(items[0].description.includes("## Comments"));
   },
 );

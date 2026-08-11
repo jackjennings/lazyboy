@@ -188,6 +188,19 @@ are true:
 If in doubt, use a single PR. A large diff is not sufficient justification. A
 single feature spanning many files is not a stack candidate.
 
+Before entering the stacked-PR path, verify that the `gh stack` extension is
+installed:
+
+```
+gh stack --help
+```
+
+If this command exits non-zero, the extension is absent. Do not attempt to
+install it. Fall back to a single PR for the ticket — treat the two-condition
+gate as if it had not been satisfied, and do not begin step 1.
+
+If the command exits zero, continue with the steps below.
+
 When stacking applies:
 
 1. Implement part 1 fully on the current ticket branch. All tests must pass

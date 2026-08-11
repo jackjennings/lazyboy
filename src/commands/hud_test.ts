@@ -1,4 +1,5 @@
 import {
+  assert,
   assertEquals,
   assertFalse,
   assertMatch,
@@ -8,8 +9,10 @@ import { dim, stripAnsiCode } from "@std/fmt/colors";
 import {
   formatHudHeader,
   formatTickLogLine,
+  isBlockedCommand,
   logPaneLines,
   openLogWatch,
+  parseCommand,
 } from "./hud.ts";
 
 // ── formatTickLogLine ─────────────────────────────────────────────────────────
@@ -104,4 +107,58 @@ Deno.test("openLogWatch: resolves when log.ndjson does not exist", async () => {
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }
+});
+
+// ── isBlockedCommand ──────────────────────────────────────────────────────────
+
+Deno.test("isBlockedCommand: returns true for hud", () => {
+  assert(isBlockedCommand("hud"));
+});
+
+Deno.test("isBlockedCommand: returns true for shell", () => {
+  assert(isBlockedCommand("shell"));
+});
+
+Deno.test("isBlockedCommand: returns true for tail", () => {
+  assert(isBlockedCommand("tail"));
+});
+
+Deno.test("isBlockedCommand: returns true for review", () => {
+  assert(isBlockedCommand("review"));
+});
+
+Deno.test("isBlockedCommand: returns false for approve", () => {
+  assertFalse(isBlockedCommand("approve"));
+});
+
+Deno.test("isBlockedCommand: returns false for decline", () => {
+  assertFalse(isBlockedCommand("decline"));
+});
+
+// ── parseCommand ──────────────────────────────────────────────────────────────
+
+Deno.test("parseCommand: returns null for empty string", () => {
+  assertEquals(parseCommand(""), null);
+});
+
+Deno.test("parseCommand: returns null for whitespace-only string", () => {
+  assertEquals(parseCommand("  "), null);
+});
+
+Deno.test("parseCommand: returns name with empty args for single token", () => {
+  assertEquals(parseCommand("approve"), { name: "approve", args: [] });
+});
+
+Deno.test("parseCommand: splits name and single arg", () => {
+  assertEquals(parseCommand("approve id123"), {
+    name: "approve",
+    args: ["id123"],
+  });
+});
+
+Deno.test("parseCommand: splits multiple args ignoring extra whitespace", () => {
+  assertEquals(parseCommand("approve  id1  id2"), {
+    name: "approve",
+    args: ["id1", "id2"],
+  });
 });

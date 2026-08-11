@@ -757,8 +757,8 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
-      selfReview: (phase, ticketDir) =>
-        selfReview(phase, ticketDir, captureCommandRunner()),
+      selfReview: (phase, ticketDir, worktreePath) =>
+        selfReview({ phase, ticketDir, run: captureCommandRunner(), worktreePath }),
       readPhaseOutput: async (ticketDir, phase) => {
         const found = await findLatestPhaseOutput(ticketDir);
         if (!found || found.phaseName !== phase) return null;

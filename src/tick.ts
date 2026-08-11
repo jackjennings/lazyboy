@@ -84,6 +84,7 @@ export interface TickDeps {
   selfReview: (
     phase: string,
     ticketDir: string,
+    worktreePath?: string,
   ) => Promise<{ approved: boolean; reason: string | null }>;
   markPRsReady: (prUrls: string[]) => Promise<void>;
   readPhaseOutput: (
@@ -484,6 +485,7 @@ export async function advancePhase(
         selfReviewResult = await deps.selfReview(
           ticket.phase,
           join(stateDir, ticket.id),
+          ticket.worktrees["jackjennings/lazyboy"]?.path,
         );
       } catch {
         // treated as { approved: false, reason: null }

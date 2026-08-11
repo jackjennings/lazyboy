@@ -3,14 +3,21 @@ import { findLatestPhaseOutput } from "./review.ts";
 import type { CommandRunner } from "./apfel.ts";
 import { readTextFile } from "./filesystem.ts";
 import { ClaudeLanguageModel } from "./models/claude.ts";
+import { runGit } from "./worktree.ts";
 
 const PROMPT_DIR = new URL("./phases/prompts/", import.meta.url).pathname;
 
-export async function selfReview(
-  phase: string,
-  ticketDir: string,
-  run: CommandRunner,
-): Promise<{ approved: boolean; reason: string | null }> {
+export async function selfReview({
+  phase,
+  ticketDir,
+  run,
+  worktreePath,
+}: {
+  phase: string;
+  ticketDir: string;
+  run: CommandRunner;
+  worktreePath?: string;
+}): Promise<{ approved: boolean; reason: string | null }> {
   let systemPrompt: string;
   try {
     systemPrompt = await readTextFile(
@@ -23,9 +30,23 @@ export async function selfReview(
   const found = await findLatestPhaseOutput(ticketDir);
   if (!found) return { approved: false, reason: null };
 
-  const outputContent = await readTextFile(
+  let outputContent = await readTextFile(
     join(ticketDir, found.filename),
   );
+
+  if (worktreePath) {
+    try {
+      const { code, stdout } = await runGit(
+        ["diff", "origin/main...HEAD"],
+        worktreePath,
+      );
+      if (code === 0 && stdout) {
+        outputContent += `\n\n## Git Diff\n\`\`\`diff\n${stdout}\n\`\`\``;
+      }
+    } catch {
+      // continue without diff
+    }
+  }
 
   const model = new ClaudeLanguageModel(run, { model: "claude-haiku-4-5" });
   const text = await model.generateText({

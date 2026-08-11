@@ -124,6 +124,49 @@ provider = "anthropic"
 file = "~/todo.txt"
 ```
 
+### GitHub token configuration
+
+**Single-account mode:** Set `GITHUB_TOKEN` and `GITHUB_LOGIN` in the
+environment. No additional `config.toml` entries are required. These variables
+also act as the fallback for any org not mapped via `[github.orgs]` when
+multi-account mode is active.
+
+**Multi-account mode:** Define named accounts under `[github.accounts.*]` and
+map org slugs to account names under `[github.orgs]`:
+
+```toml
+[github.accounts.personal]
+token_env = "GITHUB_TOKEN_PERSONAL"
+login     = "alice"
+
+[github.accounts.work]
+token_env = "GITHUB_TOKEN_WORK"
+login     = "alice-corp"
+
+[github.orgs]
+myorg    = "personal"
+mycompany = "work"
+```
+
+Each account's `token_env` names the environment variable holding the token;
+`login` is the GitHub username. `[github.orgs]` maps org slugs to account names.
+Any org not listed falls back to `GITHUB_TOKEN`/`GITHUB_LOGIN`.
+
+**Startup validation:** lazyboy validates at startup that every `token_env`
+named in `[github.accounts.*]` is set in the environment, and that every account
+name referenced in `[github.orgs]` is defined. A misconfiguration causes an
+immediate startup error rather than a per-ticket failure.
+
+**`gh` CLI compatibility:** lazyboy injects `GH_TOKEN` (and `GITHUB_TOKEN`) as
+environment variables before each phase subprocess. `gh auth login` state is
+ignored — do not rely on it.
+
+**Cron and LaunchAgent contexts:** Environment variables are not available from
+the keychain in cron. Set `GITHUB_TOKEN`, `GITHUB_LOGIN`, and any per-account
+token variables (e.g. `GITHUB_TOKEN_PERSONAL`, `GITHUB_TOKEN_WORK`) in
+`~/.config/lazyboy/env`; `scripts/tick.sh` sources this file before the tick
+loop.
+
 ## Artifacts
 
 Not all tickets produce pull requests. The `artifact` field in `meta.md`

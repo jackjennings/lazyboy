@@ -15,16 +15,26 @@ export function parseRemoteSlug(url: string): string | null {
 
 export const GIT_TIMEOUT_MS = 120_000;
 
+const SSH_KEEPALIVE_COMMAND =
+  "ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=30";
+
 export async function runGit(
   args: string[],
   cwd: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  const env = {
+    ...Deno.env.toObject(),
+    ...(Deno.env.get("GIT_SSH_COMMAND") === undefined
+      ? { GIT_SSH_COMMAND: SSH_KEEPALIVE_COMMAND }
+      : {}),
+  };
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), GIT_TIMEOUT_MS);
   try {
     const result = await new Deno.Command("git", {
       args,
       cwd,
+      env,
       signal: controller.signal,
     }).output();
     if (controller.signal.aborted) {

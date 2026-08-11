@@ -167,7 +167,8 @@ phase's context when the file exists. When a phase output contains a
 `## Principles` section, `advancePhase` extracts it, dedupes against the
 existing file, and — if novel — appends and commits `principles.md` alone via
 `commitPrinciples`. The parsing and dedup logic (`extractPrinciples`,
-`dedupePrinciples`) lives in `src/run-phase.ts`.
+`dedupePrinciples`) lives in `src/run-phase.ts`; the substance check
+(`judgePrinciples`) lives in `src/judge-principles.ts`.
 
 ## Runtime dir (`lazyboyDir`)
 

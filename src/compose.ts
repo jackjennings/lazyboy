@@ -23,9 +23,9 @@ import {
 import {
   dedupePrinciples,
   extractPrinciples,
-  judgePrinciples,
   readPhaseSessionId,
 } from "./run-phase.ts";
+import { judgePrinciples } from "./judge-principles.ts";
 import { expandHome } from "./config.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";

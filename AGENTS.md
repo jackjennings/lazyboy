@@ -170,6 +170,14 @@ existing file, and — if novel — appends and commits `principles.md` alone vi
 `dedupePrinciples`) lives in `src/run-phase.ts`; the substance check
 (`judgePrinciples`) lives in `src/judge-principles.ts`.
 
+`judgePrinciples` tries `apfel` first and falls back to the `claude` CLI. Both
+calls constrain the model to the same `{ "verdict": "KEEP" | "SKIP" }` JSON
+schema — `apfel --schema` takes a file path (written to a temp file per call),
+`claude --json-schema` takes the schema inline. Non-JSON or unrecognized output
+from `apfel` falls through to `claude` rather than being parsed loosely. The
+body is passed after a `--` separator in both calls — a principles block starts
+with `-`, which either CLI otherwise rejects as an unknown option.
+
 ## Runtime dir (`lazyboyDir`)
 
 Anything that writes under the runtime dir — the combined `log.ndjson`,

@@ -68,6 +68,18 @@ export async function loadArtifactPrompt(
   }
 }
 
+export async function loadRevisionPrompt(phase: string): Promise<string> {
+  try {
+    const content = await Deno.readTextFile(
+      join(PROMPT_DIR, `${phase}-revision.md`),
+    );
+    return renderTemplate(content);
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return "";
+    throw e;
+  }
+}
+
 function deriveProjectPath(provider: string, ticketId: string): string {
   if (provider === "github") {
     const segments = ticketId.split("/");

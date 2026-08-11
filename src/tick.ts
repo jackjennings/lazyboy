@@ -7,8 +7,8 @@ import { extractPrinciples } from "./run-phase.ts";
 import {
   loadArtifactPrompt,
   loadPrompt,
-  loadPromptFile,
   loadProviderPrompt,
+  loadRevisionPrompt,
   loadStatePrompt,
   nextPhase,
 } from "./phases/runners.ts";
@@ -189,9 +189,8 @@ export async function advancePhase(
       isMergeRevision ? "merge" : activePhase
     }.md`;
     const isImplementationRevision = activePhase === "implementation";
-    const basePrompt = isImplementationRevision
-      ? await loadPromptFile("implementation-revision.md")
-      : await loadPrompt(activePhase);
+    const revisionPrompt = await loadRevisionPrompt(activePhase);
+    const basePrompt = revisionPrompt || await loadPrompt(activePhase);
     const revisingSupplement = await loadProviderPrompt(
       activePhase,
       ticket.provider,

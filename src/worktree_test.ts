@@ -3,6 +3,7 @@ import {
   assertEquals,
   assertFalse,
   assertGreater,
+  assertLess,
   assertNotEquals,
   assertRejects,
   assertThrows,
@@ -16,6 +17,7 @@ import {
   extractGitHubSlug,
   findLocalRepo,
   formatRepoCorpus,
+  GIT_TIMEOUT_MS,
   listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
@@ -575,4 +577,29 @@ Deno.test("runGit: returns stderr alongside stdout and code", async () => {
   assertNotEquals(result.code, 0);
   assertEquals(typeof result.stderr, "string");
   assertGreater(result.stderr.length, 0);
+});
+
+Deno.test("runGit: returns timeout shape when git subprocess hangs", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  const fakeGit = join(tmpDir, "git");
+  await Deno.writeTextFile(fakeGit, "#!/bin/sh\nexec sleep 9999\n");
+  await Deno.chmod(fakeGit, 0o755);
+
+  const originalPath = Deno.env.get("PATH") ?? "";
+  Deno.env.set("PATH", `${tmpDir}:${originalPath}`);
+
+  try {
+    const start = performance.now();
+    const result = await runGit(["fetch", "origin"], tmpDir);
+    const elapsed = performance.now() - start;
+
+    assertEquals(result.code, 1);
+    assertEquals(result.stdout, "");
+    assertEquals(result.stderr, "git: timed out after 120s");
+    assertGreater(elapsed, GIT_TIMEOUT_MS - 5_000);
+    assertLess(elapsed, GIT_TIMEOUT_MS + 10_000);
+  } finally {
+    Deno.env.set("PATH", originalPath);
+    await Deno.remove(tmpDir, { recursive: true });
+  }
 });

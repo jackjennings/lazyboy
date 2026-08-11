@@ -13,16 +13,38 @@ export function parseRemoteSlug(url: string): string | null {
   return `${match[1]}/${match[2]}`;
 }
 
+export const GIT_TIMEOUT_MS = 120_000;
+
 export async function runGit(
   args: string[],
   cwd: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  const result = await new Deno.Command("git", { args, cwd }).output();
-  return {
-    code: result.code,
-    stdout: new TextDecoder().decode(result.stdout).trim(),
-    stderr: new TextDecoder().decode(result.stderr).trim(),
-  };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GIT_TIMEOUT_MS);
+  try {
+    const result = await new Deno.Command("git", {
+      args,
+      cwd,
+      signal: controller.signal,
+    }).output();
+    if (controller.signal.aborted) {
+      const secs = Math.round(GIT_TIMEOUT_MS / 1000);
+      return { code: 1, stdout: "", stderr: `git: timed out after ${secs}s` };
+    }
+    return {
+      code: result.code,
+      stdout: new TextDecoder().decode(result.stdout).trim(),
+      stderr: new TextDecoder().decode(result.stderr).trim(),
+    };
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      const secs = Math.round(GIT_TIMEOUT_MS / 1000);
+      return { code: 1, stdout: "", stderr: `git: timed out after ${secs}s` };
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function findLocalRepo(

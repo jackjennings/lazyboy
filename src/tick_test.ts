@@ -2486,8 +2486,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
       agentsMdMaxTokens: 8000,
     },
     codebase: { roots: [] },
-    packages: { enabled: [] },
-    pi: { provider: "anthropic" },
+    pi: { provider: "anthropic", packages: [] },
     agent: { type: "pi" },
     ...overrides,
   };

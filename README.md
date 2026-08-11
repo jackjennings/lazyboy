@@ -84,9 +84,6 @@ dir = "~/code/jackjennings/projects"
 [tick]
 concurrency = 2
 
-[packages]
-enabled = ["agent-browser"]
-
 [codebase]
 # List of directories the intake phase can look through when proposing scope.
 # A top-level directory listing of each root is passed to the intake agent so
@@ -115,6 +112,7 @@ type = "pi"
 # phase (triggered by rebase conflicts), configurable under
 # `[phases.defaults."conflict-resolution"]` like any other phase.
 provider = "anthropic"
+packages = ["agent-browser"]
 
 # Adds a local [todo.txt](https://todotxt.org) file as a work provider. Every
 # non-completed task becomes a ticket. When a ticket closes, the task is marked

@@ -295,7 +295,7 @@ async function setupGitWorktree(): Promise<
   return { worktreeDir, originDir };
 }
 
-Deno.test("selfReview: appends git diff to content when worktreePath is provided", async () => {
+Deno.test("selfReview: appends changed files list to content when worktreePath is provided", async () => {
   const tempDir = await Deno.makeTempDir();
   const { worktreeDir, originDir } = await setupGitWorktree();
   try {
@@ -312,8 +312,12 @@ Deno.test("selfReview: appends git diff to content when worktreePath is provided
     });
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     const content = args[args.length - 1];
-    assertStringIncludes(content, "## Git Diff");
+    assertStringIncludes(content, "## Changed Files");
     assertStringIncludes(content, "new-feature.ts");
+    assert(
+      !content.includes("diff --git"),
+      "should not include full diff output",
+    );
   } finally {
     await Deno.remove(tempDir, { recursive: true });
     await Deno.remove(worktreeDir, { recursive: true });
@@ -339,8 +343,8 @@ Deno.test("selfReview: continues without diff when worktreePath git command fail
     assertSpyCalls(run as ReturnType<typeof spy>, 1);
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     assert(
-      !args[args.length - 1].includes("## Git Diff"),
-      "should not include diff on git failure",
+      !args[args.length - 1].includes("## Changed Files"),
+      "should not include changed files on git failure",
     );
   } finally {
     await Deno.remove(tempDir, { recursive: true });

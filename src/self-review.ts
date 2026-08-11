@@ -37,11 +37,11 @@ export async function selfReview({
   if (worktreePath) {
     try {
       const { code, stdout } = await runGit(
-        ["diff", "origin/main...HEAD"],
+        ["diff", "--name-only", "origin/main...HEAD"],
         worktreePath,
       );
       if (code === 0 && stdout) {
-        outputContent += `\n\n## Git Diff\n\`\`\`diff\n${stdout}\n\`\`\``;
+        outputContent += `\n\n## Changed Files\n${stdout.trim()}`;
       }
     } catch {
       // continue without diff

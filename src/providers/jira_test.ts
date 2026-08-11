@@ -794,3 +794,74 @@ Deno.test(
     assertStringIncludes(items[0].description, "Relevant info");
   },
 );
+
+function makeCommentHttp() {
+  return new HttpClient((url, _init) => {
+    const urlStr = url as string;
+    if (urlStr.includes("/rest/api/3/search")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ issues: [makeIssue("PROJ-1", "Issue")] }),
+          { status: 200 },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          comments: [{
+            author: { displayName: "Alice" },
+            body: adfText("Useful technical info"),
+            created: "2025-01-15T00:00:00Z",
+          }],
+        }),
+        { status: 200 },
+      ),
+    );
+  });
+}
+
+Deno.test(
+  "fetchNew appends kept comments via claude JSON schema when apfel unavailable",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      http: makeCommentHttp(),
+      run: (args) =>
+        args[0] === "apfel"
+          ? Promise.resolve({ code: 1, stdout: "" })
+          : Promise.resolve({
+            code: 0,
+            stdout: JSON.stringify({ structured_output: { verdict: "KEEP" } }),
+          }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertStringIncludes(items[0].description, "## Comments");
+    assertStringIncludes(items[0].description, "Useful technical info");
+  },
+);
+
+Deno.test(
+  "fetchNew omits rejected comments via claude JSON schema when apfel unavailable",
+  async () => {
+    const provider = new JiraProvider({
+      baseUrl: BASE_URL,
+      email: "test@example.com",
+      apiToken: "token",
+      project: "PROJ",
+      http: makeCommentHttp(),
+      run: (args) =>
+        args[0] === "apfel"
+          ? Promise.resolve({ code: 1, stdout: "" })
+          : Promise.resolve({
+            code: 0,
+            stdout: JSON.stringify({ structured_output: { verdict: "SKIP" } }),
+          }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertFalse(items[0].description.includes("## Comments"));
+  },
+);

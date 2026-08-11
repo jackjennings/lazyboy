@@ -23,6 +23,14 @@ interface JiraComment {
 const COMMENT_JUDGE_SYSTEM_PROMPT =
   'You are evaluating whether a Jira comment contains information useful for understanding or implementing a software ticket. Reply with exactly KEEP if the comment contains substantive technical context, requirements clarification, decisions, constraints, repro steps, or relevant background. Reply with exactly SKIP if the comment is a status update request ("any update?", "when will this be done?"), a simple acknowledgement (+1, thanks, LGTM), a bot-generated notification, or an @-mention ping with no technical content.';
 
+const COMMENT_JUDGE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    verdict: { type: "string", enum: ["KEEP", "SKIP"] },
+  },
+  required: ["verdict"],
+};
+
 async function judgeComment(
   body: string,
   run: CommandRunner,
@@ -48,17 +56,19 @@ async function judgeComment(
       "claude",
       body,
       "--print",
+      "--bare",
       "--output-format",
-      "text",
+      "json",
       "--system-prompt",
       COMMENT_JUDGE_SYSTEM_PROMPT,
       "--model",
       "claude-haiku-4-5",
-      "--tools",
-      "",
+      "--json-schema",
+      JSON.stringify(COMMENT_JUDGE_JSON_SCHEMA),
     ]);
     if (code !== 0) return true;
-    return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
+    const parsed = JSON.parse(stdout);
+    return parsed?.structured_output?.verdict === "KEEP";
   } catch {
     return true;
   }

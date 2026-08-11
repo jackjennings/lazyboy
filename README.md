@@ -137,15 +137,15 @@ map org slugs to account names under `[github.orgs]`:
 ```toml
 [github.accounts.personal]
 token_env = "GITHUB_TOKEN_PERSONAL"
-login     = "jackjennings"
+login     = "alice"
 
 [github.accounts.work]
 token_env = "GITHUB_TOKEN_WORK"
-login     = "jack-jennings-sdx"
+login     = "alice-corp"
 
 [github.orgs]
-jackjennings = "personal"
-smarterdx    = "work"
+myorg    = "personal"
+mycompany = "work"
 ```
 
 Each account's `token_env` names the environment variable holding the token;

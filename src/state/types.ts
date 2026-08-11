@@ -140,8 +140,7 @@ export interface Config {
     maxPromptTokens?: number;
   };
   codebase: { roots: string[] };
-  packages: { enabled: string[] };
-  pi: { provider: string };
+  pi: { provider: string; packages: string[] };
   agent: { type: "pi" | "claude-code" };
   jira?: { baseUrl: string; project: string };
   todoTxt?: { file: string };

@@ -201,7 +201,7 @@ concurrency = 2
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("loadConfig parses [packages].enabled", async () => {
+Deno.test("loadConfig parses [pi].packages", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(
     join(dir, "config.toml"),
@@ -215,16 +215,16 @@ dir = "~/code/jackjennings/projects"
 [tick]
 concurrency = 1
 
-[packages]
-enabled = ["npm:pi-lens", "agent-browser"]
+[pi]
+packages = ["npm:pi-lens", "agent-browser"]
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.packages.enabled, ["npm:pi-lens", "agent-browser"]);
+  assertEquals(cfg.pi.packages, ["npm:pi-lens", "agent-browser"]);
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("loadConfig defaults packages.enabled to [] when absent", async () => {
+Deno.test("loadConfig defaults pi.packages to [] when absent", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(
     join(dir, "config.toml"),
@@ -240,11 +240,11 @@ concurrency = 1
 `,
   );
   const cfg = await loadConfig(join(dir, "config.toml"));
-  assertEquals(cfg.packages.enabled, []);
+  assertEquals(cfg.pi.packages, []);
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("loadConfig throws when packages.enabled is not an array", async () => {
+Deno.test("loadConfig throws when [pi].packages is not an array", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.writeTextFile(
     join(dir, "config.toml"),
@@ -258,8 +258,8 @@ dir = "~/code/jackjennings/projects"
 [tick]
 concurrency = 1
 
-[packages]
-enabled = "not-an-array"
+[pi]
+packages = "not-an-array"
 `,
   );
   await assertRejects(

@@ -8,11 +8,6 @@ export async function loadConfig(path?: string): Promise<Config> {
   const raw = await Deno.readTextFile(configPath);
   const parsed = parse(raw) as Record<string, unknown>;
   const codebaseRaw = parsed.codebase as Record<string, unknown> | undefined;
-  const packagesRaw = parsed.packages as Record<string, unknown> | undefined;
-  const enabledRaw = packagesRaw?.enabled;
-  if (enabledRaw !== undefined && !Array.isArray(enabledRaw)) {
-    throw new Error("config.toml: [packages].enabled must be an array");
-  }
   const jiraRaw = parsed.jira as Record<string, unknown> | undefined;
   let jira: Config["jira"];
   if (jiraRaw !== undefined) {
@@ -37,6 +32,11 @@ export async function loadConfig(path?: string): Promise<Config> {
     throw new Error("config.toml: [pi].provider must be a string");
   }
   const piProvider = (piRaw?.provider as string | undefined) ?? "anthropic";
+  const piPackagesRaw = piRaw?.packages;
+  if (piPackagesRaw !== undefined && !Array.isArray(piPackagesRaw)) {
+    throw new Error("config.toml: [pi].packages must be an array");
+  }
+  const piPackages = (piPackagesRaw as string[] | undefined) ?? [];
   const agentRaw = parsed.agent as Record<string, unknown> | undefined;
   if (
     agentRaw?.type !== undefined && typeof agentRaw.type !== "string"
@@ -142,8 +142,7 @@ export async function loadConfig(path?: string): Promise<Config> {
       maxPromptTokens: maxPromptTokensRaw as number | undefined,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
-    packages: { enabled: (enabledRaw as string[] | undefined) ?? [] },
-    pi: { provider: piProvider },
+    pi: { provider: piProvider, packages: piPackages },
     agent: { type: agentType },
     jira,
     todoTxt,

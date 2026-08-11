@@ -623,7 +623,7 @@ export function composeTickDeps(
   return {
     stateDir,
     concurrency: config.tick.concurrency,
-    packageSources: config.packages.enabled,
+    packageSources: config.pi.packages,
     installPackages: (sources) =>
       installPackages(sources, {
         run: runPiInstall,

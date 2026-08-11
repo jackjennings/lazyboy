@@ -79,7 +79,7 @@ export async function loadRevisionPrompt(phase: string): Promise<string> {
   }
 }
 
-function deriveProjectPath(provider: string, ticketId: string): string {
+export function deriveProjectPath(provider: string, ticketId: string): string {
   if (provider === "github") {
     const segments = ticketId.split("/");
     return segments.slice(1, -1).join("/");

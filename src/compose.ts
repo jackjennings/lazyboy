@@ -1,13 +1,13 @@
 import { CeremonyRunner } from "./ceremonies.ts";
 import { StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
-import { join } from "@std/path";
+import { dirname, join } from "@std/path";
 import {
   detectImplementationOutlier,
   detectPlanOutlier,
 } from "./outlier-detection.ts";
 import { compactTimestamp } from "./timestamp.ts";
-import { loadPromptFile } from "./phases/runners.ts";
+import { deriveProjectPath, loadPromptFile } from "./phases/runners.ts";
 import {
   appendTicketLog,
   commitPrinciples,
@@ -780,25 +780,56 @@ export function composeTickDeps(
         if (!config.tick.principles) return;
         const extracted = extractPrinciples(outputContent);
         if (!extracted) return;
-        const substantive = await judgePrinciples(
-          extracted,
-          captureCommandRunner(),
-        );
-        if (!substantive) return;
-        const principlesPath = join(sd, "principles.md");
-        let existing = "";
+        const scope = await judgePrinciples(extracted, captureCommandRunner());
+        if (scope === null) return;
+        const globalPath = join(sd, "principles.md");
+        let targetPath: string;
+        let relPath: string;
+        if (scope === "global") {
+          targetPath = globalPath;
+          relPath = "principles.md";
+        } else {
+          const parts = ticketId.split("/");
+          const provider = parts[0];
+          const projectPath = deriveProjectPath(provider, ticketId);
+          if (!projectPath) {
+            targetPath = globalPath;
+            relPath = "principles.md";
+          } else {
+            relPath = join("principles", provider, `${projectPath}.md`);
+            targetPath = join(sd, relPath);
+          }
+        }
+        let globalContent = "";
         try {
-          existing = await readTextFile(principlesPath);
+          globalContent = await readTextFile(globalPath);
         } catch {
           // file does not exist yet
         }
-        const novel = dedupePrinciples(existing, extracted);
+        let localContent = "";
+        if (targetPath !== globalPath) {
+          try {
+            localContent = await readTextFile(targetPath);
+          } catch {
+            // file does not exist yet
+          }
+        }
+        const combinedExisting = [globalContent, localContent]
+          .filter(Boolean)
+          .join("\n\n");
+        const novel = dedupePrinciples(combinedExisting, extracted);
         if (!novel) return;
-        const newContent = existing.length > 0
-          ? `${existing}\n\n${novel}`
+        const existingTarget = targetPath === globalPath
+          ? globalContent
+          : localContent;
+        const newContent = existingTarget.length > 0
+          ? `${existingTarget}\n\n${novel}`
           : novel;
-        await writeTextFile(principlesPath, newContent);
-        await commitPrinciples(sd, `principles: ${ticketId} ${phase}`);
+        if (targetPath !== globalPath) {
+          await mkdir(dirname(targetPath), { recursive: true });
+        }
+        await writeTextFile(targetPath, newContent);
+        await commitPrinciples(sd, `principles: ${ticketId} ${phase}`, relPath);
       },
       readPhaseExitCode: async (ticketDir, phase) => {
         const pattern = new RegExp(

@@ -453,6 +453,114 @@ Deno.test("buildContextFiles: omits principles.md when it does not exist in stat
   }
 });
 
+Deno.test("buildContextFiles: injects local principles for github ticket when file exists", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "acme", "repo", "42");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.mkdir(join(stateDir, "principles", "github", "acme"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "principles", "github", "acme", "repo.md"),
+      "- local principle",
+    );
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    assertArrayIncludes(files, [
+      `@${stateDir}/principles/github/acme/repo.md`,
+    ]);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: injects global then local principles when both exist", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "acme", "repo", "42");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(join(stateDir, "principles.md"), "- global");
+    await Deno.mkdir(join(stateDir, "principles", "github", "acme"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "principles", "github", "acme", "repo.md"),
+      "- local",
+    );
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    const globalIdx = files.indexOf(`@${stateDir}/principles.md`);
+    const localIdx = files.indexOf(
+      `@${stateDir}/principles/github/acme/repo.md`,
+    );
+    assertNotEquals(globalIdx, -1);
+    assertNotEquals(localIdx, -1);
+    assertLess(globalIdx, localIdx);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: does not inject local principles when file is absent", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "acme", "repo", "42");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    assertFalse(files.some((f) => f.includes("principles/github")));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: injects local principles for jira ticket when file exists", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "jira", "PROJ-123");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.mkdir(join(stateDir, "principles", "jira"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "principles", "jira", "PROJ.md"),
+      "- jira principle",
+    );
+    const files = await buildContextFiles({ ticketDir, stateDir });
+    assertArrayIncludes(files, [
+      `@${stateDir}/principles/jira/PROJ.md`,
+    ]);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("buildContextFiles: omits local principles when includePrinciples is false", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(stateDir, "github", "acme", "repo", "42");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+    await Deno.mkdir(join(stateDir, "principles", "github", "acme"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "principles", "github", "acme", "repo.md"),
+      "- local principle",
+    );
+    const files = await buildContextFiles({
+      ticketDir,
+      stateDir,
+      includePrinciples: false,
+    });
+    assertFalse(files.some((f) => f.includes("principles")));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
 // ── extractPrinciples ────────────────────────────────────────────────────────
 
 Deno.test("extractPrinciples: returns body of ## Principles section", () => {

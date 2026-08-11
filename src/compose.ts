@@ -147,6 +147,39 @@ type CommandRunner = (
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
+async function validateGitHubToken(
+  opts: { fetch: FetchFn },
+  token: string,
+  errorMessage: string,
+): Promise<Response> {
+  const res = await opts.fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new GitHubAuthError(errorMessage);
+  }
+  return res;
+}
+
+async function resolveBareGitHubToken(
+  opts: { run: CommandRunner },
+): Promise<string> {
+  const token = Deno.env.get("GITHUB_TOKEN");
+  if (token) return token;
+  const result = await opts.run(["gh", "auth", "token"]);
+  if (result.code !== 0 || result.stdout.trim() === "") {
+    throw new GitHubAuthError(
+      `GITHUB_TOKEN is not set and \`gh auth token\` failed: ${result.stderr}`,
+    );
+  }
+  const resolved = result.stdout.trim();
+  Deno.env.set("GITHUB_TOKEN", resolved);
+  return resolved;
+}
+
 export async function preflightGitHubCredentials(
   config: Config,
   opts: { run: CommandRunner; fetch: FetchFn },
@@ -163,44 +196,25 @@ export async function preflightGitHubCredentials(
       }
     }
     for (const [token, tokenEnv] of tokenToEnv) {
-      const res = await opts.fetch("https://api.github.com/user", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-        },
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new GitHubAuthError(
-          `GitHub authentication failed for ${tokenEnv} — check that the token is set and valid`,
-        );
-      }
-    }
-    return;
-  }
-
-  let token = Deno.env.get("GITHUB_TOKEN");
-  if (!token) {
-    const result = await opts.run(["gh", "auth", "token"]);
-    if (result.code !== 0 || result.stdout.trim() === "") {
-      throw new GitHubAuthError(
-        `GITHUB_TOKEN is not set and \`gh auth token\` failed: ${result.stderr}`,
+      await validateGitHubToken(
+        opts,
+        token,
+        `GitHub authentication failed for ${tokenEnv} — check that the token is set and valid`,
       );
     }
-    token = result.stdout.trim();
-    Deno.env.set("GITHUB_TOKEN", token);
+
+    const hasUnmappedOrg = config.github.repos.some(
+      (repo) => !config.github.orgs?.[repo.split("/")[0]],
+    );
+    if (!hasUnmappedOrg) return;
   }
 
-  const res = await opts.fetch("https://api.github.com/user", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-    },
-  });
-  if (res.status === 401 || res.status === 403) {
-    throw new GitHubAuthError(
-      "GitHub authentication failed — check that GITHUB_TOKEN is set and `gh auth status` is valid",
-    );
-  }
+  const token = await resolveBareGitHubToken(opts);
+  const res = await validateGitHubToken(
+    opts,
+    token,
+    "GitHub authentication failed — check that GITHUB_TOKEN is set and `gh auth status` is valid",
+  );
 
   if (!Deno.env.get("GITHUB_LOGIN")) {
     const data = await res.json();

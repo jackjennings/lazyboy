@@ -138,6 +138,7 @@ export interface Config {
     principles: boolean;
     agentsMdMaxTokens: number;
     maxPromptTokens?: number;
+    maxTurns: number;
   };
   codebase: { roots: string[] };
   pi: { provider: string; packages: string[] };

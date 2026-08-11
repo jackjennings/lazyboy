@@ -84,6 +84,18 @@ export async function loadConfig(path?: string): Promise<Config> {
   ) {
     throw new Error("config.toml: [tick].max_prompt_tokens must be a number");
   }
+  const maxTurnsRaw = tickRaw?.max_turns;
+  if (maxTurnsRaw !== undefined) {
+    if (
+      typeof maxTurnsRaw !== "number" ||
+      !Number.isInteger(maxTurnsRaw) ||
+      maxTurnsRaw < 0
+    ) {
+      throw new Error(
+        "config.toml: [tick].max_turns must be a non-negative integer",
+      );
+    }
+  }
 
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
@@ -141,6 +153,7 @@ export async function loadConfig(path?: string): Promise<Config> {
       principles: (principlesRaw as boolean | undefined) ?? true,
       agentsMdMaxTokens: (agentsMdMaxTokensRaw as number | undefined) ?? 8000,
       maxPromptTokens: maxPromptTokensRaw as number | undefined,
+      maxTurns: (maxTurnsRaw as number | undefined) ?? 100,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     pi: { provider: piProvider, packages: piPackages },

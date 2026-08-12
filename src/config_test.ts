@@ -920,3 +920,89 @@ agents_md_max_tokens = -1
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig defaults tick.maxTurns to 100 when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.maxTurns, 100);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig parses tick.max_turns", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+max_turns = 200
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.maxTurns, 200);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig accepts 0 for tick.max_turns", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+max_turns = 0
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.maxTurns, 0);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.max_turns is not a non-negative integer", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+max_turns = -1
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [tick].max_turns must be a non-negative integer",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

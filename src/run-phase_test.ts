@@ -88,6 +88,27 @@ Deno.test("setupPiDirectories: succeeds when directories already exist", async (
   }
 });
 
+Deno.test("setupPiDirectories: symlinks turn-limit extension that is no-op when PI_MAX_TURNS absent", async () => {
+  const tempHome = await Deno.makeTempDir();
+  try {
+    await setupPiDirectories(tempHome);
+    const extensionPath = join(
+      tempHome,
+      ".lazyboy",
+      "pi",
+      "extensions",
+      "turn-limit.ts",
+    );
+    const info = await Deno.lstat(extensionPath);
+    assert(info.isSymlink);
+    const content = await Deno.readTextFile(extensionPath);
+    assertStringIncludes(content, "PI_MAX_TURNS");
+    assertStringIncludes(content, "ctx.abort");
+  } finally {
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
 // ── setupClaudeCodeDirectories ───────────────────────────────────────────────
 
 Deno.test("setupClaudeCodeDirectories: creates claude-code directory in temp home", async () => {

@@ -30,6 +30,21 @@ export function getPiEnvironmentVariables(
 export async function setupPiDirectories(home: string): Promise<void> {
   const sessionsDir = join(home, ".lazyboy", "pi", "sessions");
   await mkdir(sessionsDir, { recursive: true });
+  const extensionsDir = join(home, ".lazyboy", "pi", "extensions");
+  await mkdir(extensionsDir, { recursive: true });
+  const extensionsSourceDir = new URL(
+    "./pi-extensions/",
+    import.meta.url,
+  ).pathname;
+  for await (const entry of readDir(extensionsSourceDir)) {
+    if (!entry.isFile) continue;
+    const sourcePath = join(extensionsSourceDir, entry.name);
+    const symlinkPath = join(extensionsDir, entry.name);
+    try {
+      await remove(symlinkPath);
+    } catch { /* may not exist */ }
+    await Deno.symlink(sourcePath, symlinkPath);
+  }
 }
 
 export async function setupClaudeCodeDirectories(home: string): Promise<void> {

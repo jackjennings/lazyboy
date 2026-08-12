@@ -2484,6 +2484,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
       resolveCIFailures: true,
       principles: true,
       agentsMdMaxTokens: 8000,
+      maxTurns: 100,
     },
     codebase: { roots: [] },
     pi: { provider: "anthropic", packages: [] },

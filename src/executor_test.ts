@@ -214,3 +214,45 @@ Deno.test("buildPhaseEnvOverrides: GH_TOKEN matches GITHUB_TOKEN (no divergence)
   );
   assertEquals(overrides["GH_TOKEN"], overrides["GITHUB_TOKEN"]);
 });
+
+Deno.test("buildPhaseEnvOverrides: sets CLAUDE_MAX_TURNS when agent is claude-code and maxTurns set", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "claude-code", maxTurns: 50 }),
+  );
+  assertEquals(overrides["CLAUDE_MAX_TURNS"], "50");
+});
+
+Deno.test("buildPhaseEnvOverrides: sets PI_MAX_TURNS when agent is pi and maxTurns set", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "pi", maxTurns: 75 }),
+  );
+  assertEquals(overrides["PI_MAX_TURNS"], "75");
+});
+
+Deno.test("buildPhaseEnvOverrides: does not set CLAUDE_MAX_TURNS when agent is pi", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "pi", maxTurns: 50 }),
+  );
+  assertEquals(overrides["CLAUDE_MAX_TURNS"], undefined);
+});
+
+Deno.test("buildPhaseEnvOverrides: does not set PI_MAX_TURNS when agent is claude-code", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "claude-code", maxTurns: 50 }),
+  );
+  assertEquals(overrides["PI_MAX_TURNS"], undefined);
+});
+
+Deno.test("buildPhaseEnvOverrides: does not set CLAUDE_MAX_TURNS when maxTurns absent", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "claude-code" }),
+  );
+  assertEquals(overrides["CLAUDE_MAX_TURNS"], undefined);
+});
+
+Deno.test("buildPhaseEnvOverrides: does not set PI_MAX_TURNS when maxTurns absent", () => {
+  const overrides = buildPhaseEnvOverrides(
+    makeOpts({ agent: "pi" }),
+  );
+  assertEquals(overrides["PI_MAX_TURNS"], undefined);
+});

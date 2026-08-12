@@ -749,6 +749,7 @@ export function composeTickDeps(
           thinking: opts.thinking,
           sessionId: opts.sessionId,
           includePrinciples: config.tick.principles,
+          maxTurns: config.tick.maxTurns,
         }),
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),

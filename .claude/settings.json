@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(deno lint)",
+      "Bash(deno lint *)",
+      "Bash(deno check *)",
+      "Bash(deno fmt --check)",
+      "Bash(deno fmt --check *)",
+      "Bash(deno info *)",
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
+      "Bash(git merge-base *)",
+      "Bash(launchctl list)",
+      "Bash(launchctl list *)",
+      "Bash(chezmoi source-path *)",
+      "Bash(lazyboy status)",
+      "Bash(lazyboy status *)",
+      "Bash(pi list)",
+      "Bash(pi list *)"
+    ]
+  }
+}

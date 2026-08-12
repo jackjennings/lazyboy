@@ -211,16 +211,70 @@ sync with the ceremonies array `composeTickDeps` actually registers.
 `~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never
 `join(HOME, ".lazyboy", …)` inline — same rule as the runtime dir below.
 
-`ceremony-warning` (an existing `tick.ndjson` event) gains two `reason` values:
-`not-approved` (gate rejection) and `ceremony-failed` (import failure, a
+`ceremony-warning` (an existing `tick.ndjson` event) gains four `reason` values:
+`not-approved` (gate rejection), `ceremony-failed` (import failure, a
 non-function default export, or a throw from the ceremony function itself),
+`invalid-name` (a ceremony directory name outside `[A-Za-z0-9._-]+`), and
+`approvals-unreadable` (`ceremony-approvals.json` exists but does not parse),
 joining the event's existing reasons (`prompt.md missing`, `claude-failed`,
 `empty-response`, and the `config.toml` parsing/validation messages).
+
+### The hash must never over-report
+
+`ceremonyHash` is a security control, so it must never return "approved" about a
+directory it could not fully characterize. Three rules follow, and a change that
+breaks any of them is a security regression:
+
+- **Every entry contributes a manifest line.** `collectManifestEntries` emits
+  `<unsupported>` for anything that is not a regular file or a directory (FIFO,
+  socket, device), and for a symlink whose resolved target is neither. An entry
+  that pushed no line would let a file appear inside an approved directory
+  without changing the hash.
+- **Contents are digested as bytes.** `readFile` plus `crypto.subtle.digest`,
+  never `readTextFile` — lossy UTF-8 decoding maps distinct byte sequences to
+  the same string, so decoded text would let any non-UTF-8 blob be swapped
+  freely.
+- **The walk is bounded and fails closed.** `MAX_MANIFEST_FILES` /
+  `MAX_MANIFEST_BYTES` raise `CeremonyManifestLimitError`, and a symlink to a
+  directory outside the ceremony root is recorded but not descended, so an
+  unapproved ceremony cannot make the tick read the operator's whole home
+  directory. `isCeremonyApproved` turns any throw into a denial.
+
+`isValidCeremonyName` (`src/ceremonies/types.ts`) is the single charset check
+(`[A-Za-z0-9._-]+`, rejecting `.` and `..`), shared by `CeremonyRunner.run()`
+and `performApproveCeremony`. A rejected name must reach neither the notifier
+nor a filesystem path builder; only the NDJSON log, which is a safe sink.
+
+Desktop notifications go through `makeDesktopNotifier` (`src/notify.ts`), which
+passes the title and message as `osascript` **arguments** after a `--`
+separator, read via `on run argv`. Never interpolate a value into AppleScript
+source — a ceremony directory name is state-dir-controlled text and macOS
+permits `"` and `&` in it, so interpolation is arbitrary command execution from
+the warning path. All notification call sites route through this one helper.
+
+`readApprovals` distinguishes a missing file (returns `{}`) from an unparseable
+one (throws `CorruptApprovalsError`). The warning path must never write a record
+it did not successfully read, or one bad parse would replace every approval with
+a single `lastWarnedWindow` entry. `writeApprovals` writes a temp file in the
+same directory and `rename`s it, so a partial write cannot corrupt the file.
 
 `CeremonyContext` (`src/ceremonies/types.ts`) is the only surface state-dir code
 depends on. Treat widening it as a compatibility commitment: add members
 deliberately, and never expose `TickDeps`, `runGit`, or a raw `CommandRunner`
 through it — state-dir code is agent-authored and untrusted until approved.
+
+### The `output/` caveat
+
+The walk skips the ceremony's own top-level `output/` so a ceremony can write
+its results without revoking itself. The cost is that **approved code which
+imports or evaluates anything under `outputDir` — or anywhere else in the state
+dir — voids the guarantee**, because that content is outside the hash and a
+state-dir writer can change it freely afterwards. The exclusion is applied
+before the walk dispatches on entry type, so a symlinked `output` pointing
+anywhere is excluded too. Reviewing a ceremony for approval means reading it for
+code that loads further code, not only for what the code itself does. Do not
+narrow the exclusion to make this safer — the ceremony must be able to write
+there — and do not extend it to further paths.
 
 ## Runtime dir (`lazyboyDir`)
 

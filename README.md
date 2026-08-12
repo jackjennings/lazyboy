@@ -239,9 +239,31 @@ Approval records a hash of the ceremony directory in
 the ceremony's own top-level `output/`. Any later edit to `config.toml`,
 `prompt.md`, or `index.ts` revokes the approval; the ceremony stops running,
 logs `ceremony-warning` with `reason: not-approved`, and fires a desktop
-notification, both throttled to once per scheduled occurrence rather than once
-per tick, until it is approved again. Built-in ceremonies (`standup`,
-`documentation-gaps`) need no approval.
+notification naming the `lazyboy approve` command to run, both throttled to once
+per scheduled occurrence rather than once per tick, until it is approved again.
+`lazyboy approve ceremony/<name>` prints the recorded hash and every path it
+hashed, so you can see exactly what you vouched for. Built-in ceremonies
+(`standup`, `documentation-gaps`) need no approval.
+
+Upgrading from a version without the gate: an existing working `prompt.md`
+ceremony stops running on the first tick after this lands, and keeps warning
+once per scheduled occurrence, until you run `lazyboy approve ceremony/<name>`
+for it.
+
+The hash is the only control — ceremony code runs with the tick process's full
+permissions and live credentials, and there is no sandbox. Two consequences to
+check when reviewing a ceremony before approving it:
+
+- The `output/` exclusion is what lets a ceremony write its own results without
+  revoking itself, so **approved code that imports or evaluates anything under
+  `outputDir` — or anywhere else in the state dir — voids the guarantee**, since
+  that content is outside the hash and can change freely afterwards. The
+  exclusion is applied before the walk decides an entry's type, so a _symlinked_
+  `output` pointing anywhere is excluded too. Read a ceremony for code that
+  loads further code, not just for what the code itself does.
+- The walk records but does not follow a symlink to a directory outside the
+  ceremony, and it refuses to hash a directory holding more than 2000 files or
+  64 MiB; a ceremony over either cap can never be approved.
 
 A particularly valuable ceremony type is **meta-review**: a recurring analysis
 of recently completed tickets that extracts learnings and writes them to

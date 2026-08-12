@@ -75,6 +75,15 @@ export async function performApproveCeremony(
   const hashFn = deps.hashFn ?? ceremonyHash;
   const manifestFn = deps.manifestFn ?? ceremonyManifest;
   const approvals = await readApprovalsFn();
+  const manifest = await manifestFn(ceremonyDir);
+  const unsupportedEntry = manifest.find((entry) =>
+    entry.detail.includes("<unsupported>")
+  );
+  if (unsupportedEntry) {
+    throw new Error(
+      `Ceremony ${name} contains an out-of-root directory symlink and cannot be approved`,
+    );
+  }
   const hash = await hashFn(ceremonyDir);
   approvals[name] = {
     ...approvals[name],
@@ -83,7 +92,6 @@ export async function performApproveCeremony(
     lastWarnedWindow: undefined,
   };
   await writeApprovalsFn(approvals);
-  const manifest = await manifestFn(ceremonyDir);
   return { hash, paths: manifest.map((entry) => entry.path) };
 }
 

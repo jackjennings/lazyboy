@@ -1,6 +1,10 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
-import type { PrEntry, TicketState } from "../state/types.ts";
+import {
+  ARTIFACT_DESCRIPTORS,
+  type PrEntry,
+  type TicketState,
+} from "../state/types.ts";
 
 export interface ReconcilePRsDeps {
   readImplementationOutput: (ticketDir: string) => Promise<string | null>;
@@ -61,6 +65,7 @@ export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
       return (
         ticket.phase === "implementation" &&
         ticket.status === "waiting" &&
+        ARTIFACT_DESCRIPTORS[ticket.artifact].requiresPRs &&
         (!ticket.prs || ticket.prs.length === 0)
       );
     },

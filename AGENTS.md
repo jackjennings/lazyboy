@@ -332,15 +332,15 @@ event rather than coining a synonym:
 | `error`                                                                            | An action or phase threw; carries the error message.          |
 
 A `reason` field, where present, is a lowercase kebab-case label naming the
-cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-worktrees`,
-`no-github-repos`, `github-slug-extraction-failed`, `clone-failed`,
-`worktree-creation-failed`, `push-failed`, `no-verdict-line`, `incomplete`,
-`pr-fetch-failed`, `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`,
-`no-commit`, `context-file-unreadable`). Reuse an existing label when it fits;
-add a new one only for a genuinely new cause, and never put free prose in
-`reason` (that belongs in a separate field or the `error` message). Work-item
-identity is the ticket directory itself — do not add an `id` or `ticketId` field
-to per-ticket entries.
+cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-pages`,
+`no-worktrees`, `no-github-repos`, `github-slug-extraction-failed`,
+`clone-failed`, `worktree-creation-failed`, `push-failed`, `no-verdict-line`,
+`incomplete`, `pr-fetch-failed`, `ci-unfixable`, `rerun-failed`,
+`infra-rerun-exhausted`, `no-commit`, `context-file-unreadable`). Reuse an
+existing label when it fits; add a new one only for a genuinely new cause, and
+never put free prose in `reason` (that belongs in a separate field or the
+`error` message). Work-item identity is the ticket directory itself — do not add
+an `id` or `ticketId` field to per-ticket entries.
 
 ## Failure handling
 

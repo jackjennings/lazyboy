@@ -1,5 +1,9 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { assertValidPhaseStatus, isApproved } from "./types.ts";
+import {
+  ARTIFACT_DESCRIPTORS,
+  assertValidPhaseStatus,
+  isApproved,
+} from "./types.ts";
 import type { TicketPhase, TicketState, TicketStatus } from "./types.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import { makeTicket } from "../test-support.ts";
@@ -123,3 +127,21 @@ Deno.test(
     }
   },
 );
+
+Deno.test("ARTIFACT_DESCRIPTORS: pr descriptor values", () => {
+  const d = ARTIFACT_DESCRIPTORS["pr"];
+  assertEquals(d.requiresWorktrees, true);
+  assertEquals(d.requiresPRs, true);
+  assertEquals(d.completionField, "prs");
+  assertEquals(d.missingReason, "no-prs");
+  assertEquals(d.mergeStatus, "waiting");
+});
+
+Deno.test("ARTIFACT_DESCRIPTORS: notion descriptor values", () => {
+  const d = ARTIFACT_DESCRIPTORS["notion"];
+  assertEquals(d.requiresWorktrees, false);
+  assertEquals(d.requiresPRs, false);
+  assertEquals(d.completionField, "notionPages");
+  assertEquals(d.missingReason, "no-pages");
+  assertEquals(d.mergeStatus, "done");
+});

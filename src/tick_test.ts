@@ -4085,7 +4085,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket in implementation/running with no PRs moves to waiting",
+  "advancePhase: notion ticket in implementation/running with no notionPages moves to needs-attention",
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
@@ -4114,8 +4114,7 @@ Deno.test(
         appendPrinciples: () => Promise.resolve(),
         readPhaseExitCode: () => Promise.resolve(0),
       });
-      assertArrayIncludes(statuses, ["waiting"]);
-      assertFalse(statuses.includes("needs-attention"));
+      assertArrayIncludes(statuses, ["waiting", "needs-attention"]);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -4988,3 +4987,95 @@ Deno.test(
     assertStringIncludes(spawnedPrompt, authoringPrompt.trim());
   },
 );
+
+Deno.test(
+  "advancePhase: notion ticket at implementation/running with no notionPages → needs-attention with reason no-pages",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "running",
+      artifact: "notion",
+    });
+    const written: TicketState[] = [];
+    const logEntries: object[] = [];
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+      appendLog: (_dir, _id, entry) => {
+        logEntries.push(entry);
+        return Promise.resolve();
+      },
+      readPhaseOutput: () => Promise.resolve("valid output"),
+    });
+    const last = written.at(-1)!;
+    assertEquals(last.status, "needs-attention");
+    assertArrayIncludes(logEntries as Record<string, unknown>[], [{
+      event: "phase-transition",
+      from: "implementation",
+      to: "needs-attention",
+      reason: "no-pages",
+    }]);
+  },
+);
+
+Deno.test(
+  "advancePhase: notion ticket at implementation/waiting approved with notionPages → merge/done",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "waiting",
+      artifact: "notion",
+      approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
+      notionPages: [{ url: "https://notion.so/page", title: "Doc" }],
+    });
+    const written: TicketState[] = [];
+    const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      written.push(t);
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      writeTicket: writeTicketSpy,
+      markPRsReady: markPRsReadySpy,
+    });
+    assertSpyCall(writeTicketSpy, 0);
+    assertEquals(written[0].phase, "merge");
+    assertEquals(written[0].status, "done");
+    assertSpyCalls(markPRsReadySpy, 0);
+  },
+);
+
+Deno.test(
+  "advancePhase: notion ticket at plan/waiting approved with no worktrees proceeds to implementation",
+  async () => {
+    const ticket = makeTicket({
+      phase: "plan",
+      status: "waiting",
+      artifact: "notion",
+      approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
+      worktrees: {},
+    });
+    let spawnedPhase = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPhase = opts.phase;
+      return Promise.resolve();
+    });
+    await advancePhase(ticket, "/state", {
+      ...makeFakeTickDeps(),
+      spawn: spawnSpy,
+    });
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedPhase, "implementation");
+  },
+);
+
+Deno.test("CLAUDE.md reason vocabulary includes no-pages", async () => {
+  const content = await Deno.readTextFile(
+    new URL("../CLAUDE.md", import.meta.url).pathname,
+  );
+  assertStringIncludes(content, "no-pages");
+});

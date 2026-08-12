@@ -174,3 +174,92 @@ Deno.test("performApproveCeremony: rejects a built-in ceremony", async () => {
     await Deno.remove(stateDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "performApproveCeremony: rejects an empty name even when a ceremony exists",
+  async () => {
+    const stateDir = await makeStateDir("digest");
+    try {
+      const writeApprovalsFn = spy(() => Promise.resolve());
+      await assertRejects(
+        () =>
+          performApproveCeremony(stateDir, "", {
+            readApprovalsFn: () => Promise.resolve({}),
+            writeApprovalsFn,
+            hashFn: () => Promise.resolve("sha256:x"),
+          }),
+        Error,
+        "empty",
+      );
+      assertSpyCalls(writeApprovalsFn, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("performApproveCeremony: rejects a name containing /", async () => {
+  const stateDir = await makeStateDir("digest");
+  try {
+    const writeApprovalsFn = spy(() => Promise.resolve());
+    await assertRejects(
+      () =>
+        performApproveCeremony(stateDir, "foo/bar", {
+          readApprovalsFn: () => Promise.resolve({}),
+          writeApprovalsFn,
+          hashFn: () => Promise.resolve("sha256:x"),
+        }),
+      Error,
+      "Invalid ceremony name",
+    );
+    assertSpyCalls(writeApprovalsFn, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApproveCeremony: rejects a name containing ..", async () => {
+  const stateDir = await makeStateDir("digest");
+  try {
+    const writeApprovalsFn = spy(() => Promise.resolve());
+    await assertRejects(
+      () =>
+        performApproveCeremony(stateDir, "..", {
+          readApprovalsFn: () => Promise.resolve({}),
+          writeApprovalsFn,
+          hashFn: () => Promise.resolve("sha256:x"),
+        }),
+      Error,
+      "Invalid ceremony name",
+    );
+    assertSpyCalls(writeApprovalsFn, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test(
+  "performApproveCeremony: clears a stale lastWarnedWindow on approval",
+  async () => {
+    const stateDir = await makeStateDir("digest");
+    try {
+      let written: ApprovalRecord = {};
+      await performApproveCeremony(stateDir, "digest", {
+        readApprovalsFn: () =>
+          Promise.resolve({
+            digest: { hash: "sha256:old", lastWarnedWindow: "2026-08-01" },
+          }),
+        writeApprovalsFn: (record) => {
+          written = record;
+          return Promise.resolve();
+        },
+        hashFn: () => Promise.resolve("sha256:new"),
+      });
+      assertEquals(written.digest.hash, "sha256:new");
+      assertEquals(typeof written.digest.approvedAt, "string");
+      assertEquals(written.digest.lastWarnedWindow, undefined);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

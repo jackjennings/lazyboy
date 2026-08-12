@@ -41,6 +41,12 @@ export async function performApproveCeremony(
     hashFn?: (ceremonyDir: string) => Promise<string>;
   } = {},
 ): Promise<void> {
+  if (name.trim() === "") {
+    throw new Error("Ceremony name must not be empty");
+  }
+  if (name.includes("/") || name.includes("..")) {
+    throw new Error(`Invalid ceremony name: ${name}`);
+  }
   if (BUILT_IN_CEREMONY_NAMES.includes(name)) {
     throw new Error(`${name} is a built-in ceremony and needs no approval`);
   }

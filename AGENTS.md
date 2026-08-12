@@ -673,6 +673,11 @@ CLI format functions (`formatGlobalHelp`, `formatCommandHelp`) live in
 directly. Tests that assert on `Deno.exit` behavior use subprocess via
 `runIndex`. Do not add `Deno.args`, `console.log`, or `Deno.exit` to `help.ts`.
 
+## Filesystem
+
+All filesystem operations go through `src/filesystem.ts` — call `stat`,
+`readFile`, `readDir`, etc. from there, never `Deno.*` directly.
+
 ## Date and time
 
 Use the Temporal API (`Temporal.Now`, `Temporal.PlainDate`, `Temporal.Instant`,

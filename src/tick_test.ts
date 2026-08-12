@@ -2510,21 +2510,21 @@ Deno.test("resolvePhaseModel: returns hardcoded defaults when no overrides", () 
   });
 });
 
-Deno.test("resolvePhaseModel: ci-triage defaults to claude-sonnet-4-6 / high", () => {
+Deno.test("resolvePhaseModel: ci-fix defaults to claude-sonnet-4-6 / high", () => {
   const config = makeConfig();
   const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "ci-triage", ticket), {
+  assertEquals(resolvePhaseModel(config, "ci-fix", ticket), {
     model: "claude-sonnet-4-6",
     thinking: "high",
   });
 });
 
-Deno.test("resolvePhaseModel: config default overrides hardcoded for ci-triage", () => {
+Deno.test("resolvePhaseModel: config default overrides hardcoded for ci-fix", () => {
   const config = makeConfig({
-    phases: { defaults: { "ci-triage": { model: "claude-haiku-4-5" } } },
+    phases: { defaults: { "ci-fix": { model: "claude-haiku-4-5" } } },
   });
   const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "ci-triage", ticket), {
+  assertEquals(resolvePhaseModel(config, "ci-fix", ticket), {
     model: "claude-haiku-4-5",
     thinking: "high",
   });

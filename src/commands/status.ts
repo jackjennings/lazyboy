@@ -104,10 +104,10 @@ function groupPhaseKey(name: string): string {
   const stem = name
     .replace(/^\d{8}T\d{6}-/, "")
     .replace(/\.usage\.json$/, "");
-  return stem.startsWith("ci-triage-") ? "ci-triage" : stem;
+  return stem.startsWith("ci-fix-") ? "ci-fix" : stem;
 }
 
-const KNOWN_BACKGROUND_PHASES = ["ci-triage", "conflict-resolution"];
+const KNOWN_BACKGROUND_PHASES = ["ci-fix", "conflict-resolution"];
 
 function comparePhaseKeys(a: string, b: string): number {
   const ai = (FULL_PHASE_SEQUENCE as readonly string[]).indexOf(a);
@@ -238,7 +238,7 @@ function isAttentionEntry(e: LogEntry): boolean {
     (e.event === "phase-transition" && e.to === "needs-attention") ||
     e.event === "needs-attention" ||
     e.event === "conflict-resolution-failed" ||
-    (e.event === "error" && e.context === "resolveCITriage")
+    (e.event === "error" && e.context === "resolveCIFix")
   );
 }
 

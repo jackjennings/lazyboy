@@ -49,8 +49,8 @@ import { cleanOrphanedWorktreesAction } from "./tick-actions/clean-orphaned-work
 import { reconcilePRsAction } from "./tick-actions/reconcile-prs.ts";
 import { checkConflictsAction } from "./tick-actions/check-conflicts.ts";
 import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
-import { spawnCITriageAction } from "./tick-actions/spawn-ci-triage.ts";
-import { resolveCITriageAction } from "./tick-actions/resolve-ci-triage.ts";
+import { spawnCIFixAction } from "./tick-actions/spawn-ci-fix.ts";
+import { resolveCIFixAction } from "./tick-actions/resolve-ci-fix.ts";
 import {
   installPackages,
   isPackageInstalled,
@@ -448,15 +448,15 @@ export function composeTickDeps(
     }),
     ...(config.tick.resolveCIFailures
       ? [
-        resolveCITriageAction({
+        resolveCIFixAction({
           isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
-          hasCITriageContextFiles: (ticketId) => {
+          hasCIFixContextFiles: (ticketId) => {
             const dir = join(stateDir, ticketId);
             try {
               for (const entry of readDirSync(dir)) {
                 if (
                   entry.isFile &&
-                  entry.name.includes("-ci-triage-context-") &&
+                  entry.name.includes("-ci-fix-context-") &&
                   entry.name.endsWith(".md")
                 ) {
                   return true;
@@ -476,24 +476,24 @@ export function composeTickDeps(
             }
           },
           remove,
-          createGitHubIssue: async ({ repo, title, body }) => {
-            const { token, login } = resolveGitHubAccount(
-              repo.split("/")[0],
-              config,
-            );
+          runGit,
+          rerunFailedJobs: async ({ repo, runId }) => {
+            const { token } = resolveGitHubAccount(repo.split("/")[0], config);
             const res = await http.post(
-              `https://api.github.com/repos/${repo}/issues`,
+              `https://api.github.com/repos/${repo}/actions/runs/${runId}/rerun-failed-jobs`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
                   Accept: "application/vnd.github+json",
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ title, body, assignees: [login] }),
+                body: "{}",
               },
             );
             if (!res.ok) {
-              throw new Error(`GitHub API ${res.status} creating issue`);
+              throw new Error(
+                `GitHub API ${res.status} re-running failed jobs`,
+              );
             }
           },
           writeTicket,
@@ -503,7 +503,7 @@ export function composeTickDeps(
             await writeLearning(stateDir, { id, ...learning }, intent);
           },
         }),
-        spawnCITriageAction({
+        spawnCIFixAction({
           getPRChecks: async (prUrl) => {
             const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
             if (!m) return null;
@@ -512,148 +512,130 @@ export function composeTickDeps(
               repoSlug.split("/")[0],
               config,
             );
+            const headers = {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            };
             const prRes = await http.get(
               `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                },
-              },
+              { headers },
             );
             if (!prRes.ok) throw new Error(`GitHub API ${prRes.status}`);
             const prData = await prRes.json();
             if (prData.state === "closed") return null;
             const headSha: string = prData.head.sha;
-            const suiteRes = await http.get(
-              `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-suites`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                },
-              },
-            );
-            if (!suiteRes.ok) throw new Error(`GitHub API ${suiteRes.status}`);
-            const { check_suites: suites } = await suiteRes.json();
-            const suite = (
-              suites as Array<
-                { status: string; conclusion: string; id: number }
-              >
-            ).find((s) => s.status === "completed");
-            if (!suite) return null;
-            if (
-              suite.conclusion !== "failure" &&
-              suite.conclusion !== "action_required"
-            ) {
-              return {
-                runId: String(suite.id),
-                conclusion: suite.conclusion as "success" | "pending",
-                failingOutput: "",
-              };
-            }
+
             const runsRes = await http.get(
-              `https://api.github.com/repos/${repoSlug}/commits/${headSha}/check-runs`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                },
-              },
+              `https://api.github.com/repos/${repoSlug}/actions/runs?head_sha=${headSha}&per_page=100`,
+              { headers },
             );
             if (!runsRes.ok) throw new Error(`GitHub API ${runsRes.status}`);
-            const { check_runs: runs } = await runsRes.json();
-            const failing = (
-              runs as Array<{
-                conclusion: string;
+            const { workflow_runs: workflowRuns } = await runsRes.json();
+            const completed = (workflowRuns as Array<{
+              id: number;
+              status: string;
+              conclusion: string;
+              run_attempt: number;
+            }>).filter((r) => r.status === "completed");
+            if (completed.length === 0) return null;
+
+            const failed = completed.find(
+              (r) =>
+                r.conclusion === "failure" ||
+                r.conclusion === "action_required",
+            );
+            if (!failed) {
+              return {
+                runId: String(completed[0].id),
+                attempt: completed[0].run_attempt,
+                conclusion: "success",
+                failingJobs: [],
+              };
+            }
+
+            const jobsRes = await http.get(
+              `https://api.github.com/repos/${repoSlug}/actions/runs/${failed.id}/attempts/${failed.run_attempt}/jobs`,
+              { headers },
+            );
+            const failingJobs = jobsRes.ok
+              ? ((await jobsRes.json()).jobs as Array<{
                 name: string;
-              }>
-            ).find((r) => r.conclusion === "failure");
-            const stepName = failing?.name ?? "";
+                conclusion: string;
+              }>)
+                .filter((j) => j.conclusion === "failure")
+                .map((j) => j.name)
+              : [];
+
             return {
-              runId: String(suite.id),
-              conclusion: suite.conclusion as "failure" | "action_required",
-              failingOutput: stepName,
+              runId: String(failed.id),
+              attempt: failed.run_attempt,
+              conclusion: failed.conclusion as "failure" | "action_required",
+              failingJobs,
             };
-          },
-          getPRDiffFiles: async (prUrl) => {
-            const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-            if (!m) return [];
-            const [, repoSlug, prNumber] = m;
-            const { token } = resolveGitHubAccount(
-              repoSlug.split("/")[0],
-              config,
-            );
-            const res = await http.get(
-              `https://api.github.com/repos/${repoSlug}/pulls/${prNumber}/files`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/vnd.github+json",
-                },
-              },
-            );
-            if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-            const files = await res.json();
-            return (files as Array<{ filename: string; patch?: string }>).map((
-              f,
-            ) => ({
-              filename: f.filename,
-              patch: f.patch,
-            }));
           },
           isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
           writeTicket,
           appendLog: appendTicketLog,
           resolveModelConfig: (ticket) =>
-            resolvePhaseModel(config, "ci-triage", ticket),
-          writeContextFile: async (ticketDir, runId, content) => {
+            resolvePhaseModel(config, "ci-fix", ticket),
+          writeContextFile: async (ticketDir, runKey, content) => {
             const timestamp = compactTimestamp(
               Temporal.Now.zonedDateTimeISO("UTC"),
             );
-            const filename = `${timestamp}-ci-triage-context-${runId}.md`;
+            const filename = `${timestamp}-ci-fix-context-${runKey}.md`;
             await writeTextFile(join(ticketDir, filename), content);
             return filename;
           },
           spawn: (opts) => {
             const timestamp = opts.contextFile.slice(
               0,
-              opts.contextFile.indexOf("-ci-triage-context-"),
+              opts.contextFile.indexOf("-ci-fix-context-"),
             );
             const prompt =
-              `You are triaging a CI failure. Read the context file for the PR URL, repo, and PR diff. ` +
-              `The ## CI Output section contains only the name of the failing check — not the full log. ` +
-              `Use \`gh pr checks <PR-URL>\` to locate the failing workflow run, then ` +
-              `\`gh run view --repo <Repo> <run-id> --log-failed\` to fetch the actual failure output. ` +
-              `Use that log in your analysis.\n\n` +
-              `Decide whether the failure was caused by the PR's changes (PR_CAUSED) or by an ` +
-              `infrastructure problem unrelated to the PR (INFRA). Infrastructure failures are: ` +
-              `network errors, rate limits, runner timeouts, package download failures, transient ` +
-              `flakiness with no code correlation. Default to PR_CAUSED unless there is positive ` +
-              `evidence of infrastructure failure — a red CI run on a PR branch is overwhelmingly ` +
-              `the PR's fault. Write your reasoning, then end your output with exactly one line: ` +
-              `\`VERDICT: PR_CAUSED\` or \`VERDICT: INFRA\`. ` +
-              `When the verdict is PR_CAUSED, add a second line immediately after: ` +
-              `\`LEARNING: <one or two sentences describing what the implementation phase should have checked or validated to catch this failure before it reached CI>\`.`;
+              `You are fixing a failing CI run on an open pull request. Your job is to make CI ` +
+              `green, not to write a report.\n\n` +
+              `Read the context file for the PR URL, repo, workflow run ID, branch, and worktree ` +
+              `path, then work inside that worktree.\n\n` +
+              `Fetch the real failure output with ` +
+              `\`gh run view --repo <Repo> <Run-ID> --log-failed\`. Read the workflow definition in ` +
+              `.github/workflows/ to find the exact command the failing job ran.\n\n` +
+              `Decide whether the failure comes from the PR's own changes or from infrastructure. ` +
+              `Infrastructure failures are network errors, rate limits, runner timeouts, package ` +
+              `download failures, and transient flakiness with no code correlation. Default to a ` +
+              `PR-side cause — a red run on a PR branch is overwhelmingly the PR's fault.\n\n` +
+              `Fix it in the worktree. Reproduce the failure locally with the job's own command, ` +
+              `fix it, re-run that command, and confirm it passes before claiming FIXED. Two common ` +
+              `cases:\n` +
+              `- Lint or format violations, often left behind by conflict resolution: run the ` +
+              `repository's own check command (for example \`deno fmt\` and \`deno lint\`) and ` +
+              `commit the result.\n` +
+              `- Commit messages rejected by commitlint: reword the offending commits rather than ` +
+              `adding a new one. Prefer \`git commit --amend -m\` when only the tip commit is bad. ` +
+              `For older commits use a non-interactive rebase driven by GIT_SEQUENCE_EDITOR and ` +
+              `GIT_EDITOR. As a last resort, ` +
+              `\`git reset --soft $(git merge-base origin/<base-branch> HEAD)\` and re-commit with ` +
+              `a conforming message.\n\n` +
+              `Commit your work, but do not push — the tick loop force-pushes the branch for you. ` +
+              `Do not create pull requests and do not create issues.\n\n` +
+              `End your output with exactly one line: \`VERDICT: FIXED\`, \`VERDICT: INFRA\`, or ` +
+              `\`VERDICT: UNFIXABLE\`. Use INFRA only for an infrastructure failure, and UNFIXABLE ` +
+              `only when the failure genuinely requires a human decision. When the verdict is ` +
+              `FIXED, add one more line immediately after: ` +
+              `\`LEARNING: <one or two sentences describing what the implementation phase should ` +
+              `have checked or validated to catch this failure before it reached CI>\`.`;
             return spawnPhase({
               ticketDir: opts.ticketDir,
               stateDir,
               prompt,
               scopeDirs: [],
-              outputFile: `${timestamp}-ci-triage-${opts.runId}.md`,
-              githubToken: resolveGitHubAccount(
-                opts.repo.split("/")[0],
-                config,
-              ).token,
+              outputFile:
+                `${timestamp}-ci-fix-${opts.runId}-${opts.attempt}.md`,
+              githubToken:
+                resolveGitHubAccount(opts.repo.split("/")[0], config).token,
               anthropicApiKey,
-              worktrees: opts.worktreePath
-                ? {
-                  [opts.branch]: {
-                    path: opts.worktreePath,
-                    branch: opts.branch,
-                  },
-                }
-                : {},
+              worktrees: {
+                [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
+              },
               provider: piProvider,
               agent: agentType,
               model: opts.model,

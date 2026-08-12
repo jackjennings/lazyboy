@@ -7,6 +7,7 @@ import { exists, isRegularFile } from "../filesystem.ts";
 import {
   ceremonyHash,
   ceremonyManifest,
+  manifestLine,
   readApprovals,
   writeApprovals,
 } from "../ceremonies/approvals.ts";
@@ -48,7 +49,7 @@ export async function performApproveCeremony(
     hashFn?: (ceremonyDir: string) => Promise<string>;
     manifestFn?: (ceremonyDir: string) => Promise<CeremonyManifestEntry[]>;
   } = {},
-): Promise<{ hash: string; paths: string[] }> {
+): Promise<{ hash: string; lines: string[] }> {
   if (name.trim() === "") {
     throw new Error("Ceremony name must not be empty");
   }
@@ -92,7 +93,7 @@ export async function performApproveCeremony(
     lastWarnedWindow: undefined,
   };
   await writeApprovalsFn(approvals);
-  return { hash, paths: manifest.map((entry) => entry.path) };
+  return { hash, lines: manifest.map(manifestLine) };
 }
 
 export const approve: Command = {
@@ -110,11 +111,11 @@ export const approve: Command = {
     const stateDir = expandHome(config.state.dir);
     if (id.startsWith("ceremony/")) {
       const name = id.slice("ceremony/".length);
-      const { hash, paths } = await performApproveCeremony(stateDir, name);
+      const { hash, lines } = await performApproveCeremony(stateDir, name);
       console.log(`Approved ceremony ${name}`);
       console.log(`  hash: ${hash}`);
-      for (const path of paths) {
-        console.log(`  ${path}`);
+      for (const line of lines) {
+        console.log(`  ${line}`);
       }
       return;
     }

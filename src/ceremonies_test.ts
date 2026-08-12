@@ -1341,6 +1341,30 @@ Deno.test("CeremonyRunner: an unreadable ceremony does not abort the remaining c
   }
 });
 
+Deno.test("CeremonyRunner: directory-as-config.toml logs warning and does not run ceremony", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ceremonyDir = join(stateDir, "ceremonies", "bad");
+    await Deno.mkdir(join(ceremonyDir, "config.toml"), { recursive: true });
+    const { ceremony, runCount } = makeCountedCeremony("bad");
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      ceremonies: [ceremony],
+      appendTickLog,
+    }).run();
+    assertSpyCalls(appendTickLog, 1);
+    assertEquals(appendTickLog.calls[0].args[0], {
+      event: "ceremony-warning",
+      ceremony: "bad",
+      reason: "config.toml is not a regular file",
+    });
+    assertEquals(runCount(), 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
 Deno.test("CeremonyRunner: a corrupt approvals file does not destroy stored approvals", async () => {
   using _lazyboy = withLazyboyDir();
   const stateDir = await Deno.makeTempDir();

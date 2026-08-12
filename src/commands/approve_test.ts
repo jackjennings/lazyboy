@@ -1,9 +1,15 @@
-import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
+import {
+  assertEquals,
+  assertFalse,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { writeTicket } from "../state/store.ts";
 import { makeTicket } from "../test-support.ts";
-import { performApprove } from "./approve.ts";
+import { performApprove, performApproveCeremony } from "./approve.ts";
+import type { ApprovalRecord } from "../ceremonies/approvals.ts";
 
 Deno.test(
   "performApprove: appends entry with actor human and current phase",
@@ -86,3 +92,85 @@ Deno.test(
     }
   },
 );
+
+async function makeStateDir(name: string): Promise<string> {
+  const stateDir = await Deno.makeTempDir();
+  const dir = join(stateDir, "ceremonies", name);
+  await Deno.mkdir(dir, { recursive: true });
+  await Deno.writeTextFile(join(dir, "prompt.md"), "x\n");
+  return stateDir;
+}
+
+Deno.test("performApproveCeremony: writes the hash and timestamp", async () => {
+  const stateDir = await makeStateDir("digest");
+  try {
+    let written: ApprovalRecord = {};
+    await performApproveCeremony(stateDir, "digest", {
+      readApprovalsFn: () => Promise.resolve({}),
+      writeApprovalsFn: (record) => {
+        written = record;
+        return Promise.resolve();
+      },
+      hashFn: () => Promise.resolve("sha256:deadbeef"),
+    });
+    assertEquals(written.digest.hash, "sha256:deadbeef");
+    assertEquals(typeof written.digest.approvedAt, "string");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApproveCeremony: preserves other entries", async () => {
+  const stateDir = await makeStateDir("digest");
+  try {
+    let written: ApprovalRecord = {};
+    await performApproveCeremony(stateDir, "digest", {
+      readApprovalsFn: () => Promise.resolve({ other: { hash: "sha256:1" } }),
+      writeApprovalsFn: (record) => {
+        written = record;
+        return Promise.resolve();
+      },
+      hashFn: () => Promise.resolve("sha256:2"),
+    });
+    assertEquals(written.other.hash, "sha256:1");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApproveCeremony: rejects an unknown ceremony", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const writeApprovalsFn = spy(() => Promise.resolve());
+    await assertRejects(
+      () =>
+        performApproveCeremony(stateDir, "missing", {
+          readApprovalsFn: () => Promise.resolve({}),
+          writeApprovalsFn,
+          hashFn: () => Promise.resolve("sha256:x"),
+        }),
+      Error,
+      "missing",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("performApproveCeremony: rejects a built-in ceremony", async () => {
+  const stateDir = await makeStateDir("standup");
+  try {
+    await assertRejects(
+      () =>
+        performApproveCeremony(stateDir, "standup", {
+          readApprovalsFn: () => Promise.resolve({}),
+          writeApprovalsFn: () => Promise.resolve(),
+          hashFn: () => Promise.resolve("sha256:x"),
+        }),
+      Error,
+      "built-in",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});

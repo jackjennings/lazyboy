@@ -31,3 +31,5 @@ export interface CeremonyContext {
 export type CeremonyModule = (
   context: CeremonyContext,
 ) => Promise<void> | void;
+
+export const BUILT_IN_CEREMONY_NAMES = ["standup", "documentation-gaps"];

@@ -290,10 +290,6 @@ export const hud: Command = {
         return;
       }
       commandInput.setValue("");
-      commandInput.focused = false;
-      statusPane.focused = true;
-      logPane.focused = false;
-      tui.setFocus(statusPane);
       commandRunning = true;
       const label = args.length > 0 ? `${name} ${args.join(" ")}` : name;
       headerLine = `Running: ${label}`;

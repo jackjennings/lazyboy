@@ -223,6 +223,13 @@ When stacking applies:
    - All entries: `merged: false`, `worktreeKey` set to the ticket's single
      worktree key (the same value for every entry in the stack).
 
+After all implementation work is complete, run
+`deno run -A npm:calldiff@0.5.0 diff origin/main HEAD` in the working directory
+(the repo root). Embed the verbatim output as a `## Calldiff` section in your
+response, positioned after `## Summary of Changes`. If the command fails, exits
+non-zero, or is unavailable, omit the section silently — do not emit an error or
+placeholder.
+
 Your response must contain:
 
 {{principles}}
@@ -237,6 +244,12 @@ A human-readable description of what was implemented and why, written for a code
 reviewer who has not read the diff. Describe the overall change at the feature
 level: what problem the implementation solves, what approach was taken, and any
 notable decisions made. Do not reproduce raw `git diff` output here.
+
+## Calldiff
+
+The verbatim output of `deno run -A npm:calldiff@0.5.0 diff origin/main HEAD`,
+run in the repo root. Omit this section if the command is unavailable or exits
+non-zero.
 
 ## Tests
 

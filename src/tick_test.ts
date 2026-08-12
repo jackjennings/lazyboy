@@ -2421,6 +2421,87 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "TickService: action.run throwing is caught, error logged, loop continues to next action",
+  async () => {
+    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "new" });
+    const appendLogSpy = spy(
+      (_stateDir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    const runSpy = spy(
+      (_t: TicketState, _sd: string) =>
+        Promise.resolve<TicketState | null>(null),
+    );
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      tickActions: [
+        { applies: () => true, run: () => Promise.reject(new Error("boom")) },
+        { applies: () => true, run: runSpy },
+      ],
+      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(runSpy, 1);
+    const errorCalls = appendLogSpy.calls.filter(
+      (c) => (c.args[2] as { event: string }).event === "error",
+    );
+    assertEquals(errorCalls.length, 1);
+    assertEquals(
+      (errorCalls[0].args[2] as { context: string }).context,
+      "tickAction",
+    );
+    assertStringIncludes(
+      String((errorCalls[0].args[2] as { message: string }).message),
+      "boom",
+    );
+  },
+);
+
+Deno.test(
+  "TickService: action.applies throwing is caught, error logged, loop continues",
+  async () => {
+    const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "new" });
+    const appendLogSpy = spy(
+      (_stateDir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    const runSpy = spy(
+      (_t: TicketState, _sd: string) =>
+        Promise.resolve<TicketState | null>(null),
+    );
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: () => Promise.resolve(ticket),
+      tickActions: [
+        {
+          applies: () => {
+            throw new Error("applies boom");
+          },
+          run: () => Promise.resolve(null),
+        },
+        { applies: () => true, run: runSpy },
+      ],
+      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(runSpy, 1);
+    const errorCalls = appendLogSpy.calls.filter(
+      (c) => (c.args[2] as { event: string }).event === "error",
+    );
+    assertEquals(errorCalls.length, 1);
+    assertEquals(
+      (errorCalls[0].args[2] as { context: string }).context,
+      "tickAction",
+    );
+    assertStringIncludes(
+      String((errorCalls[0].args[2] as { message: string }).message),
+      "applies boom",
+    );
+  },
+);
+
 // ── selectCandidates ──────────────────────────────────────────────────────────
 
 Deno.test("selectCandidates: empty candidates returns empty", () => {

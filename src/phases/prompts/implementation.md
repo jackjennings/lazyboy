@@ -167,6 +167,15 @@ map for the worktree this PR was created from). Use the Edit tool to update
 `meta.md`. Do not re-read meta.md before editing — it is already in your session
 context from the initial read; use that content as the anchor for your edit.
 
+```yaml
+prs:
+  - url: https://github.com/owner/repo/pull/42
+    title: Add widget support
+    dependsOn: []
+    merged: false
+    worktreeKey: owner/repo
+```
+
 {{agents-md-update}}
 
 Do not write any files outside the repository worktree, meta.md, and the output

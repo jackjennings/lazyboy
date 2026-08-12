@@ -1081,3 +1081,206 @@ Deno.test("writeTicket: omits phases.plan.skip when absent", async () => {
   assertFalse(data.phases?.plan?.skip === true);
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test(
+  "readTicket: normalizes prs entry missing dependsOn to empty array",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const ticketDir = join(dir, "gh-1");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: merge
+status: waiting
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+prs:
+  - url: https://github.com/x/y/pull/1
+    title: my PR
+    merged: false
+---
+`,
+    );
+    try {
+      const ticket = await readTicket(dir, "gh-1");
+      assertEquals(ticket.prs?.length, 1);
+      assertEquals(ticket.prs?.[0].dependsOn, []);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("readTicket: drops prs entry with missing url", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-1");
+  await Deno.mkdir(ticketDir);
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: merge
+status: waiting
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+prs:
+  - title: no url here
+    dependsOn: []
+    merged: false
+---
+`,
+  );
+  try {
+    const ticket = await readTicket(dir, "gh-1");
+    assertEquals(ticket.prs, []);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test(
+  "readTicket: normalizes prs entry missing merged to false",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const ticketDir = join(dir, "gh-1");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: merge
+status: waiting
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+prs:
+  - url: https://github.com/x/y/pull/1
+    title: my PR
+    dependsOn: []
+---
+`,
+    );
+    try {
+      const ticket = await readTicket(dir, "gh-1");
+      assertEquals(ticket.prs?.[0].merged, false);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readTicket: normalizes prs entry missing title to empty string",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    const ticketDir = join(dir, "gh-1");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-1
+provider: github
+title: T
+url: https://github.com/x/y/issues/1
+phase: merge
+status: waiting
+scope: []
+worktrees: {}
+created: "2026-07-01T00:00:00Z"
+updated: "2026-07-01T00:00:00Z"
+prs:
+  - url: https://github.com/x/y/pull/1
+    dependsOn: []
+    merged: false
+---
+`,
+    );
+    try {
+      const ticket = await readTicket(dir, "gh-1");
+      assertEquals(ticket.prs?.[0].title, "");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "listLearnings: normalizes prs entry missing dependsOn to empty array",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "learnings"));
+      await Deno.writeTextFile(
+        join(dir, "learnings", "20260729T050000.md"),
+        `---
+id: "20260729T050000"
+ticketId: github/jackjennings/lazyboy/226
+repo: jackjennings/lazyboy
+targetFile: src/foo.md
+prTitle: Improve prompt
+prBody: Body text
+status: pending
+prs:
+  - url: https://github.com/x/y/pull/1
+    title: my PR
+    merged: false
+---
+
+Intent text.
+`,
+      );
+      const entries = await listLearnings(dir);
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].learning.prs[0].dependsOn, []);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test("listLearnings: drops prs entry with missing url", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(dir, "learnings"));
+    await Deno.writeTextFile(
+      join(dir, "learnings", "20260729T050000.md"),
+      `---
+id: "20260729T050000"
+ticketId: github/jackjennings/lazyboy/226
+repo: jackjennings/lazyboy
+targetFile: src/foo.md
+prTitle: Improve prompt
+prBody: Body text
+status: pending
+prs:
+  - title: no url here
+    dependsOn: []
+    merged: false
+---
+
+Intent text.
+`,
+    );
+    const entries = await listLearnings(dir);
+    assertEquals(entries.length, 1);
+    assertEquals(entries[0].learning.prs, []);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});

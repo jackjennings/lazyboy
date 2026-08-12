@@ -24,6 +24,11 @@ export class ScrollPane implements Component, Focusable {
   private tui: TUI;
   private title: string;
   private getHeight: () => number;
+  private expanded?: {
+    getLinesFn: (width: number) => string[];
+    width: number;
+    lines: string[];
+  };
 
   constructor(options: {
     getLines: (width: number) => string[];
@@ -57,15 +62,25 @@ export class ScrollPane implements Component, Focusable {
   }
 
   private expandLines(width: number): string[] {
+    const cached = this.expanded;
+    if (
+      cached && cached.getLinesFn === this.getLinesFn && cached.width === width
+    ) {
+      return cached.lines;
+    }
     const raw = this.getLinesFn(width).flatMap((line) =>
       line.split(/\r\n|\n|\r/)
     );
-    if (width <= 0) return raw;
-    return raw.flatMap((segment) => wrapTextWithAnsi(segment, width));
+    const lines = width <= 0
+      ? raw
+      : raw.flatMap((segment) => wrapTextWithAnsi(segment, width));
+    this.expanded = { getLinesFn: this.getLinesFn, width, lines };
+    return lines;
   }
 
   setContent(getLines: (width: number) => string[]): void {
     this.getLinesFn = getLines;
+    this.expanded = undefined;
     this.scrollOffset = 0;
   }
 
@@ -118,6 +133,7 @@ export class ScrollPane implements Component, Focusable {
   }
 
   invalidate(): void {
+    this.expanded = undefined;
     this.onInvalidateFn?.();
   }
 

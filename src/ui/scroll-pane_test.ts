@@ -4,6 +4,7 @@ import {
   assertFalse,
   assertStringIncludes,
 } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { stripAnsiCode } from "@std/fmt/colors";
 import type { TUI } from "@earendil-works/pi-tui";
 import { ScrollPane } from "./scroll-pane.ts";
@@ -174,6 +175,48 @@ Deno.test("ScrollPane: onInvalidate callback is called by invalidate()", () => {
   });
   pane.invalidate();
   assert(called);
+});
+
+Deno.test("ScrollPane: repeated renders at one width wrap the lines once", () => {
+  const getLines = spy((_w: number) => ["alpha", "beta"]);
+  const pane = new ScrollPane({
+    getLines,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.render(80);
+  pane.render(80);
+  pane.isAtEnd(80);
+  pane.scrollToEnd();
+  assertSpyCalls(getLines, 1);
+});
+
+Deno.test("ScrollPane: a width change re-wraps the lines", () => {
+  const getLines = spy((_w: number) => ["alpha", "beta"]);
+  const pane = new ScrollPane({
+    getLines,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.render(80);
+  pane.render(60);
+  assertSpyCalls(getLines, 2);
+});
+
+Deno.test("ScrollPane: invalidate re-reads content on the next render", () => {
+  let content = ["before"];
+  const pane = new ScrollPane({
+    getLines: (_w) => content,
+    tui: makeTui(),
+    title: "T",
+    getHeight: () => 5,
+  });
+  pane.render(80);
+  content = ["after"];
+  pane.invalidate();
+  assert(pane.render(80).some((l) => l.includes("after")));
 });
 
 Deno.test("ScrollPane: render expands \\n in string into separate rows", () => {

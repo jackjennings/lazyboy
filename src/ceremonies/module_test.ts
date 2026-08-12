@@ -174,6 +174,46 @@ Deno.test("ModuleCeremony: log always identifies the ceremony by its own name", 
   }
 });
 
+Deno.test("ModuleCeremony: notify is reachable from the context", async () => {
+  const dir = await makeModuleDir(
+    `export default async function (context) {
+      await context.notify("lazyboy", "digest is ready");
+    }`,
+  );
+  try {
+    const notify = spy((_title: string, _message: string) => Promise.resolve());
+    await makeCeremony(dir, { notify }).run(TEST_NOW, join(dir, "output"));
+    assertSpyCalls(notify, 1);
+    assertEquals(notify.calls[0].args, ["lazyboy", "digest is ready"]);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ModuleCeremony: notify without an injected notifier does not fail the ceremony", async () => {
+  const dir = await makeModuleDir(
+    `export default async function (context) {
+      await context.notify("lazyboy", "digest is ready");
+      await context.writeOutput("ran to completion");
+    }`,
+  );
+  try {
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const outputDir = join(dir, "output");
+    await makeCeremony(dir, { appendTickLog, notify: undefined }).run(
+      TEST_NOW,
+      outputDir,
+    );
+    assertSpyCalls(appendTickLog, 0);
+    assertEquals(
+      await Deno.readTextFile(join(outputDir, "20260727T100000-digest.md")),
+      "ran to completion",
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
 Deno.test("ModuleCeremony: commitState is reachable from the context", async () => {
   const dir = await makeModuleDir(
     `export default async function (context) {

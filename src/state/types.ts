@@ -91,6 +91,34 @@ export function isApproved(ticket: TicketState): boolean {
   return last.phase === ticket.phase;
 }
 
+export interface ArtifactDescriptor {
+  requiresWorktrees: boolean;
+  requiresPRs: boolean;
+  completionField: "prs" | "notionPages";
+  missingReason: string;
+  mergeStatus: "waiting" | "done";
+}
+
+export const ARTIFACT_DESCRIPTORS: Record<
+  "pr" | "notion",
+  ArtifactDescriptor
+> = {
+  pr: {
+    requiresWorktrees: true,
+    requiresPRs: true,
+    completionField: "prs",
+    missingReason: "no-prs",
+    mergeStatus: "waiting",
+  },
+  notion: {
+    requiresWorktrees: false,
+    requiresPRs: false,
+    completionField: "notionPages",
+    missingReason: "no-pages",
+    mergeStatus: "done",
+  },
+};
+
 export type PhaseModelConfig = Partial<
   Record<string, { model?: string; thinking?: string; skip?: boolean }>
 >;

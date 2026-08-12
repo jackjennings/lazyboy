@@ -1,5 +1,6 @@
 import {
   assert,
+  assertArrayIncludes,
   assertEquals,
   assertFalse,
   assertGreater,
@@ -20,6 +21,9 @@ const BASE = {
   created: "2026-06-30T00:00:00Z",
   updated: "2026-06-30T00:00:00Z",
 };
+
+const isRebaseStatePath = (path: string) =>
+  path.endsWith("rebase-merge") || path.endsWith("rebase-apply");
 
 function makeAction(
   overrides: Partial<Parameters<typeof resolveConflictsAction>[0]> = {},
@@ -86,7 +90,7 @@ Deno.test(
 // ── success path ──────────────────────────────────────────────────────────────
 
 Deno.test(
-  "resolveConflictsAction: success — no REBASE_HEAD, pushes, logs conflict-resolved, status waiting",
+  "resolveConflictsAction: success — no rebase in progress, pushes, logs conflict-resolved, status waiting",
   async () => {
     const logged: object[] = [];
     const written: TicketState[] = [];
@@ -101,10 +105,7 @@ Deno.test(
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(false);
-        return Promise.resolve(true);
-      },
+      stat: (path) => Promise.resolve(!isRebaseStatePath(path)),
       readDir: async function* () {
         yield {
           name: "20260101T000000-conflict-context-gh-7.md",
@@ -196,10 +197,10 @@ Deno.test(
   },
 );
 
-// ── failure path: REBASE_HEAD present ────────────────────────────────────────
+// ── failure path: rebase still in progress ───────────────────────────────────
 
 Deno.test(
-  "resolveConflictsAction: failure — REBASE_HEAD present → aborts, logs agent-failed, status needs-attention",
+  "resolveConflictsAction: failure — rebase in progress → aborts, logs agent-failed, status needs-attention",
   async () => {
     const logged: object[] = [];
     const written: TicketState[] = [];
@@ -215,12 +216,7 @@ Deno.test(
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) {
-          return Promise.resolve(true);
-        }
-        return Promise.resolve(false);
-      },
+      stat: (path) => Promise.resolve(isRebaseStatePath(path)),
       readDir: async function* () {
         yield {
           name: "20260101T000000-conflict-context-gh-7.md",
@@ -256,6 +252,42 @@ Deno.test(
   },
 );
 
+// ── REBASE_HEAD lingers after a completed rebase ─────────────────────────────
+
+Deno.test(
+  "resolveConflictsAction: success — leftover REBASE_HEAD with no rebase dirs still resolves",
+  async () => {
+    const logged: object[] = [];
+
+    const result = await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rev-parse") {
+          return Promise.resolve({ code: 0, stdout: "/wt/.git\n", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      stat: (path) => Promise.resolve(!isRebaseStatePath(path)),
+      readDir: async function* () {
+        yield {
+          name: "20260101T000000-conflict-context-gh-7.md",
+          isFile: true,
+        };
+      },
+      remove: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(result?.status, "waiting");
+    assertArrayIncludes(
+      (logged as Record<string, unknown>[]).map((e) => e.event),
+      ["conflict-resolved"],
+    );
+  },
+);
+
 // ── failure path: push fails ──────────────────────────────────────────────────
 
 Deno.test(
@@ -281,10 +313,7 @@ Deno.test(
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(false);
-        return Promise.resolve(true);
-      },
+      stat: (path) => Promise.resolve(!isRebaseStatePath(path)),
       readDir: async function* () {
         yield {
           name: "20260101T000000-conflict-context-gh-7.md",
@@ -328,10 +357,7 @@ Deno.test(
         }
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
-      stat: (path) => {
-        if (path.endsWith("REBASE_HEAD")) return Promise.resolve(true);
-        return Promise.resolve(false);
-      },
+      stat: (path) => Promise.resolve(isRebaseStatePath(path)),
       readDir: async function* () {
         yield {
           name: "20260101T000000-conflict-context-gh-7.md",

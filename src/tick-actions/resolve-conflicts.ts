@@ -80,7 +80,10 @@ export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
         const gitDir = gitDirRaw.startsWith("/")
           ? gitDirRaw
           : join(wt.path, gitDirRaw);
-        if (await deps.stat(join(gitDir, "REBASE_HEAD"))) {
+        const rebaseInProgress =
+          (await deps.stat(join(gitDir, "rebase-merge"))) ||
+          (await deps.stat(join(gitDir, "rebase-apply")));
+        if (rebaseInProgress) {
           agentFailed = true;
           break;
         }

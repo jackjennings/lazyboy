@@ -17,6 +17,7 @@ import {
   stat,
   writeTextFile,
 } from "./filesystem.ts";
+import { deriveProjectPath } from "./phases/project-path.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -94,6 +95,27 @@ export async function buildContextFiles(
       contextFiles.push(`@${principlesPath}`);
     } catch {
       /* principles.md doesn't exist yet */
+    }
+    if (stateDir) {
+      const relative = ticketDir.slice(stateDir.length + 1);
+      const provider = relative.split("/")[0];
+      if (provider) {
+        const projectPath = deriveProjectPath(provider, relative);
+        if (projectPath) {
+          const localPath = join(
+            stateDir,
+            "principles",
+            provider,
+            `${projectPath}.md`,
+          );
+          try {
+            await stat(localPath);
+            contextFiles.push(`@${localPath}`);
+          } catch {
+            /* local principles file doesn't exist yet */
+          }
+        }
+      }
     }
   }
   contextFiles.push(`@${ticketDir}/meta.md`);

@@ -815,6 +815,35 @@ Deno.test("commitPrinciples: succeeds silently when nothing to commit", async ()
   }
 });
 
+Deno.test("commitPrinciples: stages custom relPath file when provided", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await initGitRepo(dir);
+    const run = (cmd: string[]) =>
+      new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+    await run(["git", "commit", "--allow-empty", "-m", "init"]);
+    await Deno.mkdir(join(dir, "principles", "github", "acme"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(dir, "principles", "github", "acme", "repo.md"),
+      "- local principle",
+    );
+    await commitPrinciples(
+      dir,
+      "principles: local",
+      "principles/github/acme/repo.md",
+    );
+    const log = await run(["git", "log", "--oneline"]);
+    assertStringIncludes(
+      new TextDecoder().decode(log.stdout),
+      "principles: local",
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
 function makeLearning(overrides: Partial<LearningState> = {}): LearningState {
   return {
     id: "20260729T050000",

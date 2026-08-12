@@ -262,10 +262,11 @@ export async function commitTicket(
 export async function commitPrinciples(
   stateDir: string,
   message: string,
+  relPath = "principles.md",
 ): Promise<void> {
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
-  await run(["git", "add", "--", "principles.md"]);
+  await run(["git", "add", "--", relPath]);
   const result = await run(["git", "commit", "-m", message]);
   if (result.code !== 0) {
     const stderr = new TextDecoder().decode(result.stderr);

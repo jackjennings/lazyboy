@@ -636,7 +636,7 @@ export async function review(id: string): Promise<void> {
       return { consume: true };
     }
     if (matchesKey(data, "shift+enter")) {
-      const text = editor.getText();
+      const text = editor.getExpandedText();
       if (text.trim()) {
         handleSubmit(text);
       }

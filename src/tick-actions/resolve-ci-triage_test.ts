@@ -382,7 +382,7 @@ Deno.test(
       createGitHubIssue: () => Promise.resolve(),
       remove: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(written.length, 1);
     assertEquals(
       written[0].intent,
@@ -431,7 +431,7 @@ Deno.test(
       },
       remove: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(written.length, 0);
   },
 );
@@ -461,7 +461,7 @@ Deno.test(
       createGitHubIssue: () => Promise.resolve(),
       remove: () => Promise.resolve(),
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(written.length, 0);
   },
 );
@@ -496,7 +496,7 @@ Deno.test(
         return Promise.resolve();
       },
       writeTicket: () => Promise.resolve(),
-    }).run(makeTicket(), "/state");
+    }).run(makeTicket(BASE), "/state");
     assertEquals(removed.some((p) => p.includes("-ci-triage-context-")), true);
     assertEquals(
       removed.some((p) =>

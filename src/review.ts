@@ -418,7 +418,16 @@ export class ErrorOverlay implements Component, Focusable {
   }
 }
 
-export async function review(id: string): Promise<void> {
+export async function review(
+  id: string,
+  {
+    isTerminal = () => Deno.stdin.isTerminal(),
+    readStdin = () => new Response(Deno.stdin.readable).text(),
+  }: {
+    isTerminal?: () => boolean;
+    readStdin?: () => Promise<string>;
+  } = {},
+): Promise<void> {
   const config = await loadConfig();
   const stateDir = expandHome(config.state.dir);
   const ticketDir = join(stateDir, id);
@@ -439,6 +448,26 @@ export async function review(id: string): Promise<void> {
   if (!found) {
     console.error(`No phase output found for ${id}`);
     Deno.exit(1);
+  }
+
+  if (!isTerminal()) {
+    const text = await readStdin();
+    if (!text.trim()) {
+      console.error("review input is empty");
+      Deno.exit(1);
+    }
+    const now = Temporal.Now.zonedDateTimeISO("UTC");
+    const timestamp = formatTimestamp(now);
+    const feedbackFile = `${timestamp}-${found.phaseName}-feedback.md`;
+    await writePhaseOutput(stateDir, id, feedbackFile, text);
+    const updated = await readTicket(stateDir, id);
+    await writeTicket(stateDir, {
+      ...updated,
+      status: "revising",
+      updated: now.toInstant().toString(),
+    });
+    await commitTicket(stateDir, id, `review: ${id}`);
+    Deno.exit(0);
   }
 
   const content = await readPhaseOutput(stateDir, id, found.filename);

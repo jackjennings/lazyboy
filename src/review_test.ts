@@ -1190,6 +1190,251 @@ Deno.test(
   },
 );
 
+// ── review (piped path) ───────────────────────────────────────────────────────
+
+async function setupPipedReviewState(
+  stateDir: string,
+  ticketId: string,
+): Promise<(cmd: string[]) => Promise<Deno.CommandOutput>> {
+  await initGitRepo(stateDir);
+  const run = (cmd: string[]) =>
+    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
+  await writeTicket(
+    stateDir,
+    makeTicket({ id: ticketId, phase: "spec", status: "waiting" }),
+  );
+  await Deno.writeTextFile(
+    join(stateDir, ticketId, "20260101T000000-spec.md"),
+    "spec output",
+  );
+  await run(["git", "add", "-A"]);
+  await run(["git", "commit", "-m", "initial"]);
+  return run;
+}
+
+Deno.test(
+  "review: piped path exits 1 and prints error when stdin is empty",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/20";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve(""),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 1);
+        assertSpyCalls(errorStub, 1);
+        assertEquals(errorStub.calls[0].args[0], "review input is empty");
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path exits 1 and prints error when stdin is whitespace-only",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/21";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("   \n  "),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 1);
+        assertSpyCalls(errorStub, 1);
+        assertEquals(errorStub.calls[0].args[0], "review input is empty");
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path writes feedback file named {timestamp}-spec-feedback.md",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/22";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("needs work on section 3"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+        }
+        const entries: string[] = [];
+        for await (const entry of Deno.readDir(join(stateDir, ticketId))) {
+          entries.push(entry.name);
+        }
+        assert(entries.some((e) => /^\d{8}T\d{6}-spec-feedback\.md$/.test(e)));
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path sets ticket status to revising",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/23";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("fix the tests"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+        }
+        const ticket = await readTicket(stateDir, ticketId);
+        assertEquals(ticket.status, "revising");
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path commits with message review: <id>",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/24";
+      const run = await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("fix the tests"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+        }
+        const log = await run(["git", "log", "--oneline", "-1"]);
+        const message = new TextDecoder().decode(log.stdout).trim();
+        assert(message.endsWith(`review: ${ticketId}`));
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path exits 0 on success",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/25";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("fix the tests"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 0);
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path prints nothing to stdout on success",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/26";
+      await setupPipedReviewState(stateDir, ticketId);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const logStub = stub(console, "log");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("fix the tests"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+          logStub.restore();
+        }
+        assertSpyCalls(logStub, 0);
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
 Deno.test(
   "review: exits with code 1 and prints error when ticket is done",
   async () => {

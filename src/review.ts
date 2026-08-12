@@ -646,7 +646,7 @@ export async function review(
       tui.stop();
       Deno.exit(0);
     }
-    if (matchesKey(data, "alt+?")) {
+    if (matchesKey(data, "alt+shift+/")) {
       if (overlayHandle.isHidden()) {
         overlayHandle.setHidden(false);
         overlayHandle.focus();

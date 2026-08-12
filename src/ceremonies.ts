@@ -3,12 +3,15 @@ import { parse } from "@std/toml";
 import { exists, readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import { PromptCeremony } from "./ceremonies/prompt.ts";
+import { ModuleCeremony } from "./ceremonies/module.ts";
 import {
   isCeremonyApproved,
   readApprovals,
   writeApprovals,
 } from "./ceremonies/approvals.ts";
 import { compactTimestamp } from "./timestamp.ts";
+import type { TicketState } from "./state/types.ts";
+import type { LanguageModelRequest } from "./models/types.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
 
@@ -18,6 +21,10 @@ export interface CeremonyRunnerDeps {
   now?: () => Temporal.ZonedDateTime;
   runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
   notify?(title: string, message: string): Promise<void>;
+  listTickets(): Promise<string[]>;
+  readTicket(id: string): Promise<TicketState>;
+  generateText(request: LanguageModelRequest): Promise<string | null>;
+  commitState(): Promise<void>;
 }
 
 function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
@@ -72,6 +79,24 @@ export class CeremonyRunner {
       const builtin = this.#ceremonies.get(entry.name);
       if (builtin) {
         await this.#runCeremony(builtin, ceremonyDir, false);
+        continue;
+      }
+      if (await exists(join(ceremonyDir, "index.ts"))) {
+        await this.#runCeremony(
+          new ModuleCeremony({
+            name: entry.name,
+            stateDir: this.#deps.stateDir,
+            ceremonyDir,
+            appendTickLog: this.#deps.appendTickLog,
+            listTickets: this.#deps.listTickets,
+            readTicket: this.#deps.readTicket,
+            generateText: this.#deps.generateText,
+            commitState: this.#deps.commitState,
+            notify: this.#deps.notify,
+          }),
+          ceremonyDir,
+          true,
+        );
         continue;
       }
       if (!await exists(join(ceremonyDir, "prompt.md"))) continue;

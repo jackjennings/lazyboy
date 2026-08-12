@@ -91,6 +91,7 @@ import {
 } from "./filesystem.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { HttpClient } from "./http-client.ts";
+import { ClaudeLanguageModel } from "./models/claude.ts";
 
 export async function ensureStatePrompts(
   stateDir: string,
@@ -701,6 +702,16 @@ export function composeTickDeps(
           "-e",
           `display notification "${message}" with title "${title}"`,
         ]);
+      },
+      listTickets: () => listTickets(stateDir),
+      readTicket: (id) => readTicket(stateDir, id),
+      generateText: (request) =>
+        new ClaudeLanguageModel(captureCommandRunner(), {
+          model: "claude-sonnet-4-6",
+        }).generateText(request),
+      commitState: async () => {
+        await ensureRunPidGitignored(stateDir);
+        await commitState(stateDir, "ceremony: state-dir");
       },
     },
     [

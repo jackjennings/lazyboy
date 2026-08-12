@@ -6,6 +6,7 @@ import {
 } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
+import { existsSync } from "./filesystem.ts";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
@@ -18,6 +19,7 @@ import { makeTicket, withLazyboyDir } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import type { CommandRunner } from "./apfel.ts";
+import type { LanguageModelRequest } from "./models/types.ts";
 
 const BASE = { title: "Ticket", url: "https://example.com" };
 
@@ -45,6 +47,12 @@ function makeRunner(
     ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
     runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
     notify?: (title: string, message: string) => Promise<void>;
+    listTickets?: () => Promise<string[]>;
+    readTicket?: (id: string) => Promise<TicketState>;
+    generateText?: (
+      request: LanguageModelRequest,
+    ) => Promise<string | null>;
+    commitState?: () => Promise<void>;
   } = {},
 ): CeremonyRunner {
   return new CeremonyRunner(
@@ -54,6 +62,11 @@ function makeRunner(
       now: opts.now,
       runClaude: opts.runClaude,
       notify: opts.notify,
+      listTickets: opts.listTickets ?? (() => Promise.resolve([])),
+      readTicket: opts.readTicket ??
+        (() => Promise.reject(new Error("not called"))),
+      generateText: opts.generateText ?? (() => Promise.resolve("text")),
+      commitState: opts.commitState ?? (() => Promise.resolve()),
     },
     opts.ceremonies ?? [],
   );
@@ -1121,6 +1134,83 @@ Deno.test("CeremonyRunner: a throwing notifier does not abort the run", async ()
     const notify = () => Promise.reject(new Error("no notifier"));
     await makeRunner(stateDir, { now: () => TEST_NOW, notify }).run();
     assertEquals((await readApprovals()).digest.lastWarnedWindow, "20260727");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+async function writeModuleCeremony(
+  stateDir: string,
+  name: string,
+  source: string,
+): Promise<string> {
+  const dir = join(stateDir, "ceremonies", name);
+  await Deno.mkdir(dir, { recursive: true });
+  await Deno.writeTextFile(join(dir, "config.toml"), 'time = "09:00"\n');
+  await Deno.writeTextFile(join(dir, "index.ts"), source);
+  return dir;
+}
+
+Deno.test("CeremonyRunner: an unapproved module is never imported", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  const sentinel = await Deno.makeTempFile();
+  await Deno.remove(sentinel);
+  try {
+    await writeModuleCeremony(
+      stateDir,
+      "digest",
+      `Deno.writeTextFileSync(${JSON.stringify(sentinel)}, "executed");
+       export default function () {}`,
+    );
+    await makeRunner(stateDir, { now: () => TEST_NOW }).run();
+    assertFalse(existsSync(sentinel));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: an approved module runs", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const dir = await writeModuleCeremony(
+      stateDir,
+      "digest",
+      `export default async function (context) {
+        await context.writeOutput("done\\n");
+      }`,
+    );
+    await writeApprovals({ digest: { hash: await ceremonyHash(dir) } });
+    await makeRunner(stateDir, { now: () => TEST_NOW }).run();
+    assertEquals(
+      await Deno.readTextFile(
+        join(dir, "output", "20260727T100000-digest.md"),
+      ),
+      "done\n",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: index.ts wins over prompt.md", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const dir = await writeModuleCeremony(
+      stateDir,
+      "digest",
+      `export default async function (context) {
+        await context.writeOutput("module\\n");
+      }`,
+    );
+    await Deno.writeTextFile(join(dir, "prompt.md"), "summarize\n");
+    await writeApprovals({ digest: { hash: await ceremonyHash(dir) } });
+    const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
+    await makeRunner(stateDir, { now: () => TEST_NOW, runClaude }).run();
+    assertSpyCalls(runClaude, 0);
+    assert(existsSync(join(dir, "output", "20260727T100000-digest.md")));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

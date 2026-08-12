@@ -117,23 +117,29 @@ Deno.test("openLogWatch: resolves when log.ndjson does not exist", async () => {
 
 // ── paneHeights ───────────────────────────────────────────────────────────────
 
-Deno.test("paneHeights: panes plus chrome fill the terminal exactly", () => {
+Deno.test("paneHeights: panes plus chrome and input fill the terminal exactly", () => {
   for (const rows of [24, 25, 40, 51, 120]) {
-    const { status, log } = paneHeights(rows);
-    assertEquals(status + log + HUD_CHROME_ROWS, rows);
+    for (const inputRows of [3, 7]) {
+      const { status, log } = paneHeights({ rows, inputRows });
+      assertEquals(status + log + inputRows + HUD_CHROME_ROWS, rows);
+    }
   }
 });
 
 Deno.test("paneHeights: splits the remaining rows evenly", () => {
-  assertEquals(paneHeights(24), { status: 10, log: 10 });
+  assertEquals(paneHeights({ rows: 24, inputRows: 3 }), { status: 9, log: 9 });
 });
 
 Deno.test("paneHeights: gives the odd row to the status pane", () => {
-  assertEquals(paneHeights(25), { status: 11, log: 10 });
+  assertEquals(paneHeights({ rows: 25, inputRows: 3 }), { status: 10, log: 9 });
+});
+
+Deno.test("paneHeights: shrinks the panes as the input grows", () => {
+  assertEquals(paneHeights({ rows: 24, inputRows: 6 }), { status: 8, log: 7 });
 });
 
 Deno.test("paneHeights: keeps both panes at least one row on a tiny terminal", () => {
-  const { status, log } = paneHeights(4);
+  const { status, log } = paneHeights({ rows: 4, inputRows: 3 });
   assertGreater(status, 0);
   assertGreater(log, 0);
 });

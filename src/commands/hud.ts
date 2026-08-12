@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
-import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
+import { bgGreen, bgRed, black, dim, gray, inverse } from "@std/fmt/colors";
 import {
   Input,
   matchesKey,
@@ -125,10 +125,12 @@ async function readState(
   };
 }
 
-export const HUD_CHROME_ROWS = 4;
+export const HUD_CHROME_ROWS = 3;
 
-export function paneHeights(rows: number): { status: number; log: number } {
-  const available = Math.max(2, rows - HUD_CHROME_ROWS);
+export function paneHeights(
+  { rows, inputRows }: { rows: number; inputRows: number },
+): { status: number; log: number } {
+  const available = Math.max(2, rows - inputRows - HUD_CHROME_ROWS);
   const status = Math.ceil(available / 2);
   return { status, log: available - status };
 }
@@ -187,18 +189,36 @@ export const hud: Command = {
     let currentStatusLines: string[] = [];
     let currentLogLines: string[] = [];
 
+    const commandInput = new Input();
+    const commandInputFrame = {
+      render(width: number): string[] {
+        const border = "─".repeat(width);
+        const colored = commandInput.focused ? border : gray(border);
+        return [colored, ...commandInput.render(width), colored];
+      },
+      invalidate() {
+        commandInput.invalidate();
+      },
+    };
+
+    const layout = () =>
+      paneHeights({
+        rows: tui.terminal.rows,
+        inputRows: commandInputFrame.render(tui.terminal.columns).length,
+      });
+
     const statusPane = new ScrollPane({
       getLines: (_w) => currentStatusLines,
       tui,
       title: "status",
-      getHeight: () => paneHeights(tui.terminal.rows).status,
+      getHeight: () => layout().status,
     });
 
     const logPane = new ScrollPane({
       getLines: (_w) => logPaneLines(currentLogLines),
       tui,
       title: "log",
-      getHeight: () => paneHeights(tui.terminal.rows).log,
+      getHeight: () => layout().log,
     });
 
     let headerLine = "";
@@ -210,12 +230,11 @@ export const hud: Command = {
     };
 
     let commandRunning = false;
-    const commandInput = new Input();
 
     tui.addChild(headerComponent);
     tui.addChild(statusPane);
     tui.addChild(logPane);
-    tui.addChild(commandInput);
+    tui.addChild(commandInputFrame);
     tui.setFocus(statusPane);
     statusPane.focused = true;
     logPane.focused = false;

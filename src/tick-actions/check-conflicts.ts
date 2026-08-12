@@ -142,8 +142,6 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
           event: "conflict-resolution-started",
           worktreePath: wt.path,
           branch: wt.branch,
-          conflictedFiles,
-          rebaseStderr: rebase.stderr,
         });
         return updated;
       }

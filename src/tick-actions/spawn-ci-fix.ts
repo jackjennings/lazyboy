@@ -13,6 +13,7 @@ export interface CIRunResult {
   attempt: number;
   conclusion: CIConclusion;
   failingJobs: string[];
+  headSha: string;
 }
 
 export function ciFixRunKey(runId: string, attempt: number): string {
@@ -122,6 +123,7 @@ export function spawnCIFixAction(deps: SpawnCIFixDeps): TickAction {
           `Run-ID: ${ciResult.runId}\n` +
           `Attempt: ${ciResult.attempt}\n` +
           `Branch: ${worktree.branch}\n` +
+          `Head-SHA: ${ciResult.headSha}\n` +
           `Worktree-Path: ${worktree.path}\n\n` +
           `## Failing jobs\n\n${jobsSection}`;
 

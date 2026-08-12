@@ -83,7 +83,16 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
       for (const contextFilename of contextFiles) {
         const contextPath = join(ticketDir, contextFilename);
         const contextContent = await deps.readFile(contextPath);
-        if (contextContent === null) continue;
+        if (contextContent === null) {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "error",
+            context: "resolveCIFix",
+            reason: "context-file-unreadable",
+            contextFile: contextFilename,
+          });
+          await deps.remove(contextPath);
+          continue;
+        }
 
         const headers: Record<string, string> = {};
         for (const line of contextContent.split("\n")) {
@@ -95,6 +104,7 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
         const runId = headers["Run-ID"] ?? "";
         const attempt = headers["Attempt"] ?? "";
         const branch = headers["Branch"] ?? "";
+        const headSha = headers["Head-SHA"] ?? "";
         const worktreePath = headers["Worktree-Path"] ?? "";
 
         const outputFilename = contextFilename.replace(
@@ -138,8 +148,25 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
               prUrl,
             });
           }
+          if (headSha !== "") {
+            const head = await deps.runGit(["rev-parse", "HEAD"], worktreePath);
+            if (head.code === 0 && head.stdout.trim() === headSha) {
+              return await park(contextPath, outputPath, "no-commit", {
+                runId,
+                prUrl,
+                branch,
+              });
+            }
+          }
           const push = await deps.runGit(
-            ["push", "--force-with-lease", "origin", branch],
+            headSha === ""
+              ? ["push", "--force-with-lease", "origin", branch]
+              : [
+                "push",
+                `--force-with-lease=refs/heads/${branch}:${headSha}`,
+                "origin",
+                branch,
+              ],
             worktreePath,
           );
           if (push.code !== 0) {

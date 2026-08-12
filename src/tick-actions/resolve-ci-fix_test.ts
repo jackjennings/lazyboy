@@ -1,4 +1,9 @@
-import { assert, assertEquals, assertFalse } from "@std/assert";
+import {
+  assert,
+  assertArrayIncludes,
+  assertEquals,
+  assertFalse,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { resolveCIFixAction } from "./resolve-ci-fix.ts";
 import type { ResolveCIFixDeps } from "./resolve-ci-fix.ts";
@@ -31,14 +36,33 @@ const BASE = {
 const CONTEXT_FILENAME = "20260812T101500-ci-fix-context-1001-1.md";
 const OUTPUT_FILENAME = "20260812T101500-ci-fix-1001-1.md";
 
+const PR_HEAD_SHA = "1111111111111111111111111111111111111111";
+const WORKTREE_HEAD_SHA = "2222222222222222222222222222222222222222";
+
 const CONTEXT_CONTENT =
   "PR-URL: https://github.com/jackjennings/lazyboy/pull/99\n" +
   "Repo: jackjennings/lazyboy\n" +
   "Run-ID: 1001\n" +
   "Attempt: 1\n" +
   "Branch: github/jackjennings/lazyboy/178\n" +
+  `Head-SHA: ${PR_HEAD_SHA}\n` +
   "Worktree-Path: /wt/lazyboy\n\n" +
   "## Failing jobs\n\n- lint";
+
+const CONTEXT_WITHOUT_HEAD_SHA = CONTEXT_CONTENT.replace(
+  `Head-SHA: ${PR_HEAD_SHA}\n`,
+  "",
+);
+
+function makeGitSpy(head = WORKTREE_HEAD_SHA) {
+  return spy((args: string[], _cwd: string) =>
+    Promise.resolve({
+      code: 0,
+      stdout: args[0] === "rev-parse" ? `${head}\n` : "",
+      stderr: "",
+    })
+  );
+}
 
 const FIXED_OUTPUT = "Ran deno fmt and committed the result.\nVERDICT: FIXED\n";
 const FIXED_WITH_LEARNING_OUTPUT = "Ran deno fmt and committed the result.\n" +
@@ -61,7 +85,12 @@ function makeDeps(overrides: Partial<ResolveCIFixDeps> = {}): ResolveCIFixDeps {
         path.endsWith(CONTEXT_FILENAME) ? CONTEXT_CONTENT : FIXED_OUTPUT,
       ),
     remove: () => Promise.resolve(),
-    runGit: () => Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+    runGit: (args: string[]) =>
+      Promise.resolve({
+        code: 0,
+        stdout: args[0] === "rev-parse" ? `${WORKTREE_HEAD_SHA}\n` : "",
+        stderr: "",
+      }),
     rerunFailedJobs: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
@@ -108,10 +137,50 @@ Deno.test("resolveCIFixAction: returns null when the directory holds no context 
 });
 
 Deno.test("resolveCIFixAction: FIXED force-pushes the branch and logs branch-pushed", async () => {
-  const gitSpy = spy(
-    (_args: string[], _cwd: string) =>
-      Promise.resolve({ code: 0, stdout: "", stderr: "" }),
-  );
+  const gitSpy = makeGitSpy();
+  const logged: Record<string, unknown>[] = [];
+  const result = await makeAction({
+    runGit: gitSpy,
+    appendLog: (_sd, _id, entry) => {
+      logged.push(entry as Record<string, unknown>);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assertSpyCalls(gitSpy, 2);
+  assertEquals(gitSpy.calls[1]!.args[0], [
+    "push",
+    `--force-with-lease=refs/heads/github/jackjennings/lazyboy/178:${PR_HEAD_SHA}`,
+    "origin",
+    "github/jackjennings/lazyboy/178",
+  ]);
+  assertEquals(gitSpy.calls[1]!.args[1], "/wt/lazyboy");
+  assertEquals(logged[0].event, "branch-pushed");
+  assertEquals(result?.status, "waiting");
+});
+
+Deno.test("resolveCIFixAction: FIXED without a Head-SHA header pushes with a bare lease", async () => {
+  const gitSpy = makeGitSpy();
+  const result = await makeAction({
+    runGit: gitSpy,
+    readFile: (path: string) =>
+      Promise.resolve(
+        path.endsWith(CONTEXT_FILENAME)
+          ? CONTEXT_WITHOUT_HEAD_SHA
+          : FIXED_OUTPUT,
+      ),
+  }).run(makeTicket(BASE), "/state");
+  assertSpyCalls(gitSpy, 1);
+  assertEquals(gitSpy.calls[0]!.args[0], [
+    "push",
+    "--force-with-lease",
+    "origin",
+    "github/jackjennings/lazyboy/178",
+  ]);
+  assertEquals(result?.status, "waiting");
+});
+
+Deno.test("resolveCIFixAction: FIXED with an unmoved worktree HEAD parks without pushing", async () => {
+  const gitSpy = makeGitSpy(PR_HEAD_SHA);
   const logged: Record<string, unknown>[] = [];
   const result = await makeAction({
     runGit: gitSpy,
@@ -121,14 +190,39 @@ Deno.test("resolveCIFixAction: FIXED force-pushes the branch and logs branch-pus
     },
   }).run(makeTicket(BASE), "/state");
   assertSpyCalls(gitSpy, 1);
-  assertEquals(gitSpy.calls[0]!.args[0], [
-    "push",
-    "--force-with-lease",
-    "origin",
-    "github/jackjennings/lazyboy/178",
-  ]);
-  assertEquals(gitSpy.calls[0]!.args[1], "/wt/lazyboy");
-  assertEquals(logged[0].event, "branch-pushed");
+  assertEquals(gitSpy.calls[0]!.args[0], ["rev-parse", "HEAD"]);
+  assertEquals(result?.status, "needs-attention");
+  assertEquals(logged[0].reason, "no-commit");
+  assertFalse(logged.some((e) => e.event === "branch-pushed"));
+});
+
+Deno.test("resolveCIFixAction: FIXED with an unmoved worktree HEAD removes both files", async () => {
+  const removed: string[] = [];
+  await makeAction({
+    runGit: makeGitSpy(PR_HEAD_SHA),
+    remove: (path: string) => {
+      removed.push(path);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
+  assert(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
+Deno.test("resolveCIFixAction: FIXED with an unreadable worktree HEAD still pushes", async () => {
+  const gitSpy = spy((args: string[], _cwd: string) =>
+    Promise.resolve(
+      args[0] === "rev-parse"
+        ? { code: 128, stdout: "", stderr: "not a git repository" }
+        : { code: 0, stdout: "", stderr: "" },
+    )
+  );
+  const result = await makeAction({ runGit: gitSpy }).run(
+    makeTicket(BASE),
+    "/state",
+  );
+  assertSpyCalls(gitSpy, 2);
+  assertArrayIncludes(gitSpy.calls[1]!.args[0], ["push"]);
   assertEquals(result?.status, "waiting");
 });
 
@@ -383,6 +477,29 @@ Deno.test("resolveCIFixAction: removes context file but not output file on outpu
   }).run(makeTicket(BASE), "/state");
   assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
   assertFalse(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
+Deno.test("resolveCIFixAction: an unreadable context file is removed so the action stops re-firing", async () => {
+  const removed: string[] = [];
+  const gitSpy = makeGitSpy();
+  const logged: Record<string, unknown>[] = [];
+  const result = await makeAction({
+    readFile: (path: string) =>
+      Promise.resolve(path.endsWith(CONTEXT_FILENAME) ? null : FIXED_OUTPUT),
+    remove: (path: string) => {
+      removed.push(path);
+      return Promise.resolve();
+    },
+    runGit: gitSpy,
+    appendLog: (_sd, _id, entry) => {
+      logged.push(entry as Record<string, unknown>);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assertArrayIncludes(removed, [`/state/${BASE.id}/${CONTEXT_FILENAME}`]);
+  assertSpyCalls(gitSpy, 0);
+  assertEquals(logged[0].reason, "context-file-unreadable");
+  assertEquals(result?.status, "waiting");
 });
 
 Deno.test("resolveCIFixAction: removes the context and output files after a FIXED run", async () => {

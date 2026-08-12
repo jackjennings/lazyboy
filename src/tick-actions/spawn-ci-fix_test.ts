@@ -35,11 +35,14 @@ const BASE = {
   updated: "2026-08-12T00:00:00Z",
 };
 
+const HEAD_SHA = "5f2c1ab9d7e34c0b8a6f1d2e3c4b5a6978091234";
+
 const FAILURE_RESULT: CIRunResult = {
   runId: "1001",
   attempt: 1,
   conclusion: "failure",
   failingJobs: ["lint", "test"],
+  headSha: HEAD_SHA,
 };
 
 function makeDeps(overrides: Partial<SpawnCIFixDeps> = {}): SpawnCIFixDeps {
@@ -118,6 +121,7 @@ Deno.test("spawnCIFixAction: successful conclusion does not spawn", async () => 
           attempt: 1,
           conclusion: "success",
           failingJobs: [],
+          headSha: HEAD_SHA,
         }),
       spawn: spawnSpy,
     }),
@@ -148,6 +152,7 @@ Deno.test("spawnCIFixAction: action_required conclusion spawns", async () => {
           attempt: 1,
           conclusion: "action_required",
           failingJobs: [],
+          headSha: HEAD_SHA,
         }),
       spawn: spawnSpy,
     }),
@@ -262,6 +267,7 @@ Deno.test("spawnCIFixAction: context file carries headers and failing job names"
     written[0].content,
     "Branch: github/jackjennings/lazyboy/178",
   );
+  assertStringIncludes(written[0].content, `Head-SHA: ${HEAD_SHA}`);
   assertStringIncludes(written[0].content, "Worktree-Path: /wt/lazyboy");
   assertStringIncludes(written[0].content, "- lint");
   assertStringIncludes(written[0].content, "- test");

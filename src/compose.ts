@@ -550,11 +550,12 @@ export function composeTickDeps(
                 attempt: completed[0].run_attempt,
                 conclusion: "success",
                 failingJobs: [],
+                headSha,
               };
             }
 
             const jobsRes = await http.get(
-              `https://api.github.com/repos/${repoSlug}/actions/runs/${failed.id}/attempts/${failed.run_attempt}/jobs`,
+              `https://api.github.com/repos/${repoSlug}/actions/runs/${failed.id}/attempts/${failed.run_attempt}/jobs?per_page=100`,
               { headers },
             );
             const failingJobs = jobsRes.ok
@@ -571,6 +572,7 @@ export function composeTickDeps(
               attempt: failed.run_attempt,
               conclusion: failed.conclusion as "failure" | "action_required",
               failingJobs,
+              headSha,
             };
           },
           isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),

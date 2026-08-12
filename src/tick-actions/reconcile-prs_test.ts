@@ -361,6 +361,16 @@ Deno.test(
 );
 
 Deno.test(
+  "reconcilePRsAction: does not apply when artifact is notion",
+  () => {
+    assertEquals(
+      makeAction().applies(makeTicket({ artifact: "notion" })),
+      false,
+    );
+  },
+);
+
+Deno.test(
   "reconcilePRsAction: cyclic base/head chain terminates instead of hanging",
   async () => {
     const result = await makeAction({

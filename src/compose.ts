@@ -749,6 +749,7 @@ export function composeTickDeps(
           thinking: opts.thinking,
           sessionId: opts.sessionId,
           includePrinciples: config.tick.principles,
+          maxTurns: config.tick.maxTurns,
         }),
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),
@@ -849,32 +850,6 @@ export function composeTickDeps(
         }
       },
       readPhaseSessionId,
-      readPhaseUsage: async (ticketDir, phase) => {
-        const pattern = new RegExp(
-          `^\\d{8}T\\d{6}-${phase}\\.usage\\.json$`,
-        );
-        const matches: string[] = [];
-        try {
-          for await (const entry of Deno.readDir(ticketDir)) {
-            if (entry.isFile && pattern.test(entry.name)) {
-              matches.push(entry.name);
-            }
-          }
-        } catch {
-          // dir missing
-        }
-        if (matches.length === 0) return null;
-        matches.sort();
-        try {
-          const content = await Deno.readTextFile(
-            join(ticketDir, matches[matches.length - 1]),
-          );
-          return JSON.parse(content);
-        } catch {
-          return null;
-        }
-      },
-      maxTurns: config.tick.maxTurns,
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),

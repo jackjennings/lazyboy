@@ -22,7 +22,6 @@ import {
   type ApprovalEntry,
   type Config,
   isApproved,
-  type PhaseUsage,
   type TicketState,
   type WorktreeInfo,
 } from "./state/types.ts";
@@ -105,12 +104,7 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<string | null>;
-  readPhaseUsage?: (
-    ticketDir: string,
-    phase: string,
-  ) => Promise<PhaseUsage | null>;
   maxPromptTokens?: number;
-  maxTurns?: number;
   buildRepoCorpusText?: () => Promise<string>;
   spawnOutlierAnalysis?: (
     ticketId: string,
@@ -380,32 +374,6 @@ export async function advancePhase(
           reason: "non-zero-exit",
         });
         return;
-      }
-
-      if (deps.readPhaseUsage !== undefined && deps.maxTurns !== undefined) {
-        const usage = await deps.readPhaseUsage(
-          join(stateDir, ticket.id),
-          ticket.phase,
-        );
-        if (
-          usage !== null &&
-          usage.turns !== undefined &&
-          usage.turns >= deps.maxTurns
-        ) {
-          await deps.writeTicket(stateDir, {
-            ...waitingTicket,
-            status: "needs-attention",
-            updated: now,
-          });
-          await deps.appendLog(stateDir, ticket.id, {
-            event: "phase-output-invalid",
-            phase: ticket.phase,
-            reason: "max-turns-exceeded",
-            turns: usage.turns,
-            maxTurns: deps.maxTurns,
-          });
-          return;
-        }
       }
 
       const outputContent = await deps.readPhaseOutput(

@@ -18,6 +18,7 @@ export interface ExecutorOptions {
   pidFile?: string;
   sessionId?: string;
   includePrinciples?: boolean;
+  maxTurns?: number;
 }
 
 export function isProcessAlive(pid: number): boolean {
@@ -75,11 +76,19 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
 export function buildPhaseEnvOverrides(
   opts: ExecutorOptions,
 ): Record<string, string> {
-  return {
+  const overrides: Record<string, string> = {
     GITHUB_TOKEN: opts.githubToken,
     GH_TOKEN: opts.githubToken,
     ANTHROPIC_API_KEY: opts.anthropicApiKey,
   };
+  if (opts.maxTurns !== undefined) {
+    if (opts.agent === "claude-code") {
+      overrides["CLAUDE_MAX_TURNS"] = String(opts.maxTurns);
+    } else {
+      overrides["PI_MAX_TURNS"] = String(opts.maxTurns);
+    }
+  }
+  return overrides;
 }
 
 export async function spawnPhase(opts: ExecutorOptions): Promise<void> {

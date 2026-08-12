@@ -2,9 +2,11 @@ import {
   assert,
   assertEquals,
   assertFalse,
+  assertGreater,
   assertMatch,
   assertStringIncludes,
 } from "@std/assert";
+import { dirname, join } from "@std/path";
 import { dim, stripAnsiCode } from "@std/fmt/colors";
 import {
   formatHudHeader,
@@ -13,6 +15,8 @@ import {
   logPaneLines,
   openLogWatch,
   parseCommand,
+  readTickLog,
+  TICK_LOG_TAIL_LINES,
 } from "./hud.ts";
 
 // ── formatTickLogLine ─────────────────────────────────────────────────────────
@@ -106,6 +110,84 @@ Deno.test("openLogWatch: resolves when log.ndjson does not exist", async () => {
     watcher.close();
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+// ── readTickLog ───────────────────────────────────────────────────────────────
+
+async function writeTickLog(count: number): Promise<string> {
+  const dir = await Deno.makeTempDir();
+  const path = join(dir, "log.ndjson");
+  const lines = Array.from(
+    { length: count },
+    (_, i) =>
+      `{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","index":${i}}`,
+  );
+  await Deno.writeTextFile(path, lines.join("\n") + "\n");
+  return path;
+}
+
+Deno.test("readTickLog: returns no lines when the file is missing", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    assertEquals(await readTickLog(join(dir, "log.ndjson")), []);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("readTickLog: returns every line for a short log", async () => {
+  const path = await writeTickLog(3);
+  try {
+    const lines = await readTickLog(path);
+    assertEquals(lines.length, 3);
+    assertStringIncludes(lines[0], "index=0");
+  } finally {
+    await Deno.remove(dirname(path), { recursive: true });
+  }
+});
+
+Deno.test("readTickLog: caps a long log at the tail line limit", async () => {
+  const path = await writeTickLog(TICK_LOG_TAIL_LINES + 500);
+  try {
+    const lines = await readTickLog(path);
+    assertEquals(lines.length, TICK_LOG_TAIL_LINES);
+  } finally {
+    await Deno.remove(dirname(path), { recursive: true });
+  }
+});
+
+Deno.test("readTickLog: keeps the most recent lines of a long log", async () => {
+  const total = TICK_LOG_TAIL_LINES + 500;
+  const path = await writeTickLog(total);
+  try {
+    const lines = await readTickLog(path);
+    assertStringIncludes(lines[lines.length - 1], `index=${total - 1}`);
+  } finally {
+    await Deno.remove(dirname(path), { recursive: true });
+  }
+});
+
+Deno.test("readTickLog: drops the partial line at a byte-truncated tail", async () => {
+  const dir = await Deno.makeTempDir();
+  const path = join(dir, "log.ndjson");
+  try {
+    const filler = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `{"ts":"2026-07-29T12:00:00Z","event":"tick-failed","pad":"${
+          "x".repeat(20_000)
+        }","index":${i}}`,
+    );
+    await Deno.writeTextFile(path, filler.join("\n") + "\n");
+    const lines = await readTickLog(path);
+    for (const line of lines) {
+      assertFalse(line.includes("�"));
+      assertStringIncludes(line, "index=");
+    }
+    assertGreater(lines.length, 0);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
   }
 });
 

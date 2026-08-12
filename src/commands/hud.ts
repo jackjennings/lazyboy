@@ -125,16 +125,41 @@ async function readState(
   };
 }
 
-async function readTickLog(tickLogPath: string): Promise<string[]> {
+export const TICK_LOG_TAIL_LINES = 2000;
+const TICK_LOG_TAIL_BYTES = 256 * 1024;
+
+async function readTail(path: string, maxBytes: number): Promise<string> {
+  const file = await Deno.open(path, { read: true });
+  try {
+    const { size } = await file.stat();
+    if (size <= maxBytes) return await Deno.readTextFile(path);
+    await file.seek(size - maxBytes, Deno.SeekMode.Start);
+    const buffer = new Uint8Array(maxBytes);
+    let read = 0;
+    while (read < maxBytes) {
+      const n = await file.read(buffer.subarray(read));
+      if (n === null) break;
+      read += n;
+    }
+    const text = new TextDecoder().decode(buffer.subarray(0, read));
+    const firstBreak = text.indexOf("\n");
+    return firstBreak === -1 ? "" : text.slice(firstBreak + 1);
+  } finally {
+    file.close();
+  }
+}
+
+export async function readTickLog(tickLogPath: string): Promise<string[]> {
   let raw = "";
   try {
-    raw = await Deno.readTextFile(tickLogPath);
+    raw = await readTail(tickLogPath, TICK_LOG_TAIL_BYTES);
   } catch {
     return [];
   }
   return raw
     .split("\n")
     .filter((l) => l.trim() !== "")
+    .slice(-TICK_LOG_TAIL_LINES)
     .map(formatTickLogLine);
 }
 

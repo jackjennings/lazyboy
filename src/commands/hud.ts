@@ -125,6 +125,14 @@ async function readState(
   };
 }
 
+export const HUD_CHROME_ROWS = 4;
+
+export function paneHeights(rows: number): { status: number; log: number } {
+  const available = Math.max(2, rows - HUD_CHROME_ROWS);
+  const status = Math.ceil(available / 2);
+  return { status, log: available - status };
+}
+
 export const TICK_LOG_TAIL_LINES = 2000;
 const TICK_LOG_TAIL_BYTES = 256 * 1024;
 
@@ -183,15 +191,14 @@ export const hud: Command = {
       getLines: (_w) => currentStatusLines,
       tui,
       title: "status",
-      getHeight: () => Math.ceil((tui.terminal.rows - 2) / 2),
+      getHeight: () => paneHeights(tui.terminal.rows).status,
     });
 
     const logPane = new ScrollPane({
       getLines: (_w) => logPaneLines(currentLogLines),
       tui,
       title: "log",
-      getHeight: () =>
-        tui.terminal.rows - 2 - Math.ceil((tui.terminal.rows - 2) / 2),
+      getHeight: () => paneHeights(tui.terminal.rows).log,
     });
 
     let headerLine = "";

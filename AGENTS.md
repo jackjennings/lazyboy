@@ -228,7 +228,7 @@ event rather than coining a synonym:
 | `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.                |
 | `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                                |
 | `branch-pushed`                                                                    | A worktree branch was successfully force-pushed to origin.    |
-| `ci-triage-resolved`                                                               | A CI-triage run's verdict was applied.                        |
+| `ci-fix-resolved`                                                                  | A CI-fix run's verdict was applied.                           |
 | `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).                |
 | `reconciled-prs`                                                                   | `reconcilePRsAction` populated `prs`; carries `count`.        |
 | `error`                                                                            | An action or phase threw; carries the error message.          |
@@ -237,10 +237,11 @@ A `reason` field, where present, is a lowercase kebab-case label naming the
 cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-worktrees`,
 `no-github-repos`, `github-slug-extraction-failed`, `clone-failed`,
 `worktree-creation-failed`, `push-failed`, `no-verdict-line`, `incomplete`,
-`pr-fetch-failed`). Reuse an existing label when it fits; add a new one only for
-a genuinely new cause, and never put free prose in `reason` (that belongs in a
-separate field or the `error` message). Work-item identity is the ticket
-directory itself — do not add an `id` or `ticketId` field to per-ticket entries.
+`pr-fetch-failed`, `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`).
+Reuse an existing label when it fits; add a new one only for a genuinely new
+cause, and never put free prose in `reason` (that belongs in a separate field or
+the `error` message). Work-item identity is the ticket directory itself — do not
+add an `id` or `ticketId` field to per-ticket entries.
 
 ## Failure handling
 
@@ -370,10 +371,10 @@ exports a `*Deps` interface, a factory, and a `*_test.ts` (pattern:
   live (`isPhaseAlive(ticketDir)` true) — rebasing or pushing under a live agent
   corrupts its git state. Actions that can set `needs-attention` must also
   exclude `status === "needs-attention"` to avoid a retry loop.
-- `TicketState.ciHandledRunIds?: string[]` records check-suite IDs
-  `spawnCITriageAction` has already triaged (append-only; never removed). Use it
+- `TicketState.ciHandledRunIds?: string[]` records `${runId}-${attempt}` keys
+  `spawnCIFixAction` has already handled (append-only; never removed). Use it
   only for CI-failure dedup.
-- `spawnCITriageAction` is opt-out via `[tick] resolve_ci_failures` (default
+- `spawnCIFixAction` is opt-out via `[tick] resolve_ci_failures` (default
   `true`); when `false`, `composeTickDeps` omits it.
 
 ## Background analysis subprocesses
@@ -626,46 +627,79 @@ requests and direct pushes to main.
 Every task in a plan must produce a code change and a commit. Do not create
 tasks that only run verification commands without making changes.
 
-## CI triage
+## CI fix
 
-When `spawnCITriageAction` encounters any CI failure (`failure` or
+When `spawnCIFixAction` encounters a failing GitHub Actions run (`failure` or
 `action_required` conclusion) on an unmerged PR, it writes a context file and
-spawns a triage agent to classify the failure. There is no deterministic pattern
-matching on the failing step and no direct fmt/lint auto-fixing — every failure
-goes through the triage agent. This is an async two-tick pattern identical in
-structure to conflict resolution.
+spawns an agent that fixes the branch. The agent commits; the tick loop pushes.
+There is no deterministic pattern matching on the failing job and no direct
+fmt/lint auto-fixing — every failure goes through the agent. This is an async
+two-tick pattern identical in structure to conflict resolution.
 
-**Tick 1 (spawn):** `spawnCITriageAction` writes
-`${timestamp}-ci-triage-context-${runId}.md` to the ticket directory containing
-the PR URL, repo, run ID, branch, worktree path, CI output, and PR diff (with
-patches). It calls `spawnPhase` with the context file, marks the run ID in
-`ciHandledRunIds`, writes the ticket, and returns. If `writeContextFile` or
-`spawn` throws, the run ID is removed from `ciHandledRunIds` and processing
-continues to the next PR.
+**Tick 1 (spawn):** `spawnCIFixAction` queries
+`/repos/{repo}/actions/runs?head_sha=<pr head sha>` and writes
+`${timestamp}-ci-fix-context-${runId}-${attempt}.md` to the ticket directory,
+holding the PR URL, repo, run ID, attempt, branch, worktree path, and the names
+of the failing jobs. It does not include the PR diff — the agent has the
+worktree. It calls `spawnPhase` with the context file, records
+`${runId}-${attempt}` in `ciHandledRunIds`, writes the ticket, and returns.
 
-**Tick 2 (resolve):** `resolveCITriageAction` detects completed triage runs by
-checking for `*-ci-triage-context-*.md` files when no live process is present.
-For each context file it derives the output filename by replacing
-`-ci-triage-context-` with `-ci-triage-` (the same timestamp prefix is shared).
-It parses the verdict from the first line matching
-`/^VERDICT:\s*(PR_CAUSED|INFRA)/im`. A `PR_CAUSED` verdict creates a GitHub
-issue; an `INFRA` verdict creates no issue (the failure has no PR-side cause) —
-it is only logged. Both the context and output files are deleted after
-resolution.
+The dedup key is `${runId}-${attempt}`, not the run ID alone: `gh run rerun`
+keeps the same run ID and only increments the attempt, so a run-ID-only key
+would silently swallow every re-run failure.
 
-**Phase key:** `"ci-triage"` in `PHASE_MODEL_DEFAULTS` (`src/tick.ts`). Default:
+If the PR's `worktreeKey` resolves to nothing in `ticket.worktrees`, the ticket
+transitions to `needs-attention` with reason `no-worktrees` and nothing is
+spawned — the agent cannot commit or push without a worktree, and worktree
+creation is `createWorktreeAction`'s job. If `writeContextFile` or `spawn`
+throws, the key is removed from `ciHandledRunIds` and processing continues to
+the next PR.
+
+**Tick 2 (resolve):** `resolveCIFixAction` detects completed runs by checking
+for `*-ci-fix-context-*.md` files when no live process is present. For each
+context file it derives the output filename by replacing `-ci-fix-context-` with
+`-ci-fix-` (the same timestamp prefix is shared) and parses the verdict from the
+first line matching `/^VERDICT:\s*(FIXED|INFRA|UNFIXABLE)/im`.
+
+| Verdict     | Effect                                                                                                                                                                                                                                                                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FIXED`     | `git push --force-with-lease origin <branch>` from the worktree, logging `branch-pushed`. A push failure parks the ticket (`push-failed`).                                                                                                                                                                                                         |
+| `INFRA`     | On attempt 1, `POST /actions/runs/{runId}/rerun-failed-jobs`; no push, no code change. A failed re-run is logged (`rerun-failed`) and never parks. On attempt 2 or higher, no re-run is attempted — the ticket parks with `needs-attention` and reason `infra-rerun-exhausted`. A missing or non-numeric `Attempt` header is treated as attempt 1. |
+| `UNFIXABLE` | `needs-attention`, reason `ci-unfixable`.                                                                                                                                                                                                                                                                                                          |
+
+A missing output file parks with `output-file-missing`; a missing verdict line
+parks with `no-verdict-line`. Both the context and output files are deleted
+after resolution in every path, and a `ci-fix-resolved` entry records `prUrl`,
+`runId`, `attempt`, and `verdict`.
+
+The action does not otherwise touch `ticket.phase` or `ticket.status`: on
+`FIXED` and on `INFRA` at attempt 1, the ticket stays `implementation/waiting`,
+and the next tick observes the new CI run. `UNFIXABLE` and the INFRA attempt cap
+are the only brakes — otherwise a still-red PR is picked up again on the next
+tick, since `gh run rerun` bumps the attempt and produces a fresh dedup key. The
+attempt cap exists because an uncapped INFRA path would otherwise spawn a fix
+agent every tick forever against a permanently broken CI environment.
+
+`writeLearning` fires only on `FIXED` when the agent emitted a `LEARNING:` line,
+and a failure there cannot affect the fix path. The pipeline never creates
+GitHub issues.
+
+**Phase key:** `"ci-fix"` in `PHASE_MODEL_DEFAULTS` (`src/tick.ts`). Default:
 `{ model: "claude-sonnet-4-6", thinking: "high" }`. Override via `config.toml`
-`[phases.defaults.ci-triage]` or `ticket.phases["ci-triage"]`. Bedrock users
-must override this phase the same way as `"conflict-resolution"`.
+`[phases.defaults.ci-fix]` or `ticket.phases["ci-fix"]`. Bedrock users must
+override this phase the same way as `"conflict-resolution"`.
 
-**Agent prompt:** instructs the agent to default to `PR_CAUSED` unless there is
-positive evidence of infrastructure failure (network errors, rate limits, runner
-timeouts, package download failures, transient flakiness). The last line of the
-agent's output must be exactly `VERDICT: PR_CAUSED` or `VERDICT: INFRA`.
+**Agent prompt:** lives inline in `compose.ts`, consistent with
+`conflict-resolution`. It tells the agent to fetch the log with
+`gh run view --log-failed`, reproduce the failure with the job's own command,
+fix and verify locally, commit but never push, and end with the verdict line. It
+names the two common cases explicitly: lint/format violations left by conflict
+resolution, and commit messages rejected by commitlint (reword via
+`git commit --amend` or a non-interactive rebase, never a new commit).
 
-`resolveCITriageAction` must be registered **before** `spawnCITriageAction` in
-the `tickActions` array so a completed triage run is resolved before the spawn
-action can re-evaluate the same ticket. Both are gated on
+`resolveCIFixAction` must be registered **before** `spawnCIFixAction` in the
+`tickActions` array so a completed fix run is resolved before the spawn action
+can re-evaluate the same ticket. Both are gated on
 `config.tick.resolveCIFailures`.
 
 Actions that reconcile missing data (e.g. `reconcilePRsAction`) must guard their

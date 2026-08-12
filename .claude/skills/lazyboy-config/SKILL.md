@@ -48,7 +48,7 @@ Only `[github].repos` and `[state].dir` are required; everything else defaults.
 | `github.orgs.<org>`                           | string                       | —             | Maps org slug → account name. Unknown name is an error.                                                           |
 | `state.dir`                                   | string                       | —             | Required. State git repo. `~/` expanded.                                                                          |
 | `tick.concurrency`                            | number                       | `1`           | Max tickets spawning phases per tick.                                                                             |
-| `tick.resolve_ci_failures`                    | boolean                      | `true`        | `false` omits both CI-triage actions from `composeTickDeps`.                                                      |
+| `tick.resolve_ci_failures`                    | boolean                      | `true`        | `false` omits both CI-fix actions from `composeTickDeps`.                                                         |
 | `tick.principles`                             | boolean                      | `true`        | `false` makes `appendPrinciples` a no-op and drops `@principles.md`.                                              |
 | `tick.agents_md_max_tokens`                   | integer ≥0                   | `8000`        | `0` disables AGENTS.md injection entirely.                                                                        |
 | `tick.max_prompt_tokens`                      | number                       | `5000`        | Threshold for oversized-prompt handling.                                                                          |
@@ -63,7 +63,7 @@ Only `[github].repos` and `[state].dir` are required; everything else defaults.
 ### Per-phase models
 
 Phase keys: `intake`, `enrichment`, `spec`, `plan`, `implementation`,
-`"conflict-resolution"`, `"ci-triage"` (the hyphenated two need TOML quoting).
+`"conflict-resolution"`, `"ci-fix"` (the hyphenated two need TOML quoting).
 Resolution order is ticket frontmatter → `[phases.defaults]` →
 `PHASE_MODEL_DEFAULTS` (`src/tick.ts`). `thinking` accepts `off`, `minimal`,
 `low`, `medium`, `high`, `xhigh`, `max`.
@@ -73,7 +73,7 @@ Resolution order is ticket frontmatter → `[phases.defaults]` →
 model = "claude-haiku-4-5"
 thinking = "off"
 
-[phases.defaults."ci-triage"]
+[phases.defaults."ci-fix"]
 model = "claude-sonnet-4-6"
 thinking = "high"
 ```
@@ -119,9 +119,9 @@ throw.
   Under launchd/cron the shell keychain is unavailable, so tokens must be in
   `~/.config/lazyboy/env` — an interactive `gh auth token` will not be there.
 - **Bedrock requires overriding every phase**, including `"conflict-resolution"`
-  and `"ci-triage"`, with `anthropic.`-prefixed model IDs. lazyboy does not
-  rewrite model strings, and any unconfigured phase falls back to unprefixed
-  defaults that fail against Bedrock.
+  and `"ci-fix"`, with `anthropic.`-prefixed model IDs. lazyboy does not rewrite
+  model strings, and any unconfigured phase falls back to unprefixed defaults
+  that fail against Bedrock.
 - **`skip` in `phases.defaults` does nothing.** `PhaseModelConfig` carries a
   `skip` field, but only `ticket.phases.plan.skip` is read (`src/tick.ts`).
 - **`~/` expansion is not universal.** Only `state.dir`, `todo_txt.file`, and

@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { readDir, readTextFile } from "./filesystem.ts";
 
 export async function detectImplementationOutlier(
   ticketDir: string,
@@ -6,7 +7,7 @@ export async function detectImplementationOutlier(
   const planFiles: string[] = [];
   const usageFiles: string[] = [];
   try {
-    for await (const entry of Deno.readDir(ticketDir)) {
+    for await (const entry of readDir(ticketDir)) {
       if (entry.isFile && /^\d{8}T\d{6}-plan\.md$/.test(entry.name)) {
         planFiles.push(entry.name);
       }
@@ -27,10 +28,10 @@ export async function detectImplementationOutlier(
   let planContent: string;
   let usageContent: string;
   try {
-    planContent = await Deno.readTextFile(
+    planContent = await readTextFile(
       join(ticketDir, planFiles[planFiles.length - 1]),
     );
-    usageContent = await Deno.readTextFile(
+    usageContent = await readTextFile(
       join(ticketDir, usageFiles[usageFiles.length - 1]),
     );
   } catch {
@@ -60,7 +61,7 @@ export async function detectPlanOutlier(
   const specFiles: string[] = [];
   const usageFiles: string[] = [];
   try {
-    for await (const entry of Deno.readDir(ticketDir)) {
+    for await (const entry of readDir(ticketDir)) {
       if (entry.isFile && /^\d{8}T\d{6}-spec\.md$/.test(entry.name)) {
         specFiles.push(entry.name);
       }
@@ -81,10 +82,10 @@ export async function detectPlanOutlier(
   let specContent: string;
   let usageContent: string;
   try {
-    specContent = await Deno.readTextFile(
+    specContent = await readTextFile(
       join(ticketDir, specFiles[specFiles.length - 1]),
     );
-    usageContent = await Deno.readTextFile(
+    usageContent = await readTextFile(
       join(ticketDir, usageFiles[usageFiles.length - 1]),
     );
   } catch {

@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import type { ActivePhase } from "./types.ts";
 import { PHASE_SEQUENCE } from "./types.ts";
+import { readTextFile } from "../filesystem.ts";
 
 const PROMPT_DIR = new URL("./prompts/", import.meta.url).pathname;
 
@@ -13,7 +14,7 @@ async function renderTemplate(content: string): Promise<string> {
     if (partials.has(name)) continue;
     const partialPath = join(PROMPT_DIR, "partials", `${name}.md`);
     try {
-      partials.set(name, await Deno.readTextFile(partialPath));
+      partials.set(name, await readTextFile(partialPath));
     } catch (e) {
       if (e instanceof Deno.errors.NotFound) {
         throw new Error(`Unknown partial: {{${name}}}`);
@@ -29,13 +30,11 @@ async function renderTemplate(content: string): Promise<string> {
 }
 
 export function loadPrompt(phase: ActivePhase): Promise<string> {
-  return Deno.readTextFile(join(PROMPT_DIR, `${phase}.md`)).then(
-    renderTemplate,
-  );
+  return readTextFile(join(PROMPT_DIR, `${phase}.md`)).then(renderTemplate);
 }
 
 export function loadPromptFile(filename: string): Promise<string> {
-  return Deno.readTextFile(join(PROMPT_DIR, filename)).then(renderTemplate);
+  return readTextFile(join(PROMPT_DIR, filename)).then(renderTemplate);
 }
 
 export async function loadProviderPrompt(
@@ -43,7 +42,7 @@ export async function loadProviderPrompt(
   provider: string,
 ): Promise<string> {
   try {
-    const content = await Deno.readTextFile(
+    const content = await readTextFile(
       join(PROMPT_DIR, `${provider}-${phase}.md`),
     );
     return renderTemplate(content);
@@ -58,7 +57,7 @@ export async function loadArtifactPrompt(
   artifact: string,
 ): Promise<string> {
   try {
-    const content = await Deno.readTextFile(
+    const content = await readTextFile(
       join(PROMPT_DIR, `${artifact}-${phase}.md`),
     );
     return renderTemplate(content);
@@ -70,7 +69,7 @@ export async function loadArtifactPrompt(
 
 export async function loadRevisionPrompt(phase: string): Promise<string> {
   try {
-    const content = await Deno.readTextFile(
+    const content = await readTextFile(
       join(PROMPT_DIR, `${phase}-revision.md`),
     );
     return renderTemplate(content);
@@ -95,7 +94,7 @@ function deriveProjectPath(provider: string, ticketId: string): string {
 async function readPromptFile(path: string): Promise<string> {
   let content: string;
   try {
-    content = await Deno.readTextFile(path);
+    content = await readTextFile(path);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) return "";
     throw e;

@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { Migration } from "../src/migrations/types.ts";
+import { readTextFile } from "../src/filesystem.ts";
 
 const PHASE_TIMESTAMP_PREFIX = /^\d{8}T\d{6}-/;
 
@@ -22,7 +23,7 @@ const migration: Migration = {
     const logPath = join(stateDir, ticket.id, "log.ndjson");
     let raw: string;
     try {
-      raw = await Deno.readTextFile(logPath);
+      raw = await readTextFile(logPath);
     } catch {
       return ticket;
     }

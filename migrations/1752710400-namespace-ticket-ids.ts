@@ -1,5 +1,6 @@
 import { dirname, join } from "@std/path";
 import type { Migration } from "../src/migrations/types.ts";
+import { mkdir, rename } from "../src/filesystem.ts";
 
 async function renameTicketDir(
   stateDir: string,
@@ -7,8 +8,8 @@ async function renameTicketDir(
   newId: string,
 ) {
   const newPath = join(stateDir, newId);
-  await Deno.mkdir(dirname(newPath), { recursive: true });
-  await Deno.rename(join(stateDir, oldId), newPath);
+  await mkdir(dirname(newPath), { recursive: true });
+  await rename(join(stateDir, oldId), newPath);
 }
 
 const migration: Migration = {

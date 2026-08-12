@@ -1,4 +1,5 @@
 import type { Provider, WorkItem } from "./types.ts";
+import { readTextFile, writeTextFile } from "../filesystem.ts";
 
 type ReadFileFn = (path: string) => Promise<string>;
 type WriteFileFn = (path: string, content: string) => Promise<void>;
@@ -32,9 +33,8 @@ export class TodoTxtProvider implements Provider {
     _writeTextFile?: WriteFileFn;
   }) {
     this.file = opts.file;
-    this._readTextFile = opts._readTextFile ?? ((p) => Deno.readTextFile(p));
-    this._writeTextFile = opts._writeTextFile ??
-      ((p, c) => Deno.writeTextFile(p, c));
+    this._readTextFile = opts._readTextFile ?? readTextFile;
+    this._writeTextFile = opts._writeTextFile ?? writeTextFile;
   }
 
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {

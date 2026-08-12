@@ -1,11 +1,12 @@
 import { parse } from "@std/toml";
 import { join } from "@std/path";
 import type { Config, PhaseModelConfig } from "./state/types.ts";
+import { readTextFile } from "./filesystem.ts";
 
 export async function loadConfig(path?: string): Promise<Config> {
   const configPath = path ??
     join(Deno.env.get("HOME")!, ".config", "lazyboy", "config.toml");
-  const raw = await Deno.readTextFile(configPath);
+  const raw = await readTextFile(configPath);
   const parsed = parse(raw) as Record<string, unknown>;
   const codebaseRaw = parsed.codebase as Record<string, unknown> | undefined;
   const jiraRaw = parsed.jira as Record<string, unknown> | undefined;

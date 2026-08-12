@@ -1,4 +1,5 @@
 import type { TicketState } from "./state/types.ts";
+import { removeSync } from "./filesystem.ts";
 
 export function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
   return {
@@ -32,7 +33,7 @@ export function withLazyboyDir(): Disposable & { path: string } {
         Deno.env.delete("LAZYBOY_DIR");
       }
       try {
-        Deno.removeSync(path, { recursive: true });
+        removeSync(path, { recursive: true });
       } catch {
         // temp dir already removed
       }

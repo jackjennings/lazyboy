@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import { findLatestPhaseOutput } from "./review.ts";
 import type { CommandRunner } from "./apfel.ts";
+import { readTextFile } from "./filesystem.ts";
 
 const PROMPT_DIR = new URL("./phases/prompts/", import.meta.url).pathname;
 
@@ -11,7 +12,7 @@ export async function selfReview(
 ): Promise<{ approved: boolean; reason: string | null }> {
   let systemPrompt: string;
   try {
-    systemPrompt = await Deno.readTextFile(
+    systemPrompt = await readTextFile(
       join(PROMPT_DIR, `${phase}-self-review.md`),
     );
   } catch {
@@ -21,7 +22,7 @@ export async function selfReview(
   const found = await findLatestPhaseOutput(ticketDir);
   if (!found) return { approved: false, reason: null };
 
-  const outputContent = await Deno.readTextFile(
+  const outputContent = await readTextFile(
     join(ticketDir, found.filename),
   );
 

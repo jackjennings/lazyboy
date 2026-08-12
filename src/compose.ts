@@ -1,4 +1,3 @@
-import { existsSync } from "@std/fs";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
@@ -78,7 +77,17 @@ import { processLearnings as runLearnings } from "./learnings.ts";
 import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
-import { readDir, readTextFile, remove, stat } from "./fs.ts";
+import {
+  exists,
+  existsSync,
+  mkdir,
+  readDir,
+  readDirSync,
+  readTextFile,
+  remove,
+  stat,
+  writeTextFile,
+} from "./filesystem.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { HttpClient } from "./http-client.ts";
 
@@ -88,17 +97,17 @@ export async function ensureStatePrompts(
   jiraProject?: string,
 ): Promise<void> {
   const promptsDir = join(stateDir, "prompts");
-  await Deno.mkdir(promptsDir, { recursive: true });
+  await mkdir(promptsDir, { recursive: true });
 
   async function scaffoldPhaseFiles(dir: string): Promise<void> {
-    await Deno.mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     for (const phase of PHASE_SEQUENCE) {
       const filePath = join(dir, `${phase}.md`);
       try {
-        await Deno.stat(filePath);
+        await stat(filePath);
       } catch (e) {
         if (e instanceof Deno.errors.NotFound) {
-          await Deno.writeTextFile(filePath, "");
+          await writeTextFile(filePath, "");
         } else {
           throw e;
         }
@@ -122,13 +131,13 @@ async function ensureRunPidGitignored(stateDir: string): Promise<void> {
   const gitignorePath = join(stateDir, ".gitignore");
   let content = "";
   try {
-    content = await Deno.readTextFile(gitignorePath);
+    content = await readTextFile(gitignorePath);
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
   const lines = content.split("\n");
   if (lines.some((l) => l.trim() === "run.pid")) return;
-  await Deno.writeTextFile(
+  await writeTextFile(
     gitignorePath,
     content ? content + "run.pid\n" : "run.pid\n",
   );
@@ -317,7 +326,7 @@ export function composeTickDeps(
       },
       cloneRemoteRepo: (slug: string) =>
         cloneRemoteRepo(slug, (s, d, cwd) => githubProvider.clone(s, d, cwd)),
-      stat,
+      stat: exists,
       appendLog: appendTicketLog,
       applyWorktreeInclude: async (
         worktreePath: string,
@@ -379,7 +388,7 @@ export function composeTickDeps(
         isPhaseAlive(join(stateDir, ticketId)),
       writeTicket,
       appendLog: appendTicketLog,
-      stat,
+      stat: exists,
       readDir,
       remove,
       readPhaseSessionId,
@@ -396,7 +405,7 @@ export function composeTickDeps(
           Temporal.Now.zonedDateTimeISO("UTC"),
         );
         const filename = `${timestamp}-conflict-context-${branch}.md`;
-        await Deno.writeTextFile(join(ticketDir, filename), content);
+        await writeTextFile(join(ticketDir, filename), content);
         return filename;
       },
       resolveModelConfig: (ticket) =>
@@ -443,7 +452,7 @@ export function composeTickDeps(
           hasCITriageContextFiles: (ticketId) => {
             const dir = join(stateDir, ticketId);
             try {
-              for (const entry of Deno.readDirSync(dir)) {
+              for (const entry of readDirSync(dir)) {
                 if (
                   entry.isFile &&
                   entry.name.includes("-ci-triage-context-") &&
@@ -460,7 +469,7 @@ export function composeTickDeps(
           readDir,
           readFile: async (path) => {
             try {
-              return await Deno.readTextFile(path);
+              return await readTextFile(path);
             } catch {
               return null;
             }
@@ -598,7 +607,7 @@ export function composeTickDeps(
               Temporal.Now.zonedDateTimeISO("UTC"),
             );
             const filename = `${timestamp}-ci-triage-context-${runId}.md`;
-            await Deno.writeTextFile(join(ticketDir, filename), content);
+            await writeTextFile(join(ticketDir, filename), content);
             return filename;
           },
           spawn: (opts) => {
@@ -767,7 +776,7 @@ export function composeTickDeps(
         const principlesPath = join(sd, "principles.md");
         let existing = "";
         try {
-          existing = await Deno.readTextFile(principlesPath);
+          existing = await readTextFile(principlesPath);
         } catch {
           // file does not exist yet
         }
@@ -776,7 +785,7 @@ export function composeTickDeps(
         const newContent = existing.length > 0
           ? `${existing}\n\n${novel}`
           : novel;
-        await Deno.writeTextFile(principlesPath, newContent);
+        await writeTextFile(principlesPath, newContent);
         await commitPrinciples(sd, `principles: ${ticketId} ${phase}`);
       },
       readPhaseExitCode: async (ticketDir, phase) => {
@@ -785,7 +794,7 @@ export function composeTickDeps(
         );
         const matches: string[] = [];
         try {
-          for await (const entry of Deno.readDir(ticketDir)) {
+          for await (const entry of readDir(ticketDir)) {
             if (entry.isFile && pattern.test(entry.name)) {
               matches.push(entry.name);
             }
@@ -795,7 +804,7 @@ export function composeTickDeps(
         }
         if (matches.length === 0) return null;
         matches.sort();
-        const content = await Deno.readTextFile(
+        const content = await readTextFile(
           join(ticketDir, matches[matches.length - 1]),
         );
         return parseInt(content, 10);
@@ -921,7 +930,7 @@ export function composeTickDeps(
         }
       },
       writeApplied: (dir: string, ids: string[]) =>
-        Deno.writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
+        writeTextFile(join(dir, ".migrations"), ids.join("\n") + "\n"),
       writeTicket,
     }),
     readLastWorked: async () => {
@@ -940,7 +949,7 @@ export function composeTickDeps(
       }
     },
     writeLastWorked: (ids) =>
-      Deno.writeTextFile(lastWorkedPath, JSON.stringify(ids)),
+      writeTextFile(lastWorkedPath, JSON.stringify(ids)),
     listTickets: () => listTickets(stateDir),
     readTicket: (id) => readTicket(stateDir, id),
     writeTicket: (t) => writeTicket(stateDir, t),
@@ -977,7 +986,7 @@ export function composeTickDeps(
           );
           try {
             const targetPath = join(wt.path, learning.targetFile);
-            const currentContent = await Deno.readTextFile(targetPath).catch(
+            const currentContent = await readTextFile(targetPath).catch(
               () => "",
             );
             const applied = await applyLearning(
@@ -988,11 +997,11 @@ export function composeTickDeps(
             if (applied === null) {
               throw new Error("applyLearning returned no content");
             }
-            await Deno.mkdir(
+            await mkdir(
               join(wt.path, ...learning.targetFile.split("/").slice(0, -1)),
               { recursive: true },
             );
-            await Deno.writeTextFile(targetPath, applied);
+            await writeTextFile(targetPath, applied);
             const run = (cmd: string[]) =>
               new Deno.Command(cmd[0], {
                 args: cmd.slice(1),

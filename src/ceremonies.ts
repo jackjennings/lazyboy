@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import { parse } from "@std/toml";
+import { readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
@@ -49,7 +50,7 @@ export class CeremonyRunner {
     const ceremoniesDir = join(this.#deps.stateDir, "ceremonies");
     const dirEntries: Deno.DirEntry[] = [];
     try {
-      for await (const entry of Deno.readDir(ceremoniesDir)) {
+      for await (const entry of readDir(ceremoniesDir)) {
         dirEntries.push(entry);
       }
     } catch (e) {
@@ -68,7 +69,7 @@ export class CeremonyRunner {
     const configPath = join(ceremonyDir, "config.toml");
     let raw: string;
     try {
-      raw = await Deno.readTextFile(configPath);
+      raw = await readTextFile(configPath);
     } catch (e) {
       if (e instanceof Deno.errors.NotFound) return;
       throw e;
@@ -130,7 +131,7 @@ export class CeremonyRunner {
 
       let mostRecent: Temporal.PlainDateTime | null = null;
       try {
-        for await (const entry of Deno.readDir(outputDir)) {
+        for await (const entry of readDir(outputDir)) {
           if (!entry.isFile || !entry.name.includes(ceremony.name)) continue;
           const dt = parseTimestampPrefix(entry.name);
           if (
@@ -159,7 +160,7 @@ export class CeremonyRunner {
         String(now.day).padStart(2, "0");
 
       try {
-        for await (const entry of Deno.readDir(outputDir)) {
+        for await (const entry of readDir(outputDir)) {
           if (entry.isFile && entry.name.startsWith(todayPrefix)) return;
         }
       } catch (e) {

@@ -3,6 +3,7 @@ import { lazyboyDir } from "../paths.ts";
 import { readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { Command } from "./types.ts";
+import { stat } from "../filesystem.ts";
 
 export async function resolveTicketLogPath(
   stateDir: string,
@@ -18,7 +19,7 @@ export async function resolveTicketLogPath(
   }
   const logPath = join(stateDir, id, "log.ndjson");
   try {
-    await Deno.stat(logPath);
+    await stat(logPath);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
       throw new Error(`No log file found for ${id}`);

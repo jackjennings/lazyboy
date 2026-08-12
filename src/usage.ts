@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { PhaseUsage } from "./state/types.ts";
+import { readDir, readTextFile } from "./filesystem.ts";
 
 export function formatLargeTokens(n: number): string {
   if (n < 1000) return String(n);
@@ -12,10 +13,10 @@ export async function readUsageFiles(
 ): Promise<PhaseUsage[] | null> {
   const files: PhaseUsage[] = [];
   try {
-    for await (const entry of Deno.readDir(ticketDir)) {
+    for await (const entry of readDir(ticketDir)) {
       if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
       try {
-        const raw = await Deno.readTextFile(join(ticketDir, entry.name));
+        const raw = await readTextFile(join(ticketDir, entry.name));
         files.push(JSON.parse(raw) as PhaseUsage);
       } catch {
         return null;

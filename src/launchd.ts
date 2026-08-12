@@ -1,4 +1,5 @@
 import { join } from "@std/path";
+import { writeTextFile } from "./filesystem.ts";
 
 const LABEL = "com.jackjennings.lazyboy";
 
@@ -72,7 +73,7 @@ export async function enableLaunchd(lazboyDir: string): Promise<void> {
     return;
   }
   const path = plistPath();
-  await Deno.writeTextFile(path, plistContent(lazboyDir));
+  await writeTextFile(path, plistContent(lazboyDir));
   await new Deno.Command("launchctl", {
     args: ["bootstrap", `gui/${Deno.uid()}`, path],
   }).output();

@@ -9,6 +9,7 @@ import { deleteRunPid, isPhaseAlive } from "../executor.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { TicketPhase } from "../state/types.ts";
 import type { Command } from "./types.ts";
+import { readTextFileSync } from "../filesystem.ts";
 
 function defaultKillFn(pid: number): void {
   try {
@@ -33,7 +34,7 @@ export async function performDecline(
   const ticketDir = join(stateDir, id);
 
   if (isPhaseAlive(ticketDir)) {
-    const content = Deno.readTextFileSync(`${ticketDir}/run.pid`);
+    const content = readTextFileSync(`${ticketDir}/run.pid`);
     const pid = parseInt(content.trim(), 10);
     if (!isNaN(pid)) {
       try {

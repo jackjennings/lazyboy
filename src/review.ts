@@ -52,6 +52,7 @@ import {
   extractHeadings,
   renderTocLines,
 } from "./ui/toc.ts";
+import { readDir, readTextFile } from "./filesystem.ts";
 
 const markdownTheme: MarkdownTheme = {
   heading: (s) => cyan(s),
@@ -117,7 +118,7 @@ export async function findLatestPhaseOutput(
     const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\.md$`);
     const matches: string[] = [];
     try {
-      for await (const entry of Deno.readDir(ticketDir)) {
+      for await (const entry of readDir(ticketDir)) {
         if (entry.isFile && outputPattern.test(entry.name)) {
           matches.push(entry.name);
         }
@@ -235,7 +236,7 @@ export function formatTimestamp(now: Temporal.ZonedDateTime): string {
 
 export async function buildQuestionSystemPrompt(
   contextFiles: string[],
-  readFile: (path: string | URL) => Promise<string> = Deno.readTextFile,
+  readFile: (path: string | URL) => Promise<string> = readTextFile,
 ): Promise<string> {
   const parts: string[] = [
     "You are a helpful assistant answering questions about a ticket's phase output. The following are the ticket files:",

@@ -1,4 +1,5 @@
 import type { WorktreeInfo } from "./state/types.ts";
+import { readTextFileSync, remove, writeTextFile } from "./filesystem.ts";
 
 export interface ExecutorOptions {
   ticketDir: string;
@@ -94,7 +95,7 @@ export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
   });
   const child = cmd.spawn();
   child.unref();
-  await Deno.writeTextFile(
+  await writeTextFile(
     `${opts.ticketDir}/${opts.pidFile ?? "run.pid"}`,
     child.pid.toString(),
   );
@@ -103,7 +104,7 @@ export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
 export function isPhaseAlive(ticketDir: string): boolean {
   let content: string;
   try {
-    content = Deno.readTextFileSync(`${ticketDir}/run.pid`);
+    content = readTextFileSync(`${ticketDir}/run.pid`);
   } catch {
     return false;
   }
@@ -114,7 +115,7 @@ export function isPhaseAlive(ticketDir: string): boolean {
 
 export async function deleteRunPid(ticketDir: string): Promise<void> {
   try {
-    await Deno.remove(`${ticketDir}/run.pid`);
+    await remove(`${ticketDir}/run.pid`);
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }

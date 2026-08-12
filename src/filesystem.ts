@@ -9,7 +9,16 @@ export async function exists(path: string): Promise<boolean> {
   }
 }
 
+export async function isRegularFile(path: string): Promise<boolean> {
+  try {
+    return (await Deno.stat(path)).isFile;
+  } catch {
+    return false;
+  }
+}
+
 export const stat = (path: string) => Deno.stat(path);
+export const readFile = (path: string | URL) => Deno.readFile(path);
 export const readDir = (path: string) => Deno.readDir(path);
 export const readDirSync = (path: string) => Deno.readDirSync(path);
 export const remove = (path: string, options?: Deno.RemoveOptions) =>
@@ -30,3 +39,4 @@ export const rename = (oldPath: string, newPath: string) =>
 export const open = (path: string | URL, options?: Deno.OpenOptions) =>
   Deno.open(path, options);
 export const readLink = (path: string | URL) => Deno.readLink(path);
+export const realPath = (path: string | URL) => Deno.realPath(path);

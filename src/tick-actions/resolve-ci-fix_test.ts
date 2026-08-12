@@ -274,6 +274,60 @@ Deno.test("resolveCIFixAction: FIXED with an empty worktree path parks the ticke
   assertEquals(logged[0].reason, "no-worktrees");
 });
 
+Deno.test("resolveCIFixAction: removes context and output files on no-verdict-line park", async () => {
+  const removed: string[] = [];
+  await makeAction({
+    readFile: outputReader("I looked at the logs and gave up.\n"),
+    remove: (path: string) => {
+      removed.push(path);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
+  assert(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
+Deno.test("resolveCIFixAction: removes context and output files on push-failed park", async () => {
+  const removed: string[] = [];
+  await makeAction({
+    runGit: () => Promise.resolve({ code: 1, stdout: "", stderr: "rejected" }),
+    remove: (path: string) => {
+      removed.push(path);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
+  assert(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
+Deno.test("resolveCIFixAction: removes context and output files on UNFIXABLE park", async () => {
+  const removed: string[] = [];
+  await makeAction({
+    readFile: outputReader(UNFIXABLE_OUTPUT),
+    remove: (path: string) => {
+      removed.push(path);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
+  assert(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
+Deno.test("resolveCIFixAction: removes context file but not output file on output-file-missing park", async () => {
+  const removed: string[] = [];
+  const removeSpy = spy((path: string) => {
+    removed.push(path);
+    return Promise.resolve();
+  });
+  await makeAction({
+    readFile: (path: string) =>
+      Promise.resolve(path.endsWith(CONTEXT_FILENAME) ? CONTEXT_CONTENT : null),
+    remove: removeSpy,
+  }).run(makeTicket(BASE), "/state");
+  assert(removed.some((p) => p.endsWith(CONTEXT_FILENAME)));
+  assertFalse(removed.some((p) => p.endsWith(OUTPUT_FILENAME)));
+});
+
 Deno.test("resolveCIFixAction: removes the context and output files after a FIXED run", async () => {
   const removed: string[] = [];
   await makeAction({

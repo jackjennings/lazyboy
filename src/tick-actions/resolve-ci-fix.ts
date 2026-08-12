@@ -57,6 +57,7 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
 
       const park = async (
         contextPath: string,
+        outputPath: string | null,
         reason: string,
         fields: Record<string, unknown>,
       ): Promise<TicketState> => {
@@ -67,6 +68,9 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
           ...fields,
         });
         await deps.remove(contextPath);
+        if (outputPath) {
+          await deps.remove(outputPath);
+        }
         const parked: TicketState = {
           ...ticket,
           status: "needs-attention",
@@ -101,14 +105,18 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
         const outputContent = await deps.readFile(outputPath);
 
         if (outputContent === null) {
-          return await park(contextPath, "output-file-missing", { runId });
+          return await park(contextPath, null, "output-file-missing", {
+            runId,
+          });
         }
 
         const verdictMatch = outputContent.match(
           /^VERDICT:\s*(FIXED|INFRA|UNFIXABLE)/im,
         );
         if (!verdictMatch) {
-          return await park(contextPath, "no-verdict-line", { runId });
+          return await park(contextPath, outputPath, "no-verdict-line", {
+            runId,
+          });
         }
 
         const verdict = verdictMatch[1].toUpperCase() as
@@ -117,19 +125,28 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
           | "UNFIXABLE";
 
         if (verdict === "UNFIXABLE") {
-          return await park(contextPath, "ci-unfixable", { runId, prUrl });
+          return await park(contextPath, outputPath, "ci-unfixable", {
+            runId,
+            prUrl,
+          });
         }
 
         if (verdict === "FIXED") {
           if (worktreePath === "" || branch === "") {
-            return await park(contextPath, "no-worktrees", { runId, prUrl });
+            return await park(contextPath, outputPath, "no-worktrees", {
+              runId,
+              prUrl,
+            });
           }
           const push = await deps.runGit(
             ["push", "--force-with-lease", "origin", branch],
             worktreePath,
           );
           if (push.code !== 0) {
-            return await park(contextPath, "push-failed", { runId, branch });
+            return await park(contextPath, outputPath, "push-failed", {
+              runId,
+              branch,
+            });
           }
           await deps.appendLog(stateDir, ticket.id, {
             event: "branch-pushed",

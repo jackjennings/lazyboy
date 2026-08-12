@@ -70,7 +70,7 @@ import {
   defaultCommandRunner,
 } from "./apfel.ts";
 import { generateShortTitle as apfelGenerateShortTitle } from "./short-title.ts";
-import { makeNotify } from "./notify.ts";
+import { makeDesktopNotifier, makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
 import { applyLearning } from "./apply-learning.ts";
@@ -692,17 +692,15 @@ export function composeTickDeps(
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
 
+  const desktopNotifier = makeDesktopNotifier({
+    runCommand: defaultCommandRunner(),
+  });
+
   const ceremonies = new CeremonyRunner(
     {
       stateDir,
       appendTickLog,
-      notify: async (title, message) => {
-        await defaultCommandRunner()([
-          "osascript",
-          "-e",
-          `display notification "${message}" with title "${title}"`,
-        ]);
-      },
+      notify: desktopNotifier,
       listTickets: () => listTickets(stateDir),
       readTicket: (id) => readTicket(stateDir, id),
       generateText: (request) =>
@@ -722,13 +720,7 @@ export function composeTickDeps(
           await ensureRunPidGitignored(stateDir);
           await commitState(stateDir, "ceremony: standup");
         },
-        notify: async (title, message) => {
-          await defaultCommandRunner()([
-            "osascript",
-            "-e",
-            `display notification "${message}" with title "${title}"`,
-          ]);
-        },
+        notify: desktopNotifier,
       }),
       new DocumentationGapsCeremony({
         stateDir,
@@ -738,13 +730,7 @@ export function composeTickDeps(
           await ensureRunPidGitignored(stateDir);
           await commitState(stateDir, "ceremony: documentation-gaps");
         },
-        notify: async (title, message) => {
-          await defaultCommandRunner()([
-            "osascript",
-            "-e",
-            `display notification "${message}" with title "${title}"`,
-          ]);
-        },
+        notify: desktopNotifier,
       }),
     ],
   );
@@ -1122,15 +1108,8 @@ export function composeTickDeps(
         },
         fetch,
       }),
-    notifyTickFailure: async (error: string) => {
-      const escaped = error.replaceAll("'", "\\'");
-      const body = escaped.slice(0, 200);
-      await defaultCommandRunner()([
-        "osascript",
-        "-e",
-        `display notification "${body}" with title "Tick failed"`,
-      ]);
-    },
+    notifyTickFailure: (error: string) =>
+      desktopNotifier("Tick failed", error.slice(0, 200)),
     scaffoldStatePrompts: () =>
       ensureStatePrompts(
         stateDir,

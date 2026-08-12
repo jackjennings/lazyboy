@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
-import type { TicketState } from "../state/types.ts";
+import type { LearningState, TicketState } from "../state/types.ts";
 
 export interface ResolveCITriageDeps {
   isProcessAlive: (ticketId: string) => boolean;
@@ -15,6 +15,10 @@ export interface ResolveCITriageDeps {
   }) => Promise<void>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  writeLearning: (
+    learning: Omit<LearningState, "id">,
+    intent: string,
+  ) => Promise<void>;
 }
 
 export function resolveCITriageAction(
@@ -116,6 +120,29 @@ export function resolveCITriageAction(
             title: `Fix CI failure on ${branch || prUrl}`,
             body: `${reasoning}\n\nPR: ${prUrl}`,
           });
+        }
+
+        const learningMatch = outputContent.match(/^LEARNING:\s*(.+)$/im);
+        const learningText = learningMatch?.[1]?.trim() ?? "";
+
+        if (verdict === "PR_CAUSED" && learningText) {
+          try {
+            await deps.writeLearning(
+              {
+                ticketId: ticket.id,
+                repo,
+                targetFile: "AGENTS.md",
+                prTitle: "ci: update AGENTS.md with implementation check",
+                prBody:
+                  `CI failure on branch ${branch}, PR ${prUrl}, run ${runId}`,
+                status: "pending",
+                prs: [],
+              },
+              learningText,
+            );
+          } catch (e) {
+            console.error("writeLearning failed:", e);
+          }
         }
 
         await deps.remove(contextPath);

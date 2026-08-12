@@ -47,6 +47,11 @@ const PR_CAUSED_OUTPUT =
 
 const INFRA_OUTPUT = "Network timeout downloading packages.\nVERDICT: INFRA\n";
 
+const PR_CAUSED_WITH_LEARNING_OUTPUT =
+  "The type error is in a file changed by this PR.\n" +
+  "VERDICT: PR_CAUSED\n" +
+  "LEARNING: Validate all imported types resolve before pushing to ensure type errors surface locally rather than in CI.\n";
+
 function makeDeps(
   overrides: Partial<ResolveCITriageDeps> = {},
 ): ResolveCITriageDeps {
@@ -59,6 +64,7 @@ function makeDeps(
     createGitHubIssue: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
+    writeLearning: () => Promise.resolve(),
     ...overrides,
   };
 }
@@ -346,5 +352,158 @@ Deno.test(
     assertNotEquals(resolved, undefined);
     assertEquals(resolved!.verdict, "PR_CAUSED");
     assertEquals(resolved!.runId, "run-42");
+  },
+);
+
+// ── learning extraction ───────────────────────────────────────────────────────
+
+Deno.test(
+  "resolveCITriageAction: PR_CAUSED with LEARNING line → writeLearning called with correct fields",
+  async () => {
+    const written: Array<{ learning: object; intent: string }> = [];
+    await makeAction({
+      hasCITriageContextFiles: () => true,
+      readDir: async function* () {
+        yield {
+          name: "20260729T184053-ci-triage-context-run-42.md",
+          isFile: true,
+        };
+      },
+      readFile: (path) => {
+        if (path.includes("-ci-triage-context-")) {
+          return Promise.resolve(CONTEXT_CONTENT);
+        }
+        return Promise.resolve(PR_CAUSED_WITH_LEARNING_OUTPUT);
+      },
+      writeLearning: (learning, intent) => {
+        written.push({ learning, intent });
+        return Promise.resolve();
+      },
+      createGitHubIssue: () => Promise.resolve(),
+      remove: () => Promise.resolve(),
+      writeTicket: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+    assertEquals(written.length, 1);
+    assertEquals(
+      written[0].intent,
+      "Validate all imported types resolve before pushing to ensure type errors surface locally rather than in CI.",
+    );
+    assertEquals(
+      (written[0].learning as Record<string, unknown>).repo,
+      "jackjennings/lazyboy",
+    );
+    assertEquals(
+      (written[0].learning as Record<string, unknown>).targetFile,
+      "AGENTS.md",
+    );
+    assertEquals(
+      (written[0].learning as Record<string, unknown>).status,
+      "pending",
+    );
+    assertEquals(
+      (written[0].learning as Record<string, unknown>).ticketId,
+      "github/jackjennings/lazyboy/178",
+    );
+  },
+);
+
+Deno.test(
+  "resolveCITriageAction: INFRA verdict → writeLearning not called",
+  async () => {
+    const written: object[] = [];
+    await makeAction({
+      hasCITriageContextFiles: () => true,
+      readDir: async function* () {
+        yield {
+          name: "20260729T184053-ci-triage-context-run-42.md",
+          isFile: true,
+        };
+      },
+      readFile: (path) => {
+        if (path.includes("-ci-triage-context-")) {
+          return Promise.resolve(CONTEXT_CONTENT);
+        }
+        return Promise.resolve(INFRA_OUTPUT);
+      },
+      writeLearning: (learning, intent) => {
+        written.push({ learning, intent });
+        return Promise.resolve();
+      },
+      remove: () => Promise.resolve(),
+      writeTicket: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+    assertEquals(written.length, 0);
+  },
+);
+
+Deno.test(
+  "resolveCITriageAction: PR_CAUSED without LEARNING line → writeLearning not called",
+  async () => {
+    const written: object[] = [];
+    await makeAction({
+      hasCITriageContextFiles: () => true,
+      readDir: async function* () {
+        yield {
+          name: "20260729T184053-ci-triage-context-run-42.md",
+          isFile: true,
+        };
+      },
+      readFile: (path) => {
+        if (path.includes("-ci-triage-context-")) {
+          return Promise.resolve(CONTEXT_CONTENT);
+        }
+        return Promise.resolve(PR_CAUSED_OUTPUT);
+      },
+      writeLearning: (learning, intent) => {
+        written.push({ learning, intent });
+        return Promise.resolve();
+      },
+      createGitHubIssue: () => Promise.resolve(),
+      remove: () => Promise.resolve(),
+      writeTicket: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+    assertEquals(written.length, 0);
+  },
+);
+
+Deno.test(
+  "resolveCITriageAction: writeLearning throws → files cleaned up and action completes normally",
+  async () => {
+    const removed: string[] = [];
+    const logged: object[] = [];
+    const result = await makeAction({
+      hasCITriageContextFiles: () => true,
+      readDir: async function* () {
+        yield {
+          name: "20260729T184053-ci-triage-context-run-42.md",
+          isFile: true,
+        };
+      },
+      readFile: (path) => {
+        if (path.includes("-ci-triage-context-")) {
+          return Promise.resolve(CONTEXT_CONTENT);
+        }
+        return Promise.resolve(PR_CAUSED_WITH_LEARNING_OUTPUT);
+      },
+      writeLearning: () => Promise.reject(new Error("storage error")),
+      createGitHubIssue: () => Promise.resolve(),
+      remove: (path) => {
+        removed.push(path);
+        return Promise.resolve();
+      },
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+      writeTicket: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+    assertEquals(removed.some((p) => p.includes("-ci-triage-context-")), true);
+    assertEquals(
+      removed.some((p) =>
+        p.includes("-ci-triage-") && !p.includes("-context-")
+      ),
+      true,
+    );
+    assertEquals(result !== null, true);
   },
 );

@@ -5,7 +5,7 @@ import {
   assertStringIncludes,
 } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
-import { stripAnsiCode } from "@std/fmt/colors";
+import { dim, stripAnsiCode } from "@std/fmt/colors";
 import type { TUI } from "@earendil-works/pi-tui";
 import { ScrollPane } from "./scroll-pane.ts";
 import { computeVisibleHeadingIndices, renderTocLines } from "./toc.ts";
@@ -175,6 +175,30 @@ Deno.test("ScrollPane: onInvalidate callback is called by invalidate()", () => {
   });
   pane.invalidate();
   assert(called);
+});
+
+Deno.test("ScrollPane: header of the focused pane is undimmed", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["line"],
+    tui: makeTui(),
+    title: "status",
+    getHeight: () => 5,
+  });
+  pane.focused = true;
+  const header = pane.render(80)[0];
+  assertEquals(header, stripAnsiCode(header));
+});
+
+Deno.test("ScrollPane: header of an unfocused pane is dimmed", () => {
+  const pane = new ScrollPane({
+    getLines: (_w) => ["line"],
+    tui: makeTui(),
+    title: "status",
+    getHeight: () => 5,
+  });
+  pane.focused = false;
+  const header = pane.render(80)[0];
+  assertEquals(header, dim(stripAnsiCode(header)));
 });
 
 Deno.test("ScrollPane: repeated renders at one width wrap the lines once", () => {

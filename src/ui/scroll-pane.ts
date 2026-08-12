@@ -104,7 +104,8 @@ export class ScrollPane implements Component, Focusable {
     const remaining = Math.max(0, width - label.length);
     const left = Math.floor(remaining / 2);
     const right = remaining - left;
-    return dim("─".repeat(left) + label + "─".repeat(right));
+    const line = "─".repeat(left) + label + "─".repeat(right);
+    return this.focused ? line : dim(line);
   }
 
   handleInput(data: string): void {

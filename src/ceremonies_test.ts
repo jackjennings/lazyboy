@@ -9,7 +9,11 @@ import { join } from "@std/path";
 import { CeremonyRunner } from "./ceremonies.ts";
 import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
-import { ceremonyHash, writeApprovals } from "./ceremonies/approvals.ts";
+import {
+  ceremonyHash,
+  readApprovals,
+  writeApprovals,
+} from "./ceremonies/approvals.ts";
 import { makeTicket, withLazyboyDir } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
@@ -40,6 +44,7 @@ function makeRunner(
     now?: () => Temporal.ZonedDateTime;
     ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
     runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
+    notify?: (title: string, message: string) => Promise<void>;
   } = {},
 ): CeremonyRunner {
   return new CeremonyRunner(
@@ -48,6 +53,7 @@ function makeRunner(
       appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
       now: opts.now,
       runClaude: opts.runClaude,
+      notify: opts.notify,
     },
     opts.ceremonies ?? [],
   );
@@ -1047,6 +1053,74 @@ Deno.test("CeremonyRunner: unapproved ceremony that is not due is silent", async
     const appendTickLog = spy((_entry: object) => Promise.resolve());
     await makeRunner(stateDir, { now: () => TEST_NOW, appendTickLog }).run();
     assertSpyCalls(appendTickLog, 0);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: warns and notifies once per due window", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await writePromptCeremony(stateDir, "digest");
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const notify = spy((_title: string, _message: string) => Promise.resolve());
+    const runner = makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      appendTickLog,
+      notify,
+    });
+    await runner.run();
+    await runner.run();
+    await runner.run();
+    assertSpyCalls(appendTickLog, 1);
+    assertSpyCalls(notify, 1);
+    assertEquals(notify.calls[0].args[1], "Ceremony digest needs approval");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: warns again in the next window", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await writePromptCeremony(stateDir, "digest");
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const tomorrow = TEST_NOW.add({ days: 1 });
+    await makeRunner(stateDir, { now: () => TEST_NOW, appendTickLog }).run();
+    await makeRunner(stateDir, { now: () => tomorrow, appendTickLog }).run();
+    assertSpyCalls(appendTickLog, 2);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: warning preserves an existing hash", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const dir = await writePromptCeremony(stateDir, "digest");
+    const hash = await ceremonyHash(dir);
+    await writeApprovals({ digest: { hash } });
+    await Deno.writeTextFile(join(dir, "prompt.md"), "changed\n");
+    await makeRunner(stateDir, { now: () => TEST_NOW }).run();
+    const approvals = await readApprovals();
+    assertEquals(approvals.digest.hash, hash);
+    assertEquals(approvals.digest.lastWarnedWindow, "20260727");
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: a throwing notifier does not abort the run", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await writePromptCeremony(stateDir, "digest");
+    const notify = () => Promise.reject(new Error("no notifier"));
+    await makeRunner(stateDir, { now: () => TEST_NOW, notify }).run();
+    assertEquals((await readApprovals()).digest.lastWarnedWindow, "20260727");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

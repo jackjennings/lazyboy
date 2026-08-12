@@ -3,7 +3,12 @@ import { parse } from "@std/toml";
 import { exists, readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import { PromptCeremony } from "./ceremonies/prompt.ts";
-import { isCeremonyApproved } from "./ceremonies/approvals.ts";
+import {
+  isCeremonyApproved,
+  readApprovals,
+  writeApprovals,
+} from "./ceremonies/approvals.ts";
+import { compactTimestamp } from "./timestamp.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
 
@@ -12,6 +17,7 @@ export interface CeremonyRunnerDeps {
   appendTickLog(entry: object): Promise<void>;
   now?: () => Temporal.ZonedDateTime;
   runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
+  notify?(title: string, message: string): Promise<void>;
 }
 
 function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
@@ -140,20 +146,62 @@ export class CeremonyRunner {
       nanosecond: 0,
     });
 
+    const outputDir = join(ceremonyDir, "output");
+    const window = await this.#dueWindow({
+      config,
+      now,
+      threshold,
+      outputDir,
+      name: ceremony.name,
+    });
+    if (window === null) return;
+
+    if (gated && !await isCeremonyApproved(ceremony.name, ceremonyDir)) {
+      const approvals = await readApprovals();
+      const entry = approvals[ceremony.name];
+      if (entry?.lastWarnedWindow === window) return;
+      await this.#deps.appendTickLog({
+        event: "ceremony-warning",
+        ceremony: ceremony.name,
+        reason: "not-approved",
+      });
+      try {
+        await this.#deps.notify?.(
+          "lazyboy",
+          `Ceremony ${ceremony.name} needs approval`,
+        );
+      } catch {
+        // notification failures must not abort the run
+      }
+      approvals[ceremony.name] = { ...entry, lastWarnedWindow: window };
+      await writeApprovals(approvals);
+      return;
+    }
+
+    await ceremony.run(now, outputDir);
+  }
+
+  async #dueWindow(opts: {
+    config: Record<string, unknown>;
+    now: Temporal.ZonedDateTime;
+    threshold: Temporal.ZonedDateTime;
+    outputDir: string;
+    name: string;
+  }): Promise<string | null> {
+    const { config, now, threshold, outputDir, name } = opts;
     const intervalHours = typeof config.interval_hours === "number"
       ? config.interval_hours
       : null;
     const workdaysOnly = config.workdays_only === true;
-    const outputDir = join(ceremonyDir, "output");
 
     if (intervalHours !== null) {
-      if (workdaysOnly && now.dayOfWeek > 5) return;
-      if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return;
+      if (workdaysOnly && now.dayOfWeek > 5) return null;
+      if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return null;
 
       let mostRecent: Temporal.PlainDateTime | null = null;
       try {
         for await (const entry of readDir(outputDir)) {
-          if (!entry.isFile || !entry.name.includes(ceremony.name)) continue;
+          if (!entry.isFile || !entry.name.includes(name)) continue;
           const dt = parseTimestampPrefix(entry.name);
           if (
             dt !== null &&
@@ -167,37 +215,30 @@ export class CeremonyRunner {
         if (!(e instanceof Deno.errors.NotFound)) throw e;
       }
 
-      if (mostRecent !== null) {
-        const elapsed = mostRecent
-          .until(now.toPlainDateTime())
-          .total("seconds");
-        if (elapsed < intervalHours * 3600) return;
-      }
-    } else {
-      if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return;
-
-      const todayPrefix = String(now.year) +
-        String(now.month).padStart(2, "0") +
-        String(now.day).padStart(2, "0");
-
-      try {
-        for await (const entry of readDir(outputDir)) {
-          if (entry.isFile && entry.name.startsWith(todayPrefix)) return;
-        }
-      } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e;
-      }
-    }
-
-    if (gated && !await isCeremonyApproved(ceremony.name, ceremonyDir)) {
-      await this.#deps.appendTickLog({
-        event: "ceremony-warning",
-        ceremony: ceremony.name,
-        reason: "not-approved",
+      if (mostRecent === null) return compactTimestamp(threshold);
+      const eligible = mostRecent.add({
+        seconds: Math.round(intervalHours * 3600),
       });
-      return;
+      if (Temporal.PlainDateTime.compare(now.toPlainDateTime(), eligible) < 0) {
+        return null;
+      }
+      return compactTimestamp(eligible.toZonedDateTime(now.timeZoneId));
     }
 
-    await ceremony.run(now, outputDir);
+    if (Temporal.ZonedDateTime.compare(now, threshold) < 0) return null;
+
+    const todayPrefix = String(now.year) +
+      String(now.month).padStart(2, "0") +
+      String(now.day).padStart(2, "0");
+
+    try {
+      for await (const entry of readDir(outputDir)) {
+        if (entry.isFile && entry.name.startsWith(todayPrefix)) return null;
+      }
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    }
+
+    return todayPrefix;
   }
 }

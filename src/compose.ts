@@ -695,6 +695,13 @@ export function composeTickDeps(
     {
       stateDir,
       appendTickLog,
+      notify: async (title, message) => {
+        await defaultCommandRunner()([
+          "osascript",
+          "-e",
+          `display notification "${message}" with title "${title}"`,
+        ]);
+      },
     },
     [
       new StandupCeremony({

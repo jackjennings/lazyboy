@@ -22,6 +22,7 @@ const SSH_KEEPALIVE_COMMAND =
 export async function runGit(
   args: string[],
   cwd: string,
+  { timeoutMs = GIT_TIMEOUT_MS }: { timeoutMs?: number } = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const env = {
     ...Deno.env.toObject(),
@@ -30,7 +31,11 @@ export async function runGit(
       : {}),
   };
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), GIT_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timedOut = () => {
+    const secs = Math.round(timeoutMs / 1000);
+    return { code: 1, stdout: "", stderr: `git: timed out after ${secs}s` };
+  };
   try {
     const result = await new Deno.Command("git", {
       args,
@@ -38,20 +43,14 @@ export async function runGit(
       env,
       signal: controller.signal,
     }).output();
-    if (controller.signal.aborted) {
-      const secs = Math.round(GIT_TIMEOUT_MS / 1000);
-      return { code: 1, stdout: "", stderr: `git: timed out after ${secs}s` };
-    }
+    if (controller.signal.aborted) return timedOut();
     return {
       code: result.code,
       stdout: new TextDecoder().decode(result.stdout).trim(),
       stderr: new TextDecoder().decode(result.stderr).trim(),
     };
   } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") {
-      const secs = Math.round(GIT_TIMEOUT_MS / 1000);
-      return { code: 1, stdout: "", stderr: `git: timed out after ${secs}s` };
-    }
+    if (e instanceof Error && e.name === "AbortError") return timedOut();
     throw e;
   } finally {
     clearTimeout(timeoutId);

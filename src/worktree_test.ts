@@ -17,7 +17,6 @@ import {
   extractGitHubSlug,
   findLocalRepo,
   formatRepoCorpus,
-  GIT_TIMEOUT_MS,
   listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
@@ -588,16 +587,18 @@ Deno.test("runGit: returns timeout shape when git subprocess hangs", async () =>
   const originalPath = Deno.env.get("PATH") ?? "";
   Deno.env.set("PATH", `${tmpDir}:${originalPath}`);
 
+  const timeoutMs = 1_000;
+
   try {
     const start = performance.now();
-    const result = await runGit(["fetch", "origin"], tmpDir);
+    const result = await runGit(["fetch", "origin"], tmpDir, { timeoutMs });
     const elapsed = performance.now() - start;
 
     assertEquals(result.code, 1);
     assertEquals(result.stdout, "");
-    assertEquals(result.stderr, "git: timed out after 120s");
-    assertGreater(elapsed, GIT_TIMEOUT_MS - 5_000);
-    assertLess(elapsed, GIT_TIMEOUT_MS + 10_000);
+    assertEquals(result.stderr, "git: timed out after 1s");
+    assertGreater(elapsed, timeoutMs * 0.9);
+    assertLess(elapsed, timeoutMs + 10_000);
   } finally {
     Deno.env.set("PATH", originalPath);
     await Deno.remove(tmpDir, { recursive: true });

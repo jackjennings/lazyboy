@@ -1,5 +1,4 @@
 import { CeremonyRunner } from "./ceremonies.ts";
-import { StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
 import { dirname, join } from "@std/path";
 import {
@@ -697,15 +696,6 @@ export function composeTickDeps(
       },
     },
     [
-      new StandupCeremony({
-        listTickets: () => listTickets(stateDir),
-        readTicket: (id) => readTicket(stateDir, id),
-        commitState: async () => {
-          await ensureRunPidGitignored(stateDir);
-          await commitState(stateDir, "ceremony: standup");
-        },
-        notify: desktopNotifier,
-      }),
       new DocumentationGapsCeremony({
         stateDir,
         repoDir: new URL("../", import.meta.url).pathname,

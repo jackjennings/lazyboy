@@ -6,13 +6,6 @@ export interface Ceremony {
   run(now: Temporal.ZonedDateTime, outputDir: string): Promise<void>;
 }
 
-export interface StandupCeremonyDeps {
-  listTickets(): Promise<string[]>;
-  readTicket(id: string): Promise<TicketState>;
-  commitState(): Promise<void>;
-  notify?: (title: string, message: string) => Promise<void>;
-}
-
 export interface CeremonyContext {
   now: Temporal.ZonedDateTime;
   stateDir: string;
@@ -32,7 +25,7 @@ export type CeremonyModule = (
   context: CeremonyContext,
 ) => Promise<void> | void;
 
-export const BUILT_IN_CEREMONY_NAMES = ["standup", "documentation-gaps"];
+export const BUILT_IN_CEREMONY_NAMES = ["documentation-gaps"];
 
 const CEREMONY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 

@@ -8,7 +8,6 @@ import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { existsSync } from "./filesystem.ts";
 import { CeremonyRunner } from "./ceremonies.ts";
-import { renderStandup, StandupCeremony } from "./ceremonies/standup.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
 import {
   ceremonyHash,
@@ -16,28 +15,14 @@ import {
   writeApprovals,
 } from "./ceremonies/approvals.ts";
 import { lazyboyDir } from "./paths.ts";
-import { makeTicket, withLazyboyDir } from "./test-support.ts";
+import { withLazyboyDir } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import type { CommandRunner } from "./apfel.ts";
 import type { LanguageModelRequest } from "./models/types.ts";
 
-const BASE = { title: "Ticket", url: "https://example.com" };
-
 const TEST_NOW = Temporal.ZonedDateTime.from(
   "2026-07-27T10:00:00[America/New_York]",
-);
-
-const JIRA_BASE = {
-  provider: "jira",
-  id: "jira/FOO-1",
-  url: "https://jira.example.com/browse/FOO-1",
-  title: "My Feature",
-};
-
-// Tuesday; last workday = Monday 2026-07-21
-const TUESDAY_NOW = Temporal.ZonedDateTime.from(
-  "2026-07-22T10:00:00[America/New_York]",
 );
 
 function makeRunner(
@@ -75,23 +60,6 @@ function makeRunner(
   );
 }
 
-function makeStandup(
-  opts: {
-    listTickets?: () => Promise<string[]>;
-    readTicket?: (id: string) => Promise<TicketState>;
-    commitState?: () => Promise<void>;
-    notify?: (title: string, message: string) => Promise<void>;
-  } = {},
-): StandupCeremony {
-  return new StandupCeremony({
-    listTickets: opts.listTickets ?? (() => Promise.resolve([])),
-    readTicket: opts.readTicket ??
-      (() => Promise.reject(new Error("not called"))),
-    commitState: opts.commitState ?? (() => Promise.resolve()),
-    notify: opts.notify,
-  });
-}
-
 function makeCountedCeremony(
   name: string,
 ): { ceremony: Ceremony; runCount: () => number } {
@@ -125,11 +93,10 @@ Deno.test("CeremonyRunner: unknown ceremony directory silently skipped", async (
     await Deno.mkdir(join(stateDir, "ceremonies", "digest"), {
       recursive: true,
     });
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 0);
+    assertEquals(runCount(), 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -141,11 +108,10 @@ Deno.test("CeremonyRunner: standup skipped when no config.toml", async () => {
     await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
       recursive: true,
     });
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 0);
+    assertEquals(runCount(), 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -162,17 +128,16 @@ Deno.test("CeremonyRunner: invalid time appends warning and skips ceremony", asy
       'time = "9am"',
     );
     const warnings: object[] = [];
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
+    const { ceremony, runCount } = makeCountedCeremony("standup");
     await makeRunner(stateDir, {
       appendTickLog: (entry) => {
         warnings.push(entry);
         return Promise.resolve();
       },
       now: () => TEST_NOW,
-      ceremonies: [standup],
+      ceremonies: [ceremony],
     }).run();
-    assertSpyCalls(commitState, 0);
+    assertEquals(runCount(), 0);
     assertEquals(warnings.length, 1);
     assertEquals(
       (warnings[0] as Record<string, unknown>).event,
@@ -194,14 +159,14 @@ Deno.test("CeremonyRunner: invalid time 25:00 appends warning and skips ceremony
       'time = "25:00"',
     );
     const warnings: object[] = [];
-    const standup = makeStandup();
+    const { ceremony } = makeCountedCeremony("standup");
     await makeRunner(stateDir, {
       appendTickLog: (entry) => {
         warnings.push(entry);
         return Promise.resolve();
       },
       now: () => TEST_NOW,
-      ceremonies: [standup],
+      ceremonies: [ceremony],
     }).run();
     assertEquals(warnings.length, 1);
   } finally {
@@ -219,11 +184,10 @@ Deno.test("CeremonyRunner: standup does not fire before configured time", async 
       join(stateDir, "ceremonies", "standup", "config.toml"),
       'time = "23:00"',
     );
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 0);
+    assertEquals(runCount(), 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -239,27 +203,17 @@ Deno.test("CeremonyRunner: standup fires when time has passed", async () => {
       join(stateDir, "ceremonies", "standup", "config.toml"),
       'time = "09:00"',
     );
-    const commitState = spy(() => Promise.resolve());
-    const notifyCalls: [string, string][] = [];
-    const standup = makeStandup({
-      commitState,
-      notify: (title, message) => {
-        notifyCalls.push([title, message]);
-        return Promise.resolve();
-      },
-    });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 1);
-    assertEquals(notifyCalls, [["lazyboy", "Standup ready"]]);
+    assertEquals(runCount(), 1);
     const outputDir = join(stateDir, "ceremonies", "standup", "output");
     const files: string[] = [];
     for await (const entry of Deno.readDir(outputDir)) {
       files.push(entry.name);
     }
     assertEquals(files.length, 1);
-    assert(files[0].endsWith("-standup.md"));
-    assert(files[0].startsWith("20260727"));
+    assertEquals(files[0], "standup-output.md");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -278,34 +232,10 @@ Deno.test("CeremonyRunner: standup does not rerun if output file exists for toda
       join(outputDir, "20260727T090000-standup.md"),
       "existing",
     );
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 0);
-  } finally {
-    await Deno.remove(stateDir, { recursive: true });
-  }
-});
-
-Deno.test("CeremonyRunner: notify failure does not prevent ceremony completion", async () => {
-  const stateDir = await Deno.makeTempDir();
-  try {
-    await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
-      recursive: true,
-    });
-    await Deno.writeTextFile(
-      join(stateDir, "ceremonies", "standup", "config.toml"),
-      'time = "09:00"',
-    );
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({
-      commitState,
-      notify: () => Promise.reject(new Error("osascript failed")),
-    });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
-      .run();
-    assertSpyCalls(commitState, 1);
+    assertEquals(runCount(), 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -508,226 +438,6 @@ Deno.test("CeremonyRunner: a ceremony that never resolves triggers timeout warni
     await Deno.remove(stateDir, { recursive: true });
   }
 });
-
-Deno.test(
-  "renderStandup: Jira ticket updated last workday (non-Monday) appears in Y:",
-  () => {
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "plan",
-      status: "running",
-      updated: "2026-07-21T14:00:00Z",
-    });
-    const output = renderStandup(TUESDAY_NOW, [ticket]);
-    assertStringIncludes(output, "Y:");
-    assertStringIncludes(output, "Worked on plan for");
-  },
-);
-
-Deno.test(
-  "renderStandup: Jira ticket updated Friday appears in Y: when today is Monday",
-  () => {
-    // TEST_NOW = Monday 2026-07-27; last workday = Friday 2026-07-24
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "plan",
-      status: "running",
-      updated: "2026-07-24T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertStringIncludes(output, "Y:");
-    assertStringIncludes(output, "Worked on plan for");
-  },
-);
-
-Deno.test("renderStandup: Jira ticket updated today appears in T:", () => {
-  const ticket = makeTicket({
-    ...JIRA_BASE,
-    phase: "spec",
-    status: "running",
-    updated: "2026-07-27T14:00:00Z",
-  });
-  const output = renderStandup(TEST_NOW, [ticket]);
-  assertStringIncludes(output, "T:");
-  assertStringIncludes(output, "Work on specifications for");
-  assertFalse(output.includes("Y:"));
-});
-
-Deno.test(
-  "renderStandup: merge+done uses Merged pull request for in Y:",
-  () => {
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "merge",
-      status: "done",
-      updated: "2026-07-24T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertStringIncludes(output, "Merged pull request for");
-  },
-);
-
-Deno.test(
-  "renderStandup: merge+done uses Merged pull request for in T:",
-  () => {
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "merge",
-      status: "done",
-      updated: "2026-07-27T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertStringIncludes(output, "Merged pull request for");
-  },
-);
-
-Deno.test("renderStandup: non-Jira tickets are excluded", () => {
-  const ticket = makeTicket({
-    ...BASE,
-    id: "github/org/repo/1",
-    phase: "plan",
-    status: "running",
-    updated: "2026-07-27T14:00:00Z",
-  });
-  const output = renderStandup(TEST_NOW, [ticket]);
-  assertStringIncludes(output, "No Jira tickets.");
-  assertFalse(output.includes("github/org/repo/1"));
-});
-
-Deno.test(
-  "renderStandup: done non-merge tickets appear in the correct section",
-  () => {
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "spec",
-      status: "done",
-      updated: "2026-07-27T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertStringIncludes(output, "T:");
-    assertStringIncludes(output, "Work on specifications for");
-  },
-);
-
-Deno.test("renderStandup: empty Y: section omits Y: header", () => {
-  const ticket = makeTicket({
-    ...JIRA_BASE,
-    phase: "spec",
-    status: "running",
-    updated: "2026-07-27T14:00:00Z",
-  });
-  const output = renderStandup(TEST_NOW, [ticket]);
-  assertFalse(output.includes("Y:"));
-  assertStringIncludes(output, "T:");
-});
-
-Deno.test("renderStandup: empty T: section omits T: header", () => {
-  const ticket = makeTicket({
-    ...JIRA_BASE,
-    phase: "spec",
-    status: "running",
-    updated: "2026-07-24T14:00:00Z",
-  });
-  const output = renderStandup(TEST_NOW, [ticket]);
-  assertFalse(output.includes("T:"));
-  assertStringIncludes(output, "Y:");
-});
-
-Deno.test(
-  "renderStandup: no Jira tickets in window yields No Jira tickets message",
-  () => {
-    // Thursday 2026-07-23 is neither today (Mon 2026-07-27) nor last workday (Fri 2026-07-24)
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "plan",
-      status: "running",
-      updated: "2026-07-23T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertEquals(output, "# Standup — 2026-07-27\n\nNo Jira tickets.\n");
-  },
-);
-
-Deno.test("renderStandup: Jira key rendered as markdown link", () => {
-  const ticket = makeTicket({
-    ...JIRA_BASE,
-    phase: "plan",
-    status: "running",
-    updated: "2026-07-27T14:00:00Z",
-  });
-  const output = renderStandup(TEST_NOW, [ticket]);
-  assertStringIncludes(
-    output,
-    "([FOO-1](https://jira.example.com/browse/FOO-1))",
-  );
-});
-
-Deno.test(
-  "renderStandup: ticket updated two days ago is excluded from output",
-  () => {
-    // Monday today; last workday = Friday 2026-07-24; Thursday 2026-07-23 is excluded
-    const ticket = makeTicket({
-      ...JIRA_BASE,
-      phase: "plan",
-      status: "running",
-      updated: "2026-07-23T14:00:00Z",
-    });
-    const output = renderStandup(TEST_NOW, [ticket]);
-    assertStringIncludes(output, "No Jira tickets.");
-  },
-);
-
-Deno.test(
-  "CeremonyRunner: standup includes done Jira tickets, excludes non-Jira",
-  async () => {
-    const stateDir = await Deno.makeTempDir();
-    try {
-      await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
-        recursive: true,
-      });
-      await Deno.writeTextFile(
-        join(stateDir, "ceremonies", "standup", "config.toml"),
-        'time = "09:00"',
-      );
-      const tickets = [
-        makeTicket({
-          provider: "jira",
-          id: "jira/FOO-99",
-          url: "https://jira.example.com/browse/FOO-99",
-          title: "Done Feature",
-          phase: "merge",
-          status: "done",
-          updated: "2026-07-27T14:00:00Z",
-        }),
-        makeTicket({
-          ...BASE,
-          id: "github/org/repo/1",
-          phase: "intake",
-          status: "new",
-          updated: "2026-07-27T14:00:00Z",
-        }),
-      ];
-      let written = "";
-      const standup = makeStandup({
-        listTickets: () => Promise.resolve(tickets.map((t) => t.id)),
-        readTicket: (id) => Promise.resolve(tickets.find((t) => t.id === id)!),
-      });
-      await makeRunner(stateDir, {
-        now: () => TEST_NOW,
-        ceremonies: [standup],
-      }).run();
-      const outputDir = join(stateDir, "ceremonies", "standup", "output");
-      for await (const entry of Deno.readDir(outputDir)) {
-        written = await Deno.readTextFile(join(outputDir, entry.name));
-      }
-      assertStringIncludes(written, "FOO-99");
-      assertFalse(written.includes("github/org/repo/1"));
-    } finally {
-      await Deno.remove(stateDir, { recursive: true });
-    }
-  },
-);
-
 function makeDocumentationGaps(
   stateDir: string,
   _outputDir: string,
@@ -1086,11 +796,10 @@ Deno.test("CeremonyRunner: built-in ceremony needs no approval", async () => {
       join(stateDir, "ceremonies", "standup", "config.toml"),
       'time = "09:00"\n',
     );
-    const commitState = spy(() => Promise.resolve());
-    const standup = makeStandup({ commitState });
-    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [standup] })
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, { now: () => TEST_NOW, ceremonies: [ceremony] })
       .run();
-    assertSpyCalls(commitState, 1);
+    assertEquals(runCount(), 1);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

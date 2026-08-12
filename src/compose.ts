@@ -52,6 +52,12 @@ import { resolveConflictsAction } from "./tick-actions/resolve-conflicts.ts";
 import { spawnCIFixAction } from "./tick-actions/spawn-ci-fix.ts";
 import { resolveCIFixAction } from "./tick-actions/resolve-ci-fix.ts";
 import {
+  checkNewCommentsAction,
+  type RawComment,
+} from "./tick-actions/check-new-comments.ts";
+import { judgeComment } from "./judge-comment.ts";
+import { adf2markdown } from "adf2markdown";
+import {
   installPackages,
   isPackageInstalled,
   runPiInstall,
@@ -671,6 +677,101 @@ export function composeTickDeps(
         }),
       ]
       : []),
+    checkNewCommentsAction({
+      isProcessAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
+      writeTicket,
+      appendLog: appendTicketLog,
+      fetchGitHubComments: async (ticketId, since) => {
+        const parts = ticketId.split("/");
+        const org = parts[1];
+        const repo = parts[2];
+        const number = parts[3];
+        const { token } = resolveGitHubAccount(org, config);
+        const url =
+          `https://api.github.com/repos/${org}/${repo}/issues/${number}/comments` +
+          (since ? `?since=${encodeURIComponent(since)}` : "");
+        const res = await http.get(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+          },
+        });
+        if (!res.ok) {
+          throw new Error(`GitHub API ${res.status} fetching comments`);
+        }
+        const items = (await res.json()) as Array<{
+          user: { login: string };
+          body: string;
+          created_at: string;
+        }>;
+        return items.map((c): RawComment => ({
+          author: c.user.login,
+          body: c.body ?? "",
+          timestamp: c.created_at,
+        }));
+      },
+      fetchJiraComments: async (issueKey, since) => {
+        const auth = btoa(
+          `${Deno.env.get("JIRA_EMAIL") ?? ""}:${
+            Deno.env.get("JIRA_API_TOKEN") ?? ""
+          }`,
+        );
+        const url = `${
+          config.jira!.baseUrl
+        }/rest/api/3/issue/${issueKey}/comment?maxResults=50`;
+        const res = await http.get(url, {
+          headers: {
+            Authorization: `Basic ${auth}`,
+            Accept: "application/json",
+          },
+        });
+        if (!res.ok) {
+          throw new Error(`Jira API ${res.status} fetching comments`);
+        }
+        const data = (await res.json()) as {
+          comments: Array<{
+            author: { displayName: string; emailAddress?: string };
+            body: unknown;
+            created: string;
+          }>;
+        };
+        return (data.comments ?? [])
+          .filter((c) => !since || c.created > since)
+          .map((c): RawComment => ({
+            author: c.author.displayName,
+            body: c.body == null || typeof c.body !== "object"
+              ? ""
+              // deno-lint-ignore no-explicit-any
+              : adf2markdown(c.body as any).trim(),
+            timestamp: c.created,
+          }));
+      },
+      isBot: (() => {
+        const botLogins = new Set<string>();
+        if (config.github.accounts) {
+          for (const account of Object.values(config.github.accounts)) {
+            botLogins.add(account.login);
+          }
+        } else {
+          const login = Deno.env.get("GITHUB_LOGIN");
+          if (login) botLogins.add(login);
+        }
+        const jiraEmail = Deno.env.get("JIRA_EMAIL");
+        if (jiraEmail) botLogins.add(jiraEmail);
+        return (author: string) => botLogins.has(author);
+      })(),
+      judgeComment: (body) => judgeComment(body, captureCommandRunner()),
+      writeContextFile: async (ticketDir, content) => {
+        const timestamp = compactTimestamp(
+          Temporal.Now.zonedDateTimeISO("UTC"),
+        );
+        await writeTextFile(
+          join(ticketDir, `${timestamp}-comment-context.md`),
+          content,
+        );
+      },
+      config,
+    }),
   ];
 
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;

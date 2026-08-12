@@ -237,11 +237,12 @@ A `reason` field, where present, is a lowercase kebab-case label naming the
 cause (`agent-failed`, `output-file-missing`, `empty`, `no-prs`, `no-worktrees`,
 `no-github-repos`, `github-slug-extraction-failed`, `clone-failed`,
 `worktree-creation-failed`, `push-failed`, `no-verdict-line`, `incomplete`,
-`pr-fetch-failed`, `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`).
-Reuse an existing label when it fits; add a new one only for a genuinely new
-cause, and never put free prose in `reason` (that belongs in a separate field or
-the `error` message). Work-item identity is the ticket directory itself — do not
-add an `id` or `ticketId` field to per-ticket entries.
+`pr-fetch-failed`, `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`,
+`no-commit`, `context-file-unreadable`). Reuse an existing label when it fits;
+add a new one only for a genuinely new cause, and never put free prose in
+`reason` (that belongs in a separate field or the `error` message). Work-item
+identity is the ticket directory itself — do not add an `id` or `ticketId` field
+to per-ticket entries.
 
 ## Failure handling
 
@@ -256,7 +257,8 @@ The default response to a failure is decided by where it happens, not per-caller
   **never block the state machine or throw out of the action.** An action may
   set `needs-attention` only when the failure means the ticket genuinely cannot
   proceed — and then its `applies` must exclude `status === "needs-attention"`
-  to avoid a retry loop.
+  to avoid a retry loop (with the documented `resolveCIFixAction` exception —
+  see Tick actions and CI fix).
 - **Background analysis subprocess** → fire-and-forget; its failure must never
   touch ticket state (see Background analysis subprocesses).
 
@@ -370,7 +372,10 @@ exports a `*Deps` interface, a factory, and a `*_test.ts` (pattern:
 - An action's `applies` predicate must exclude tickets where a phase agent is
   live (`isPhaseAlive(ticketDir)` true) — rebasing or pushing under a live agent
   corrupts its git state. Actions that can set `needs-attention` must also
-  exclude `status === "needs-attention"` to avoid a retry loop.
+  exclude `status === "needs-attention"` to avoid a retry loop. The one
+  exception is `resolveCIFixAction`, which is gated on the presence of a context
+  file it consumes — see the CI fix section for why the guard is deliberately
+  omitted there. Do not add it.
 - `TicketState.ciHandledRunIds?: string[]` records `${runId}-${attempt}` keys
   `spawnCIFixAction` has already handled (append-only; never removed). Use it
   only for CI-failure dedup.
@@ -639,14 +644,18 @@ two-tick pattern identical in structure to conflict resolution.
 **Tick 1 (spawn):** `spawnCIFixAction` queries
 `/repos/{repo}/actions/runs?head_sha=<pr head sha>` and writes
 `${timestamp}-ci-fix-context-${runId}-${attempt}.md` to the ticket directory,
-holding the PR URL, repo, run ID, attempt, branch, worktree path, and the names
-of the failing jobs. It does not include the PR diff — the agent has the
-worktree. It calls `spawnPhase` with the context file, records
+holding the PR URL, repo, run ID, attempt, branch, head SHA, worktree path, and
+the names of the failing jobs. It does not include the PR diff — the agent has
+the worktree. It calls `spawnPhase` with the context file, records
 `${runId}-${attempt}` in `ciHandledRunIds`, writes the ticket, and returns.
 
-The dedup key is `${runId}-${attempt}`, not the run ID alone: `gh run rerun`
-keeps the same run ID and only increments the attempt, so a run-ID-only key
-would silently swallow every re-run failure.
+The `Head-SHA` header is the PR head SHA the failing run was queued against. It
+is what the resolve action pins its `--force-with-lease` to and what it compares
+the worktree HEAD against, so it must keep being written.
+
+The dedup key is `${runId}-${attempt}`, not the run ID alone: re-running the
+failed jobs keeps the same run ID and only increments the attempt, so a
+run-ID-only key would silently swallow every re-run failure.
 
 If the PR's `worktreeKey` resolves to nothing in `ticket.worktrees`, the ticket
 transitions to `needs-attention` with reason `no-worktrees` and nothing is
@@ -663,22 +672,38 @@ first line matching `/^VERDICT:\s*(FIXED|INFRA|UNFIXABLE)/im`.
 
 | Verdict     | Effect                                                                                                                                                                                                                                                                                                                                             |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FIXED`     | `git push --force-with-lease origin <branch>` from the worktree, logging `branch-pushed`. A push failure parks the ticket (`push-failed`).                                                                                                                                                                                                         |
+| `FIXED`     | `git push --force-with-lease=refs/heads/<branch>:<Head-SHA> origin <branch>` from the worktree, logging `branch-pushed`. A push failure parks the ticket (`push-failed`).                                                                                                                                                                          |
 | `INFRA`     | On attempt 1, `POST /actions/runs/{runId}/rerun-failed-jobs`; no push, no code change. A failed re-run is logged (`rerun-failed`) and never parks. On attempt 2 or higher, no re-run is attempted — the ticket parks with `needs-attention` and reason `infra-rerun-exhausted`. A missing or non-numeric `Attempt` header is treated as attempt 1. |
 | `UNFIXABLE` | `needs-attention`, reason `ci-unfixable`.                                                                                                                                                                                                                                                                                                          |
 
+The lease is pinned to the head SHA rather than left bare because the agent is
+told to rewrite history and may run `git fetch`, which advances the worktree's
+`origin/<branch>` and makes a bare lease compare against a ref that already
+contains someone else's commits. Before pushing, the action also compares the
+worktree HEAD (`git rev-parse HEAD` through the injected `runGit`) against the
+head SHA: equal means the agent claimed `FIXED` without committing, which would
+push nothing and leave the PR red forever with no new run to trigger another
+attempt, so the ticket parks with reason `no-commit`. A context file written
+before the `Head-SHA` header existed has neither behavior — the push falls back
+to a bare `--force-with-lease` and the did-it-move check is skipped, so
+in-flight tickets are not stranded across a deploy.
+
 A missing output file parks with `output-file-missing`; a missing verdict line
-parks with `no-verdict-line`. Both the context and output files are deleted
-after resolution in every path, and a `ci-fix-resolved` entry records `prUrl`,
-`runId`, `attempt`, and `verdict`.
+parks with `no-verdict-line`; a context file that cannot be read is logged
+(`context-file-unreadable`) and deleted without parking, since leaving it in
+place would re-fire the action and rewrite the ticket on every subsequent tick.
+Both the context and output files are deleted after resolution in every path,
+and a `ci-fix-resolved` entry records `prUrl`, `runId`, `attempt`, and
+`verdict`.
 
 The action does not otherwise touch `ticket.phase` or `ticket.status`: on
 `FIXED` and on `INFRA` at attempt 1, the ticket stays `implementation/waiting`,
 and the next tick observes the new CI run. `UNFIXABLE` and the INFRA attempt cap
 are the only brakes — otherwise a still-red PR is picked up again on the next
-tick, since `gh run rerun` bumps the attempt and produces a fresh dedup key. The
-attempt cap exists because an uncapped INFRA path would otherwise spawn a fix
-agent every tick forever against a permanently broken CI environment.
+tick, since re-running the failed jobs bumps the attempt and produces a fresh
+dedup key. The attempt cap exists because an uncapped INFRA path would otherwise
+spawn a fix agent every tick forever against a permanently broken CI
+environment.
 
 `writeLearning` fires only on `FIXED` when the agent emitted a `LEARNING:` line,
 and a failure there cannot affect the fix path. The pipeline never creates
@@ -701,6 +726,14 @@ resolution, and commit messages rejected by commitlint (reword via
 `tickActions` array so a completed fix run is resolved before the spawn action
 can re-evaluate the same ticket. Both are gated on
 `config.tick.resolveCIFailures`.
+
+`resolveCIFixAction.applies` deliberately does **not** exclude
+`status === "needs-attention"`, unlike every other action that can park a
+ticket. Its guard is the presence of a context file, and every path — including
+`park` — deletes the context file it consumed, so `applies` goes false on its
+own and there is no retry loop. Adding the status guard would instead strand any
+unprocessed sibling context file on an already-parked ticket, because no later
+tick would ever revisit it. Do not add the guard.
 
 Actions that reconcile missing data (e.g. `reconcilePRsAction`) must guard their
 `applies` predicate so they fire only when the data is absent and never

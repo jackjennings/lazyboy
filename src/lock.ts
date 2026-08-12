@@ -1,5 +1,12 @@
 import { dirname } from "@std/path";
 import { isProcessAlive } from "./executor.ts";
+import {
+  mkdir,
+  readTextFile,
+  remove,
+  stat,
+  writeTextFile,
+} from "./filesystem.ts";
 
 export interface Lock {
   withLock(fn: () => Promise<void>): Promise<void>;
@@ -25,16 +32,17 @@ export class PidFileLock implements Lock {
 
   async withLock(fn: () => Promise<void>): Promise<void> {
     try {
-      const existing = await Deno.readTextFile(this.#pidFile).catch(
+      const existing = await readTextFile(this.#pidFile).catch(
         () => null,
       );
       if (existing) {
         const pid = parseInt(existing.trim(), 10);
         const alive = !isNaN(pid) && this.#isPidAlive(pid);
         if (alive) {
-          const stat = await Deno.stat(this.#pidFile).catch(() => null);
-          const ageMs = stat?.mtime
-            ? Temporal.Now.instant().epochMilliseconds - stat.mtime.getTime()
+          const fileInfo = await stat(this.#pidFile).catch(() => null);
+          const ageMs = fileInfo?.mtime
+            ? Temporal.Now.instant().epochMilliseconds -
+              fileInfo.mtime.getTime()
             : 0;
           if (ageMs < STALE_LOCK_MS) {
             await this.#log({ event: "tick-already-running", pid });
@@ -47,8 +55,8 @@ export class PidFileLock implements Lock {
           });
         }
       }
-      await Deno.mkdir(dirname(this.#pidFile), { recursive: true });
-      await Deno.writeTextFile(this.#pidFile, String(Deno.pid));
+      await mkdir(dirname(this.#pidFile), { recursive: true });
+      await writeTextFile(this.#pidFile, String(Deno.pid));
     } catch (e) {
       await this.#log({
         event: "lock-failed",
@@ -60,7 +68,7 @@ export class PidFileLock implements Lock {
     try {
       await fn();
     } finally {
-      await Deno.remove(this.#pidFile).catch(() => {});
+      await remove(this.#pidFile).catch(() => {});
     }
   }
 }

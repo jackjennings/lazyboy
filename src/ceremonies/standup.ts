@@ -2,6 +2,7 @@ import { join } from "@std/path";
 import { compactTimestamp } from "../timestamp.ts";
 import type { TicketState } from "../state/types.ts";
 import type { Ceremony, StandupCeremonyDeps } from "./types.ts";
+import { mkdir, writeTextFile } from "../filesystem.ts";
 
 export type { StandupCeremonyDeps } from "./types.ts";
 
@@ -43,7 +44,7 @@ export class StandupCeremony implements Ceremony {
   }
 
   async run(now: Temporal.ZonedDateTime, outputDir: string): Promise<void> {
-    await Deno.mkdir(outputDir, { recursive: true });
+    await mkdir(outputDir, { recursive: true });
 
     const ids = await this.#deps.listTickets();
     const tickets = await Promise.all(
@@ -51,7 +52,7 @@ export class StandupCeremony implements Ceremony {
     );
 
     const content = renderStandup(now, tickets);
-    await Deno.writeTextFile(
+    await writeTextFile(
       join(outputDir, `${compactTimestamp(now)}-standup.md`),
       content,
     );

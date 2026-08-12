@@ -9,6 +9,14 @@ import {
   type AnthropicPricingCache,
   calculateAnthropicCost,
 } from "./anthropic-pricing.ts";
+import {
+  mkdir,
+  readDir,
+  readTextFile,
+  remove,
+  stat,
+  writeTextFile,
+} from "./filesystem.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -21,17 +29,17 @@ export function getPiEnvironmentVariables(
 
 export async function setupPiDirectories(home: string): Promise<void> {
   const sessionsDir = join(home, ".lazyboy", "pi", "sessions");
-  await Deno.mkdir(sessionsDir, { recursive: true });
+  await mkdir(sessionsDir, { recursive: true });
 }
 
 export async function setupClaudeCodeDirectories(home: string): Promise<void> {
   const claudeCodeDir = join(home, ".lazyboy", "claude-code");
-  await Deno.mkdir(claudeCodeDir, { recursive: true });
+  await mkdir(claudeCodeDir, { recursive: true });
   const settingsPath = join(claudeCodeDir, "settings.json");
   try {
-    await Deno.stat(settingsPath);
+    await stat(settingsPath);
   } catch {
-    await Deno.writeTextFile(
+    await writeTextFile(
       settingsPath,
       JSON.stringify({ attribution: { commit: "", pr: "" } }),
     );
@@ -67,7 +75,7 @@ export async function buildContextFiles(
   const contextFiles: string[] = [];
   if (includePrinciples) {
     try {
-      await Deno.stat(principlesPath);
+      await stat(principlesPath);
       contextFiles.push(`@${principlesPath}`);
     } catch {
       /* principles.md doesn't exist yet */
@@ -78,7 +86,7 @@ export async function buildContextFiles(
     const phaseFiles: string[] = [];
     const prefixPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}[.-]`);
     try {
-      for await (const entry of Deno.readDir(ticketDir)) {
+      for await (const entry of readDir(ticketDir)) {
         if (
           entry.isFile &&
           prefixPattern.test(entry.name) &&
@@ -102,7 +110,7 @@ export async function appendPhaseLog(
   ticketDir: string,
   entry: object,
 ): Promise<void> {
-  await Deno.writeTextFile(
+  await writeTextFile(
     join(ticketDir, "log.ndjson"),
     JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n",
     { append: true },
@@ -368,7 +376,7 @@ export async function executePhase(
   });
 
   try {
-    await Deno.remove(outputFilePath);
+    await remove(outputFilePath);
   } catch {
     // file didn't exist; nothing to do
   }
@@ -393,7 +401,7 @@ export async function executePhase(
   if (usage !== null) {
     let costUsd: number | undefined;
     try {
-      const cacheText = await Deno.readTextFile(
+      const cacheText = await readTextFile(
         join(opts.homeDir, ".lazyboy", "anthropic-pricing.json"),
       );
       const pricingCache = JSON.parse(cacheText) as AnthropicPricingCache;
@@ -403,7 +411,7 @@ export async function executePhase(
       // pricing unavailable
     }
 
-    await Deno.writeTextFile(
+    await writeTextFile(
       join(opts.ticketDir, opts.outputFile.replace(/\.md$/, ".usage.json")),
       JSON.stringify(costUsd !== undefined ? { ...usage, costUsd } : usage),
     );
@@ -422,7 +430,7 @@ export async function executePhase(
   });
 
   try {
-    await Deno.writeTextFile(
+    await writeTextFile(
       join(opts.ticketDir, opts.outputFile + ".exit"),
       String(result.code),
     );
@@ -432,7 +440,7 @@ export async function executePhase(
 
   if (sessionId !== null) {
     try {
-      await Deno.writeTextFile(
+      await writeTextFile(
         join(opts.ticketDir, opts.outputFile + ".session"),
         sessionId,
       );
@@ -451,7 +459,7 @@ export async function readPhaseSessionId(
   const pattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md\\.session$`);
   const matches: string[] = [];
   try {
-    for await (const entry of Deno.readDir(ticketDir)) {
+    for await (const entry of readDir(ticketDir)) {
       if (entry.isFile && pattern.test(entry.name)) {
         matches.push(entry.name);
       }
@@ -462,9 +470,7 @@ export async function readPhaseSessionId(
   if (matches.length === 0) return null;
   matches.sort();
   try {
-    return await Deno.readTextFile(
-      join(ticketDir, matches[matches.length - 1]),
-    );
+    return await readTextFile(join(ticketDir, matches[matches.length - 1]));
   } catch {
     return null;
   }

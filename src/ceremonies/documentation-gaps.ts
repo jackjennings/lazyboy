@@ -2,6 +2,7 @@ import { join } from "@std/path";
 import { compactTimestamp } from "../timestamp.ts";
 import type { Ceremony } from "./types.ts";
 import type { CommandRunner } from "../apfel.ts";
+import { mkdir, readDir, readTextFile, writeTextFile } from "../filesystem.ts";
 
 export interface DocumentationGapsCeremonyDeps {
   stateDir: string;
@@ -61,11 +62,11 @@ async function collectOpenQuestions(
 
   async function walk(dir: string): Promise<void> {
     try {
-      for await (const entry of Deno.readDir(dir)) {
+      for await (const entry of readDir(dir)) {
         if (entry.isDirectory && !SKIP.has(entry.name)) {
           await walk(join(dir, entry.name));
         } else if (entry.isFile && entry.name.endsWith("-enrichment.md")) {
-          const content = await Deno.readTextFile(join(dir, entry.name));
+          const content = await readTextFile(join(dir, entry.name));
           const questions = extractOpenQuestions(content);
           if (!questions) continue;
           results.push({ ticketId: dir.slice(stateDir.length + 1), questions });
@@ -83,9 +84,9 @@ async function collectOpenQuestions(
 async function readMdFiles(dir: string): Promise<string[]> {
   const contents: string[] = [];
   try {
-    for await (const entry of Deno.readDir(dir)) {
+    for await (const entry of readDir(dir)) {
       if (entry.isFile && entry.name.endsWith(".md")) {
-        contents.push(await Deno.readTextFile(join(dir, entry.name)));
+        contents.push(await readTextFile(join(dir, entry.name)));
       }
     }
   } catch (e) {
@@ -97,7 +98,7 @@ async function readMdFiles(dir: string): Promise<string[]> {
 async function readCorpus(repoDir: string, stateDir: string): Promise<string> {
   const parts: string[] = [];
   try {
-    parts.push(await Deno.readTextFile(join(repoDir, "AGENTS.md")));
+    parts.push(await readTextFile(join(repoDir, "AGENTS.md")));
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
@@ -109,11 +110,11 @@ async function readCorpus(repoDir: string, stateDir: string): Promise<string> {
 async function readPriorHeadings(outputDir: string): Promise<string[]> {
   const headings: string[] = [];
   try {
-    for await (const entry of Deno.readDir(outputDir)) {
+    for await (const entry of readDir(outputDir)) {
       if (!entry.isFile || !entry.name.endsWith("-documentation-gaps.md")) {
         continue;
       }
-      const content = await Deno.readTextFile(join(outputDir, entry.name));
+      const content = await readTextFile(join(outputDir, entry.name));
       for (const line of content.split("\n")) {
         if (line.startsWith("## ")) headings.push(line.slice(3));
       }
@@ -177,7 +178,7 @@ export class DocumentationGapsCeremony implements Ceremony {
   }
 
   async run(now: Temporal.ZonedDateTime, outputDir: string): Promise<void> {
-    await Deno.mkdir(outputDir, { recursive: true });
+    await mkdir(outputDir, { recursive: true });
 
     const questions = await collectOpenQuestions(this.#deps.stateDir);
     const outputPath = join(
@@ -199,7 +200,7 @@ export class DocumentationGapsCeremony implements Ceremony {
       );
     }
 
-    await Deno.writeTextFile(outputPath, content);
+    await writeTextFile(outputPath, content);
     await this.#deps.commitState();
 
     try {

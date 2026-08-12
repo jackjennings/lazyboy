@@ -1,8 +1,9 @@
 import { commands } from "./commands/registry.ts";
 import { formatCommandHelp, formatGlobalHelp } from "./commands/help.ts";
+import { readTextFile } from "./filesystem.ts";
 
 try {
-  const content = await Deno.readTextFile(
+  const content = await readTextFile(
     `${Deno.env.get("HOME")}/.config/lazyboy/env`,
   );
   for (const line of content.split("\n")) {

@@ -1,4 +1,5 @@
 import type { Command } from "./types.ts";
+import { readTextFile } from "../filesystem.ts";
 
 export const completion: Command = {
   name: "completion",
@@ -19,6 +20,6 @@ export const completion: Command = {
       `../completion.${shell}`,
       import.meta.url,
     ).pathname;
-    console.log(await Deno.readTextFile(scriptPath));
+    console.log(await readTextFile(scriptPath));
   },
 };

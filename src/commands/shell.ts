@@ -1,6 +1,7 @@
 import { readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { Command } from "./types.ts";
+import { stat } from "../filesystem.ts";
 
 export const shell: Command = {
   name: "shell",
@@ -27,14 +28,14 @@ export const shell: Command = {
       Deno.exit(1);
     }
     const worktreePath = worktreeEntries[0].path;
-    let stat;
+    let fileInfo;
     try {
-      stat = await Deno.stat(worktreePath);
+      fileInfo = await stat(worktreePath);
     } catch {
       console.error(`shell: ${worktreePath}: not a directory`);
       Deno.exit(1);
     }
-    if (!stat.isDirectory) {
+    if (!fileInfo.isDirectory) {
       console.error(`shell: ${worktreePath}: not a directory`);
       Deno.exit(1);
     }

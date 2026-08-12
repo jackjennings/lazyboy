@@ -21,6 +21,7 @@ import {
 import { listTickets, readTicket } from "../state/store.ts";
 import { ScrollPane } from "../ui/scroll-pane.ts";
 import type { Command } from "./types.ts";
+import { mkdir, open, readTextFile } from "../filesystem.ts";
 
 const BLOCKED_COMMANDS = new Set(["hud", "shell", "tail", "review"]);
 
@@ -85,7 +86,7 @@ export function logPaneLines(lines: string[]): string[] {
 }
 
 export async function openLogWatch(parentDir: string): Promise<Deno.FsWatcher> {
-  await Deno.mkdir(parentDir, { recursive: true });
+  await mkdir(parentDir, { recursive: true });
   return Deno.watchFs(parentDir);
 }
 
@@ -139,10 +140,10 @@ export const TICK_LOG_TAIL_LINES = 2000;
 const TICK_LOG_TAIL_BYTES = 256 * 1024;
 
 async function readTail(path: string, maxBytes: number): Promise<string> {
-  const file = await Deno.open(path, { read: true });
+  const file = await open(path, { read: true });
   try {
     const { size } = await file.stat();
-    if (size <= maxBytes) return await Deno.readTextFile(path);
+    if (size <= maxBytes) return await readTextFile(path);
     await file.seek(size - maxBytes, Deno.SeekMode.Start);
     const buffer = new Uint8Array(maxBytes);
     let read = 0;

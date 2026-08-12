@@ -26,6 +26,7 @@ import {
   type WorktreeInfo,
 } from "./state/types.ts";
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
+import { mkdir, readTextFile, writeTextFile } from "./filesystem.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase | "conflict-resolution" | "ci-triage",
@@ -700,14 +701,14 @@ export async function advancePhase(
 export async function appendTickLog(entry: object): Promise<void> {
   const lazyDir = lazyboyDir();
   const ts = Temporal.Now.instant().toString();
-  await Deno.mkdir(lazyDir, { recursive: true });
-  await Deno.writeTextFile(
+  await mkdir(lazyDir, { recursive: true });
+  await writeTextFile(
     join(lazyDir, "tick.ndjson"),
     JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
   try {
-    await Deno.writeTextFile(
+    await writeTextFile(
       join(lazyDir, "log.ndjson"),
       JSON.stringify({ ts, ...entry }) + "\n",
       { append: true },
@@ -865,7 +866,7 @@ export class TickService {
           for (const agentsMdPath of deps.agentsMdPaths) {
             let content: string;
             try {
-              content = await Deno.readTextFile(agentsMdPath);
+              content = await readTextFile(agentsMdPath);
             } catch {
               continue;
             }

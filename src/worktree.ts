@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
+import { mkdir, readDir, stat } from "./filesystem.ts";
 
 export function extractGitHubSlug(url: string): string {
   const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
@@ -63,11 +64,11 @@ export async function findLocalRepo(
 ): Promise<string | null> {
   for (const root of roots) {
     try {
-      for await (const orgEntry of Deno.readDir(root)) {
+      for await (const orgEntry of readDir(root)) {
         if (!orgEntry.isDirectory) continue;
         const orgPath = join(root, orgEntry.name);
         try {
-          for await (const repoEntry of Deno.readDir(orgPath)) {
+          for await (const repoEntry of readDir(orgPath)) {
             if (!repoEntry.isDirectory) continue;
             const candidatePath = join(orgPath, repoEntry.name);
             const { code, stdout } = await runGit(
@@ -100,11 +101,11 @@ export async function listRepoCorpus(
 
   for (const root of roots) {
     try {
-      for await (const orgEntry of Deno.readDir(root)) {
+      for await (const orgEntry of readDir(root)) {
         if (!orgEntry.isDirectory) continue;
         const orgPath = join(root, orgEntry.name);
         try {
-          for await (const repoEntry of Deno.readDir(orgPath)) {
+          for await (const repoEntry of readDir(orgPath)) {
             if (!repoEntry.isDirectory) continue;
             const repoPath = join(orgPath, repoEntry.name);
             const { code, stdout } = await runGit(
@@ -195,9 +196,9 @@ export async function cloneRemoteRepo(
   const [org, repo] = slug.split("/");
   const orgDir = join(home, ".lazyboy", "repositories", org);
   const repoDir = join(orgDir, repo);
-  await Deno.mkdir(orgDir, { recursive: true });
+  await mkdir(orgDir, { recursive: true });
   try {
-    await Deno.stat(repoDir);
+    await stat(repoDir);
     return repoDir;
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
@@ -214,7 +215,7 @@ export async function createWorktree(
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
   const worktreePath = join(home, ".lazyboy", "worktrees", ticketId, org, repo);
-  await Deno.mkdir(join(home, ".lazyboy", "worktrees", ticketId, org), {
+  await mkdir(join(home, ".lazyboy", "worktrees", ticketId, org), {
     recursive: true,
   });
 

@@ -12,7 +12,14 @@ import {
   type TicketStatus,
   type WorktreeInfo,
 } from "./types.ts";
-import { mkdir, readDir, readTextFile, remove, writeTextFile } from "../fs.ts";
+import {
+  mkdir,
+  readDir,
+  readTextFile,
+  remove,
+  stat,
+  writeTextFile,
+} from "../filesystem.ts";
 
 function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
   const table: Record<string, [TicketPhase, TicketStatus]> = {
@@ -41,7 +48,7 @@ export async function readTicket(
   id: string,
 ): Promise<TicketState> {
   const metaPath = join(stateDir, id, "meta.md");
-  const raw = await Deno.readTextFile(metaPath);
+  const raw = await readTextFile(metaPath);
   const { data, content } = matter(raw);
 
   let phase: TicketPhase;
@@ -105,7 +112,7 @@ export async function writeTicket(
 ): Promise<void> {
   assertValidPhaseStatus(ticket.phase, ticket.status);
   const dir = join(stateDir, ticket.id);
-  await Deno.mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   const frontmatter: Record<string, unknown> = {
     id: ticket.id,
     provider: ticket.provider,
@@ -132,7 +139,7 @@ export async function writeTicket(
     frontmatter.notionPages = ticket.notionPages;
   }
   const raw = matter.stringify(ticket.body, frontmatter);
-  await Deno.writeTextFile(join(dir, "meta.md"), raw);
+  await writeTextFile(join(dir, "meta.md"), raw);
 }
 
 export async function writePhaseOutput(
@@ -141,7 +148,7 @@ export async function writePhaseOutput(
   filename: string,
   content: string,
 ): Promise<void> {
-  await Deno.writeTextFile(join(stateDir, id, filename), content);
+  await writeTextFile(join(stateDir, id, filename), content);
 }
 
 export function readPhaseOutput(
@@ -149,7 +156,7 @@ export function readPhaseOutput(
   id: string,
   filename: string,
 ): Promise<string> {
-  return Deno.readTextFile(join(stateDir, id, filename));
+  return readTextFile(join(stateDir, id, filename));
 }
 
 async function walkStateDir(
@@ -159,13 +166,13 @@ async function walkStateDir(
   ids: string[],
 ): Promise<void> {
   if (depth > 4) return;
-  for await (const entry of Deno.readDir(dir)) {
+  for await (const entry of readDir(dir)) {
     if (!entry.isDirectory || entry.name.startsWith(".")) continue;
     const entryDir = join(dir, entry.name);
     const entryRel = relPath ? `${relPath}/${entry.name}` : entry.name;
     let hasMeta = false;
     try {
-      await Deno.stat(join(entryDir, "meta.md"));
+      await stat(join(entryDir, "meta.md"));
       hasMeta = true;
       // deno-lint-ignore no-empty
     } catch {}
@@ -193,15 +200,15 @@ export async function appendTicketLog(
   entry: object,
 ): Promise<void> {
   const ts = Temporal.Now.instant().toString();
-  await Deno.writeTextFile(
+  await writeTextFile(
     join(stateDir, id, "log.ndjson"),
     JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
   const lazyDir = lazyboyDir();
-  await Deno.mkdir(lazyDir, { recursive: true });
+  await mkdir(lazyDir, { recursive: true });
   try {
-    await Deno.writeTextFile(
+    await writeTextFile(
       join(lazyDir, "log.ndjson"),
       JSON.stringify({ ts, id, ...entry }) + "\n",
       { append: true },

@@ -2,6 +2,7 @@ import matter from "gray-matter";
 import { join } from "@std/path";
 import type { Migration } from "../src/migrations/types.ts";
 import type { ApprovalEntry } from "../src/state/types.ts";
+import { readTextFile } from "../src/filesystem.ts";
 
 const migration: Migration = {
   async run(ticket, stateDir) {
@@ -10,7 +11,7 @@ const migration: Migration = {
     const metaPath = join(stateDir, ticket.id, "meta.md");
     let raw: string;
     try {
-      raw = await Deno.readTextFile(metaPath);
+      raw = await readTextFile(metaPath);
     } catch {
       return { ...ticket, approvals: [] };
     }

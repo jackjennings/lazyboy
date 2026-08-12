@@ -17,6 +17,7 @@ import { GitHubProvider } from "../providers/github.ts";
 import { JiraProvider } from "../providers/jira.ts";
 import { TodoTxtProvider } from "../providers/todo-txt.ts";
 import { compareSortKeys } from "../providers/types.ts";
+import { readDir, readTextFile } from "../filesystem.ts";
 
 const toSortableMap: Record<string, (id: string) => Array<string | number>> = {
   github: GitHubProvider.toSortable,
@@ -84,10 +85,10 @@ async function readNamedUsageFiles(
 ): Promise<{ name: string; usage: PhaseUsage }[] | null> {
   const files: { name: string; usage: PhaseUsage }[] = [];
   try {
-    for await (const entry of Deno.readDir(ticketDir)) {
+    for await (const entry of readDir(ticketDir)) {
       if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
       try {
-        const raw = await Deno.readTextFile(join(ticketDir, entry.name));
+        const raw = await readTextFile(join(ticketDir, entry.name));
         files.push({ name: entry.name, usage: JSON.parse(raw) as PhaseUsage });
       } catch {
         return null;
@@ -264,7 +265,7 @@ export async function readAttentionReason(
 ): Promise<string | null> {
   let raw: string;
   try {
-    raw = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+    raw = await readTextFile(join(ticketDir, "log.ndjson"));
   } catch {
     return null;
   }

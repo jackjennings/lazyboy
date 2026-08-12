@@ -2,6 +2,7 @@ import { join } from "@std/path";
 import { compactTimestamp } from "../src/timestamp.ts";
 import { runGit } from "../src/worktree.ts";
 import type { Migration } from "../src/migrations/types.ts";
+import { readDir, rename, stat } from "../src/filesystem.ts";
 
 const PHASES = [
   "intake",
@@ -16,7 +17,7 @@ const migration: Migration = {
     const ticketDir = join(stateDir, ticket.id);
     const entries: Deno.DirEntry[] = [];
     try {
-      for await (const entry of Deno.readDir(ticketDir)) {
+      for await (const entry of readDir(ticketDir)) {
         entries.push(entry);
       }
     } catch {
@@ -52,8 +53,8 @@ const migration: Migration = {
                 .toZonedDateTimeISO("UTC"),
             );
           } else {
-            const stat = await Deno.stat(oldPath);
-            const ms = stat.mtime?.getTime() ?? Date.now();
+            const fileInfo = await stat(oldPath);
+            const ms = fileInfo.mtime?.getTime() ?? 0;
             ts = compactTimestamp(
               Temporal.Instant.fromEpochMilliseconds(ms)
                 .toZonedDateTimeISO("UTC"),
@@ -85,7 +86,7 @@ const migration: Migration = {
       }
 
       if (newName && newName !== name) {
-        await Deno.rename(oldPath, join(ticketDir, newName));
+        await rename(oldPath, join(ticketDir, newName));
       }
     }
 

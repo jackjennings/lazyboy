@@ -1,4 +1,5 @@
 import type { CommandRunner } from "./apfel.ts";
+import { remove, writeTextFile } from "./filesystem.ts";
 
 const JUDGE_SYSTEM_PROMPT =
   "You are evaluating whether content from an AI coding agent's Principles section contains substantive engineering guidance worth preserving. Reply with verdict KEEP if the content contains at least one concrete, reusable engineering principle or guideline — a lesson that could inform future engineering decisions. Reply with verdict SKIP if the content is a meta-commentary explaining why no principles were added, a placeholder, or otherwise lacks actionable engineering guidance.";
@@ -28,7 +29,7 @@ async function judgeWithApfel(
   let schemaPath: string;
   try {
     schemaPath = await Deno.makeTempFile({ suffix: ".json" });
-    await Deno.writeTextFile(schemaPath, JSON.stringify(VERDICT_SCHEMA));
+    await writeTextFile(schemaPath, JSON.stringify(VERDICT_SCHEMA));
   } catch {
     return null;
   }
@@ -50,7 +51,7 @@ async function judgeWithApfel(
     return null;
   } finally {
     try {
-      await Deno.remove(schemaPath);
+      await remove(schemaPath);
     } catch {
       // temp file already gone
     }

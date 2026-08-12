@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { PhaseUsage } from "./state/types.ts";
+import { stat, writeTextFile } from "./filesystem.ts";
 
 export interface AnthropicModelPricing {
   inputPerMTok: number;
@@ -203,10 +204,10 @@ export async function refreshAnthropicPricingIfStale(
   const cachePath = join(homeDir, ".lazyboy", "anthropic-pricing.json");
 
   try {
-    const stat = await Deno.stat(cachePath);
-    if (stat.mtime) {
+    const fileInfo = await stat(cachePath);
+    if (fileInfo.mtime) {
       const ageMs = Temporal.Now.instant().epochMilliseconds -
-        stat.mtime.getTime();
+        fileInfo.mtime.getTime();
       if (ageMs < 24 * 60 * 60 * 1000) return;
     }
   } catch {
@@ -254,7 +255,7 @@ export async function refreshAnthropicPricingIfStale(
   };
 
   try {
-    await Deno.writeTextFile(cachePath, JSON.stringify(cache));
+    await writeTextFile(cachePath, JSON.stringify(cache));
   } catch (e) {
     console.error(
       `Warning: Failed to write Anthropic pricing cache: ${

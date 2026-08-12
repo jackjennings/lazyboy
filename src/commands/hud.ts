@@ -279,21 +279,11 @@ export const hud: Command = {
         listTickets: () => listTickets(stateDir),
       }),
     );
-    const commandInputFrame = {
-      render(width: number): string[] {
-        const border = "─".repeat(width);
-        const colored = commandEditor.focused ? border : dim(border);
-        return [colored, ...commandEditor.render(width), colored];
-      },
-      invalidate() {
-        commandEditor.invalidate();
-      },
-    };
 
     const layout = () =>
       paneHeights({
         rows: tui.terminal.rows,
-        inputRows: commandInputFrame.render(tui.terminal.columns).length,
+        inputRows: commandEditor.render(tui.terminal.columns).length,
       });
 
     const statusPane = new ScrollPane({
@@ -323,7 +313,7 @@ export const hud: Command = {
     tui.addChild(headerComponent);
     tui.addChild(statusPane);
     tui.addChild(logPane);
-    tui.addChild(commandInputFrame);
+    tui.addChild(commandEditor);
     tui.setFocus(statusPane);
     statusPane.focused = true;
     logPane.focused = false;

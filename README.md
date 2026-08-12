@@ -263,7 +263,9 @@ check when reviewing a ceremony before approving it:
   loads further code, not just for what the code itself does.
 - The walk records but does not follow a symlink to a directory outside the
   ceremony, and it refuses to hash a directory holding more than 2000 files or
-  64 MiB; a ceremony over either cap can never be approved.
+  64 MiB; a ceremony over either cap can never be approved. A ceremony
+  containing a directory symlink whose target is outside the ceremony root can
+  also never be approved.
 
 A particularly valuable ceremony type is **meta-review**: a recurring analysis
 of recently completed tickets that extracts learnings and writes them to

@@ -238,7 +238,9 @@ breaks any of them is a security regression:
   `MAX_MANIFEST_BYTES` raise `CeremonyManifestLimitError`, and a symlink to a
   directory outside the ceremony root is recorded but not descended, so an
   unapproved ceremony cannot make the tick read the operator's whole home
-  directory. `isCeremonyApproved` turns any throw into a denial.
+  directory. `isCeremonyApproved` turns any throw into a denial. A ceremony
+  containing a directory symlink whose target is outside the ceremony root also
+  cannot be approved.
 
 `isValidCeremonyName` (`src/ceremonies/types.ts`) is the single charset check
 (`[A-Za-z0-9._-]+`, rejecting `.` and `..`), shared by `CeremonyRunner.run()`

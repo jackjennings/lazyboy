@@ -360,3 +360,31 @@ Deno.test("performApproveCeremony: returns the recorded hash and hashed paths", 
     await Deno.remove(stateDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "performApproveCeremony: rejects when manifest contains an out-of-root directory symlink",
+  async () => {
+    const stateDir = await makeStateDir("my-ceremony");
+    try {
+      const writeApprovalsFn = spy(() => Promise.resolve());
+      await assertRejects(
+        () =>
+          performApproveCeremony(stateDir, "my-ceremony", {
+            readApprovalsFn: () => Promise.resolve({}),
+            writeApprovalsFn,
+            hashFn: () => Promise.resolve("sha256:x"),
+            manifestFn: () =>
+              Promise.resolve([
+                { path: "index.ts", detail: "abc123" },
+                { path: "lib", detail: "-> /tmp/out <unsupported>" },
+              ]),
+          }),
+        Error,
+        "Ceremony my-ceremony contains an out-of-root directory symlink and cannot be approved",
+      );
+      assertSpyCalls(writeApprovalsFn, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

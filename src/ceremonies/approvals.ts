@@ -135,8 +135,12 @@ async function collectManifestEntries(
         continue;
       }
       if (linkStat.isDirectory) {
-        entries.push({ path, detail: `-> ${target}` });
-        if (await isInsideBase(full, state)) {
+        const inside = await isInsideBase(full, state);
+        entries.push({
+          path,
+          detail: inside ? `-> ${target}` : `-> ${target} <unsupported>`,
+        });
+        if (inside) {
           entries.push(...await collectManifestEntries(full, state));
         }
       } else if (linkStat.isFile) {

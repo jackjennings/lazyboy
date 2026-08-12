@@ -177,7 +177,7 @@ Deno.test("resolveCIFixAction: FIXED without a LEARNING line writes no learning"
   assertSpyCalls(learningSpy, 0);
 });
 
-Deno.test("resolveCIFixAction: INFRA re-runs the failed jobs and does not push", async () => {
+Deno.test("resolveCIFixAction: INFRA on attempt 1 re-runs the failed jobs and does not push", async () => {
   const gitSpy = spy(
     (_args: string[], _cwd: string) =>
       Promise.resolve({ code: 0, stdout: "", stderr: "" }),
@@ -196,6 +196,63 @@ Deno.test("resolveCIFixAction: INFRA re-runs the failed jobs and does not push",
     repo: "jackjennings/lazyboy",
     runId: "1001",
   });
+  assertEquals(result?.status, "waiting");
+});
+
+Deno.test("resolveCIFixAction: INFRA on attempt 2 parks and does not re-run", async () => {
+  const rerunSpy = spy((_opts: { repo: string; runId: string }) =>
+    Promise.resolve()
+  );
+  const logged: Record<string, unknown>[] = [];
+  const result = await makeAction({
+    readFile: (path: string) =>
+      Promise.resolve(
+        path.endsWith(CONTEXT_FILENAME)
+          ? CONTEXT_CONTENT.replace("Attempt: 1", "Attempt: 2")
+          : INFRA_OUTPUT,
+      ),
+    rerunFailedJobs: rerunSpy,
+    appendLog: (_sd, _id, entry) => {
+      logged.push(entry as Record<string, unknown>);
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assertSpyCalls(rerunSpy, 0);
+  assertEquals(result?.status, "needs-attention");
+  assertEquals(logged[0].reason, "infra-rerun-exhausted");
+});
+
+Deno.test("resolveCIFixAction: INFRA with a missing Attempt header re-runs rather than parking", async () => {
+  const rerunSpy = spy((_opts: { repo: string; runId: string }) =>
+    Promise.resolve()
+  );
+  const result = await makeAction({
+    readFile: (path: string) =>
+      Promise.resolve(
+        path.endsWith(CONTEXT_FILENAME)
+          ? CONTEXT_CONTENT.replace("Attempt: 1\n", "")
+          : INFRA_OUTPUT,
+      ),
+    rerunFailedJobs: rerunSpy,
+  }).run(makeTicket(BASE), "/state");
+  assertSpyCalls(rerunSpy, 1);
+  assertEquals(result?.status, "waiting");
+});
+
+Deno.test("resolveCIFixAction: INFRA with a non-numeric Attempt header re-runs rather than parking", async () => {
+  const rerunSpy = spy((_opts: { repo: string; runId: string }) =>
+    Promise.resolve()
+  );
+  const result = await makeAction({
+    readFile: (path: string) =>
+      Promise.resolve(
+        path.endsWith(CONTEXT_FILENAME)
+          ? CONTEXT_CONTENT.replace("Attempt: 1", "Attempt: not-a-number")
+          : INFRA_OUTPUT,
+      ),
+    rerunFailedJobs: rerunSpy,
+  }).run(makeTicket(BASE), "/state");
+  assertSpyCalls(rerunSpy, 1);
   assertEquals(result?.status, "waiting");
 });
 

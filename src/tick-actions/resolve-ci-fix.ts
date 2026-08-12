@@ -182,6 +182,16 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
         }
 
         if (verdict === "INFRA") {
+          const parsedAttempt = Number.parseInt(attempt, 10);
+          const attemptNumber = Number.isNaN(parsedAttempt) ? 1 : parsedAttempt;
+          if (attemptNumber >= 2) {
+            return await park(
+              contextPath,
+              outputPath,
+              "infra-rerun-exhausted",
+              { runId, prUrl },
+            );
+          }
           try {
             await deps.rerunFailedJobs({ repo, runId });
           } catch (e) {

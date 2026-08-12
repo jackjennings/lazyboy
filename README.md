@@ -189,6 +189,10 @@ pipeline:
     config.toml     # time = "HH:MM"; optional: model = "...", thinking = <budget_tokens>
     prompt.md       # ceremony behavior; receives current date as system context
     output/
+  digest/
+    config.toml
+    index.ts        # alternative to prompt.md: ceremony behavior as code
+    output/
 ```
 
 Each ceremony directory under `{stateDir}/ceremonies/{name}/` activates the
@@ -199,6 +203,67 @@ named ceremony. The directory contains a `config.toml` with scheduling keys:
 | `time`           | yes      | Earliest wall-clock time to run (`"HH:MM"` in local timezone)                        |
 | `interval_hours` | no       | Run repeatedly, at most once per this many hours after `time`; omit for once-per-day |
 | `workdays_only`  | no       | When `true`, skip Saturday and Sunday (default `false`)                              |
+
+A ceremony's behavior is either a prompt (`prompt.md`) or code (`index.ts`);
+when both are present, `index.ts` wins. `index.ts` default-exports a function
+that receives a `CeremonyContext`:
+
+```ts
+export default async function (context) {
+  const ids = await context.listTickets();
+  await context.writeOutput(`# Report\n\n${ids.length} tickets\n`);
+}
+```
+
+| Member                                           | Purpose                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
+| `now: Temporal.ZonedDateTime`                    | Scheduled run time                                                  |
+| `stateDir`, `ceremonyDir`, `outputDir`           | Paths                                                               |
+| `config: Record<string, unknown>`                | Parsed `config.toml`                                                |
+| `listTickets(): Promise<string[]>`               | Ticket IDs                                                          |
+| `readTicket(id): Promise<TicketState>`           | One ticket                                                          |
+| `generateText(options): Promise<string \| null>` | Ancillary LLM call via `LanguageModel`, default `claude-sonnet-4-6` |
+| `writeOutput(content): Promise<void>`            | Writes `${compactTimestamp(now)}-${name}.md` into `outputDir`       |
+| `commitState(): Promise<void>`                   | Commit the state repo                                               |
+| `notify(title, message): Promise<void>`          | Desktop notification                                                |
+| `log(entry): Promise<void>`                      | `appendTickLog` with `ceremony` filled in                           |
+
+Ceremonies defined in the state dir do not run until an operator approves them:
+
+```bash
+lazyboy approve ceremony/digest
+```
+
+Approval records a hash of the ceremony directory in
+`~/.lazyboy/ceremony-approvals.json` — a recursive walk of every file, except
+the ceremony's own top-level `output/`. Any later edit to `config.toml`,
+`prompt.md`, or `index.ts` revokes the approval; the ceremony stops running,
+logs `ceremony-warning` with `reason: not-approved`, and fires a desktop
+notification naming the `lazyboy approve` command to run, both throttled to once
+per scheduled occurrence rather than once per tick, until it is approved again.
+`lazyboy approve ceremony/<name>` prints the recorded hash and every path it
+hashed, so you can see exactly what you vouched for. Built-in ceremonies
+(`standup`, `documentation-gaps`) need no approval.
+
+Upgrading from a version without the gate: an existing working `prompt.md`
+ceremony stops running on the first tick after this lands, and keeps warning
+once per scheduled occurrence, until you run `lazyboy approve ceremony/<name>`
+for it.
+
+The hash is the only control — ceremony code runs with the tick process's full
+permissions and live credentials, and there is no sandbox. Two consequences to
+check when reviewing a ceremony before approving it:
+
+- The `output/` exclusion is what lets a ceremony write its own results without
+  revoking itself, so **approved code that imports or evaluates anything under
+  `outputDir` — or anywhere else in the state dir — voids the guarantee**, since
+  that content is outside the hash and can change freely afterwards. The
+  exclusion is applied before the walk decides an entry's type, so a _symlinked_
+  `output` pointing anywhere is excluded too. Read a ceremony for code that
+  loads further code, not just for what the code itself does.
+- The walk records but does not follow a symlink to a directory outside the
+  ceremony, and it refuses to hash a directory holding more than 2000 files or
+  64 MiB; a ceremony over either cap can never be approved.
 
 A particularly valuable ceremony type is **meta-review**: a recurring analysis
 of recently completed tickets that extracts learnings and writes them to

@@ -1,4 +1,5 @@
 import type { TicketState } from "../state/types.ts";
+import type { LanguageModelRequest } from "../models/types.ts";
 
 export interface Ceremony {
   readonly name: string;
@@ -10,4 +11,32 @@ export interface StandupCeremonyDeps {
   readTicket(id: string): Promise<TicketState>;
   commitState(): Promise<void>;
   notify?: (title: string, message: string) => Promise<void>;
+}
+
+export interface CeremonyContext {
+  now: Temporal.ZonedDateTime;
+  stateDir: string;
+  ceremonyDir: string;
+  outputDir: string;
+  config: Record<string, unknown>;
+  listTickets(): Promise<string[]>;
+  readTicket(id: string): Promise<TicketState>;
+  generateText(request: LanguageModelRequest): Promise<string | null>;
+  writeOutput(content: string): Promise<void>;
+  commitState(): Promise<void>;
+  notify(title: string, message: string): Promise<void>;
+  log(entry: object): Promise<void>;
+}
+
+export type CeremonyModule = (
+  context: CeremonyContext,
+) => Promise<void> | void;
+
+export const BUILT_IN_CEREMONY_NAMES = ["standup", "documentation-gaps"];
+
+const CEREMONY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+export function isValidCeremonyName(name: string): boolean {
+  if (name === "." || name === "..") return false;
+  return CEREMONY_NAME_PATTERN.test(name);
 }

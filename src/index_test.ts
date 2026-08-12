@@ -595,7 +595,7 @@ Deno.test("approve --help: prints usage line to stdout", () => {
   const cmd = commands.find((c) => c.name === "approve")!;
   assertStringIncludes(
     formatCommandHelp(cmd),
-    "Usage: lazyboy approve <ticket-id>",
+    "Usage: lazyboy approve <ticket-id|ceremony/<name>>",
   );
 });
 
@@ -611,7 +611,7 @@ Deno.test("approve --help: blank line separates usage and description", () => {
   const cmd = commands.find((c) => c.name === "approve")!;
   assertStringIncludes(
     formatCommandHelp(cmd),
-    "Usage: lazyboy approve <ticket-id>\n\napprove the current phase gate",
+    "Usage: lazyboy approve <ticket-id|ceremony/<name>>\n\napprove the current phase gate",
   );
 });
 

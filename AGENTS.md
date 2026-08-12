@@ -178,6 +178,104 @@ from `apfel` falls through to `claude` rather than being parsed loosely. The
 body is passed after a `--` separator in both calls — a principles block starts
 with `-`, which either CLI otherwise rejects as an unknown option.
 
+## State-dir ceremonies
+
+`{stateDir}/ceremonies/<name>/` may define its behavior as `prompt.md`
+(existing) or `index.ts` (`CeremonyModule`, `src/ceremonies/types.ts`) — a
+default-exported function receiving a `CeremonyContext`. `index.ts` wins when
+both are present.
+
+The approval gate (`CeremonyRunner#runCeremony`, `src/ceremonies.ts`) runs after
+the schedule check and before `ceremony.run()`. `ModuleCeremony.run()`
+(`src/ceremonies/module.ts`) performs its `await import(...)` of `index.ts`
+inside `run()` — never in a constructor, a field initializer, or the runner's
+resolution path — so an unapproved ceremony's `index.ts` is never imported and
+its top-level code never executes. **This ordering is load-bearing: any change
+that moves the import earlier executes unapproved, agent-authored code and is a
+security regression.** Do not refactor around it.
+
+A ceremony directory is exempt from the gate only when its name matches an entry
+in the ceremonies array `composeTickDeps` passes to `CeremonyRunner`'s
+constructor (`StandupCeremony`, `DocumentationGapsCeremony` — compiled into the
+binary); every other directory that resolves to a `PromptCeremony` or
+`ModuleCeremony` is gated. The exemption comes from that code-constructed
+registry, not from matching the directory name against a string constant —
+`BUILT_IN_CEREMONY_NAMES` (`src/ceremonies/types.ts`) has two consumers:
+`performApproveCeremony` (`src/commands/approve.ts`) rejects
+`lazyboy approve ceremony/standup`, and `listCeremonyIds`
+(`src/commands/ids.ts`) filters built-ins out of `lazyboy _ids` so they never
+appear in shell completion. Both call sites depend on the constant staying in
+sync with the ceremonies array `composeTickDeps` actually registers.
+
+`readApprovals`/`writeApprovals` (`src/ceremonies/approvals.ts`) resolve
+`~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never
+`join(HOME, ".lazyboy", …)` inline — same rule as the runtime dir below.
+
+`ceremony-warning` (an existing `tick.ndjson` event) gains four `reason` values:
+`not-approved` (gate rejection), `ceremony-failed` (import failure, a
+non-function default export, or a throw from the ceremony function itself),
+`invalid-name` (a ceremony directory name outside `[A-Za-z0-9._-]+`), and
+`approvals-unreadable` (`ceremony-approvals.json` exists but does not parse),
+joining the event's existing reasons (`prompt.md missing`, `claude-failed`,
+`empty-response`, and the `config.toml` parsing/validation messages).
+
+### The hash must never over-report
+
+`ceremonyHash` is a security control, so it must never return "approved" about a
+directory it could not fully characterize. Three rules follow, and a change that
+breaks any of them is a security regression:
+
+- **Every entry contributes a manifest line.** `collectManifestEntries` emits
+  `<unsupported>` for anything that is not a regular file or a directory (FIFO,
+  socket, device), and for a symlink whose resolved target is neither. An entry
+  that pushed no line would let a file appear inside an approved directory
+  without changing the hash.
+- **Contents are digested as bytes.** `readFile` plus `crypto.subtle.digest`,
+  never `readTextFile` — lossy UTF-8 decoding maps distinct byte sequences to
+  the same string, so decoded text would let any non-UTF-8 blob be swapped
+  freely.
+- **The walk is bounded and fails closed.** `MAX_MANIFEST_FILES` /
+  `MAX_MANIFEST_BYTES` raise `CeremonyManifestLimitError`, and a symlink to a
+  directory outside the ceremony root is recorded but not descended, so an
+  unapproved ceremony cannot make the tick read the operator's whole home
+  directory. `isCeremonyApproved` turns any throw into a denial.
+
+`isValidCeremonyName` (`src/ceremonies/types.ts`) is the single charset check
+(`[A-Za-z0-9._-]+`, rejecting `.` and `..`), shared by `CeremonyRunner.run()`
+and `performApproveCeremony`. A rejected name must reach neither the notifier
+nor a filesystem path builder; only the NDJSON log, which is a safe sink.
+
+Desktop notifications go through `makeDesktopNotifier` (`src/notify.ts`), which
+passes the title and message as `osascript` **arguments** after a `--`
+separator, read via `on run argv`. Never interpolate a value into AppleScript
+source — a ceremony directory name is state-dir-controlled text and macOS
+permits `"` and `&` in it, so interpolation is arbitrary command execution from
+the warning path. All notification call sites route through this one helper.
+
+`readApprovals` distinguishes a missing file (returns `{}`) from an unparseable
+one (throws `CorruptApprovalsError`). The warning path must never write a record
+it did not successfully read, or one bad parse would replace every approval with
+a single `lastWarnedWindow` entry. `writeApprovals` writes a temp file in the
+same directory and `rename`s it, so a partial write cannot corrupt the file.
+
+`CeremonyContext` (`src/ceremonies/types.ts`) is the only surface state-dir code
+depends on. Treat widening it as a compatibility commitment: add members
+deliberately, and never expose `TickDeps`, `runGit`, or a raw `CommandRunner`
+through it — state-dir code is agent-authored and untrusted until approved.
+
+### The `output/` caveat
+
+The walk skips the ceremony's own top-level `output/` so a ceremony can write
+its results without revoking itself. The cost is that **approved code which
+imports or evaluates anything under `outputDir` — or anywhere else in the state
+dir — voids the guarantee**, because that content is outside the hash and a
+state-dir writer can change it freely afterwards. The exclusion is applied
+before the walk dispatches on entry type, so a symlinked `output` pointing
+anywhere is excluded too. Reviewing a ceremony for approval means reading it for
+code that loads further code, not only for what the code itself does. Do not
+narrow the exclusion to make this safer — the ceremony must be able to write
+there — and do not extend it to further paths.
+
 ## Runtime dir (`lazyboyDir`)
 
 Anything that writes under the runtime dir — the combined `log.ndjson`,

@@ -168,3 +168,17 @@ Deno.test("ceremonyHash: symlink to directory includes nested files", async () =
     await Deno.remove(linkedDir, { recursive: true });
   }
 });
+
+Deno.test("ceremonyHash: ignores the output directory when symlinked", async () => {
+  const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
+  const outputDir = await Deno.makeTempDir();
+  try {
+    const before = await ceremonyHash(dir);
+    await Deno.symlink(outputDir, join(dir, "output"));
+    await Deno.writeTextFile(join(outputDir, "result.md"), "output");
+    assertEquals(await ceremonyHash(dir), before);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+    await Deno.remove(outputDir, { recursive: true });
+  }
+});

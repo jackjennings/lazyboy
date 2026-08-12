@@ -48,8 +48,9 @@ async function collectManifestLines(
     const full = join(dir, entry.name);
     const rel = relative(base, full);
 
+    if (dir === base && entry.name === "output") continue;
+
     if (entry.isDirectory) {
-      if (dir === base && entry.name === "output") continue;
       lines.push(...await collectManifestLines(full, base, visited));
     } else if (entry.isFile) {
       const contentHash = await sha256(await readTextFile(full));

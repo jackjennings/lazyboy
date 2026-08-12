@@ -684,39 +684,45 @@ export function composeTickDeps(
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
 
-  const ceremonies = new CeremonyRunner({ stateDir, appendTickLog }, [
-    new StandupCeremony({
-      listTickets: () => listTickets(stateDir),
-      readTicket: (id) => readTicket(stateDir, id),
-      commitState: async () => {
-        await ensureRunPidGitignored(stateDir);
-        await commitState(stateDir, "ceremony: standup");
-      },
-      notify: async (title, message) => {
-        await defaultCommandRunner()([
-          "osascript",
-          "-e",
-          `display notification "${message}" with title "${title}"`,
-        ]);
-      },
-    }),
-    new DocumentationGapsCeremony({
+  const ceremonies = new CeremonyRunner(
+    {
       stateDir,
-      repoDir: new URL("../", import.meta.url).pathname,
-      run: captureCommandRunner(),
-      commitState: async () => {
-        await ensureRunPidGitignored(stateDir);
-        await commitState(stateDir, "ceremony: documentation-gaps");
-      },
-      notify: async (title, message) => {
-        await defaultCommandRunner()([
-          "osascript",
-          "-e",
-          `display notification "${message}" with title "${title}"`,
-        ]);
-      },
-    }),
-  ]);
+      appendTickLog,
+    },
+    [
+      new StandupCeremony({
+        listTickets: () => listTickets(stateDir),
+        readTicket: (id) => readTicket(stateDir, id),
+        commitState: async () => {
+          await ensureRunPidGitignored(stateDir);
+          await commitState(stateDir, "ceremony: standup");
+        },
+        notify: async (title, message) => {
+          await defaultCommandRunner()([
+            "osascript",
+            "-e",
+            `display notification "${message}" with title "${title}"`,
+          ]);
+        },
+      }),
+      new DocumentationGapsCeremony({
+        stateDir,
+        repoDir: new URL("../", import.meta.url).pathname,
+        run: captureCommandRunner(),
+        commitState: async () => {
+          await ensureRunPidGitignored(stateDir);
+          await commitState(stateDir, "ceremony: documentation-gaps");
+        },
+        notify: async (title, message) => {
+          await defaultCommandRunner()([
+            "osascript",
+            "-e",
+            `display notification "${message}" with title "${title}"`,
+          ]);
+        },
+      }),
+    ],
+  );
 
   return {
     stateDir,

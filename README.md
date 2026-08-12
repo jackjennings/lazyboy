@@ -183,14 +183,13 @@ as input and produce an output (Slack standup, weekly digest, sprint report)
 without a ticket or human gate. They are configured separately from the ticket
 pipeline:
 
-```toml
-[[ceremony]]
-name = "standup"
-schedule = "0 9 * * 1-5"   # weekdays at 9am
-prompt = "ceremonies/standup.md"
 ```
-
-Ceremony prompts receive the state store and recent git history as context.
+{stateDir}/ceremonies/
+  standup/
+    config.toml     # time = "HH:MM"; optional: model = "...", thinking = <budget_tokens>
+    prompt.md       # ceremony behavior; receives current date as system context
+    output/
+```
 
 Each ceremony directory under `{stateDir}/ceremonies/{name}/` activates the
 named ceremony. The directory contains a `config.toml` with scheduling keys:

@@ -38,6 +38,7 @@ function makeRunner(
     appendTickLog?: (entry: object) => Promise<void>;
     now?: () => Temporal.ZonedDateTime;
     ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
+    runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
   } = {},
 ): CeremonyRunner {
   return new CeremonyRunner(
@@ -45,6 +46,7 @@ function makeRunner(
       stateDir,
       appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
       now: opts.now,
+      runClaude: opts.runClaude,
     },
     opts.ceremonies ?? [],
   );
@@ -411,6 +413,35 @@ Deno.test("CeremonyRunner: interval ceremony runs when no prior output file exis
       ceremonies: [ceremony],
     }).run();
     assertEquals(runCount(), 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: prompt ceremony dir runs PromptCeremony", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const ceremonyDir = join(stateDir, "ceremonies", "docs-gap");
+    await Deno.mkdir(ceremonyDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ceremonyDir, "config.toml"),
+      'time = "09:00"',
+    );
+    await Deno.writeTextFile(join(ceremonyDir, "prompt.md"), "List gaps.");
+
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      runClaude: () => Promise.resolve({ stdout: "Gaps found.\n", code: 0 }),
+    }).run();
+
+    const outputDir = join(stateDir, "ceremonies", "docs-gap", "output");
+    const files: string[] = [];
+    for await (const entry of Deno.readDir(outputDir)) {
+      files.push(entry.name);
+    }
+    assertEquals(files.length, 1);
+    assert(files[0].startsWith("20260727"));
+    assert(files[0].endsWith("-docs-gap.md"));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

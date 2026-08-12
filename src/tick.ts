@@ -20,6 +20,7 @@ import type { MigrationFn } from "./migrations/runner.ts";
 import type { InstallResult } from "./packages.ts";
 import {
   type ApprovalEntry,
+  ARTIFACT_DESCRIPTORS,
   type Config,
   isApproved,
   type TicketState,
@@ -182,6 +183,7 @@ export async function advancePhase(
 ): Promise<void> {
   const zonedNow = Temporal.Now.zonedDateTimeISO("UTC");
   const now = zonedNow.toInstant().toString();
+  const descriptor = ARTIFACT_DESCRIPTORS[ticket.artifact];
 
   if (ticket.status === "revising") {
     const isMergeRevision = ticket.phase === "merge";
@@ -450,8 +452,7 @@ export async function advancePhase(
 
       if (
         ticket.phase === "implementation" &&
-        ticket.artifact !== "notion" &&
-        !(ticket.prs?.length)
+        !(ticket[descriptor.completionField]?.length)
       ) {
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
@@ -462,7 +463,7 @@ export async function advancePhase(
           event: "phase-transition",
           from: "implementation",
           to: "needs-attention",
-          reason: "no-prs",
+          reason: descriptor.missingReason,
         });
         return;
       }
@@ -558,38 +559,26 @@ export async function advancePhase(
     ticket.status === "waiting" &&
     isApproved(ticket)
   ) {
-    if (ticket.artifact === "notion") {
-      await deps.writeTicket(stateDir, {
-        ...ticket,
-        phase: "merge",
-        status: "done",
-        updated: now,
-      });
-      await deps.appendLog(stateDir, ticket.id, {
-        event: "phase-transition",
-        from: ticket.phase,
-        to: "merge",
-      });
-      return;
-    }
-    const unmergedUrls = (ticket.prs ?? [])
-      .filter((pr) => !pr.merged)
-      .map((pr) => pr.url);
-    if (unmergedUrls.length > 0) {
-      try {
-        await deps.markPRsReady(unmergedUrls);
-      } catch (e) {
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "error",
-          context: "markPRsReady",
-          message: String(e),
-        });
+    if (descriptor.requiresPRs) {
+      const unmergedUrls = (ticket.prs ?? [])
+        .filter((pr) => !pr.merged)
+        .map((pr) => pr.url);
+      if (unmergedUrls.length > 0) {
+        try {
+          await deps.markPRsReady(unmergedUrls);
+        } catch (e) {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "error",
+            context: "markPRsReady",
+            message: String(e),
+          });
+        }
       }
     }
     await deps.writeTicket(stateDir, {
       ...ticket,
       phase: "merge",
-      status: "waiting",
+      status: descriptor.mergeStatus,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -616,7 +605,7 @@ export async function advancePhase(
       : next;
     if (
       effectiveNext === "implementation" &&
-      ticket.artifact !== "notion" &&
+      descriptor.requiresWorktrees &&
       Object.keys(ticket.worktrees).length === 0
     ) {
       await deps.writeTicket(stateDir, {

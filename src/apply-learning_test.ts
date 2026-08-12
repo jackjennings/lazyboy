@@ -37,13 +37,14 @@ Deno.test("applyLearning: falls back to trimmed text when tags are absent", asyn
   assertEquals(result, `${placed}\n`);
 });
 
-Deno.test("applyLearning: sends current document and intent as second arg to claude", async () => {
+Deno.test("applyLearning: passes current document and intent after -- to claude", async () => {
   const run = runnerReturning("<updated-file>x</updated-file>");
   await applyLearning(CURRENT, INTENT, run);
   const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
   assertEquals(args[0], "claude");
-  assertStringIncludes(args[1], INTENT);
-  assertStringIncludes(args[1], "Do the thing.");
+  const prompt = args[args.length - 1];
+  assertStringIncludes(prompt, INTENT);
+  assertStringIncludes(prompt, "Do the thing.");
   assertSpyCalls(run as ReturnType<typeof spy>, 1);
 });
 

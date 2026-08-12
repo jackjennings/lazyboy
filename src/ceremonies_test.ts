@@ -824,7 +824,7 @@ Deno.test("DocumentationGapsCeremony: prior report headings included in LLM user
     let capturedUserMessage = "";
     const ceremony = makeDocumentationGaps(stateDir, outputDir, {
       run: (args) => {
-        capturedUserMessage = args[1] as string;
+        capturedUserMessage = args[args.length - 1] as string;
         return Promise.resolve({ code: 0, stdout: "NO_GAPS" });
       },
     });
@@ -856,7 +856,7 @@ Deno.test("DocumentationGapsCeremony: documentation corpus content included in L
       stateDir,
       repoDir,
       run: (args) => {
-        capturedUserMessage = args[1] as string;
+        capturedUserMessage = args[args.length - 1] as string;
         return Promise.resolve({ code: 0, stdout: "NO_GAPS" });
       },
       commitState: () => Promise.resolve(),

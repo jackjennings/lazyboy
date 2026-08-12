@@ -295,10 +295,19 @@ Phase runtimes implement `CodeAgent` (`src/agents/types.ts`). Two adapters
 exist: `PiCodeAgent` (`src/agents/pi.ts`, shells to `pi`) and `ClaudeCodeAgent`
 (`src/agents/claude-code.ts`, shells to `claude`). The `pi` CLI must not be
 referenced by name outside `pi.ts`; the `claude` CLI must not be invoked via
-`Deno.Command` outside `claude-code.ts`. Ancillary helper functions
-(`judgePrinciples`, `selfReview`, `applyLearning`, `callLlm`) that shell to
-`claude` via an injected `CommandRunner` are exempt from this restriction. New
-CodeAgent adapters go in `src/agents/<name>.ts` and implement `CodeAgent`.
+`Deno.Command` outside `claude-code.ts`. Ancillary functions that shell to CLIs
+via an injected `CommandRunner` are exempt from this restriction — they go
+through `src/models/` adapters (see below). New CodeAgent adapters go in
+`src/agents/<name>.ts` and implement `CodeAgent`.
+
+### Ancillary LLM calls
+
+Non-phase LLM calls use the `LanguageModel` interface (`src/models/types.ts`).
+`ApfelLanguageModel` and `ClaudeLanguageModel` implement it via `CommandRunner`;
+`FallbackLanguageModel` composes them. Callers: `judgePrinciples`,
+`judgeComment`, `selfReview`, `applyLearning`, `callLlm`, `generateShortTitle`.
+`checkApfelAvailable` (`src/apfel.ts`) is not a `LanguageModel` — it remains for
+non-LLM availability checks used by `src/compose.ts` and `src/review.ts`.
 
 - `[agent].type` (default `"pi"`) selects the adapter, orthogonal to
   `[pi].provider` (which applies only when `agent.type === "pi"`). Resolved once

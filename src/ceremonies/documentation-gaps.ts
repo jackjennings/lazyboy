@@ -3,6 +3,7 @@ import { compactTimestamp } from "../timestamp.ts";
 import type { Ceremony } from "./types.ts";
 import type { CommandRunner } from "../apfel.ts";
 import { mkdir, readDir, readTextFile, writeTextFile } from "../filesystem.ts";
+import { ClaudeLanguageModel } from "../models/claude.ts";
 
 export interface DocumentationGapsCeremonyDeps {
   stateDir: string;
@@ -144,29 +145,17 @@ async function callLlm(
     `## Required Output Format\n\`\`\`\n${OUTPUT_FORMAT_TEMPLATE}\n\`\`\`\nwhere \`N clusters across M tickets\` are computed from the surviving clusters.`,
   ].join("\n\n");
 
-  try {
-    const { code, stdout } = await run([
-      "claude",
-      userMessage,
-      "--print",
-      "--output-format",
-      "text",
-      "--system-prompt",
-      SYSTEM_PROMPT,
-      "--model",
-      "claude-sonnet-4-6",
-      "--tools",
-      "",
-    ]);
-    if (code !== 0) {
-      return "# Documentation Gap Report\n\nError: LLM call failed.\n";
-    }
-    return stdout.trim() === "NO_GAPS"
-      ? "# Documentation Gap Report\n\nNo uncovered gaps found.\n"
-      : stdout;
-  } catch {
+  const model = new ClaudeLanguageModel(run, { model: "claude-sonnet-4-6" });
+  const text = await model.generateText({
+    systemPrompt: SYSTEM_PROMPT,
+    prompt: userMessage,
+  });
+  if (text == null) {
     return "# Documentation Gap Report\n\nError: LLM call failed.\n";
   }
+  return text.trim() === "NO_GAPS"
+    ? "# Documentation Gap Report\n\nNo uncovered gaps found.\n"
+    : `${text}\n`;
 }
 
 export class DocumentationGapsCeremony implements Ceremony {

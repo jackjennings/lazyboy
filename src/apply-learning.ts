@@ -1,4 +1,5 @@
 import type { CommandRunner } from "./apfel.ts";
+import { ClaudeLanguageModel } from "./models/claude.ts";
 
 const SYSTEM_PROMPT =
   `You are integrating a single learning into an existing Markdown document (a coding-agent prompt).
@@ -25,23 +26,10 @@ export async function applyLearning(
 ): Promise<string | null> {
   const userMessage =
     `## Learning to integrate\n\n${intent}\n\n## Current document\n\n${currentContent}`;
-  try {
-    const { code, stdout } = await run([
-      "claude",
-      userMessage,
-      "--print",
-      "--output-format",
-      "text",
-      "--system-prompt",
-      SYSTEM_PROMPT,
-      "--model",
-      "claude-sonnet-4-6",
-      "--tools",
-      "",
-    ]);
-    if (code !== 0) return null;
-    return extractDocument(stdout);
-  } catch {
-    return null;
-  }
+  const model = new ClaudeLanguageModel(run, { model: "claude-sonnet-4-6" });
+  const text = await model.generateText({
+    systemPrompt: SYSTEM_PROMPT,
+    prompt: userMessage,
+  });
+  return text != null ? extractDocument(text) : null;
 }

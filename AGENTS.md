@@ -26,7 +26,7 @@ Config is read from `~/.config/lazyboy/config.toml`.
 
 ```bash
 deno task test                          # run all tests
-LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/foo_test.ts  # single file
+deno task test:file src/foo_test.ts     # run a single test file
 deno task start tick                    # run the tick loop once
 deno run --allow-all src/index.ts status
 
@@ -289,9 +289,10 @@ that keeps tests from writing to the operator's real `~/.lazyboy`:
 `deno task
 test` sets `LAZYBOY_DIR=$(mktemp -d)`, so any code routed through
 `lazyboyDir()` is isolated automatically with no per-test setup. Single-file
-runs must set it too (see Commands). A test that inspects the combined/tick log
-directly uses `withLazyboyDir()` (`src/test-support.ts`) for its own scratch
-dir.
+runs go through `deno task test:file <path>`, which sets it the same way — do
+not invoke `deno test` directly (see Commands). A test that inspects the
+combined/tick log directly uses `withLazyboyDir()` (`src/test-support.ts`) for
+its own scratch dir.
 
 Non-log paths (`worktrees/`, `pi/`, `claude-code/`, `anthropic-pricing.json`,
 `tick.pid`, `last-worked.json`) still read `HOME`/`opts.homeDir` directly; their

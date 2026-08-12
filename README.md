@@ -234,11 +234,13 @@ Ceremonies defined in the state dir do not run until an operator approves them:
 lazyboy approve ceremony/digest
 ```
 
-Approval records a hash of the ceremony directory (excluding `output/`) in
-`~/.lazyboy/ceremony-approvals.json`. Any later edit to `config.toml`,
-`prompt.md`, or `index.ts` revokes the approval; the ceremony stops running and
-logs `ceremony-warning` with `reason: not-approved` once per scheduled
-occurrence until it is approved again. Built-in ceremonies (`standup`,
+Approval records a hash of the ceremony directory in
+`~/.lazyboy/ceremony-approvals.json` — a recursive walk of every file, except
+the ceremony's own top-level `output/`. Any later edit to `config.toml`,
+`prompt.md`, or `index.ts` revokes the approval; the ceremony stops running,
+logs `ceremony-warning` with `reason: not-approved`, and fires a desktop
+notification, both throttled to once per scheduled occurrence rather than once
+per tick, until it is approved again. Built-in ceremonies (`standup`,
 `documentation-gaps`) need no approval.
 
 A particularly valuable ceremony type is **meta-review**: a recurring analysis

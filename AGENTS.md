@@ -200,9 +200,12 @@ constructor (`StandupCeremony`, `DocumentationGapsCeremony` — compiled into th
 binary); every other directory that resolves to a `PromptCeremony` or
 `ModuleCeremony` is gated. The exemption comes from that code-constructed
 registry, not from matching the directory name against a string constant —
-`BUILT_IN_CEREMONY_NAMES` (`src/ceremonies/types.ts`) exists only so
-`performApproveCeremony` (`src/commands/approve.ts`) can reject
-`lazyboy approve ceremony/standup`.
+`BUILT_IN_CEREMONY_NAMES` (`src/ceremonies/types.ts`) has two consumers:
+`performApproveCeremony` (`src/commands/approve.ts`) rejects
+`lazyboy approve ceremony/standup`, and `listCeremonyIds`
+(`src/commands/ids.ts`) filters built-ins out of `lazyboy _ids` so they never
+appear in shell completion. Both call sites depend on the constant staying in
+sync with the ceremonies array `composeTickDeps` actually registers.
 
 `readApprovals`/`writeApprovals` (`src/ceremonies/approvals.ts`) resolve
 `~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never

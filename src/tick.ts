@@ -818,8 +818,15 @@ export class TickService {
       if (
         ticket.status === "needs-attention" && !ticket.notifiedNeedsAttention
       ) {
-        await deps.notify?.(ticket);
-        const updated = { ...ticket, notifiedNeedsAttention: true };
+        const freshTicket = await deps.readTicket(ticket.id);
+        if (
+          freshTicket.status !== "needs-attention" ||
+          freshTicket.notifiedNeedsAttention
+        ) {
+          continue;
+        }
+        await deps.notify?.(freshTicket);
+        const updated = { ...freshTicket, notifiedNeedsAttention: true };
         await deps.writeTicket(updated);
         processedTickets[i] = updated;
       }

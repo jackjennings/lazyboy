@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
-import { bgGreen, bgRed, black, dim, gray, inverse } from "@std/fmt/colors";
+import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
 import {
   Input,
   matchesKey,
@@ -193,7 +193,7 @@ export const hud: Command = {
     const commandInputFrame = {
       render(width: number): string[] {
         const border = "─".repeat(width);
-        const colored = commandInput.focused ? border : gray(border);
+        const colored = commandInput.focused ? border : dim(border);
         return [colored, ...commandInput.render(width), colored];
       },
       invalidate() {

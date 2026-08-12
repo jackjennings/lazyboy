@@ -54,6 +54,7 @@ function makeRunner(
       request: LanguageModelRequest,
     ) => Promise<string | null>;
     commitState?: () => Promise<void>;
+    timeoutMs?: number;
   } = {},
 ): CeremonyRunner {
   return new CeremonyRunner(
@@ -68,6 +69,7 @@ function makeRunner(
         (() => Promise.reject(new Error("not called"))),
       generateText: opts.generateText ?? (() => Promise.resolve("text")),
       commitState: opts.commitState ?? (() => Promise.resolve()),
+      timeoutMs: opts.timeoutMs,
     },
     opts.ceremonies ?? [],
   );
@@ -467,6 +469,41 @@ Deno.test("CeremonyRunner: prompt ceremony dir runs PromptCeremony", async () =>
     assertEquals(files.length, 1);
     assert(files[0].startsWith("20260727"));
     assert(files[0].endsWith("-docs-gap.md"));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: a ceremony that never resolves triggers timeout warning", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(stateDir, "ceremonies", "digest"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(stateDir, "ceremonies", "digest", "config.toml"),
+      'time = "09:00"\n',
+    );
+    const neverSettles: Ceremony = {
+      name: "digest",
+      run: () => new Promise<void>(() => {}),
+    };
+    const warnings: object[] = [];
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      ceremonies: [neverSettles],
+      appendTickLog: (entry) => {
+        warnings.push(entry);
+        return Promise.resolve();
+      },
+      timeoutMs: 10,
+    }).run();
+    assertEquals(warnings.length, 1);
+    assertEquals(warnings[0], {
+      event: "ceremony-warning",
+      ceremony: "digest",
+      reason: "timeout",
+    });
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

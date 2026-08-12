@@ -1,6 +1,13 @@
 import { join, relative } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
-import { mkdir, readDir, readTextFile, writeTextFile } from "../filesystem.ts";
+import {
+  mkdir,
+  readDir,
+  readLink,
+  readTextFile,
+  stat,
+  writeTextFile,
+} from "../filesystem.ts";
 
 export interface CeremonyApproval {
   hash?: string;
@@ -25,28 +32,49 @@ async function sha256(text: string): Promise<string> {
   ).join("");
 }
 
-async function collectFiles(dir: string, base: string): Promise<string[]> {
-  const paths: string[] = [];
+async function collectManifestLines(
+  dir: string,
+  base: string,
+  visited: Set<string> = new Set(),
+): Promise<string[]> {
+  const realDir = await Deno.realPath(dir);
+  if (visited.has(realDir)) {
+    return [];
+  }
+  visited.add(realDir);
+
+  const lines: string[] = [];
   for await (const entry of readDir(dir)) {
     const full = join(dir, entry.name);
+    const rel = relative(base, full);
+
     if (entry.isDirectory) {
       if (dir === base && entry.name === "output") continue;
-      paths.push(...await collectFiles(full, base));
+      lines.push(...await collectManifestLines(full, base, visited));
     } else if (entry.isFile) {
-      paths.push(relative(base, full));
+      const contentHash = await sha256(await readTextFile(full));
+      lines.push(`${rel} ${contentHash}`);
+    } else if (entry.isSymlink) {
+      const target = await readLink(full);
+      try {
+        const fileStat = await stat(full);
+        if (fileStat.isDirectory) {
+          lines.push(`${rel} -> ${target}`);
+          lines.push(...await collectManifestLines(full, base, visited));
+        } else if (fileStat.isFile) {
+          const contentHash = await sha256(await readTextFile(full));
+          lines.push(`${rel} -> ${target} ${contentHash}`);
+        }
+      } catch {
+        lines.push(`${rel} -> ${target}`);
+      }
     }
   }
-  return paths;
+  return lines;
 }
 
 export async function ceremonyHash(ceremonyDir: string): Promise<string> {
-  const files = (await collectFiles(ceremonyDir, ceremonyDir)).sort();
-  const lines: string[] = [];
-  for (const path of files) {
-    lines.push(
-      `${path} ${await sha256(await readTextFile(join(ceremonyDir, path)))}`,
-    );
-  }
+  const lines = (await collectManifestLines(ceremonyDir, ceremonyDir)).sort();
   return `sha256:${await sha256(lines.join("\n"))}`;
 }
 

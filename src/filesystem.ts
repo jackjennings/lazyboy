@@ -29,3 +29,4 @@ export const rename = (oldPath: string, newPath: string) =>
   Deno.rename(oldPath, newPath);
 export const open = (path: string | URL, options?: Deno.OpenOptions) =>
   Deno.open(path, options);
+export const readLink = (path: string | URL) => Deno.readLink(path);

@@ -113,3 +113,58 @@ Deno.test("isCeremonyApproved: false when the entry has no hash", async () => {
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("ceremonyHash: retargeting a symlink changes the hash", async () => {
+  const dir = await makeCeremonyDir({
+    "file1.ts": "identical\n",
+    "file2.ts": "identical\n",
+  });
+  try {
+    await Deno.symlink(join(dir, "file1.ts"), join(dir, "link.ts"));
+    const before = await ceremonyHash(dir);
+    await Deno.remove(join(dir, "link.ts"));
+    await Deno.symlink(join(dir, "file2.ts"), join(dir, "link.ts"));
+    assert(await ceremonyHash(dir) !== before);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ceremonyHash: editing a symlink target changes the hash", async () => {
+  const dir = await makeCeremonyDir({ "target.ts": "before\n" });
+  try {
+    await Deno.symlink(join(dir, "target.ts"), join(dir, "link.ts"));
+    const before = await ceremonyHash(dir);
+    await Deno.writeTextFile(join(dir, "target.ts"), "after\n");
+    assert(await ceremonyHash(dir) !== before);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ceremonyHash: broken symlink is stable", async () => {
+  const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
+  try {
+    await Deno.symlink("/nonexistent/path", join(dir, "broken.ts"));
+    const before = await ceremonyHash(dir);
+    const after = await ceremonyHash(dir);
+    assertEquals(before, after);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ceremonyHash: symlink to directory includes nested files", async () => {
+  const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
+  const linkedDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(linkedDir, "nested.ts"), "content\n");
+    await Deno.symlink(linkedDir, join(dir, "linked-dir"));
+    const before = await ceremonyHash(dir);
+    await Deno.writeTextFile(join(linkedDir, "nested.ts"), "changed\n");
+    assert(await ceremonyHash(dir) !== before);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+    await Deno.remove(linkedDir, { recursive: true });
+  }
+});

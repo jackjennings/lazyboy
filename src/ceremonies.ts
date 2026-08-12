@@ -17,6 +17,8 @@ import type { LanguageModelRequest } from "./models/types.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
 
+const CEREMONY_TIMEOUT_MS = 300_000;
+
 export interface CeremonyRunnerDeps {
   stateDir: string;
   appendTickLog(entry: object): Promise<void>;
@@ -27,6 +29,7 @@ export interface CeremonyRunnerDeps {
   readTicket(id: string): Promise<TicketState>;
   generateText(request: LanguageModelRequest): Promise<string | null>;
   commitState(): Promise<void>;
+  timeoutMs?: number;
 }
 
 function parseTimestampPrefix(filename: string): Temporal.PlainDateTime | null {
@@ -212,7 +215,29 @@ export class CeremonyRunner {
       return;
     }
 
-    await ceremony.run(now, outputDir);
+    const timeoutMs = this.#deps.timeoutMs ?? CEREMONY_TIMEOUT_MS;
+    let timedOut = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, timeoutMs);
+    });
+    const runPromise = ceremony.run(now, outputDir);
+    try {
+      await Promise.race([runPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId!);
+    }
+    if (timedOut) {
+      runPromise.catch(() => {});
+      await this.#deps.appendTickLog({
+        event: "ceremony-warning",
+        ceremony: ceremony.name,
+        reason: "timeout",
+      });
+    }
   }
 
   async #warnUnapproved(name: string, window: string): Promise<void> {

@@ -211,11 +211,12 @@ sync with the ceremonies array `composeTickDeps` actually registers.
 `~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never
 `join(HOME, ".lazyboy", …)` inline — same rule as the runtime dir below.
 
-`ceremony-warning` (an existing `tick.ndjson` event) gains four `reason` values:
+`ceremony-warning` (an existing `tick.ndjson` event) gains five `reason` values:
 `not-approved` (gate rejection), `ceremony-failed` (import failure, a
 non-function default export, or a throw from the ceremony function itself),
-`invalid-name` (a ceremony directory name outside `[A-Za-z0-9._-]+`), and
+`invalid-name` (a ceremony directory name outside `[A-Za-z0-9._-]+`),
 `approvals-unreadable` (`ceremony-approvals.json` exists but does not parse),
+and `timeout` (`ceremony.run()` did not resolve within the timeout window),
 joining the event's existing reasons (`prompt.md missing`, `claude-failed`,
 `empty-response`, and the `config.toml` parsing/validation messages).
 

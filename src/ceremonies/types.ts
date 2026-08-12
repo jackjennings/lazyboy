@@ -33,3 +33,10 @@ export type CeremonyModule = (
 ) => Promise<void> | void;
 
 export const BUILT_IN_CEREMONY_NAMES = ["standup", "documentation-gaps"];
+
+const CEREMONY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+export function isValidCeremonyName(name: string): boolean {
+  if (name === "." || name === "..") return false;
+  return CEREMONY_NAME_PATTERN.test(name);
+}

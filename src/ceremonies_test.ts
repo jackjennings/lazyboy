@@ -15,6 +15,7 @@ import {
   readApprovals,
   writeApprovals,
 } from "./ceremonies/approvals.ts";
+import { lazyboyDir } from "./paths.ts";
 import { makeTicket, withLazyboyDir } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
@@ -1088,7 +1089,10 @@ Deno.test("CeremonyRunner: warns and notifies once per due window", async () => 
     await runner.run();
     assertSpyCalls(appendTickLog, 1);
     assertSpyCalls(notify, 1);
-    assertEquals(notify.calls[0].args[1], "Ceremony digest needs approval");
+    assertStringIncludes(
+      notify.calls[0].args[1],
+      "lazyboy approve ceremony/digest",
+    );
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }
@@ -1211,6 +1215,115 @@ Deno.test("CeremonyRunner: index.ts wins over prompt.md", async () => {
     await makeRunner(stateDir, { now: () => TEST_NOW, runClaude }).run();
     assertSpyCalls(runClaude, 0);
     assert(existsSync(join(dir, "output", "20260727T100000-digest.md")));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: a ceremony directory with an unsafe name is skipped", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const unsafe = 'x" & (do shell script "id") & "y';
+    const dir = join(stateDir, "ceremonies", unsafe);
+    await Deno.mkdir(dir, { recursive: true });
+    await Deno.writeTextFile(join(dir, "config.toml"), 'time = "09:00"\n');
+    await Deno.writeTextFile(join(dir, "prompt.md"), "summarize\n");
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const notify = spy((_title: string, _message: string) => Promise.resolve());
+    const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      appendTickLog,
+      notify,
+      runClaude,
+    }).run();
+    assertSpyCalls(notify, 0);
+    assertSpyCalls(runClaude, 0);
+    assertEquals(appendTickLog.calls[0].args[0], {
+      event: "ceremony-warning",
+      ceremony: unsafe,
+      reason: "invalid-name",
+    });
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: a non-regular-file index.ts is never treated as a module", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const dir = await writePromptCeremony(stateDir, "digest");
+    await writeApprovals({ digest: { hash: await ceremonyHash(dir) } });
+    const mkfifo = await new Deno.Command("mkfifo", {
+      args: [join(dir, "index.ts")],
+    }).output();
+    assert(mkfifo.code === 0, "mkfifo must succeed for this test to mean much");
+    const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      appendTickLog,
+      runClaude,
+    }).run();
+    assertSpyCalls(runClaude, 0);
+    assertEquals(appendTickLog.calls[0].args[0], {
+      event: "ceremony-warning",
+      ceremony: "digest",
+      reason: "not-approved",
+    });
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: an unreadable ceremony does not abort the remaining ceremonies", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    const broken = join(stateDir, "ceremonies", "alpha");
+    await Deno.mkdir(join(broken, "config.toml"), { recursive: true });
+    await Deno.writeTextFile(join(broken, "prompt.md"), "summarize\n");
+    const good = await writePromptCeremony(stateDir, "zeta");
+    await writeApprovals({ zeta: { hash: await ceremonyHash(good) } });
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      appendTickLog,
+      runClaude,
+    }).run();
+    assertSpyCalls(runClaude, 1);
+    assertEquals(
+      (appendTickLog.calls[0].args[0] as Record<string, unknown>).ceremony,
+      "alpha",
+    );
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: a corrupt approvals file does not destroy stored approvals", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await writePromptCeremony(stateDir, "digest");
+    await Deno.mkdir(lazyboyDir(), { recursive: true });
+    const approvalsFile = join(lazyboyDir(), "ceremony-approvals.json");
+    await Deno.writeTextFile(approvalsFile, "{ not json");
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const notify = spy((_title: string, _message: string) => Promise.resolve());
+    const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
+    await makeRunner(stateDir, {
+      now: () => TEST_NOW,
+      appendTickLog,
+      notify,
+      runClaude,
+    }).run();
+    assertSpyCalls(runClaude, 0);
+    assertSpyCalls(notify, 1);
+    assertEquals(await Deno.readTextFile(approvalsFile), "{ not json");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

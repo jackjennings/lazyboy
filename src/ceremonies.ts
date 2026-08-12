@@ -1,7 +1,8 @@
 import { join } from "@std/path";
 import { parse } from "@std/toml";
-import { exists, readDir, readTextFile } from "./filesystem.ts";
+import { isRegularFile, readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
+import { isValidCeremonyName } from "./ceremonies/types.ts";
 import { PromptCeremony } from "./ceremonies/prompt.ts";
 import { ModuleCeremony } from "./ceremonies/module.ts";
 import {
@@ -9,6 +10,7 @@ import {
   readApprovals,
   writeApprovals,
 } from "./ceremonies/approvals.ts";
+import type { ApprovalRecord } from "./ceremonies/approvals.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import type { TicketState } from "./state/types.ts";
 import type { LanguageModelRequest } from "./models/types.ts";
@@ -75,42 +77,66 @@ export class CeremonyRunner {
     }
     for (const entry of dirEntries) {
       if (!entry.isDirectory) continue;
-      const ceremonyDir = join(ceremoniesDir, entry.name);
-      const builtin = this.#ceremonies.get(entry.name);
-      if (builtin) {
-        await this.#runCeremony(builtin, ceremonyDir, false);
+      if (!isValidCeremonyName(entry.name)) {
+        await this.#deps.appendTickLog({
+          event: "ceremony-warning",
+          ceremony: entry.name,
+          reason: "invalid-name",
+        });
         continue;
       }
-      if (await exists(join(ceremonyDir, "index.ts"))) {
-        await this.#runCeremony(
-          new ModuleCeremony({
-            name: entry.name,
-            stateDir: this.#deps.stateDir,
-            ceremonyDir,
-            appendTickLog: this.#deps.appendTickLog,
-            listTickets: this.#deps.listTickets,
-            readTicket: this.#deps.readTicket,
-            generateText: this.#deps.generateText,
-            commitState: this.#deps.commitState,
-            notify: this.#deps.notify,
-          }),
-          ceremonyDir,
-          true,
-        );
-        continue;
+      try {
+        await this.#dispatchCeremony(ceremoniesDir, entry.name);
+      } catch (e) {
+        await this.#deps.appendTickLog({
+          event: "ceremony-warning",
+          ceremony: entry.name,
+          reason: "ceremony-failed",
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
-      if (!await exists(join(ceremonyDir, "prompt.md"))) continue;
+    }
+  }
+
+  async #dispatchCeremony(
+    ceremoniesDir: string,
+    name: string,
+  ): Promise<void> {
+    const ceremonyDir = join(ceremoniesDir, name);
+    const builtin = this.#ceremonies.get(name);
+    if (builtin) {
+      await this.#runCeremony(builtin, ceremonyDir, false);
+      return;
+    }
+    if (await isRegularFile(join(ceremonyDir, "index.ts"))) {
       await this.#runCeremony(
-        new PromptCeremony({
-          name: entry.name,
+        new ModuleCeremony({
+          name,
           stateDir: this.#deps.stateDir,
+          ceremonyDir,
           appendTickLog: this.#deps.appendTickLog,
-          runClaude: this.#deps.runClaude,
+          listTickets: this.#deps.listTickets,
+          readTicket: this.#deps.readTicket,
+          generateText: this.#deps.generateText,
+          commitState: this.#deps.commitState,
+          notify: this.#deps.notify,
         }),
         ceremonyDir,
         true,
       );
+      return;
     }
+    if (!await isRegularFile(join(ceremonyDir, "prompt.md"))) return;
+    await this.#runCeremony(
+      new PromptCeremony({
+        name,
+        stateDir: this.#deps.stateDir,
+        appendTickLog: this.#deps.appendTickLog,
+        runClaude: this.#deps.runClaude,
+      }),
+      ceremonyDir,
+      true,
+    );
   }
 
   async #runCeremony(
@@ -182,28 +208,45 @@ export class CeremonyRunner {
     if (window === null) return;
 
     if (gated && !await isCeremonyApproved(ceremony.name, ceremonyDir)) {
-      const approvals = await readApprovals();
-      const entry = approvals[ceremony.name];
-      if (entry?.lastWarnedWindow === window) return;
-      await this.#deps.appendTickLog({
-        event: "ceremony-warning",
-        ceremony: ceremony.name,
-        reason: "not-approved",
-      });
-      try {
-        await this.#deps.notify?.(
-          "lazyboy",
-          `Ceremony ${ceremony.name} needs approval`,
-        );
-      } catch {
-        // notification failures must not abort the run
-      }
-      approvals[ceremony.name] = { ...entry, lastWarnedWindow: window };
-      await writeApprovals(approvals);
+      await this.#warnUnapproved(ceremony.name, window);
       return;
     }
 
     await ceremony.run(now, outputDir);
+  }
+
+  async #warnUnapproved(name: string, window: string): Promise<void> {
+    let approvals: ApprovalRecord | null = null;
+    try {
+      approvals = await readApprovals();
+    } catch (e) {
+      await this.#deps.appendTickLog({
+        event: "ceremony-warning",
+        ceremony: name,
+        reason: "approvals-unreadable",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    if (approvals?.[name]?.lastWarnedWindow === window) return;
+
+    await this.#deps.appendTickLog({
+      event: "ceremony-warning",
+      ceremony: name,
+      reason: "not-approved",
+    });
+    try {
+      await this.#deps.notify?.(
+        "lazyboy",
+        `Ceremony ${name} needs approval: run lazyboy approve ceremony/${name}`,
+      );
+    } catch {
+      // notification failures must not abort the run
+    }
+
+    if (approvals === null) return;
+    approvals[name] = { ...approvals[name], lastWarnedWindow: window };
+    await writeApprovals(approvals);
   }
 
   async #dueWindow(opts: {

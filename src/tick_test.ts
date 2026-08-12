@@ -3377,6 +3377,38 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: notify skipped when fresh read shows ticket no longer needs attention",
+  async () => {
+    const snapshotTicket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "needs-attention",
+    });
+    const freshTicket = makeTicket({
+      id: "gh-1",
+      phase: "implementation",
+      status: "waiting",
+    });
+    let readCount = 0;
+    const notifySpy = spy((_t: TicketState) => Promise.resolve());
+    const writeTicketSpy = spy((_t: TicketState) => Promise.resolve());
+    const deps = makeFakeServiceDeps({
+      listTickets: () => Promise.resolve(["gh-1"]),
+      readTicket: (_id) => {
+        readCount++;
+        return Promise.resolve(readCount === 1 ? snapshotTicket : freshTicket);
+      },
+      notify: notifySpy,
+      writeTicket: writeTicketSpy,
+      concurrency: 0,
+    });
+    await new TickService(deps).run();
+    assertSpyCalls(notifySpy, 0);
+    assertSpyCalls(writeTicketSpy, 0);
+  },
+);
+
+Deno.test(
   "TickService: refreshAnthropicPricing called before installPackages",
   async () => {
     const sequence: string[] = [];

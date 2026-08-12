@@ -1,8 +1,9 @@
 import { join } from "@std/path";
 import { parse } from "@std/toml";
-import { readDir, readTextFile } from "./filesystem.ts";
+import { exists, readDir, readTextFile } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import { PromptCeremony } from "./ceremonies/prompt.ts";
+import { isCeremonyApproved } from "./ceremonies/approvals.ts";
 
 export type { Ceremony } from "./ceremonies/types.ts";
 
@@ -61,29 +62,31 @@ export class CeremonyRunner {
     }
     for (const entry of dirEntries) {
       if (!entry.isDirectory) continue;
-      let ceremony: Ceremony | undefined = this.#ceremonies.get(entry.name);
-      if (!ceremony) {
-        const promptPath = join(ceremoniesDir, entry.name, "prompt.md");
-        let hasPrompt = false;
-        try {
-          await Deno.stat(promptPath);
-          hasPrompt = true;
-        } catch (e) {
-          if (!(e instanceof Deno.errors.NotFound)) throw e;
-        }
-        if (!hasPrompt) continue;
-        ceremony = new PromptCeremony({
+      const ceremonyDir = join(ceremoniesDir, entry.name);
+      const builtin = this.#ceremonies.get(entry.name);
+      if (builtin) {
+        await this.#runCeremony(builtin, ceremonyDir, false);
+        continue;
+      }
+      if (!await exists(join(ceremonyDir, "prompt.md"))) continue;
+      await this.#runCeremony(
+        new PromptCeremony({
           name: entry.name,
           stateDir: this.#deps.stateDir,
           appendTickLog: this.#deps.appendTickLog,
           runClaude: this.#deps.runClaude,
-        });
-      }
-      await this.#runCeremony(ceremony, join(ceremoniesDir, entry.name));
+        }),
+        ceremonyDir,
+        true,
+      );
     }
   }
 
-  async #runCeremony(ceremony: Ceremony, ceremonyDir: string): Promise<void> {
+  async #runCeremony(
+    ceremony: Ceremony,
+    ceremonyDir: string,
+    gated: boolean,
+  ): Promise<void> {
     const configPath = join(ceremonyDir, "config.toml");
     let raw: string;
     try {
@@ -184,6 +187,15 @@ export class CeremonyRunner {
       } catch (e) {
         if (!(e instanceof Deno.errors.NotFound)) throw e;
       }
+    }
+
+    if (gated && !await isCeremonyApproved(ceremony.name, ceremonyDir)) {
+      await this.#deps.appendTickLog({
+        event: "ceremony-warning",
+        ceremony: ceremony.name,
+        reason: "not-approved",
+      });
+      return;
     }
 
     await ceremony.run(now, outputDir);

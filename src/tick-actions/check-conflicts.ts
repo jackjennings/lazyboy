@@ -51,102 +51,125 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
       stateDir: string,
     ): Promise<TicketState | null> {
       const now = Temporal.Now.instant().toString();
+      const ticketDir = join(stateDir, ticket.id);
 
-      for (const wt of Object.values(ticket.worktrees)) {
-        if (!deps.worktreeExists(wt.path)) continue;
-        const fetch = await deps.runGit(
-          ["fetch", "origin", "main"],
-          wt.path,
-        );
-        if (fetch.code !== 0) {
-          await deps.appendLog(stateDir, ticket.id, {
-            event: "error",
-            context: "checkConflicts",
-            worktreePath: wt.path,
-            stderr: fetch.stderr,
-          });
-          continue;
-        }
+      type ConflictInfo = {
+        wt: { path: string; branch: string };
+        conflictedFiles: string[];
+        rebaseStderr: string;
+        contextFilename: string;
+      };
 
-        const rebase = await deps.runGit(
-          ["rebase", "origin/main"],
-          wt.path,
-        );
-
-        if (rebase.code === 0) {
-          if (ticket.prs !== undefined && ticket.prs.length > 0) {
-            const push = await deps.runGit(
-              ["push", "--force-with-lease", "origin", wt.branch],
+      const conflictResults = await Promise.all(
+        Object.values(ticket.worktrees)
+          .filter((wt) => deps.worktreeExists(wt.path))
+          .map(async (wt): Promise<ConflictInfo | null> => {
+            const fetch = await deps.runGit(
+              ["fetch", "origin", "main"],
               wt.path,
             );
-            if (push.code !== 0) {
+            if (fetch.code !== 0) {
               await deps.appendLog(stateDir, ticket.id, {
                 event: "error",
                 context: "checkConflicts",
                 worktreePath: wt.path,
-                pushStderr: push.stderr,
+                stderr: fetch.stderr,
               });
-            } else {
-              await deps.appendLog(stateDir, ticket.id, {
-                event: "branch-pushed",
-                worktreePath: wt.path,
-                branch: wt.branch,
-              });
+              return null;
             }
-          }
-          continue;
-        }
 
-        const diff = await deps.runGit(
-          ["diff", "--name-only", "--diff-filter=U"],
-          wt.path,
-        );
-        const conflictedFiles = diff.stdout
-          .split("\n")
-          .map((f) => f.trim())
-          .filter((f) => f.length > 0);
+            const rebase = await deps.runGit(
+              ["rebase", "origin/main"],
+              wt.path,
+            );
 
-        const ticketDir = join(stateDir, ticket.id);
-        const safeBranch = sanitizeBranchForFilename(wt.branch);
-        const contextContent = `# Conflict Context\n\n## Conflicted Files\n\n${
-          conflictedFiles.map((f) => `- ${f}`).join("\n")
-        }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
-        const contextFilename = await deps.writeContextFile(
-          ticketDir,
-          safeBranch,
-          contextContent,
-        );
+            if (rebase.code === 0) {
+              if (ticket.prs !== undefined && ticket.prs.length > 0) {
+                const push = await deps.runGit(
+                  ["push", "--force-with-lease", "origin", wt.branch],
+                  wt.path,
+                );
+                if (push.code !== 0) {
+                  await deps.appendLog(stateDir, ticket.id, {
+                    event: "error",
+                    context: "checkConflicts",
+                    worktreePath: wt.path,
+                    pushStderr: push.stderr,
+                  });
+                } else {
+                  await deps.appendLog(stateDir, ticket.id, {
+                    event: "branch-pushed",
+                    worktreePath: wt.path,
+                    branch: wt.branch,
+                  });
+                }
+              }
+              return null;
+            }
 
-        const { model, thinking } = deps.resolveModelConfig(ticket);
-        await deps.spawn({
-          worktreePath: wt.path,
-          branch: wt.branch,
-          ticketDir,
-          contextFile: contextFilename,
-          conflictedFiles,
-          rebaseStderr: rebase.stderr,
-          model,
-          thinking,
-        });
+            const diff = await deps.runGit(
+              ["diff", "--name-only", "--diff-filter=U"],
+              wt.path,
+            );
+            const conflictedFiles = diff.stdout
+              .split("\n")
+              .map((f) => f.trim())
+              .filter((f) => f.length > 0);
 
-        const updated: TicketState = {
-          ...ticket,
-          status: "running",
-          updated: now,
-          phaseSessionIds: ticket.phaseSessionIds
-            ? { ...ticket.phaseSessionIds, implementation: undefined }
-            : undefined,
-        };
-        await deps.writeTicket(stateDir, updated);
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "conflict-resolution-started",
-          worktreePath: wt.path,
-          branch: wt.branch,
-        });
-        return updated;
-      }
+            const safeBranch = sanitizeBranchForFilename(wt.branch);
+            const contextContent =
+              `# Conflict Context\n\n## Conflicted Files\n\n${
+                conflictedFiles.map((f) => `- ${f}`).join("\n")
+              }\n\n## Rebase Stderr\n\n\`\`\`\n${rebase.stderr}\n\`\`\`\n`;
+            const contextFilename = await deps.writeContextFile(
+              ticketDir,
+              safeBranch,
+              contextContent,
+            );
 
-      return null;
+            return {
+              wt,
+              conflictedFiles,
+              rebaseStderr: rebase.stderr,
+              contextFilename,
+            };
+          }),
+      );
+
+      const firstConflict = conflictResults.find(
+        (r): r is ConflictInfo => r !== null,
+      );
+      if (!firstConflict) return null;
+
+      const { model, thinking } = deps.resolveModelConfig(ticket);
+      await deps.spawn({
+        worktreePath: firstConflict.wt.path,
+        branch: firstConflict.wt.branch,
+        ticketDir,
+        contextFile: firstConflict.contextFilename,
+        conflictedFiles: firstConflict.conflictedFiles,
+        rebaseStderr: firstConflict.rebaseStderr,
+        model,
+        thinking,
+      });
+
+      const updated: TicketState = {
+        ...ticket,
+        status: "running",
+        updated: now,
+        phaseSessionIds: ticket.phaseSessionIds
+          ? { ...ticket.phaseSessionIds, implementation: undefined }
+          : undefined,
+      };
+      await deps.writeTicket(stateDir, updated);
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "conflict-resolution-started",
+        worktreePath: firstConflict.wt.path,
+        branch: firstConflict.wt.branch,
+        conflictedFiles: firstConflict.conflictedFiles,
+        rebaseStderr: firstConflict.rebaseStderr,
+      });
+      return updated;
     },
   };
 }

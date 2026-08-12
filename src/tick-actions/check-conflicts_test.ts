@@ -488,9 +488,9 @@ Deno.test("checkConflictsAction: merge/waiting — rebase conflict spawns agent"
 });
 
 Deno.test(
-  "checkConflictsAction: multiple worktrees — loop stops after first conflict spawns agent",
+  "checkConflictsAction: multiple worktrees — both conflict → spawn targets first by insertion order, both receive git calls",
   async () => {
-    const spawnCalls: object[] = [];
+    const spawnCalls: Record<string, unknown>[] = [];
     const gitCalls: { args: string[]; cwd: string }[] = [];
 
     await makeAction({
@@ -505,7 +505,7 @@ Deno.test(
         return Promise.resolve({ code: 0, stdout: "", stderr: "" });
       },
       spawn: (opts) => {
-        spawnCalls.push(opts);
+        spawnCalls.push(opts as Record<string, unknown>);
         return Promise.resolve();
       },
       writeContextFile: () => Promise.resolve(""),
@@ -523,10 +523,9 @@ Deno.test(
     );
 
     assertEquals(spawnCalls.length, 1);
-    assertEquals(
-      gitCalls.filter((c) => c.cwd === "/wt/b/repo").length,
-      0,
-    );
+    assertEquals(spawnCalls[0].worktreePath, "/wt/a/repo");
+    assert(gitCalls.some((c) => c.cwd === "/wt/a/repo"));
+    assert(gitCalls.some((c) => c.cwd === "/wt/b/repo"));
   },
 );
 

@@ -4180,6 +4180,25 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: preflightGitHubCredentials called before processLearnings",
+  async () => {
+    const order: string[] = [];
+    const deps = makeFakeServiceDeps({
+      preflightGitHubCredentials: () => {
+        order.push("preflight");
+        return Promise.resolve();
+      },
+      processLearnings: () => {
+        order.push("learnings");
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    assert(order.indexOf("preflight") < order.indexOf("learnings"));
+  },
+);
+
+Deno.test(
   "TickService: emits agents-md-too-large when file token count exceeds threshold",
   async () => {
     const dir = await Deno.makeTempDir();

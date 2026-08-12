@@ -146,6 +146,7 @@ export interface TickServiceDeps {
     context?: string,
   ): Promise<string | null>;
   notifyTickFailure?(error: string): Promise<void>;
+  preflightGitHubCredentials?(): Promise<void>;
 }
 
 export function selectCandidates(
@@ -753,6 +754,7 @@ export class TickService {
   }
 
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
+    await deps.preflightGitHubCredentials?.();
     await deps.processLearnings?.();
     const existingIds = new Set(await deps.listTickets());
     for (const provider of deps.providers) {

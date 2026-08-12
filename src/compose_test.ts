@@ -1,7 +1,10 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import {
   deriveOrgFromTicketDir,
   ensureStatePrompts,
+  GitHubAuthError,
+  preflightGitHubCredentials,
   resolveGitHubAccount,
 } from "./compose.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
@@ -307,6 +310,316 @@ Deno.test(
       assertEquals(entries, []);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+// ── preflightGitHubCredentials ────────────────────────────────────────────────
+
+function makeOkResponse(login: string): Response {
+  return new Response(JSON.stringify({ login }), { status: 200 });
+}
+
+function makeErrorResponse(status: 401 | 403): Response {
+  return new Response("{}", { status });
+}
+
+Deno.test(
+  "preflightGitHubCredentials: gh auth token exits nonzero → throws GitHubAuthError",
+  async () => {
+    const saved = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.delete("GITHUB_TOKEN");
+    try {
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({
+          code: 1,
+          stdout: "",
+          stderr: "not logged in",
+        })
+      );
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(makeConfig(), {
+            run: runSpy,
+            fetch: () => Promise.resolve(makeOkResponse("u")),
+          }),
+        GitHubAuthError,
+        "gh auth token",
+      );
+    } finally {
+      if (saved !== undefined) Deno.env.set("GITHUB_TOKEN", saved);
+      else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: gh auth token exits 0 with empty stdout → throws GitHubAuthError",
+  async () => {
+    const saved = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.delete("GITHUB_TOKEN");
+    try {
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({
+          code: 0,
+          stdout: "   ",
+          stderr: "",
+        })
+      );
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(makeConfig(), {
+            run: runSpy,
+            fetch: () => Promise.resolve(makeOkResponse("u")),
+          }),
+        GitHubAuthError,
+        "gh auth token",
+      );
+    } finally {
+      if (saved !== undefined) Deno.env.set("GITHUB_TOKEN", saved);
+      else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: token resolved from gh but GET /user returns 401 → throws GitHubAuthError",
+  async () => {
+    const savedToken = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.delete("GITHUB_TOKEN");
+    try {
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(makeConfig(), {
+            run: () =>
+              Promise.resolve({ code: 0, stdout: "gh-token", stderr: "" }),
+            fetch: () => Promise.resolve(makeErrorResponse(401)),
+          }),
+        GitHubAuthError,
+        "GitHub authentication failed",
+      );
+    } finally {
+      if (savedToken !== undefined) Deno.env.set("GITHUB_TOKEN", savedToken);
+      else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: token from env but GET /user returns 401 → throws GitHubAuthError",
+  async () => {
+    const saved = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.set("GITHUB_TOKEN", "existing-token");
+    try {
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(makeConfig(), {
+            run: spy(() =>
+              Promise.resolve({ code: 0, stdout: "", stderr: "" })
+            ),
+            fetch: () => Promise.resolve(makeErrorResponse(401)),
+          }),
+        GitHubAuthError,
+        "GitHub authentication failed",
+      );
+    } finally {
+      if (saved !== undefined) Deno.env.set("GITHUB_TOKEN", saved);
+      else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: token from env and GET /user 200 → sets GITHUB_LOGIN when unset",
+  async () => {
+    const savedToken = Deno.env.get("GITHUB_TOKEN");
+    const savedLogin = Deno.env.get("GITHUB_LOGIN");
+    Deno.env.set("GITHUB_TOKEN", "existing-token");
+    Deno.env.delete("GITHUB_LOGIN");
+    try {
+      await preflightGitHubCredentials(makeConfig(), {
+        run: spy(() => Promise.resolve({ code: 0, stdout: "", stderr: "" })),
+        fetch: () => Promise.resolve(makeOkResponse("testuser")),
+      });
+      assertEquals(Deno.env.get("GITHUB_LOGIN"), "testuser");
+    } finally {
+      if (savedToken !== undefined) Deno.env.set("GITHUB_TOKEN", savedToken);
+      else Deno.env.delete("GITHUB_TOKEN");
+      if (savedLogin !== undefined) Deno.env.set("GITHUB_LOGIN", savedLogin);
+      else Deno.env.delete("GITHUB_LOGIN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: GITHUB_TOKEN already set → does not shell to gh",
+  async () => {
+    const saved = Deno.env.get("GITHUB_TOKEN");
+    const savedLogin = Deno.env.get("GITHUB_LOGIN");
+    Deno.env.set("GITHUB_TOKEN", "existing-token");
+    Deno.env.set("GITHUB_LOGIN", "existinguser");
+    try {
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({
+          code: 0,
+          stdout: "",
+          stderr: "",
+        })
+      );
+      await preflightGitHubCredentials(makeConfig(), {
+        run: runSpy,
+        fetch: () => Promise.resolve(makeOkResponse("existinguser")),
+      });
+      assertSpyCalls(runSpy, 0);
+    } finally {
+      if (saved !== undefined) Deno.env.set("GITHUB_TOKEN", saved);
+      else Deno.env.delete("GITHUB_TOKEN");
+      if (savedLogin !== undefined) Deno.env.set("GITHUB_LOGIN", savedLogin);
+      else Deno.env.delete("GITHUB_LOGIN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: named account with unset env var → throws GitHubAuthError, no gh invoked",
+  async () => {
+    const savedEnv = Deno.env.get("GITHUB_TOKEN_PERSONAL");
+    Deno.env.delete("GITHUB_TOKEN_PERSONAL");
+    try {
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({
+          code: 0,
+          stdout: "",
+          stderr: "",
+        })
+      );
+      const cfg = makeConfig({
+        accounts: {
+          personal: {
+            tokenEnv: "GITHUB_TOKEN_PERSONAL",
+            login: "jackjennings",
+          },
+        },
+        orgs: { jackjennings: "personal" },
+      });
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(cfg, {
+            run: runSpy,
+            fetch: () => Promise.resolve(makeOkResponse("u")),
+          }),
+        GitHubAuthError,
+        "GITHUB_TOKEN_PERSONAL is not set",
+      );
+      assertSpyCalls(runSpy, 0);
+    } finally {
+      if (savedEnv !== undefined) {
+        Deno.env.set("GITHUB_TOKEN_PERSONAL", savedEnv);
+      } else Deno.env.delete("GITHUB_TOKEN_PERSONAL");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: named account token present and GET /user 200 → no env mutation",
+  async () => {
+    const savedEnv = Deno.env.get("GITHUB_TOKEN_PERSONAL");
+    Deno.env.set("GITHUB_TOKEN_PERSONAL", "named-token");
+    try {
+      const cfg = makeConfig({
+        accounts: {
+          personal: {
+            tokenEnv: "GITHUB_TOKEN_PERSONAL",
+            login: "jackjennings",
+          },
+        },
+        orgs: { jackjennings: "personal" },
+      });
+      await preflightGitHubCredentials(cfg, {
+        run: spy(() => Promise.resolve({ code: 0, stdout: "", stderr: "" })),
+        fetch: () => Promise.resolve(makeOkResponse("jackjennings")),
+      });
+    } finally {
+      if (savedEnv !== undefined) {
+        Deno.env.set("GITHUB_TOKEN_PERSONAL", savedEnv);
+      } else Deno.env.delete("GITHUB_TOKEN_PERSONAL");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: accounts configured but a repo's org is unmapped and GITHUB_TOKEN unset → throws GitHubAuthError",
+  async () => {
+    const savedPersonal = Deno.env.get("GITHUB_TOKEN_PERSONAL");
+    const savedToken = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.set("GITHUB_TOKEN_PERSONAL", "named-token");
+    Deno.env.delete("GITHUB_TOKEN");
+    try {
+      const cfg = makeConfig({
+        repos: ["someneworg/somerepo"],
+        accounts: {
+          personal: {
+            tokenEnv: "GITHUB_TOKEN_PERSONAL",
+            login: "jackjennings",
+          },
+        },
+        orgs: { jackjennings: "personal" },
+      });
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({ code: 1, stdout: "", stderr: "not logged in" })
+      );
+      await assertRejects(
+        () =>
+          preflightGitHubCredentials(cfg, {
+            run: runSpy,
+            fetch: () => Promise.resolve(makeOkResponse("jackjennings")),
+          }),
+        GitHubAuthError,
+        "gh auth token",
+      );
+      assertSpyCalls(runSpy, 1);
+    } finally {
+      if (savedPersonal !== undefined) {
+        Deno.env.set("GITHUB_TOKEN_PERSONAL", savedPersonal);
+      } else Deno.env.delete("GITHUB_TOKEN_PERSONAL");
+      if (savedToken !== undefined) Deno.env.set("GITHUB_TOKEN", savedToken);
+      else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+Deno.test(
+  "preflightGitHubCredentials: accounts configured, all repo orgs mapped → does not validate bare GITHUB_TOKEN",
+  async () => {
+    const savedPersonal = Deno.env.get("GITHUB_TOKEN_PERSONAL");
+    const savedToken = Deno.env.get("GITHUB_TOKEN");
+    Deno.env.set("GITHUB_TOKEN_PERSONAL", "named-token");
+    Deno.env.delete("GITHUB_TOKEN");
+    try {
+      const cfg = makeConfig({
+        repos: ["jackjennings/lazyboy"],
+        accounts: {
+          personal: {
+            tokenEnv: "GITHUB_TOKEN_PERSONAL",
+            login: "jackjennings",
+          },
+        },
+        orgs: { jackjennings: "personal" },
+      });
+      const runSpy = spy((_cmd: string[]) =>
+        Promise.resolve({ code: 1, stdout: "", stderr: "not logged in" })
+      );
+      await preflightGitHubCredentials(cfg, {
+        run: runSpy,
+        fetch: () => Promise.resolve(makeOkResponse("jackjennings")),
+      });
+      assertSpyCalls(runSpy, 0);
+    } finally {
+      if (savedPersonal !== undefined) {
+        Deno.env.set("GITHUB_TOKEN_PERSONAL", savedPersonal);
+      } else Deno.env.delete("GITHUB_TOKEN_PERSONAL");
+      if (savedToken !== undefined) Deno.env.set("GITHUB_TOKEN", savedToken);
+      else Deno.env.delete("GITHUB_TOKEN");
     }
   },
 );

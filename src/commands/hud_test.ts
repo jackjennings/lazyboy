@@ -1,6 +1,8 @@
 import {
   assert,
+  assertArrayIncludes,
   assertEquals,
+  assertExists,
   assertFalse,
   assertGreater,
   assertMatch,
@@ -12,6 +14,7 @@ import {
   formatHudHeader,
   formatTickLogLine,
   HUD_CHROME_ROWS,
+  hudAutocompleteProvider,
   isBlockedCommand,
   logPaneLines,
   openLogWatch,
@@ -273,5 +276,156 @@ Deno.test("parseCommand: splits multiple args ignoring extra whitespace", () => 
   assertEquals(parseCommand("approve  id1  id2"), {
     name: "approve",
     args: ["id1", "id2"],
+  });
+});
+
+// ── hudAutocompleteProvider ───────────────────────────────────────────────────
+
+const fakeCommands = [
+  {
+    name: "approve",
+    description: "approve a ticket",
+    completesWith: "_ids" as const,
+  },
+  {
+    name: "decline",
+    description: "decline a ticket",
+    completesWith: "_ids" as const,
+  },
+  {
+    name: "completion",
+    description: "print completion",
+    completesWith: ["zsh"],
+  },
+  { name: "tick", description: "run tick" },
+  { name: "_completions", description: "internal" },
+  { name: "hud", description: "blocked" },
+  { name: "shell", description: "blocked" },
+];
+
+const fakeTickets = [
+  "github/jackjennings/lazyboy/1",
+  "github/jackjennings/lazyboy/2",
+];
+
+function makeProvider() {
+  return hudAutocompleteProvider({
+    commands: fakeCommands,
+    listTickets: () => Promise.resolve(fakeTickets),
+  });
+}
+
+const abortSignal = new AbortController().signal;
+
+Deno.test("hudAutocompleteProvider: suggests unblocked, non-underscore commands for token 1", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["app"], 0, 3, {
+    signal: abortSignal,
+  });
+  assertExists(result);
+  const names = result.items.map((i) => i.value);
+  assertArrayIncludes(names, ["approve"]);
+  assertFalse(names.includes("hud"));
+  assertFalse(names.includes("shell"));
+  assertFalse(names.includes("_completions"));
+  assertEquals(result.prefix, "app");
+});
+
+Deno.test("hudAutocompleteProvider: returns null for token 1 when no commands", async () => {
+  const provider = hudAutocompleteProvider({
+    commands: [],
+    listTickets: () => Promise.resolve([]),
+  });
+  const result = await provider.getSuggestions(["x"], 0, 1, {
+    signal: abortSignal,
+  });
+  assertExists(result);
+  assertEquals(result.items, []);
+});
+
+Deno.test("hudAutocompleteProvider: returns ticket IDs for token 2 on _ids command", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["approve "], 0, 8, {
+    signal: abortSignal,
+  });
+  assertExists(result);
+  assertEquals(result.items.map((i) => i.value), fakeTickets);
+  assertEquals(result.prefix, "");
+});
+
+Deno.test("hudAutocompleteProvider: filters ticket IDs by partial token", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["approve github/j"], 0, 15, {
+    signal: abortSignal,
+  });
+  assertExists(result);
+  assertEquals(result.prefix, "github/j");
+  assertEquals(result.items.map((i) => i.value), fakeTickets);
+});
+
+Deno.test("hudAutocompleteProvider: returns literal list for string[] completesWith", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["completion "], 0, 11, {
+    signal: abortSignal,
+  });
+  assertExists(result);
+  assertEquals(result.items.map((i) => i.value), ["zsh"]);
+  assertEquals(result.prefix, "");
+});
+
+Deno.test("hudAutocompleteProvider: returns null for command with no completesWith", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["tick "], 0, 5, {
+    signal: abortSignal,
+  });
+  assertEquals(result, null);
+});
+
+Deno.test("hudAutocompleteProvider: returns null for unknown command at token 2", async () => {
+  const provider = makeProvider();
+  const result = await provider.getSuggestions(["unknown "], 0, 8, {
+    signal: abortSignal,
+  });
+  assertEquals(result, null);
+});
+
+Deno.test("hudAutocompleteProvider: returns null when signal is already aborted", async () => {
+  const provider = makeProvider();
+  const controller = new AbortController();
+  controller.abort();
+  const result = await provider.getSuggestions(["approve "], 0, 8, {
+    signal: controller.signal,
+  });
+  assertEquals(result, null);
+});
+
+Deno.test("hudAutocompleteProvider: applyCompletion replaces prefix before cursor", () => {
+  const provider = makeProvider();
+  const result = provider.applyCompletion(
+    ["app"],
+    0,
+    3,
+    { value: "approve", label: "approve" },
+    "app",
+  );
+  assertEquals(result, { lines: ["approve"], cursorLine: 0, cursorCol: 7 });
+});
+
+Deno.test("hudAutocompleteProvider: applyCompletion handles token-2 replacement", () => {
+  const provider = makeProvider();
+  const result = provider.applyCompletion(
+    ["approve github/j"],
+    0,
+    16,
+    {
+      value: "github/jackjennings/lazyboy/1",
+      label: "github/jackjennings/lazyboy/1",
+    },
+    "github/j",
+  );
+  assertEquals(result, {
+    lines: ["approve github/jackjennings/lazyboy/1"],
+    cursorLine: 0,
+    cursorCol: 37,
   });
 });

@@ -2,7 +2,11 @@ import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
 import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
 import {
-  Input,
+  type AutocompleteItem,
+  type AutocompleteProvider,
+  type AutocompleteSuggestions,
+  Editor,
+  type EditorTheme,
   matchesKey,
   ProcessTerminal,
   TUI,
@@ -174,6 +178,74 @@ export async function readTickLog(tickLogPath: string): Promise<string[]> {
     .map(formatTickLogLine);
 }
 
+export interface HudAutocompleteProviderDeps {
+  commands: Array<Pick<Command, "name" | "description" | "completesWith">>;
+  listTickets: (stateDir?: string) => Promise<string[]>;
+}
+
+export function hudAutocompleteProvider(
+  deps: HudAutocompleteProviderDeps,
+): AutocompleteProvider {
+  return {
+    getSuggestions(
+      lines: string[],
+      _cursorLine: number,
+      cursorCol: number,
+      { signal }: { signal: AbortSignal },
+    ): Promise<AutocompleteSuggestions | null> {
+      if (signal.aborted) return Promise.resolve(null);
+      const text = lines[0].slice(0, cursorCol);
+      const spaceIndex = text.search(/\s/);
+      if (spaceIndex === -1) {
+        const prefix = text;
+        const items = deps.commands
+          .filter(
+            (c) => !isBlockedCommand(c.name) && !c.name.startsWith("_"),
+          )
+          .map((c) => ({
+            value: c.name,
+            label: c.name,
+            description: c.description ?? "",
+          }));
+        return Promise.resolve({ items, prefix });
+      }
+      const token1 = text.slice(0, spaceIndex);
+      const prefix = lines[0].split(/\s/).pop() ?? "";
+      const cmd = deps.commands.find((c) => c.name === token1);
+      if (!cmd || cmd.completesWith === undefined) return Promise.resolve(null);
+      if (cmd.completesWith === "_ids") {
+        return deps.listTickets().then((ids) => {
+          if (signal.aborted) return null;
+          return {
+            items: ids.map((id) => ({ value: id, label: id })),
+            prefix,
+          };
+        });
+      }
+      return Promise.resolve({
+        items: cmd.completesWith.map((s) => ({ value: s, label: s })),
+        prefix,
+      });
+    },
+    applyCompletion(
+      lines: string[],
+      _cursorLine: number,
+      cursorCol: number,
+      item: AutocompleteItem,
+      prefix: string,
+    ) {
+      const before = lines[0].slice(0, cursorCol - prefix.length);
+      const after = lines[0].slice(cursorCol);
+      const newLine = before + item.value + after;
+      return {
+        lines: [newLine],
+        cursorLine: 0,
+        cursorCol: cursorCol - prefix.length + item.value.length,
+      };
+    },
+  };
+}
+
 export const hud: Command = {
   name: "hud",
   description: "live status display",
@@ -190,15 +262,31 @@ export const hud: Command = {
     let currentStatusLines: string[] = [];
     let currentLogLines: string[] = [];
 
-    const commandInput = new Input();
+    const editorTheme: EditorTheme = {
+      borderColor: (str: string) => dim(str),
+      selectList: {
+        selectedPrefix: (text: string) => inverse(text),
+        selectedText: (text: string) => inverse(text),
+        description: (text: string) => dim(text),
+        scrollInfo: (text: string) => dim(text),
+        noMatch: (text: string) => text,
+      },
+    };
+    const commandEditor = new Editor(tui, editorTheme);
+    commandEditor.setAutocompleteProvider(
+      hudAutocompleteProvider({
+        commands,
+        listTickets: () => listTickets(stateDir),
+      }),
+    );
     const commandInputFrame = {
       render(width: number): string[] {
         const border = "─".repeat(width);
-        const colored = commandInput.focused ? border : dim(border);
-        return [colored, ...commandInput.render(width), colored];
+        const colored = commandEditor.focused ? border : dim(border);
+        return [colored, ...commandEditor.render(width), colored];
       },
       invalidate() {
-        commandInput.invalidate();
+        commandEditor.invalidate();
       },
     };
 
@@ -239,7 +327,7 @@ export const hud: Command = {
     tui.setFocus(statusPane);
     statusPane.focused = true;
     logPane.focused = false;
-    commandInput.focused = false;
+    commandEditor.focused = false;
 
     async function refresh() {
       const logWasAtEnd = logPane.isAtEnd(tui.terminal.columns);
@@ -265,16 +353,7 @@ export const hud: Command = {
       tui.requestRender(true);
     }
 
-    commandInput.onEscape = () => {
-      commandInput.setValue("");
-      commandInput.focused = false;
-      statusPane.focused = true;
-      logPane.focused = false;
-      tui.setFocus(statusPane);
-      tui.requestRender(true);
-    };
-
-    commandInput.onSubmit = async (value: string) => {
+    commandEditor.onSubmit = async (value: string) => {
       if (commandRunning) return;
       const parsed = parseCommand(value);
       if (!parsed) return;
@@ -289,7 +368,7 @@ export const hud: Command = {
         tui.requestRender(true);
         return;
       }
-      commandInput.setValue("");
+      commandEditor.setText("");
       commandRunning = true;
       const label = args.length > 0 ? `${name} ${args.join(" ")}` : name;
       headerLine = `Running: ${label}`;
@@ -354,19 +433,33 @@ export const hud: Command = {
         tui.stop();
         Deno.exit(0);
       }
+      if (matchesKey(data, "escape")) {
+        if (commandEditor.focused && !commandEditor.isShowingAutocomplete()) {
+          commandEditor.setText("");
+          commandEditor.focused = false;
+          statusPane.focused = true;
+          logPane.focused = false;
+          tui.setFocus(statusPane);
+          tui.requestRender(true);
+          return { consume: true };
+        }
+      }
       if (matchesKey(data, "tab")) {
+        if (commandEditor.focused && commandEditor.getText() !== "") {
+          return;
+        }
         if (statusPane.focused) {
           statusPane.focused = false;
           logPane.focused = true;
-          commandInput.focused = false;
+          commandEditor.focused = false;
           tui.setFocus(logPane);
         } else if (logPane.focused) {
           logPane.focused = false;
-          commandInput.focused = true;
+          commandEditor.focused = true;
           statusPane.focused = false;
-          tui.setFocus(commandInput);
+          tui.setFocus(commandEditor);
         } else {
-          commandInput.focused = false;
+          commandEditor.focused = false;
           statusPane.focused = true;
           logPane.focused = false;
           tui.setFocus(statusPane);
@@ -376,8 +469,8 @@ export const hud: Command = {
       if (matchesKey(data, "super+k")) {
         statusPane.focused = false;
         logPane.focused = false;
-        commandInput.focused = true;
-        tui.setFocus(commandInput);
+        commandEditor.focused = true;
+        tui.setFocus(commandEditor);
         tui.requestRender(true);
       }
     });

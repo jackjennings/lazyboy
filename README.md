@@ -189,6 +189,10 @@ pipeline:
     config.toml     # time = "HH:MM"; optional: model = "...", thinking = <budget_tokens>
     prompt.md       # ceremony behavior; receives current date as system context
     output/
+  digest/
+    config.toml
+    index.ts        # alternative to prompt.md: ceremony behavior as code
+    output/
 ```
 
 Each ceremony directory under `{stateDir}/ceremonies/{name}/` activates the
@@ -199,6 +203,43 @@ named ceremony. The directory contains a `config.toml` with scheduling keys:
 | `time`           | yes      | Earliest wall-clock time to run (`"HH:MM"` in local timezone)                        |
 | `interval_hours` | no       | Run repeatedly, at most once per this many hours after `time`; omit for once-per-day |
 | `workdays_only`  | no       | When `true`, skip Saturday and Sunday (default `false`)                              |
+
+A ceremony's behavior is either a prompt (`prompt.md`) or code (`index.ts`);
+when both are present, `index.ts` wins. `index.ts` default-exports a function
+that receives a `CeremonyContext`:
+
+```ts
+export default async function (context) {
+  const ids = await context.listTickets();
+  await context.writeOutput(`# Report\n\n${ids.length} tickets\n`);
+}
+```
+
+| Member                                           | Purpose                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
+| `now: Temporal.ZonedDateTime`                    | Scheduled run time                                                  |
+| `stateDir`, `ceremonyDir`, `outputDir`           | Paths                                                               |
+| `config: Record<string, unknown>`                | Parsed `config.toml`                                                |
+| `listTickets(): Promise<string[]>`               | Ticket IDs                                                          |
+| `readTicket(id): Promise<TicketState>`           | One ticket                                                          |
+| `generateText(options): Promise<string \| null>` | Ancillary LLM call via `LanguageModel`, default `claude-sonnet-4-6` |
+| `writeOutput(content): Promise<void>`            | Writes `${compactTimestamp(now)}-${name}.md` into `outputDir`       |
+| `commitState(): Promise<void>`                   | Commit the state repo                                               |
+| `notify(title, message): Promise<void>`          | Desktop notification                                                |
+| `log(entry): Promise<void>`                      | `appendTickLog` with `ceremony` filled in                           |
+
+Ceremonies defined in the state dir do not run until an operator approves them:
+
+```bash
+lazyboy approve ceremony/digest
+```
+
+Approval records a hash of the ceremony directory (excluding `output/`) in
+`~/.lazyboy/ceremony-approvals.json`. Any later edit to `config.toml`,
+`prompt.md`, or `index.ts` revokes the approval; the ceremony stops running and
+logs `ceremony-warning` with `reason: not-approved` once per scheduled
+occurrence until it is approved again. Built-in ceremonies (`standup`,
+`documentation-gaps`) need no approval.
 
 A particularly valuable ceremony type is **meta-review**: a recurring analysis
 of recently completed tickets that extracts learnings and writes them to

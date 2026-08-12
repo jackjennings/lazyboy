@@ -178,6 +178,47 @@ from `apfel` falls through to `claude` rather than being parsed loosely. The
 body is passed after a `--` separator in both calls — a principles block starts
 with `-`, which either CLI otherwise rejects as an unknown option.
 
+## State-dir ceremonies
+
+`{stateDir}/ceremonies/<name>/` may define its behavior as `prompt.md`
+(existing) or `index.ts` (`CeremonyModule`, `src/ceremonies/types.ts`) — a
+default-exported function receiving a `CeremonyContext`. `index.ts` wins when
+both are present.
+
+The approval gate (`CeremonyRunner#runCeremony`, `src/ceremonies.ts`) runs after
+the schedule check and before `ceremony.run()`. `ModuleCeremony.run()`
+(`src/ceremonies/module.ts`) performs its `await import(...)` of `index.ts`
+inside `run()` — never in a constructor, a field initializer, or the runner's
+resolution path — so an unapproved ceremony's `index.ts` is never imported and
+its top-level code never executes. **This ordering is load-bearing: any change
+that moves the import earlier executes unapproved, agent-authored code and is a
+security regression.** Do not refactor around it.
+
+A ceremony directory is exempt from the gate only when its name matches an entry
+in the ceremonies array `composeTickDeps` passes to `CeremonyRunner`'s
+constructor (`StandupCeremony`, `DocumentationGapsCeremony` — compiled into the
+binary); every other directory that resolves to a `PromptCeremony` or
+`ModuleCeremony` is gated. The exemption comes from that code-constructed
+registry, not from matching the directory name against a string constant —
+`BUILT_IN_CEREMONY_NAMES` (`src/ceremonies/types.ts`) exists only so
+`performApproveCeremony` (`src/commands/approve.ts`) can reject
+`lazyboy approve ceremony/standup`.
+
+`readApprovals`/`writeApprovals` (`src/ceremonies/approvals.ts`) resolve
+`~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never
+`join(HOME, ".lazyboy", …)` inline — same rule as the runtime dir below.
+
+`ceremony-warning` (an existing `tick.ndjson` event) gains two `reason` values:
+`not-approved` (gate rejection) and `ceremony-failed` (import failure, a
+non-function default export, or a throw from the ceremony function itself),
+joining the event's existing reasons (`prompt.md missing`, `claude-failed`,
+`empty-response`, and the `config.toml` parsing/validation messages).
+
+`CeremonyContext` (`src/ceremonies/types.ts`) is the only surface state-dir code
+depends on. Treat widening it as a compatibility commitment: add members
+deliberately, and never expose `TickDeps`, `runGit`, or a raw `CommandRunner`
+through it — state-dir code is agent-authored and untrusted until approved.
+
 ## Runtime dir (`lazyboyDir`)
 
 Anything that writes under the runtime dir — the combined `log.ndjson`,

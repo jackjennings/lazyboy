@@ -7,7 +7,8 @@ import {
   detectPlanOutlier,
 } from "./outlier-detection.ts";
 import { compactTimestamp } from "./timestamp.ts";
-import { deriveProjectPath, loadPromptFile } from "./phases/runners.ts";
+import { loadPromptFile } from "./phases/runners.ts";
+import { deriveProjectPath } from "./phases/project-path.ts";
 import {
   appendTicketLog,
   commitPrinciples,

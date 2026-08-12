@@ -2,6 +2,7 @@ import { join } from "@std/path";
 import type { ActivePhase } from "./types.ts";
 import { PHASE_SEQUENCE } from "./types.ts";
 import { readTextFile } from "../filesystem.ts";
+import { deriveProjectPath } from "./project-path.ts";
 
 const PROMPT_DIR = new URL("./prompts/", import.meta.url).pathname;
 
@@ -77,18 +78,6 @@ export async function loadRevisionPrompt(phase: string): Promise<string> {
     if (e instanceof Deno.errors.NotFound) return "";
     throw e;
   }
-}
-
-export function deriveProjectPath(provider: string, ticketId: string): string {
-  if (provider === "github") {
-    const segments = ticketId.split("/");
-    return segments.slice(1, -1).join("/");
-  }
-  if (provider === "jira") {
-    const key = ticketId.split("/")[1] ?? "";
-    return key.replace(/-\d+$/, "");
-  }
-  return "";
 }
 
 async function readPromptFile(path: string): Promise<string> {

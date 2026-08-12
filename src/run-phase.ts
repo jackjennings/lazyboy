@@ -17,7 +17,7 @@ import {
   stat,
   writeTextFile,
 } from "./filesystem.ts";
-import { deriveProjectPath } from "./phases/runners.ts";
+import { deriveProjectPath } from "./phases/project-path.ts";
 
 export function getPiEnvironmentVariables(
   home: string,

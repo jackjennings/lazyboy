@@ -43,6 +43,21 @@ function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
   return result;
 }
 
+function normalizePrEntry(raw: unknown): PrEntry | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.url !== "string" || !r.url) return null;
+  const entry: PrEntry = {
+    url: r.url,
+    title: typeof r.title === "string" ? r.title : "",
+    dependsOn: Array.isArray(r.dependsOn) ? (r.dependsOn as string[]) : [],
+    merged: typeof r.merged === "boolean" ? r.merged : false,
+  };
+  if (typeof r.worktreeKey === "string") entry.worktreeKey = r.worktreeKey;
+  if (typeof r.closed === "boolean") entry.closed = r.closed;
+  return entry;
+}
+
 export async function readTicket(
   stateDir: string,
   id: string,
@@ -74,7 +89,17 @@ export async function readTicket(
     }
   }
 
-  const prs = data.prs as PrEntry[] | undefined;
+  const rawPrs = data.prs;
+  const prs: PrEntry[] | undefined = Array.isArray(rawPrs)
+    ? (rawPrs as unknown[]).flatMap((entry) => {
+      const normalized = normalizePrEntry(entry);
+      if (!normalized) {
+        console.error(`readTicket: dropping prs entry without url in ${id}`);
+        return [];
+      }
+      return [normalized];
+    })
+    : undefined;
 
   const ticket: TicketState = {
     id: data.id,
@@ -324,7 +349,18 @@ export async function listLearnings(
             prTitle: data.prTitle as string,
             prBody: data.prBody as string,
             status: (data.status as LearningStatus) ?? "pending",
-            prs: (data.prs as PrEntry[]) ?? [],
+            prs: Array.isArray(data.prs)
+              ? (data.prs as unknown[]).flatMap((entry) => {
+                const normalized = normalizePrEntry(entry);
+                if (!normalized) {
+                  console.error(
+                    `listLearnings: dropping prs entry without url in ${file.name}`,
+                  );
+                  return [];
+                }
+                return [normalized];
+              })
+              : [],
           },
           intent: content.trim(),
         });

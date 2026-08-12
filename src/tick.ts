@@ -792,12 +792,27 @@ export class TickService {
     for (let i = 0; i < processedTickets.length; i++) {
       if (processedTickets[i].phase === "wont-do") continue;
       for (const action of deps.tickActions) {
-        if (action.applies(processedTickets[i])) {
-          const updated = await action.run(
-            processedTickets[i],
+        try {
+          if (action.applies(processedTickets[i])) {
+            const updated = await action.run(
+              processedTickets[i],
+              deps.stateDir,
+            );
+            if (updated !== null) processedTickets[i] = updated;
+          }
+        } catch (e) {
+          await deps.tickDeps.appendLog(
             deps.stateDir,
+            processedTickets[i].id,
+            {
+              event: "error",
+              context: "tickAction",
+              action:
+                (action as { constructor?: { name?: string } }).constructor
+                  ?.name ?? "unknown",
+              message: String(e),
+            },
           );
-          if (updated !== null) processedTickets[i] = updated;
         }
       }
     }

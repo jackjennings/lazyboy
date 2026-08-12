@@ -1,4 +1,5 @@
 import type { CommandRunner } from "./apfel.ts";
+import { ApfelLanguageModel } from "./models/apfel.ts";
 
 const CONTEXT_CHAR_BUDGET = 12000;
 
@@ -29,31 +30,21 @@ Short: Kill Process on Decline
 Title: Fix slow test suite
 Short: Fix Slow Test Suite`;
 
-export async function generateShortTitle(
+export function generateShortTitle(
   run: CommandRunner,
   title: string,
   context?: string,
 ): Promise<string | null> {
-  try {
-    const trimmedContext = context?.trim();
-    const userPrompt = trimmedContext
-      ? `Title: ${title}\n\nContext:\n${
-        trimmedContext.slice(0, CONTEXT_CHAR_BUDGET)
-      }`
-      : title;
-    const { code, stdout } = await run([
-      "apfel",
-      "--quiet",
-      "--max-tokens",
-      "40",
-      "-s",
-      SHORT_TITLE_SYSTEM_PROMPT,
-      userPrompt,
-    ]);
-    if (code !== 0) return null;
-    const trimmed = stdout.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  } catch {
-    return null;
-  }
+  const trimmedContext = context?.trim();
+  const userPrompt = trimmedContext
+    ? `Title: ${title}\n\nContext:\n${
+      trimmedContext.slice(0, CONTEXT_CHAR_BUDGET)
+    }`
+    : title;
+  const model = new ApfelLanguageModel(run);
+  return model.generateText({
+    systemPrompt: SHORT_TITLE_SYSTEM_PROMPT,
+    prompt: userPrompt,
+    maxTokens: 40,
+  });
 }

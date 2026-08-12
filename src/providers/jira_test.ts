@@ -591,10 +591,9 @@ Deno.test("fetchNew omits rejected comments from description", async () => {
     }),
     run: (args) =>
       Promise.resolve(
-        args[0] === "apfel" ? { code: 0, stdout: "SKIP" } : {
-          code: 1,
-          stdout: "",
-        },
+        args[0] === "apfel"
+          ? { code: 0, stdout: JSON.stringify({ verdict: "SKIP" }) }
+          : { code: 1, stdout: "" },
       ),
   });
   const items = await provider.fetchNew(new Set());
@@ -858,7 +857,7 @@ Deno.test(
           ? Promise.resolve({ code: 1, stdout: "" })
           : Promise.resolve({
             code: 0,
-            stdout: JSON.stringify({ structured_output: { verdict: "SKIP" } }),
+            stdout: JSON.stringify({ verdict: "SKIP" }),
           }),
     });
     const items = await provider.fetchNew(new Set());

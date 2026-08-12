@@ -99,7 +99,7 @@ Deno.test("selfReview: returns false when run throws", async () => {
   }
 });
 
-Deno.test("selfReview: passes output file content as second arg to claude", async () => {
+Deno.test("selfReview: passes output file content after -- to claude", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     const outputContent =
@@ -112,7 +112,7 @@ Deno.test("selfReview: passes output file content as second arg to claude", asyn
     await selfReview("intake", tempDir, run);
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     assertEquals(args[0], "claude");
-    assertEquals(args[1], outputContent);
+    assertEquals(args[args.length - 1], outputContent);
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }

@@ -3,6 +3,9 @@ import type { Provider, WorkItem } from "./types.ts";
 import { jiraTransition } from "../tick-actions/jira-transition.ts";
 import { HttpClient } from "../http-client.ts";
 import { captureCommandRunner, type CommandRunner } from "../apfel.ts";
+import { ApfelLanguageModel } from "../models/apfel.ts";
+import { ClaudeLanguageModel } from "../models/claude.ts";
+import { FallbackLanguageModel } from "../models/fallback.ts";
 
 interface JiraIssue {
   id: string;
@@ -35,43 +38,17 @@ async function judgeComment(
   body: string,
   run: CommandRunner,
 ): Promise<boolean> {
-  try {
-    const { code, stdout } = await run([
-      "apfel",
-      "--quiet",
-      "--max-tokens",
-      "5",
-      "-s",
-      COMMENT_JUDGE_SYSTEM_PROMPT,
-      body,
-    ]);
-    if (code === 0) {
-      return stdout.trim().split(/\s/)[0].toUpperCase() === "KEEP";
-    }
-  } catch {
-    // apfel unavailable — fall through to claude CLI
-  }
-  try {
-    const { code, stdout } = await run([
-      "claude",
-      body,
-      "--print",
-      "--bare",
-      "--output-format",
-      "json",
-      "--system-prompt",
-      COMMENT_JUDGE_SYSTEM_PROMPT,
-      "--model",
-      "claude-haiku-4-5",
-      "--json-schema",
-      JSON.stringify(COMMENT_JUDGE_JSON_SCHEMA),
-    ]);
-    if (code !== 0) return true;
-    const parsed = JSON.parse(stdout);
-    return parsed?.structured_output?.verdict === "KEEP";
-  } catch {
-    return true;
-  }
+  const model = new FallbackLanguageModel([
+    new ApfelLanguageModel(run),
+    new ClaudeLanguageModel(run, { model: "claude-haiku-4-5" }),
+  ]);
+  const result = await model.generateObject<{ verdict: "KEEP" | "SKIP" }>({
+    systemPrompt: COMMENT_JUDGE_SYSTEM_PROMPT,
+    prompt: body,
+    schema: COMMENT_JUDGE_JSON_SCHEMA,
+    maxTokens: 64,
+  });
+  return (result?.verdict ?? "KEEP") === "KEEP";
 }
 
 export class JiraProvider implements Provider {

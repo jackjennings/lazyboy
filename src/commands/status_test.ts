@@ -664,7 +664,7 @@ Deno.test("readAttentionReason: formats conflict-resolution-failed without sessi
   }
 });
 
-Deno.test("readAttentionReason: formats error/resolveCITriage with reason and runId", async () => {
+Deno.test("readAttentionReason: formats error/resolveCIFix with reason and runId", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -672,7 +672,7 @@ Deno.test("readAttentionReason: formats error/resolveCITriage with reason and ru
       JSON.stringify({
         ts: "2026-07-31T20:00:00Z",
         event: "error",
-        context: "resolveCITriage",
+        context: "resolveCIFix",
         reason: "output-file-missing",
         runId: "wf_abc123",
       }) + "\n",
@@ -686,7 +686,7 @@ Deno.test("readAttentionReason: formats error/resolveCITriage with reason and ru
   }
 });
 
-Deno.test("readAttentionReason: ignores error events without resolveCITriage context", async () => {
+Deno.test("readAttentionReason: ignores error events without resolveCIFix context", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -808,11 +808,11 @@ Deno.test("buildPhaseBreakdown: groups files by phase key and sums all token fie
 });
 
 Deno.test(
-  "buildPhaseBreakdown: normalizes ci-triage-* stems to ci-triage and counts revisions",
+  "buildPhaseBreakdown: normalizes ci-fix-* stems to ci-fix and counts revisions",
   () => {
     const rows = buildPhaseBreakdown([
       {
-        name: "20260806T050000-ci-triage-wf_abc123.usage.json",
+        name: "20260806T050000-ci-fix-wf_abc123.usage.json",
         usage: {
           input: 10,
           output: 5,
@@ -823,7 +823,7 @@ Deno.test(
         },
       },
       {
-        name: "20260806T160000-ci-triage-wf_xyz789.usage.json",
+        name: "20260806T160000-ci-fix-wf_xyz789.usage.json",
         usage: {
           input: 20,
           output: 8,
@@ -835,7 +835,7 @@ Deno.test(
       },
     ]);
     assertEquals(rows.length, 1);
-    assertEquals(rows[0].key, "ci-triage");
+    assertEquals(rows[0].key, "ci-fix");
     assertEquals(rows[0].revisions, 2);
     assertEquals(rows[0].tokens, 43);
   },
@@ -925,7 +925,7 @@ Deno.test(
   () => {
     const rows = buildPhaseBreakdown([
       {
-        name: "20260806T160000-ci-triage-wf_x.usage.json",
+        name: "20260806T160000-ci-fix-wf_x.usage.json",
         usage: {
           input: 5,
           output: 2,
@@ -959,7 +959,7 @@ Deno.test(
       },
     ]);
     assertEquals(rows[0].key, "intake");
-    assertEquals(rows[1].key, "ci-triage");
+    assertEquals(rows[1].key, "ci-fix");
     assertEquals(rows[2].key, "custom-phase");
   },
 );

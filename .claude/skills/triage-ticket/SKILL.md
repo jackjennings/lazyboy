@@ -43,7 +43,9 @@ files directly is usually faster and always complete.
    Anything carrying a `reason`, plus `error` and `*-failed`, is the incident.
 3. **Identify the emitter from the `event` name, not the `reason`.** Two code
    paths emit the same label with different meanings — see the table below.
-   `grep -rn --include='*.ts' '"<reason>"' src/ | grep -v _test` finds it.
+   Grepping the literal in `src/` finds most of them; when it does not, the
+   label came from `ARTIFACT_DESCRIPTORS` (`src/state/types.ts`) via
+   `descriptor.missingReason`.
 4. **Read that code and check its precondition against the ticket.** Most parks
    are a guard reading one field (`ticket.prs`, `ticket.worktrees`) that was
    never populated. Confirm the field's actual value in `meta.md`.
@@ -64,17 +66,17 @@ files directly is usually faster and always complete.
 
 ## Reason labels and their emitters
 
-| `reason`                                                                                                                       | Emitter                                                       | Means                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `missing`                                                                                                                      | `tick.ts:433` (`phase-output-invalid`)                        | Agent exited without writing its output file; one resume was already tried.       |
-| `empty` / `incomplete`                                                                                                         | `tick.ts:362`                                                 | Output file present but unusable.                                                 |
-| `no-prs` (`needs-attention`)                                                                                                   | `reconcile-prs.ts:86`                                         | Output file scanned, no PR URL in it.                                             |
-| `no-prs` (`phase-transition`)                                                                                                  | `tick.ts:465`                                                 | Inline guard: `ticket.prs` frontmatter empty. Says nothing about the output file. |
-| `pr-fetch-failed`                                                                                                              | `reconcile-prs.ts:114`                                        | PR URL found, GitHub metadata call threw.                                         |
-| `agent-failed`                                                                                                                 | `resolve-conflicts.ts:111`                                    | Conflict-resolution agent did not finish the rebase.                              |
-| `worktree-creation-failed` / `clone-failed`                                                                                    | `create-worktree.ts:153` / `:117`                             | Setup failed before any phase ran.                                                |
-| `ci-unfixable` / `no-commit` / `no-verdict-line` / `output-file-missing` / `infra-rerun-exhausted` / `context-file-unreadable` | `resolve-ci-fix.ts`                                           | CI-fix verdict handling; see the CI fix section of CLAUDE.md.                     |
-| `no-worktrees`                                                                                                                 | `tick.ts:632`, `spawn-ci-fix.ts:104`, `resolve-ci-fix.ts:146` | Three unrelated sites — check the `event` to tell them apart.                     |
+| `reason`                                                                                                                       | Emitter                                                       | Means                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `missing`                                                                                                                      | `tick.ts:435` (`phase-output-invalid`)                        | Agent exited without writing its output file; one resume was already tried.                                 |
+| `empty` / `incomplete`                                                                                                         | `tick.ts:448` / `:364`                                        | Output file present but unusable.                                                                           |
+| `no-prs` (`needs-attention`)                                                                                                   | `reconcile-prs.ts:91`                                         | Output file scanned, no PR URL in it.                                                                       |
+| `no-prs` / `no-pages` (`phase-transition`)                                                                                     | `tick.ts:453-469`                                             | Inline guard: the artifact's `completionField` in frontmatter is empty. Says nothing about the output file. |
+| `pr-fetch-failed`                                                                                                              | `reconcile-prs.ts:119`                                        | PR URL found, GitHub metadata call threw.                                                                   |
+| `agent-failed`                                                                                                                 | `resolve-conflicts.ts:111`                                    | Conflict-resolution agent did not finish the rebase.                                                        |
+| `worktree-creation-failed` / `clone-failed`                                                                                    | `create-worktree.ts:153` / `:117`                             | Setup failed before any phase ran.                                                                          |
+| `ci-unfixable` / `no-commit` / `no-verdict-line` / `output-file-missing` / `infra-rerun-exhausted` / `context-file-unreadable` | `resolve-ci-fix.ts`                                           | CI-fix verdict handling; see the CI fix section of CLAUDE.md.                                               |
+| `no-worktrees`                                                                                                                 | `tick.ts:621`, `spawn-ci-fix.ts:104`, `resolve-ci-fix.ts:146` | Three unrelated sites — check the `event` to tell them apart.                                               |
 
 ## Gotchas
 

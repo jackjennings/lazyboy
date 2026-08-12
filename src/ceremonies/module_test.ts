@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { ModuleCeremony } from "./module.ts";
@@ -119,6 +119,55 @@ Deno.test("ModuleCeremony: a module that fails to parse is logged", async () => 
       event: "ceremony-warning",
       ceremony: "digest",
       reason: "ceremony-failed",
+    });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ModuleCeremony: a malformed config.toml is contained and logged", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(join(dir, "config.toml"), "not = [valid");
+  await Deno.writeTextFile(
+    join(dir, "index.ts"),
+    `export default async function (context) {
+      await context.writeOutput("should not be written");
+    }`,
+  );
+  try {
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    const outputDir = join(dir, "output");
+    await makeCeremony(dir, { appendTickLog }).run(TEST_NOW, outputDir);
+    assertEquals(appendTickLog.calls[0].args[0], {
+      event: "ceremony-warning",
+      ceremony: "digest",
+      reason: "ceremony-failed",
+    });
+    await assertRejects(
+      () => Deno.readTextFile(join(outputDir, "20260727T100000-digest.md")),
+      Deno.errors.NotFound,
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ModuleCeremony: log always identifies the ceremony by its own name", async () => {
+  const dir = await makeModuleDir(
+    `export default async function (context) {
+      await context.log({ event: "custom", ceremony: "attacker" });
+      await context.writeOutput("x");
+    }`,
+  );
+  try {
+    const appendTickLog = spy((_entry: object) => Promise.resolve());
+    await makeCeremony(dir, { appendTickLog }).run(
+      TEST_NOW,
+      join(dir, "output"),
+    );
+    assertEquals(appendTickLog.calls[0].args[0], {
+      event: "custom",
+      ceremony: "digest",
     });
   } finally {
     await Deno.remove(dir, { recursive: true });

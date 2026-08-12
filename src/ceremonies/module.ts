@@ -57,7 +57,10 @@ export class ModuleCeremony implements Ceremony {
         await readTextFile(join(this.#deps.ceremonyDir, "config.toml")),
       ) as Record<string, unknown>;
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e;
+      if (!(e instanceof Deno.errors.NotFound)) {
+        await this.#fail();
+        return;
+      }
     }
 
     const context: CeremonyContext = {
@@ -81,7 +84,7 @@ export class ModuleCeremony implements Ceremony {
         await this.#deps.notify?.(title, message);
       },
       log: (fields) =>
-        this.#deps.appendTickLog({ ceremony: this.name, ...fields }),
+        this.#deps.appendTickLog({ ...fields, ceremony: this.name }),
     };
 
     try {

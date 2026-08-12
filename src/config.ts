@@ -96,6 +96,15 @@ export async function loadConfig(path?: string): Promise<Config> {
       );
     }
   }
+  const checkNewCommentsRaw = tickRaw?.check_new_comments;
+  if (
+    checkNewCommentsRaw !== undefined &&
+    typeof checkNewCommentsRaw !== "boolean"
+  ) {
+    throw new Error(
+      "config.toml: [tick].check_new_comments must be a boolean",
+    );
+  }
 
   const githubRaw = parsed.github as Record<string, unknown>;
   const accountsRaw = githubRaw.accounts as
@@ -154,6 +163,7 @@ export async function loadConfig(path?: string): Promise<Config> {
       agentsMdMaxTokens: (agentsMdMaxTokensRaw as number | undefined) ?? 8000,
       maxPromptTokens: maxPromptTokensRaw as number | undefined,
       maxTurns: (maxTurnsRaw as number | undefined) ?? 100,
+      checkNewComments: checkNewCommentsRaw as boolean | undefined,
     },
     codebase: { roots: (codebaseRaw?.roots as string[]) ?? [] },
     pi: { provider: piProvider, packages: piPackages },

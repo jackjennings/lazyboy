@@ -73,6 +73,7 @@ export interface TicketState {
   worktrees: Record<string, WorktreeInfo>;
   prs?: PrEntry[];
   ciHandledRunIds?: string[];
+  lastSeenCommentTimestamp?: string;
   providerDone?: boolean;
   outputRetries?: number;
   phaseSessionIds?: Partial<Record<string, string>>;
@@ -167,6 +168,7 @@ export interface Config {
     agentsMdMaxTokens: number;
     maxPromptTokens?: number;
     maxTurns: number;
+    checkNewComments?: boolean;
   };
   codebase: { roots: string[] };
   pi: { provider: string; packages: string[] };

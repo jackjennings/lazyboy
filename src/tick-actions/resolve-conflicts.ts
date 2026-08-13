@@ -25,6 +25,7 @@ export interface ResolveConflictsDeps {
 
 export function resolveConflictsAction(deps: ResolveConflictsDeps): TickAction {
   return {
+    label: "Resolving conflicts",
     applies(ticket: TicketState): boolean {
       return (
         ticket.status === "running" &&

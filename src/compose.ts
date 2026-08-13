@@ -26,6 +26,7 @@ import {
 } from "./run-phase.ts";
 import { judgePrinciples } from "./judge-principles.ts";
 import { expandHome } from "./config.ts";
+import { lazyboyDir } from "./paths.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
 import { TodoTxtProvider } from "./providers/todo-txt.ts";
@@ -1203,5 +1204,17 @@ export function composeTickDeps(
     agentsMdMaxTokens: config.tick.agentsMdMaxTokens > 0
       ? config.tick.agentsMdMaxTokens
       : undefined,
+    writeTickProgress: async (label: string | null) => {
+      const path = join(lazyboyDir(), "tick-progress.json");
+      if (label === null) {
+        try {
+          await remove(path);
+        } catch {
+          // file may not exist
+        }
+      } else {
+        await writeTextFile(path, JSON.stringify({ label }));
+      }
+    },
   };
 }

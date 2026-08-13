@@ -11,6 +11,7 @@ export interface CheckMergedPRDeps {
 
 export function checkMergedPRAction(deps: CheckMergedPRDeps): TickAction {
   return {
+    label: "Checking merged PRs",
     applies(ticket: TicketState): boolean {
       return (
         ticket.phase === "merge" &&

@@ -61,6 +61,7 @@ function topoSort(
 
 export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
   return {
+    label: "Reconciling PRs",
     applies(ticket: TicketState): boolean {
       return (
         ticket.phase === "implementation" &&

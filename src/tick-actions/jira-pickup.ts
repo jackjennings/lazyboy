@@ -13,6 +13,7 @@ export interface JiraPickupDeps {
 
 export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
   return {
+    label: "Picking up Jira",
     applies(ticket: TicketState): boolean {
       return ticket.provider === "jira" && ticket.status === "new";
     },

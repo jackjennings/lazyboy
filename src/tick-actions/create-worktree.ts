@@ -29,6 +29,7 @@ export interface CreateWorktreeDeps {
 
 export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
   return {
+    label: "Creating worktree",
     applies(ticket: TicketState): boolean {
       return (
         ticket.phase === "intake" &&

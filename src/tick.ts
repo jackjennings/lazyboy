@@ -452,6 +452,7 @@ export async function advancePhase(
 
       if (
         ticket.phase === "implementation" &&
+        !descriptor.requiresPRs &&
         !(ticket[descriptor.completionField]?.length)
       ) {
         await deps.writeTicket(stateDir, {

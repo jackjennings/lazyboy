@@ -1292,11 +1292,11 @@ Deno.test("CeremonyRunner: a non-regular-file index.ts is never treated as a mod
   const stateDir = await Deno.makeTempDir();
   try {
     const dir = await writePromptCeremony(stateDir, "digest");
-    await writeApprovals({ digest: { hash: await ceremonyHash(dir) } });
     const mkfifo = await new Deno.Command("mkfifo", {
       args: [join(dir, "index.ts")],
     }).output();
     assert(mkfifo.code === 0, "mkfifo must succeed for this test to mean much");
+    await writeApprovals({ digest: { hash: await ceremonyHash(dir) } });
     const runClaude = spy(() => Promise.resolve({ stdout: "out", code: 0 }));
     const appendTickLog = spy((_entry: object) => Promise.resolve());
     await makeRunner(stateDir, {
@@ -1304,12 +1304,8 @@ Deno.test("CeremonyRunner: a non-regular-file index.ts is never treated as a mod
       appendTickLog,
       runClaude,
     }).run();
-    assertSpyCalls(runClaude, 0);
-    assertEquals(appendTickLog.calls[0].args[0], {
-      event: "ceremony-warning",
-      ceremony: "digest",
-      reason: "not-approved",
-    });
+    assertSpyCalls(runClaude, 1);
+    assertSpyCalls(appendTickLog, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

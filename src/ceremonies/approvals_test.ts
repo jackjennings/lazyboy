@@ -10,8 +10,10 @@ import { join } from "@std/path";
 import {
   ceremonyHash,
   ceremonyManifest,
+  CeremonyManifestLimitError,
   CorruptApprovalsError,
   isCeremonyApproved,
+  MAX_MANIFEST_BYTES,
   MAX_MANIFEST_FILES,
   readApprovals,
   writeApprovals,
@@ -205,10 +207,11 @@ Deno.test("ceremonyHash: records the target of a symlink to an outside directory
 Deno.test("ceremonyHash: descends a symlink to a directory inside the root", async () => {
   const dir = await makeCeremonyDir({ "inner/nested.ts": "content\n" });
   try {
-    await Deno.symlink(join(dir, "inner"), join(dir, "linked-dir"));
-    const before = await ceremonyHash(dir);
-    await Deno.writeTextFile(join(dir, "inner", "nested.ts"), "changed\n");
-    assert(await ceremonyHash(dir) !== before);
+    await Deno.symlink(join(dir, "inner"), join(dir, "alink"));
+    const manifest = await ceremonyManifest(dir);
+    const paths = manifest.map((entry) => entry.path);
+    assertArrayIncludes(paths, [join("alink", "nested.ts")]);
+    assertFalse(paths.includes(join("inner", "nested.ts")));
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -217,10 +220,10 @@ Deno.test("ceremonyHash: descends a symlink to a directory inside the root", asy
 Deno.test("ceremonyHash: editing through an in-root symlink changes the hash", async () => {
   const dir = await makeCeremonyDir({ "inner/nested.ts": "content\n" });
   try {
-    await Deno.symlink(join(dir, "inner"), join(dir, "linked-dir"));
+    await Deno.symlink(join(dir, "inner"), join(dir, "alink"));
     const before = await ceremonyHash(dir);
     await Deno.writeTextFile(
-      join(dir, "linked-dir", "nested.ts"),
+      join(dir, "alink", "nested.ts"),
       "through the link\n",
     );
     assert(await ceremonyHash(dir) !== before);
@@ -385,7 +388,7 @@ Deno.test("ceremonyHash: exceeding the file cap fails closed", async () => {
     for (let index = 0; index <= MAX_MANIFEST_FILES; index += 1) {
       await Deno.writeTextFile(join(dir, `file-${index}.txt`), "x");
     }
-    await assertRejects(() => ceremonyHash(dir));
+    await assertRejects(() => ceremonyHash(dir), CeremonyManifestLimitError);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -401,6 +404,18 @@ Deno.test("isCeremonyApproved: exceeding the file cap denies approval", async ()
       await Deno.writeTextFile(join(dir, `file-${index}.txt`), "x");
     }
     assertFalse(await isCeremonyApproved("digest", dir));
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ceremonyHash: exceeding the byte cap fails closed", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const file = join(dir, "large.bin");
+    await Deno.writeTextFile(file, "");
+    await Deno.truncate(file, MAX_MANIFEST_BYTES + 1);
+    await assertRejects(() => ceremonyHash(dir), CeremonyManifestLimitError);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

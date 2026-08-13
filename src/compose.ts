@@ -19,6 +19,7 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
+import { pushStateIfOriginExists } from "./state/push.ts";
 import {
   dedupePrinciples,
   extractPrinciples,
@@ -1085,6 +1086,7 @@ export function composeTickDeps(
     commitState: async () => {
       await ensureRunPidGitignored(stateDir);
       await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
+      await pushStateIfOriginExists(stateDir, runGit, appendTickLog);
     },
     lock: new PidFileLock(join(home, ".lazyboy", "tick.pid"), {
       log: appendTickLog,

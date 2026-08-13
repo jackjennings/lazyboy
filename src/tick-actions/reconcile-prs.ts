@@ -125,20 +125,23 @@ export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
       const sorted = topoSort(infos);
       const headToUrl = new Map(sorted.map((p) => [p.headRefName, p.url]));
 
-      const basePR = sorted[0];
-      const worktreeKey = Object.entries(ticket.worktrees).find(
-        ([, wt]) => wt.branch === basePR.headRefName,
-      )?.[0] ?? Object.keys(ticket.worktrees)[0];
-
-      const prs: PrEntry[] = sorted.map((p) => ({
-        url: p.url,
-        title: p.title,
-        dependsOn: headToUrl.has(p.baseRefName)
-          ? [headToUrl.get(p.baseRefName)!]
-          : [],
-        merged: false,
-        worktreeKey,
-      }));
+      const prs: PrEntry[] = sorted.map((p) => {
+        const slug = p.url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//)?.[1];
+        const worktreeKey = slug && ticket.worktrees[slug]
+          ? slug
+          : Object.entries(ticket.worktrees).find(
+            ([, wt]) => wt.branch === p.headRefName,
+          )?.[0] ?? Object.keys(ticket.worktrees)[0];
+        return {
+          url: p.url,
+          title: p.title,
+          dependsOn: headToUrl.has(p.baseRefName)
+            ? [headToUrl.get(p.baseRefName)!]
+            : [],
+          merged: false,
+          worktreeKey,
+        };
+      });
 
       const updated: TicketState = { ...ticket, prs, updated: now };
       await deps.writeTicket(stateDir, updated);

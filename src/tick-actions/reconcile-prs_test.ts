@@ -224,7 +224,7 @@ Deno.test(
 );
 
 Deno.test(
-  "reconcilePRsAction: single PR — worktreeKey falls back to first key when no branch match",
+  "reconcilePRsAction: single PR — worktreeKey derived from PR URL slug",
   async () => {
     const result = await makeAction({
       readImplementationOutput: () =>
@@ -245,6 +245,42 @@ Deno.test(
       "/state",
     );
     assertEquals(result?.prs?.[0].worktreeKey, "myorg/myrepo");
+  },
+);
+
+Deno.test(
+  "reconcilePRsAction: two PRs from different repos — each gets its own worktreeKey",
+  async () => {
+    const result = await makeAction({
+      readImplementationOutput: () =>
+        Promise.resolve(
+          "https://github.com/myorg/repo-a/pull/1\nhttps://github.com/myorg/repo-b/pull/2",
+        ),
+      getPRInfo: (url) =>
+        Promise.resolve({
+          url,
+          title: "T",
+          baseRefName: "main",
+          headRefName: "github/myorg/myrepo/42",
+        }),
+    }).run(
+      makeTicket({
+        worktrees: {
+          "myorg/repo-a": {
+            path: "/wt/repo-a",
+            branch: "github/myorg/myrepo/42",
+          },
+          "myorg/repo-b": {
+            path: "/wt/repo-b",
+            branch: "github/myorg/myrepo/42",
+          },
+        },
+      }),
+      "/state",
+    );
+    assertEquals(result?.prs?.length, 2);
+    assertEquals(result?.prs?.[0].worktreeKey, "myorg/repo-a");
+    assertEquals(result?.prs?.[1].worktreeKey, "myorg/repo-b");
   },
 );
 

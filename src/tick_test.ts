@@ -1560,6 +1560,97 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "advancePhase: feedback immediately preceding output suppresses self-review",
+  async () => {
+    const stateDir = Deno.makeTempDirSync();
+    try {
+      const ticket = makeTicket({ phase: "spec", status: "running" });
+      const ticketDir = join(stateDir, ticket.id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100000-spec-feedback.md"),
+        "feedback",
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100001-spec.md"),
+        "content",
+      );
+      const selfReviewSpy = spy(() =>
+        Promise.resolve({ approved: false, reason: null })
+      );
+      await advancePhase(ticket, stateDir, {
+        ...makeFakeTickDeps(),
+        selfReview: selfReviewSpy,
+      });
+      assertSpyCalls(selfReviewSpy, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: no feedback before output calls self-review normally",
+  async () => {
+    const stateDir = Deno.makeTempDirSync();
+    try {
+      const ticket = makeTicket({ phase: "spec", status: "running" });
+      const ticketDir = join(stateDir, ticket.id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100001-spec.md"),
+        "content",
+      );
+      const selfReviewSpy = spy(() =>
+        Promise.resolve({ approved: false, reason: null })
+      );
+      await advancePhase(ticket, stateDir, {
+        ...makeFakeTickDeps(),
+        selfReview: selfReviewSpy,
+      });
+      assertSpyCalls(selfReviewSpy, 1);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: feedback not immediately preceding output calls self-review normally",
+  async () => {
+    const stateDir = Deno.makeTempDirSync();
+    try {
+      const ticket = makeTicket({ phase: "spec", status: "running" });
+      const ticketDir = join(stateDir, ticket.id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100000-spec-feedback.md"),
+        "feedback",
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100001-spec.md"),
+        "first output",
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100002-spec.md"),
+        "second output",
+      );
+      const selfReviewSpy = spy(() =>
+        Promise.resolve({ approved: false, reason: null })
+      );
+      await advancePhase(ticket, stateDir, {
+        ...makeFakeTickDeps(),
+        selfReview: selfReviewSpy,
+        readPhaseOutput: () => Promise.resolve("second output"),
+      });
+      assertSpyCalls(selfReviewSpy, 1);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
 // ── appendTickLog ─────────────────────────────────────────────────────────────
 
 Deno.test("appendTickLog: writes to combined log without id field", async () => {

@@ -546,43 +546,74 @@ export async function advancePhase(
         );
       }
 
-      let selfReviewResult: { approved: boolean; reason: string | null } = {
-        approved: false,
-        reason: null,
-      };
+      let feedbackPrecedesOutput = false;
       try {
-        selfReviewResult = await deps.selfReview(
-          ticket.phase,
-          join(stateDir, ticket.id),
-          ticket.worktrees["jackjennings/lazyboy"]?.path,
+        const outputPattern = new RegExp(
+          `^\\d{8}T\\d{6}-${ticket.phase}\\.md$`,
         );
+        const feedbackPattern = new RegExp(
+          `^\\d{8}T\\d{6}-${ticket.phase}-feedback\\.md$`,
+        );
+        const relevantFiles: string[] = [];
+        for await (const entry of readDir(join(stateDir, ticket.id))) {
+          if (
+            entry.isFile &&
+            (outputPattern.test(entry.name) || feedbackPattern.test(entry.name))
+          ) {
+            relevantFiles.push(entry.name);
+          }
+        }
+        relevantFiles.sort();
+        const lastOutputIndex = relevantFiles.findLastIndex((name) =>
+          outputPattern.test(name)
+        );
+        if (lastOutputIndex > 0) {
+          feedbackPrecedesOutput = feedbackPattern.test(
+            relevantFiles[lastOutputIndex - 1],
+          );
+        }
       } catch {
-        // treated as { approved: false, reason: null }
+        // directory unreadable — proceed with normal self-review
       }
-      if (selfReviewResult.approved) {
-        const agentEntry: ApprovalEntry = {
-          timestamp: Temporal.Now.instant().toString(),
-          actor: "agent",
-          phase: ticket.phase,
+      if (!feedbackPrecedesOutput) {
+        let selfReviewResult: { approved: boolean; reason: string | null } = {
+          approved: false,
+          reason: null,
         };
-        await deps.writeTicket(stateDir, {
-          ...waitingTicket,
-          approvals: [...waitingTicket.approvals, agentEntry],
-        });
-        await deps.appendLog(stateDir, ticket.id, {
-          event: "self-approved",
-          phase: ticket.phase,
-        });
-      } else if (selfReviewResult.reason !== null) {
-        const filename = `${
-          compactTimestamp(zonedNow)
-        }-${ticket.phase}-self-review.md`;
-        await deps.writePhaseOutput(
-          stateDir,
-          ticket.id,
-          filename,
-          selfReviewResult.reason,
-        );
+        try {
+          selfReviewResult = await deps.selfReview(
+            ticket.phase,
+            join(stateDir, ticket.id),
+            ticket.worktrees["jackjennings/lazyboy"]?.path,
+          );
+        } catch {
+          // treated as { approved: false, reason: null }
+        }
+        if (selfReviewResult.approved) {
+          const agentEntry: ApprovalEntry = {
+            timestamp: Temporal.Now.instant().toString(),
+            actor: "agent",
+            phase: ticket.phase,
+          };
+          await deps.writeTicket(stateDir, {
+            ...waitingTicket,
+            approvals: [...waitingTicket.approvals, agentEntry],
+          });
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "self-approved",
+            phase: ticket.phase,
+          });
+        } else if (selfReviewResult.reason !== null) {
+          const filename = `${
+            compactTimestamp(zonedNow)
+          }-${ticket.phase}-self-review.md`;
+          await deps.writePhaseOutput(
+            stateDir,
+            ticket.id,
+            filename,
+            selfReviewResult.reason,
+          );
+        }
       }
       if (ticket.phase === "implementation" && deps.spawnOutlierAnalysis) {
         const wt = ticket.worktrees["jackjennings/lazyboy"];

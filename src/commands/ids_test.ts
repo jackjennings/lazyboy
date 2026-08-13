@@ -8,7 +8,7 @@ Deno.test("listCeremonyIds: emits namespaced ceremony ids", async () => {
     await Deno.mkdir(join(stateDir, "ceremonies", "digest"), {
       recursive: true,
     });
-    await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
+    await Deno.mkdir(join(stateDir, "ceremonies", "documentation-gaps"), {
       recursive: true,
     });
     assertArrayIncludes(await listCeremonyIds(stateDir), ["ceremony/digest"]);
@@ -20,7 +20,7 @@ Deno.test("listCeremonyIds: emits namespaced ceremony ids", async () => {
 Deno.test("listCeremonyIds: omits built-in ceremonies", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
-    await Deno.mkdir(join(stateDir, "ceremonies", "standup"), {
+    await Deno.mkdir(join(stateDir, "ceremonies", "documentation-gaps"), {
       recursive: true,
     });
     assertEquals(await listCeremonyIds(stateDir), []);

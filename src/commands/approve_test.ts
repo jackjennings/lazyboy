@@ -158,11 +158,11 @@ Deno.test("performApproveCeremony: rejects an unknown ceremony", async () => {
 });
 
 Deno.test("performApproveCeremony: rejects a built-in ceremony", async () => {
-  const stateDir = await makeStateDir("standup");
+  const stateDir = await makeStateDir("documentation-gaps");
   try {
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "standup", {
+        performApproveCeremony(stateDir, "documentation-gaps", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn: () => Promise.resolve(),
           hashFn: () => Promise.resolve("sha256:x"),

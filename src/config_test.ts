@@ -1006,3 +1006,68 @@ max_turns = -1
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig defaults tick.checkNewComments to undefined when absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.tick.checkNewComments, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig parses tick.check_new_comments = false", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+check_new_comments = false
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertFalse(cfg.tick.checkNewComments);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when tick.check_new_comments is not a boolean", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+check_new_comments = "yes"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "[tick].check_new_comments must be a boolean",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

@@ -5076,3 +5076,70 @@ Deno.test("CLAUDE.md reason vocabulary includes no-pages", async () => {
   );
   assertStringIncludes(content, "no-pages");
 });
+
+Deno.test(
+  "advancePhase: revising prompt is unchanged when no comment-context file exists",
+  async () => {
+    const ticket = makeTicket({ phase: "plan", status: "revising" });
+    const spawnedPrompts: string[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnedPrompts.push(opts.prompt);
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertFalse(spawnedPrompts[0].includes("comment-context"));
+  },
+);
+
+Deno.test(
+  "advancePhase: revising prompt includes most recent comment-context file content",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const ticketDir = join(stateDir, "github", "org", "repo", "1");
+    await Deno.mkdir(ticketDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(ticketDir, "20260101T120000-comment-context.md"),
+      "## New comments\n\nOlder comment",
+    );
+    await Deno.writeTextFile(
+      join(ticketDir, "20260201T080000-comment-context.md"),
+      "## New comments\n\nNewer comment",
+    );
+    const ticket = makeTicket({
+      id: "github/org/repo/1",
+      phase: "plan",
+      status: "revising",
+    });
+    const spawnedPrompts: string[] = [];
+    await advancePhase(ticket, stateDir, {
+      spawn: (opts) => {
+        spawnedPrompts.push(opts.prompt);
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: () => Promise.resolve(),
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    assertStringIncludes(spawnedPrompts[0], "Newer comment");
+    assertFalse(spawnedPrompts[0].includes("Older comment"));
+    await Deno.remove(stateDir, { recursive: true });
+  },
+);

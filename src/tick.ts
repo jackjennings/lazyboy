@@ -27,7 +27,7 @@ import {
   type WorktreeInfo,
 } from "./state/types.ts";
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
-import { mkdir, readTextFile, writeTextFile } from "./filesystem.ts";
+import { mkdir, readDir, readTextFile, writeTextFile } from "./filesystem.ts";
 
 export const PHASE_MODEL_DEFAULTS: Record<
   ActivePhase | "conflict-resolution" | "ci-fix",
@@ -210,11 +210,28 @@ export async function advancePhase(
       ticket.provider,
       ticket.id,
     );
+    let commentContext = "";
+    try {
+      const contextFiles: string[] = [];
+      for await (const entry of readDir(join(stateDir, ticket.id))) {
+        if (entry.isFile && entry.name.endsWith("-comment-context.md")) {
+          contextFiles.push(entry.name);
+        }
+      }
+      contextFiles.sort();
+      const last = contextFiles.at(-1);
+      if (last) {
+        commentContext = await readTextFile(join(stateDir, ticket.id, last));
+      }
+    } catch {
+      // directory missing or unreadable — proceed without comment context
+    }
     const prompt = [
       basePrompt,
       revisingSupplement,
       revisingArtifactSupplement,
       revisingStatePrompt,
+      commentContext,
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");

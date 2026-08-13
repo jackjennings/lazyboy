@@ -118,6 +118,8 @@ export interface TickDeps {
   adjudicatePhaseModel?: (
     prompt: string,
   ) => Promise<{ model: string; thinking: string } | null>;
+  readRunPidBootStamp?: (ticketDir: string) => Promise<string | null>;
+  currentBootId?: () => string;
 }
 
 export interface TickServiceDeps {
@@ -317,6 +319,14 @@ export async function advancePhase(
     }
     const { model: intakeModel, thinking: intakeThinking } = deps
       .resolveModelConfig("intake", ticket);
+    const intakeUuid = crypto.randomUUID();
+    await deps.writeTicket(stateDir, {
+      ...ticket,
+      phase: "intake",
+      status: "running",
+      updated: now,
+      phaseSessionIds: { ...ticket.phaseSessionIds, intake: intakeUuid },
+    });
     await deps.spawn({
       phase: "intake",
       ticketDir: join(stateDir, ticket.id),
@@ -326,12 +336,7 @@ export async function advancePhase(
       outputFile: `${compactTimestamp(zonedNow)}-intake.md`,
       model: intakeModel,
       thinking: intakeThinking,
-    });
-    await deps.writeTicket(stateDir, {
-      ...ticket,
-      phase: "intake",
-      status: "running",
-      updated: now,
+      sessionId: intakeUuid,
     });
     await deps.appendLog(stateDir, ticket.id, {
       event: "status-transition",
@@ -344,6 +349,9 @@ export async function advancePhase(
 
   if (ticket.status === "running") {
     if (!deps.isProcessAlive(ticket.id)) {
+      const storedBootId = deps.readRunPidBootStamp
+        ? await deps.readRunPidBootStamp(join(stateDir, ticket.id))
+        : null;
       await deleteRunPid(join(stateDir, ticket.id));
       const sessionIdFromSidecar = deps.readPhaseSessionId
         ? await deps.readPhaseSessionId(join(stateDir, ticket.id), ticket.phase)
@@ -371,6 +379,45 @@ export async function advancePhase(
         ticket.phase,
       );
       if (exitCode === null) {
+        const currentId = deps.currentBootId?.();
+        if (
+          storedBootId !== null &&
+          currentId !== undefined &&
+          storedBootId !== currentId &&
+          waitingTicket.phaseSessionIds?.[ticket.phase]
+        ) {
+          const sessionId = waitingTicket.phaseSessionIds[ticket.phase]!;
+          const outputFile = `${compactTimestamp(zonedNow)}-${ticket.phase}.md`;
+          const resumePhase: ActivePhase = ticket.phase === "merge"
+            ? "implementation"
+            : ticket.phase as ActivePhase;
+          const { model: resumeModel, thinking: resumeThinking } = deps
+            .resolveModelConfig(resumePhase, ticket);
+          await deps.spawn({
+            phase: resumePhase,
+            ticketDir: join(stateDir, ticket.id),
+            prompt:
+              `Your previous run was interrupted by a system restart. Continue from where you left off and write your output to ${outputFile}. Output nothing else.`,
+            scope: ticket.scope,
+            worktrees: resumePhase === "implementation" ? ticket.worktrees : {},
+            outputFile,
+            model: resumeModel,
+            thinking: resumeThinking,
+            sessionId,
+            resume: true,
+          });
+          await deps.writeTicket(stateDir, {
+            ...ticket,
+            status: "running",
+            outputRetries: undefined,
+            updated: now,
+          });
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "phase-resumed",
+            phase: ticket.phase,
+          });
+          return;
+        }
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
           status: "needs-attention",
@@ -684,6 +731,17 @@ export async function advancePhase(
     }
     const { model: nextModel, thinking: nextThinking } = deps
       .resolveModelConfig(effectiveNext, resolvedTicket);
+    const nextUuid = crypto.randomUUID();
+    await deps.writeTicket(stateDir, {
+      ...resolvedTicket,
+      phase: effectiveNext,
+      status: "running",
+      updated: now,
+      phaseSessionIds: {
+        ...ticket.phaseSessionIds,
+        [effectiveNext]: nextUuid,
+      },
+    });
     await deps.spawn({
       phase: effectiveNext,
       ticketDir: join(stateDir, ticket.id),
@@ -693,12 +751,7 @@ export async function advancePhase(
       outputFile: `${compactTimestamp(zonedNow)}-${effectiveNext}.md`,
       model: nextModel,
       thinking: nextThinking,
-    });
-    await deps.writeTicket(stateDir, {
-      ...resolvedTicket,
-      phase: effectiveNext,
-      status: "running",
-      updated: now,
+      sessionId: nextUuid,
     });
     await deps.appendLog(stateDir, ticket.id, {
       event: "phase-transition",

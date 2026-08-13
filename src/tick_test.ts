@@ -5143,3 +5143,176 @@ Deno.test(
     await Deno.remove(stateDir, { recursive: true });
   },
 );
+
+Deno.test(
+  "advancePhase: new ticket stores session ID in phaseSessionIds before spawning",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "new" });
+    let writtenTicket: TicketState | undefined;
+    let spawnOpts: SpawnOpts | undefined;
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnOpts = opts;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTicket = t;
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    const uuid = writtenTicket?.phaseSessionIds?.["intake"];
+    assertExists(uuid);
+    assert(/^[0-9a-f-]{36}$/.test(uuid));
+    assertExists(spawnOpts);
+    assertEquals(spawnOpts!.sessionId, uuid);
+  },
+);
+
+Deno.test(
+  "advancePhase: waiting + approved stores session ID in phaseSessionIds before spawning next phase",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+    });
+    let writtenTicket: TicketState | undefined;
+    let spawnOpts: SpawnOpts | undefined;
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnOpts = opts;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenTicket = t;
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve("content"),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(0),
+    });
+    const uuid = writtenTicket?.phaseSessionIds?.["enrichment"];
+    assertExists(uuid);
+    assert(/^[0-9a-f-]{36}$/.test(uuid));
+    assertExists(spawnOpts);
+    assertEquals(spawnOpts!.sessionId, uuid);
+  },
+);
+
+Deno.test(
+  "advancePhase: boot ID mismatch with stored session ID resumes the phase",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "running",
+      phaseSessionIds: { intake: "uuid-stored" },
+    });
+    const writtenStatuses: string[] = [];
+    const loggedEvents: string[] = [];
+    let spawnOpts: SpawnOpts | undefined;
+    await advancePhase(ticket, "/state", {
+      spawn: (opts) => {
+        spawnOpts = opts;
+        return Promise.resolve();
+      },
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenStatuses.push(t.status);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: (_dir, _id, entry) => {
+        loggedEvents.push((entry as { event: string }).event);
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      readRunPidBootStamp: () => Promise.resolve("old-boot"),
+      currentBootId: () => "new-boot",
+    });
+    assert(writtenStatuses.includes("running"));
+    assert(loggedEvents.includes("phase-resumed"));
+    assertExists(spawnOpts);
+    assertEquals(spawnOpts!.sessionId, "uuid-stored");
+    assertEquals(spawnOpts!.resume, true);
+  },
+);
+
+Deno.test(
+  "advancePhase: matching boot IDs with null exit code goes to needs-attention",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "running",
+      phaseSessionIds: { intake: "uuid-stored" },
+    });
+    const writtenStatuses: string[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenStatuses.push(t.status);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      readRunPidBootStamp: () => Promise.resolve("same-boot"),
+      currentBootId: () => "same-boot",
+    });
+    assert(writtenStatuses.includes("needs-attention"));
+    assertFalse(writtenStatuses.includes("running"));
+  },
+);
+
+Deno.test(
+  "advancePhase: boot ID mismatch without stored session ID goes to needs-attention",
+  async () => {
+    const ticket = makeTicket({ phase: "intake", status: "running" });
+    const writtenStatuses: string[] = [];
+    await advancePhase(ticket, "/state", {
+      spawn: () => Promise.resolve(),
+      isProcessAlive: () => false,
+      writeTicket: (_dir, t) => {
+        writtenStatuses.push(t.status);
+        return Promise.resolve();
+      },
+      writePhaseOutput: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      selfReview: () => Promise.resolve({ approved: false, reason: null }),
+      markPRsReady: () => Promise.resolve(),
+      readPhaseOutput: () => Promise.resolve(null),
+      appendPrinciples: () => Promise.resolve(),
+      readPhaseExitCode: () => Promise.resolve(null),
+      readRunPidBootStamp: () => Promise.resolve("old-boot"),
+      currentBootId: () => "new-boot",
+    });
+    assert(writtenStatuses.includes("needs-attention"));
+    assertFalse(writtenStatuses.includes("running"));
+  },
+);

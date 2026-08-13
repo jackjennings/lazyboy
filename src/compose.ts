@@ -33,6 +33,7 @@ import type { Provider } from "./providers/types.ts";
 import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPhaseAlive, spawnPhase } from "./executor.ts";
+import { bootId } from "./paths.ts";
 import {
   cloneRemoteRepo,
   createWorktree,
@@ -979,6 +980,16 @@ export function composeTickDeps(
         }
       },
       readPhaseSessionId,
+      readRunPidBootStamp: async (ticketDir: string) => {
+        try {
+          const content = await readTextFile(join(ticketDir, "run.pid"));
+          const lines = content.trim().split("\n");
+          return lines[1] ?? null;
+        } catch {
+          return null;
+        }
+      },
+      currentBootId: () => bootId(),
       buildRepoCorpusText: () =>
         listRepoCorpus(
           config.codebase.roots.map(expandHome),

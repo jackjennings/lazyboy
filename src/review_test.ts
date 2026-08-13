@@ -7,7 +7,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
-import { stripAnsiCode } from "@std/fmt/colors";
+import { dim, stripAnsiCode } from "@std/fmt/colors";
 import { assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   answerQuestion,
@@ -15,9 +15,11 @@ import {
   buildQuestionSystemPrompt,
   classifyApproval,
   ErrorOverlay,
+  findAllPhaseOutputs,
   findLatestPhaseOutput,
   formatTimestamp,
   renderDiff,
+  renderTabBar,
   review,
   wrapDiffLines,
 } from "./review.ts";
@@ -527,6 +529,141 @@ Deno.test("findLatestPhaseOutput: prefers merge output over earlier phase files"
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
+});
+
+// ── findAllPhaseOutputs ───────────────────────────────────────────────────────
+
+Deno.test("findAllPhaseOutputs: returns empty array when no output files exist", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    assertEquals(await findAllPhaseOutputs(tempDir), []);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: returns all phases with output in PHASE_SEQUENCE order", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-intake.md"),
+      "intake",
+    );
+    await Deno.writeTextFile(join(tempDir, "20260629T154507-spec.md"), "spec");
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result.length, 2);
+    assertEquals(result[0].phaseName, "intake");
+    assertEquals(result[1].phaseName, "spec");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: omits phases with no output files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154507-spec.md"), "spec");
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result.length, 1);
+    assertEquals(result[0].phaseName, "spec");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: filename is lexicographically last; previousFilename is second-to-last", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-spec.md"), "v1");
+    await Deno.writeTextFile(join(tempDir, "20260629T225507-spec.md"), "v2");
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result[0].filename, "20260629T225507-spec.md");
+    assertEquals(result[0].previousFilename, "20260629T154506-spec.md");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: previousFilename is null when only one file exists for a phase", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-intake.md"), "v1");
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result[0].previousFilename, null);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: places merge phase after all PHASE_SEQUENCE phases", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154506-intake.md"),
+      "intake",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T154507-merge.md"),
+      "merge",
+    );
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result.length, 2);
+    assertEquals(result[0].phaseName, "intake");
+    assertEquals(result[1].phaseName, "merge");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findAllPhaseOutputs: excludes feedback files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "20260629T154506-spec.md"), "v1");
+    await Deno.writeTextFile(
+      join(tempDir, "20260629T225507-spec-feedback.md"),
+      "fb",
+    );
+    const result = await findAllPhaseOutputs(tempDir);
+    assertEquals(result.length, 1);
+    assertEquals(result[0].filename, "20260629T154506-spec.md");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+// ── renderTabBar ──────────────────────────────────────────────────────────────
+
+Deno.test("renderTabBar: single tab renders as [phaseName]", () => {
+  const result = renderTabBar([{ phaseName: "spec" }], 0);
+  assertEquals(stripAnsiCode(result), "[spec]");
+});
+
+Deno.test("renderTabBar: active tab is bracketed and inactive tabs are not", () => {
+  const result = stripAnsiCode(
+    renderTabBar([{ phaseName: "intake" }, { phaseName: "spec" }], 1),
+  );
+  assertStringIncludes(result, "[spec]");
+  assertFalse(result.includes("[intake]"));
+});
+
+Deno.test("renderTabBar: inactive tab text is dimmed", () => {
+  const result = renderTabBar(
+    [{ phaseName: "intake" }, { phaseName: "spec" }],
+    1,
+  );
+  assertStringIncludes(result, dim("intake"));
+});
+
+Deno.test("renderTabBar: tabs are separated by ' ─ '", () => {
+  const result = stripAnsiCode(
+    renderTabBar(
+      [{ phaseName: "intake" }, { phaseName: "enrichment" }, {
+        phaseName: "spec",
+      }],
+      2,
+    ),
+  );
+  assertStringIncludes(result, "intake ─ enrichment ─ [spec]");
 });
 
 // ── renderDiff ────────────────────────────────────────────────────────────────

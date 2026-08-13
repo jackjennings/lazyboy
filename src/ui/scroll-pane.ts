@@ -1,4 +1,4 @@
-import { dim } from "@std/fmt/colors";
+import { dim, stripAnsiCode } from "@std/fmt/colors";
 import {
   type Component,
   type Focusable,
@@ -22,7 +22,7 @@ export class ScrollPane implements Component, Focusable {
   scrollOffset = 0;
   focused = true;
   private tui: TUI;
-  private title: string;
+  private titleFn: () => string;
   private getHeight: () => number;
   private expanded?: {
     getLinesFn: (width: number) => string[];
@@ -30,21 +30,28 @@ export class ScrollPane implements Component, Focusable {
     lines: string[];
   };
 
-  constructor(options: {
-    getLines: (width: number) => string[];
-    tui: TUI;
-    title: string;
-    getHeight: () => number;
-    onInvalidate?: () => void;
-    pinnedSidebar?: (
-      sidebarWidth: number,
-      scrollState: { scrollOffset: number; totalLines: number; height: number },
-    ) => string[];
-    pinnedSidebarWidth?: (totalWidth: number) => number;
-  }) {
+  constructor(
+    options: {
+      getLines: (width: number) => string[];
+      tui: TUI;
+      getHeight: () => number;
+      onInvalidate?: () => void;
+      pinnedSidebar?: (
+        sidebarWidth: number,
+        scrollState: {
+          scrollOffset: number;
+          totalLines: number;
+          height: number;
+        },
+      ) => string[];
+      pinnedSidebarWidth?: (totalWidth: number) => number;
+    } & ({ title: string } | { getTitle: () => string }),
+  ) {
     this.getLinesFn = options.getLines;
     this.tui = options.tui;
-    this.title = options.title;
+    this.titleFn = "getTitle" in options
+      ? options.getTitle
+      : () => options.title;
     this.getHeight = options.getHeight;
     this.onInvalidateFn = options.onInvalidate;
     this.pinnedSidebar = options.pinnedSidebar;
@@ -100,8 +107,9 @@ export class ScrollPane implements Component, Focusable {
   }
 
   private header(width: number): string {
-    const label = ` ${this.title} `;
-    const remaining = Math.max(0, width - label.length);
+    const title = this.titleFn();
+    const label = ` ${title} `;
+    const remaining = Math.max(0, width - stripAnsiCode(label).length);
     const left = Math.floor(remaining / 2);
     const right = remaining - left;
     const line = "─".repeat(left) + label + "─".repeat(right);

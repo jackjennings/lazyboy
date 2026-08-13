@@ -1,6 +1,7 @@
 import {
   assert,
   assertEquals,
+  assertExists,
   assertFalse,
   assertNotEquals,
 } from "@std/assert";
@@ -255,4 +256,11 @@ Deno.test("buildPhaseEnvOverrides: does not set PI_MAX_TURNS when maxTurns absen
     makeOpts({ agent: "pi" }),
   );
   assertEquals(overrides["PI_MAX_TURNS"], undefined);
+});
+
+Deno.test("buildPhaseEnvOverrides: PATH starts with resolved bin/ directory", () => {
+  const overrides = buildPhaseEnvOverrides(makeOpts());
+  const binDir = new URL("../bin", import.meta.url).pathname;
+  assertExists(overrides["PATH"]);
+  assert(overrides["PATH"].startsWith(`${binDir}:`));
 });

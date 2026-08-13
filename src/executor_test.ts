@@ -13,6 +13,7 @@ import {
   isProcessAlive,
 } from "./executor.ts";
 import type { ExecutorOptions } from "./executor.ts";
+import { bootId } from "./paths.ts";
 
 function makeOpts(overrides: Partial<ExecutorOptions> = {}): ExecutorOptions {
   return {
@@ -264,3 +265,41 @@ Deno.test("buildPhaseEnvOverrides: PATH starts with resolved bin/ directory", ()
   assertExists(overrides["PATH"]);
   assert(overrides["PATH"].startsWith(`${binDir}:`));
 });
+
+Deno.test("bootId: returns a non-empty decimal string", () => {
+  const id = bootId();
+  assert(id.length > 0);
+  assert(/^\d+$/.test(id));
+});
+
+Deno.test(
+  "isPhaseAlive: returns false when run.pid boot ID does not match current boot ID",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(tempDir, "run.pid"),
+        `${Deno.pid}\nwrong-boot-id`,
+      );
+      assertFalse(isPhaseAlive(tempDir));
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "isPhaseAlive: returns true when run.pid boot ID matches current boot ID and PID is alive",
+  async () => {
+    const tempDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(tempDir, "run.pid"),
+        `${Deno.pid}\n${bootId()}`,
+      );
+      assert(isPhaseAlive(tempDir));
+    } finally {
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+);

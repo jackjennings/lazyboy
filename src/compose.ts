@@ -19,6 +19,7 @@ import {
   writePhaseOutput,
   writeTicket,
 } from "./state/store.ts";
+import { pushState } from "./state/push.ts";
 import {
   dedupePrinciples,
   extractPrinciples,
@@ -1098,6 +1099,7 @@ export function composeTickDeps(
     commitState: async () => {
       await ensureRunPidGitignored(stateDir);
       await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
+      await pushState({ stateDir, runGit, log: appendTickLog });
     },
     lock: new PidFileLock(join(home, ".lazyboy", "tick.pid"), {
       log: appendTickLog,

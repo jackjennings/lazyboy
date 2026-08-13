@@ -1,5 +1,4 @@
 import {
-  assertArrayIncludes,
   assertEquals,
   assertFalse,
   assertRejects,
@@ -355,7 +354,8 @@ Deno.test("performApproveCeremony: returns the recorded hash and hashed paths", 
       hashFn: () => Promise.resolve("sha256:deadbeef"),
     });
     assertEquals(result.hash, "sha256:deadbeef");
-    assertArrayIncludes(result.paths, ["prompt.md"]);
+    assertEquals(result.lines.length, 1);
+    assertStringIncludes(result.lines[0], "prompt.md ");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
   }

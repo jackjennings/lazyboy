@@ -562,6 +562,39 @@ Deno.test("ScrollPane: pinnedSidebar scrollState reflects updated scrollOffset a
   assertEquals(capturedOffset, 5);
 });
 
+Deno.test("ScrollPane: title option renders static title in header", () => {
+  const pane = new ScrollPane({
+    title: "spec",
+    getLines: () => [],
+    tui: makeTui(),
+    getHeight: () => 10,
+  });
+  const lines = pane.render(80);
+  assertStringIncludes(stripAnsiCode(lines[0]), "spec");
+});
+
+Deno.test(
+  "ScrollPane: getTitle is called on each render and its return value appears in the header",
+  () => {
+    let label = "intake";
+    const getTitle = spy(() => label);
+    const pane = new ScrollPane({
+      getTitle,
+      getLines: () => [],
+      tui: makeTui(),
+      getHeight: () => 10,
+    });
+
+    pane.render(80);
+    assertSpyCalls(getTitle, 1);
+
+    label = "spec";
+    const lines = pane.render(80);
+    assertSpyCalls(getTitle, 2);
+    assertStringIncludes(stripAnsiCode(lines[0]), "spec");
+  },
+);
+
 Deno.test("ScrollPane: ┃ indicator appears for visible heading via computeVisibleHeadingIndices", () => {
   const headings = [
     { level: 1, title: "Section A", sourceLine: 0 },

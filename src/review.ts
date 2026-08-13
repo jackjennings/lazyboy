@@ -140,6 +140,54 @@ export async function findLatestPhaseOutput(
   return null;
 }
 
+export async function findAllPhaseOutputs(
+  ticketDir: string,
+): Promise<
+  Array<
+    { filename: string; phaseName: string; previousFilename: string | null }
+  >
+> {
+  const results: Array<
+    { filename: string; phaseName: string; previousFilename: string | null }
+  > = [];
+  for (const phase of [...PHASE_SEQUENCE, "merge" as const]) {
+    const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md$`);
+    const matches: string[] = [];
+    try {
+      for await (const entry of readDir(ticketDir)) {
+        if (entry.isFile && outputPattern.test(entry.name)) {
+          matches.push(entry.name);
+        }
+      }
+    } catch {
+      /* dir missing */
+    }
+    if (matches.length > 0) {
+      matches.sort();
+      results.push({
+        filename: matches[matches.length - 1],
+        phaseName: phase,
+        previousFilename: matches.length >= 2
+          ? matches[matches.length - 2]
+          : null,
+      });
+    }
+  }
+  return results;
+}
+
+export function renderTabBar(
+  tabs: Array<{ phaseName: string }>,
+  activeIndex: number,
+): string {
+  return tabs
+    .map((
+      tab,
+      i,
+    ) => (i === activeIndex ? `[${tab.phaseName}]` : dim(tab.phaseName)))
+    .join(" ─ ");
+}
+
 export async function classifyApproval(
   text: string,
   fetcher: typeof fetch,
@@ -470,21 +518,49 @@ export async function review(
     Deno.exit(0);
   }
 
-  const content = await readPhaseOutput(stateDir, id, found.filename);
-  let paneContent: string | string[];
-  let paneTitle: string;
-  if (found.previousFilename !== null) {
-    const previousContent = await readPhaseOutput(
-      stateDir,
-      id,
-      found.previousFilename,
-    );
-    paneContent = renderDiff(previousContent, content);
-    paneTitle = `${found.phaseName} (diff)`;
-  } else {
-    paneContent = content;
-    paneTitle = found.phaseName;
+  const tabs = await findAllPhaseOutputs(ticketDir);
+
+  type TabContent = {
+    getLines: (width: number) => string[];
+    onInvalidate: (() => void) | undefined;
+    headings: { level: number; title: string; sourceLine: number }[];
+    totalSourceLines: number;
+  };
+
+  const tabContents: TabContent[] = [];
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i];
+    const isLatest = i === tabs.length - 1;
+    const rawContent = await readPhaseOutput(stateDir, id, tab.filename);
+    if (isLatest && tab.previousFilename !== null) {
+      const previousContent = await readPhaseOutput(
+        stateDir,
+        id,
+        tab.previousFilename,
+      );
+      const diffResult = renderDiff(previousContent, rawContent);
+      tabContents.push({
+        getLines: (w) => wrapDiffLines(diffResult, w),
+        onInvalidate: undefined,
+        headings: [],
+        totalSourceLines: 0,
+      });
+    } else {
+      const md = new Markdown(rawContent, 1, 0, markdownTheme);
+      tabContents.push({
+        getLines: (w) => md.render(w),
+        onInvalidate: () => md.invalidate(),
+        headings: extractHeadings(rawContent),
+        totalSourceLines: rawContent.split("\n").length,
+      });
+    }
   }
+
+  let activeTabIndex = tabs.length - 1;
+  let editorVisible = true;
+  let headings = tabContents[activeTabIndex].headings;
+  let totalSourceLines = tabContents[activeTabIndex].totalSourceLines;
+  let currentOnInvalidate = tabContents[activeTabIndex].onInvalidate;
 
   const available = await checkApfelAvailable(defaultCommandRunner());
   const server = available
@@ -509,22 +585,6 @@ export async function review(
   const tui = new TUI(terminal);
   let focused: "content" | "editor" = "content";
 
-  let contentGetLines: (width: number) => string[];
-  let contentOnInvalidate: (() => void) | undefined;
-  let headings: { level: number; title: string; sourceLine: number }[] = [];
-  let totalSourceLines = 0;
-  if (Array.isArray(paneContent)) {
-    contentGetLines = (w) => wrapDiffLines(paneContent, w);
-    contentOnInvalidate = undefined;
-  } else {
-    const md = new Markdown(paneContent, 1, 0, markdownTheme);
-    const baseGetLines = (w: number) => md.render(w);
-    headings = extractHeadings(paneContent);
-    totalSourceLines = paneContent.split("\n").length;
-    contentGetLines = baseGetLines;
-    contentOnInvalidate = () => md.invalidate();
-  }
-
   const editor = new Editor(tui, {
     borderColor: (s) => focused === "editor" ? s : gray(s),
     selectList: {
@@ -537,35 +597,48 @@ export async function review(
   });
 
   const contentPane = new ScrollPane({
-    getLines: contentGetLines,
+    getLines: tabContents[activeTabIndex].getLines,
     tui,
-    title: paneTitle,
+    getTitle: () => renderTabBar(tabs, activeTabIndex),
     getHeight: () =>
-      Math.max(
-        1,
-        tui.terminal.rows - editor.render(tui.terminal.columns).length - 1,
-      ),
-    onInvalidate: contentOnInvalidate,
-    pinnedSidebar: Array.isArray(paneContent)
-      ? undefined
-      : (w, scrollState) =>
-        renderTocLines(
+      editorVisible
+        ? Math.max(
+          1,
+          tui.terminal.rows - editor.render(tui.terminal.columns).length - 1,
+        )
+        : tui.terminal.rows - 1,
+    onInvalidate: () => currentOnInvalidate?.(),
+    pinnedSidebar: (w, scrollState) =>
+      renderTocLines(
+        headings,
+        w,
+        computeVisibleHeadingIndices({
           headings,
-          w,
-          computeVisibleHeadingIndices({
-            headings,
-            totalSourceLines,
-            ...scrollState,
-          }),
-        ),
-    pinnedSidebarWidth: Array.isArray(paneContent)
-      ? undefined
-      : (w) => (headings.length === 0 || w < 100 ? 0 : Math.floor(w / 3)),
+          totalSourceLines,
+          ...scrollState,
+        }),
+      ),
+    pinnedSidebarWidth: (w) =>
+      headings.length === 0 || w < 100 ? 0 : Math.floor(w / 3),
   });
 
   tui.addChild(contentPane);
   tui.addChild(editor);
   tui.setFocus(contentPane);
+
+  function applyTabSwitch(): void {
+    const tabContent = tabContents[activeTabIndex];
+    contentPane.setContent(tabContent.getLines);
+    headings = tabContent.headings;
+    totalSourceLines = tabContent.totalSourceLines;
+    currentOnInvalidate = tabContent.onInvalidate;
+    editorVisible = activeTabIndex === tabs.length - 1;
+    if (editorVisible) {
+      tui.addChild(editor);
+    } else {
+      tui.removeChild(editor);
+    }
+  }
 
   const contextFiles = await buildContextFiles({ ticketDir, stateDir });
   const systemPrompt = await buildQuestionSystemPrompt(contextFiles);
@@ -653,15 +726,35 @@ export async function review(
       }
       return { consume: true };
     }
-    if (matchesKey(data, "tab")) {
-      if (focused === "content") {
-        focused = "editor";
-        tui.setFocus(editor);
-      } else {
-        focused = "content";
-        tui.setFocus(contentPane);
-      }
+    if (
+      matchesKey(data, "left") && focused === "content" && activeTabIndex > 0
+    ) {
+      activeTabIndex--;
+      applyTabSwitch();
       tui.requestRender(true);
+      return { consume: true };
+    }
+    if (
+      matchesKey(data, "right") &&
+      focused === "content" &&
+      activeTabIndex < tabs.length - 1
+    ) {
+      activeTabIndex++;
+      applyTabSwitch();
+      tui.requestRender(true);
+      return { consume: true };
+    }
+    if (matchesKey(data, "tab")) {
+      if (editorVisible) {
+        if (focused === "content") {
+          focused = "editor";
+          tui.setFocus(editor);
+        } else {
+          focused = "content";
+          tui.setFocus(contentPane);
+        }
+        tui.requestRender(true);
+      }
       return { consume: true };
     }
     if (matchesKey(data, "shift+enter")) {

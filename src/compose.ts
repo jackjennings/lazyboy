@@ -738,14 +738,17 @@ export function composeTickDeps(
           }>;
         };
         return (data.comments ?? [])
-          .filter((c) => !since || c.created > since)
+          .filter(
+            (c) =>
+              !since || Temporal.Instant.from(c.created).toString() > since,
+          )
           .map((c): RawComment => ({
             author: c.author.displayName,
             body: c.body == null || typeof c.body !== "object"
               ? ""
               // deno-lint-ignore no-explicit-any
               : adf2markdown(c.body as any).trim(),
-            timestamp: c.created,
+            timestamp: Temporal.Instant.from(c.created).toString(),
           }));
       },
       isBot: (() => {

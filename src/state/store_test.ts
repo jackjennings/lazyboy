@@ -233,6 +233,45 @@ Deno.test("writeTicket: round-trips worktrees through meta.md", async () => {
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("writeTicket: round-trips lastSeenCommentTimestamp through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-7",
+    lastSeenCommentTimestamp: "2026-08-12T18:30:00.000Z",
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-7");
+  assertEquals(read.lastSeenCommentTimestamp, "2026-08-12T18:30:00.000Z");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("readTicket: normalizes an unquoted lastSeenCommentTimestamp to an ISO string", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "gh-8");
+  await Deno.mkdir(ticketDir);
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: gh-8
+provider: github
+title: Test
+url: https://github.com/x/y/issues/8
+phase: implementation
+status: waiting
+scope: []
+created: "2026-06-22T00:00:00Z"
+updated: "2026-06-22T00:00:00Z"
+lastSeenCommentTimestamp: 2026-08-12T18:30:00.000Z
+---
+
+body
+`,
+  );
+  const ticket = await readTicket(dir, "gh-8");
+  assertEquals(ticket.lastSeenCommentTimestamp, "2026-08-12T18:30:00.000Z");
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("listTickets: returns all ticket IDs", async () => {
   const dir = await Deno.makeTempDir();
   await Deno.mkdir(

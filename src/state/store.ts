@@ -43,6 +43,14 @@ function migratePhase(oldPhase: string): [TicketPhase, TicketStatus] {
   return result;
 }
 
+// YAML parses an unquoted ISO timestamp into a Date; comparisons against
+// comment timestamps are string-based, so normalize back to ISO.
+function normalizeTimestamp(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (raw instanceof Date) return raw.toISOString();
+  return String(raw);
+}
+
 function normalizePrEntry(raw: unknown): PrEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
@@ -122,6 +130,9 @@ export async function readTicket(
     notionPages: data.notionPages as
       | { url: string; title: string }[]
       | undefined,
+    lastSeenCommentTimestamp: normalizeTimestamp(
+      data.lastSeenCommentTimestamp,
+    ),
   };
 
   if (needsMigration) {
@@ -162,6 +173,9 @@ export async function writeTicket(
   if (ticket.artifact !== "pr") frontmatter.artifact = ticket.artifact;
   if (ticket.notionPages !== undefined) {
     frontmatter.notionPages = ticket.notionPages;
+  }
+  if (ticket.lastSeenCommentTimestamp !== undefined) {
+    frontmatter.lastSeenCommentTimestamp = ticket.lastSeenCommentTimestamp;
   }
   const raw = matter.stringify(ticket.body, frontmatter);
   await writeTextFile(join(dir, "meta.md"), raw);

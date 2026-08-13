@@ -296,6 +296,41 @@ Deno.test(
 );
 
 Deno.test(
+  "checkNewCommentsAction: logs the since cursor and comment counts",
+  async () => {
+    const logged: Record<string, unknown>[] = [];
+    await checkNewCommentsAction(
+      makeDeps({
+        fetchGitHubComments: () =>
+          Promise.resolve([
+            {
+              author: "alice",
+              body: "Please add retry logic",
+              timestamp: "2026-02-01T10:00:00Z",
+            },
+            {
+              author: "lazyboy-bot",
+              body: "Working on it",
+              timestamp: "2026-02-02T10:00:00Z",
+            },
+          ]),
+        isBot: (author) => author === "lazyboy-bot",
+        appendLog: (_sd, _id, entry) => {
+          logged.push(entry as Record<string, unknown>);
+          return Promise.resolve();
+        },
+      }),
+    ).run(makeTicket(BASE_GITHUB), "/state");
+    assertEquals(logged.length, 1);
+    assertEquals(logged[0].action, "check-new-comments");
+    assertEquals(logged[0].since, "2026-01-01T00:00:00Z");
+    assertEquals(logged[0].fetched, 2);
+    assertEquals(logged[0].kept, 1);
+    assertEquals(logged[0].latestTimestamp, "2026-02-02T10:00:00Z");
+  },
+);
+
+Deno.test(
   "checkNewCommentsAction: multiple KEEP comments separated by --- in context file",
   async () => {
     const written: string[] = [];

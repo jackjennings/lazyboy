@@ -89,6 +89,14 @@ export function checkNewCommentsAction(deps: CheckNewCommentsDeps): TickAction {
         await deps.writeContextFile(ticketDir, content);
       }
 
+      await deps.appendLog(stateDir, ticket.id, {
+        action: "check-new-comments",
+        since,
+        fetched: comments.length,
+        kept: keptComments.length,
+        latestTimestamp,
+      });
+
       const now = Temporal.Now.instant().toString();
       const updated: TicketState = {
         ...ticket,

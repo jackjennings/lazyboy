@@ -185,7 +185,7 @@ pipeline:
 
 ```
 {stateDir}/ceremonies/
-  standup/
+  summary/
     config.toml     # time = "HH:MM"; optional: model = "...", thinking = <budget_tokens>
     prompt.md       # ceremony behavior; receives current date as system context
     output/
@@ -243,7 +243,7 @@ notification naming the `lazyboy approve` command to run, both throttled to once
 per scheduled occurrence rather than once per tick, until it is approved again.
 `lazyboy approve ceremony/<name>` prints the recorded hash and every path it
 hashed, so you can see exactly what you vouched for. Built-in ceremonies
-(`standup`, `documentation-gaps`) need no approval.
+(`documentation-gaps`) need no approval.
 
 Upgrading from a version without the gate: an existing working `prompt.md`
 ceremony stops running on the first tick after this lands, and keeps warning

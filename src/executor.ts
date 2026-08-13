@@ -76,10 +76,13 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
 export function buildPhaseEnvOverrides(
   opts: ExecutorOptions,
 ): Record<string, string> {
+  const binDir = new URL("../bin", import.meta.url).pathname;
+  const existingPath = Deno.env.get("PATH");
   const overrides: Record<string, string> = {
     GITHUB_TOKEN: opts.githubToken,
     GH_TOKEN: opts.githubToken,
     ANTHROPIC_API_KEY: opts.anthropicApiKey,
+    PATH: existingPath ? `${binDir}:${existingPath}` : binDir,
   };
   if (opts.maxTurns !== undefined) {
     if (opts.agent === "claude-code") {

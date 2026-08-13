@@ -266,6 +266,16 @@ Deno.test("buildPhaseEnvOverrides: PATH starts with resolved bin/ directory", ()
   assert(overrides["PATH"].startsWith(`${binDir}:`));
 });
 
+Deno.test("buildPhaseArgs: includes --resume boolean flag when resume is true", () => {
+  const args = buildPhaseArgs(makeOpts({ resume: true }));
+  assert(args.includes("--resume"));
+});
+
+Deno.test("buildPhaseArgs: omits --resume flag when resume is absent", () => {
+  const args = buildPhaseArgs(makeOpts());
+  assertFalse(args.includes("--resume"));
+});
+
 Deno.test("bootId: returns a non-empty decimal string", () => {
   const id = bootId();
   assert(id.length > 0);

@@ -40,6 +40,7 @@ export function buildClaudeCodeArgs(opts: {
   cwd: string;
   settingsPath: string;
   sessionId?: string;
+  resume?: boolean;
 }): string[] {
   const fileList = opts.contextFiles.length > 0
     ? "\n\nRead these files first:\n" +
@@ -68,7 +69,11 @@ export function buildClaudeCodeArgs(opts: {
   }
 
   if (opts.sessionId !== undefined) {
-    args.push("--resume", opts.sessionId);
+    if (opts.resume) {
+      args.push("--resume", opts.sessionId);
+    } else {
+      args.push("--session-id", opts.sessionId);
+    }
   }
 
   const addDirs = deriveAddDirs(opts.contextFiles, opts.cwd);
@@ -91,6 +96,7 @@ export class ClaudeCodeAgent implements CodeAgent {
     model: string;
     thinking: string;
     sessionId?: string;
+    resume?: boolean;
   }): Promise<{ stdout: string; stderr: string; code: number }> {
     const result = await new Deno.Command("claude", {
       args: buildClaudeCodeArgs({
@@ -101,6 +107,7 @@ export class ClaudeCodeAgent implements CodeAgent {
         cwd: opts.cwd,
         settingsPath: this.settingsPath,
         sessionId: opts.sessionId,
+        resume: opts.resume,
       }),
       cwd: opts.cwd,
       env: opts.env,

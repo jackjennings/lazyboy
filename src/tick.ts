@@ -68,6 +68,7 @@ export interface TickDeps {
     model: string;
     thinking: string;
     sessionId?: string;
+    resume?: boolean;
   }) => Promise<void>;
   isProcessAlive: (ticketId: string) => boolean;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
@@ -426,6 +427,7 @@ export async function advancePhase(
               model: retryModel,
               thinking: retryThinking,
               sessionId,
+              resume: true,
             });
             await deps.writeTicket(stateDir, {
               ...ticket,

@@ -248,20 +248,44 @@ Deno.test("ClaudeCodeAgent: implements CodeAgent's runPhase signature with setti
   assertEquals(typeof agent.runPhase, "function");
 });
 
-Deno.test("buildClaudeCodeArgs: includes --resume when sessionId is provided", () => {
-  const args = buildClaudeCodeArgs({
-    prompt: "p",
-    model: "m",
-    thinking: "off",
-    contextFiles: [],
-    cwd: "/wt",
-    settingsPath: "/s.json",
-    sessionId: "sess-xyz",
-  });
-  const idx = args.indexOf("--resume");
-  assertNotEquals(idx, -1);
-  assertEquals(args[idx + 1], "sess-xyz");
-});
+Deno.test(
+  "buildClaudeCodeArgs: uses --session-id when sessionId is provided and resume is absent",
+  () => {
+    const args = buildClaudeCodeArgs({
+      prompt: "p",
+      model: "m",
+      thinking: "off",
+      contextFiles: [],
+      cwd: "/wt",
+      settingsPath: "/s.json",
+      sessionId: "sess-xyz",
+    });
+    const idx = args.indexOf("--session-id");
+    assertNotEquals(idx, -1);
+    assertEquals(args[idx + 1], "sess-xyz");
+    assertFalse(args.includes("--resume"));
+  },
+);
+
+Deno.test(
+  "buildClaudeCodeArgs: uses --resume when sessionId is provided and resume is true",
+  () => {
+    const args = buildClaudeCodeArgs({
+      prompt: "p",
+      model: "m",
+      thinking: "off",
+      contextFiles: [],
+      cwd: "/wt",
+      settingsPath: "/s.json",
+      sessionId: "sess-xyz",
+      resume: true,
+    });
+    const idx = args.indexOf("--resume");
+    assertNotEquals(idx, -1);
+    assertEquals(args[idx + 1], "sess-xyz");
+    assertFalse(args.includes("--session-id"));
+  },
+);
 
 Deno.test("buildClaudeCodeArgs: omits --resume when sessionId is absent", () => {
   const args = buildClaudeCodeArgs({

@@ -840,6 +840,7 @@ export function composeTickDeps(
           model: opts.model,
           thinking: opts.thinking,
           sessionId: opts.sessionId,
+          resume: opts.resume,
           includePrinciples: config.tick.principles,
           maxTurns: config.tick.maxTurns,
         }),

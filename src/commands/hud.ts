@@ -78,11 +78,13 @@ export function formatHudHeader(
   enabled: boolean,
   running: number,
   max: number,
+  progress?: string,
 ): string {
   const badge = enabled
     ? bgGreen(black(" enabled "))
     : bgRed(black(" disabled "));
-  return `${badge}  ${running}/${max} running`;
+  const base = `${badge}  ${running}/${max} running`;
+  return progress ? `${base}  ${progress}` : base;
 }
 
 export function logPaneLines(lines: string[]): string[] {
@@ -124,8 +126,23 @@ async function readState(
       )
     ),
   ];
+  let progress: string | undefined;
+  try {
+    const raw = await readTextFile(
+      join(lazyboyDir(), "tick-progress.json"),
+    );
+    const data = JSON.parse(raw) as { label?: string };
+    if (data.label) progress = data.label;
+  } catch {
+    // missing or unparseable
+  }
   return {
-    header: formatHudHeader(enabled, running, config.tick.concurrency),
+    header: formatHudHeader(
+      enabled,
+      running,
+      config.tick.concurrency,
+      progress,
+    ),
     statusLines,
   };
 }

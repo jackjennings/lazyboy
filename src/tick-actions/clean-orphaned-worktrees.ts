@@ -22,6 +22,7 @@ export function cleanOrphanedWorktreesAction(
   deps: CleanOrphanedWorktreesDeps,
 ): TickAction {
   return {
+    label: "Cleaning worktrees",
     applies(ticket: TicketState): boolean {
       return (
         ticket.prs !== undefined &&

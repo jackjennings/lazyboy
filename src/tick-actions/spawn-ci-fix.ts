@@ -49,6 +49,7 @@ export interface SpawnCIFixDeps {
 
 export function spawnCIFixAction(deps: SpawnCIFixDeps): TickAction {
   return {
+    label: "Spawning CI fix",
     applies(ticket: TicketState): boolean {
       return (
         ticket.prs !== undefined &&

@@ -95,6 +95,24 @@ Deno.test("formatHudHeader: shows disabled badge when enabled is false", () => {
   assertStringIncludes(line, "0/5 running");
 });
 
+Deno.test("formatHudHeader: appends progress string when provided", () => {
+  const line = formatHudHeader(true, 2, 5, "Reconciling PRs [3/47]");
+  assertStringIncludes(stripAnsiCode(line), "2/5 running");
+  assertStringIncludes(stripAnsiCode(line), "Reconciling PRs [3/47]");
+});
+
+Deno.test("formatHudHeader: does not append progress when absent", () => {
+  const withoutProgress = formatHudHeader(true, 2, 5);
+  assertFalse(stripAnsiCode(withoutProgress).includes("["));
+  assertStringIncludes(stripAnsiCode(withoutProgress), "2/5 running");
+});
+
+Deno.test("formatHudHeader: does not append progress when empty string", () => {
+  const withEmpty = formatHudHeader(true, 2, 5, "");
+  const withoutProgress = formatHudHeader(true, 2, 5);
+  assertEquals(withEmpty, withoutProgress);
+});
+
 // ── logPaneLines ──────────────────────────────────────────────────────────────
 
 Deno.test("logPaneLines: returns dim placeholder when lines is empty", () => {

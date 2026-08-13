@@ -14,6 +14,7 @@ export interface JiraDoneDeps {
 
 export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
   return {
+    label: "Updating Jira",
     applies(ticket: TicketState): boolean {
       return (
         ticket.provider === "jira" &&

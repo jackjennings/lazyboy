@@ -37,6 +37,7 @@ export function sanitizeBranchForFilename(branch: string): string {
 
 export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
   return {
+    label: "Checking conflicts",
     applies(ticket: TicketState): boolean {
       return (
         ticket.status !== "needs-attention" &&

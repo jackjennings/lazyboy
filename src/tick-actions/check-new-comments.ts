@@ -30,6 +30,7 @@ const MONITORED_PHASES = new Set(["spec", "plan", "implementation", "merge"]);
 
 export function checkNewCommentsAction(deps: CheckNewCommentsDeps): TickAction {
   return {
+    label: "Checking comments",
     applies(ticket: TicketState): boolean {
       return (
         (ticket.provider === "github" || ticket.provider === "jira") &&

@@ -23,6 +23,7 @@ export interface ResolveCIFixDeps {
 
 export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
   return {
+    label: "Resolving CI fix",
     applies(ticket: TicketState): boolean {
       return (
         deps.hasCIFixContextFiles(ticket.id) && !deps.isProcessAlive(ticket.id)

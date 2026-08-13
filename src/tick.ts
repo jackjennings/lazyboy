@@ -150,6 +150,7 @@ export interface TickServiceDeps {
   ): Promise<string | null>;
   notifyTickFailure?(error: string): Promise<void>;
   preflightGitHubCredentials?(): Promise<void>;
+  writeTickProgress?: (label: string | null) => Promise<void>;
 }
 
 export function selectCandidates(
@@ -807,11 +808,21 @@ export class TickService {
     );
 
     const processedTickets = [...migratedTickets];
+    const totalNonWontDo = processedTickets.filter(
+      (t) => t.phase !== "wont-do",
+    ).length;
+    let ticketIndex = 0;
     for (let i = 0; i < processedTickets.length; i++) {
       if (processedTickets[i].phase === "wont-do") continue;
+      ticketIndex++;
       for (const action of deps.tickActions) {
         try {
           if (action.applies(processedTickets[i])) {
+            if (action.label) {
+              await deps.writeTickProgress?.(
+                `${action.label} [${ticketIndex}/${totalNonWontDo}]`,
+              );
+            }
             const updated = await action.run(
               processedTickets[i],
               deps.stateDir,
@@ -834,6 +845,7 @@ export class TickService {
         }
       }
     }
+    await deps.writeTickProgress?.(null);
 
     for (let i = 0; i < processedTickets.length; i++) {
       const ticket = processedTickets[i];

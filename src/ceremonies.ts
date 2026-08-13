@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { parse } from "@std/toml";
-import { isRegularFile, readDir, readTextFile } from "./filesystem.ts";
+import { isRegularFile, readDir, readTextFile, stat } from "./filesystem.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
 import { isValidCeremonyName } from "./ceremonies/types.ts";
 import { PromptCeremony } from "./ceremonies/prompt.ts";
@@ -148,6 +148,21 @@ export class CeremonyRunner {
     gated: boolean,
   ): Promise<void> {
     const configPath = join(ceremonyDir, "config.toml");
+    let configStat: Deno.FileInfo;
+    try {
+      configStat = await stat(configPath);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) return;
+      throw e;
+    }
+    if (!configStat.isFile) {
+      await this.#deps.appendTickLog({
+        event: "ceremony-warning",
+        ceremony: ceremony.name,
+        reason: "config.toml is not a regular file",
+      });
+      return;
+    }
     let raw: string;
     try {
       raw = await readTextFile(configPath);

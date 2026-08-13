@@ -2082,11 +2082,29 @@ Deno.test(
       exit: () => {},
     });
     await new TickService(deps).run();
-    assertEquals(captured.length, 1);
-    const entry = captured[0] as Record<string, unknown>;
+    assertEquals(captured.length, 2);
+    assertEquals((captured[0] as Record<string, unknown>).event, "tick-start");
+    const entry = captured[1] as Record<string, unknown>;
     assertEquals(entry.event, "tick-failed");
     assertEquals(entry.error, "workflow error");
     assertEquals(typeof entry.ts, "string");
+  },
+);
+
+Deno.test(
+  "TickService: writes tick-start then tick-end on successful workflow",
+  async () => {
+    const captured: object[] = [];
+    const deps = makeFakeServiceDeps({
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+    });
+    await new TickService(deps).run();
+    assertEquals(captured.length, 2);
+    assertEquals((captured[0] as Record<string, unknown>).event, "tick-start");
+    assertEquals((captured[1] as Record<string, unknown>).event, "tick-end");
   },
 );
 

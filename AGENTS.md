@@ -302,9 +302,9 @@ defeat that per-test `HOME` isolation.
 ## `tick.ndjson` format
 
 `~/.lazyboy/tick.ndjson` is NDJSON — one object per line with `ts` (ISO 8601
-UTC) and `event`. Events: `tick-already-running`, `stale-lock`, `lock-failed`,
-`tick-failed`. `appendTickLog` (`src/tick.ts`) writes it directly; it is not
-`appendTicketLog` (`src/state/store.ts`).
+UTC) and `event`. Events: `tick-start`, `tick-end`, `tick-already-running`,
+`stale-lock`, `lock-failed`, `tick-failed`. `appendTickLog` (`src/tick.ts`)
+writes it directly; it is not `appendTicketLog` (`src/state/store.ts`).
 
 The plist from `plistContent()` must **not** include `StandardOutPath` or
 `StandardErrorPath` pointing to `tick.ndjson` — the tick process owns its own

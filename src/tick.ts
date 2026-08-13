@@ -741,6 +741,9 @@ export class TickService {
       await deps.refreshAnthropicPricing?.();
       await deps.installPackages(deps.packageSources);
       await deps.lock.withLock(async () => {
+        await (deps.appendTickLog ?? appendTickLog)({
+          event: "tick-start",
+        });
         try {
           await this.#runWorkflow(deps);
         } catch (e) {
@@ -751,6 +754,9 @@ export class TickService {
           });
           throw e;
         }
+        await (deps.appendTickLog ?? appendTickLog)({
+          event: "tick-end",
+        });
       });
     } catch (e) {
       const errorStr = e instanceof Error ? e.message : String(e);

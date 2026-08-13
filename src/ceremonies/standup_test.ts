@@ -13,7 +13,7 @@ const YESTERDAY_ISO = "2026-08-11T18:00:00Z";
 const TODAY_ISO = "2026-08-12T08:00:00Z";
 
 const STANDUP_DIR = new URL(
-  "../../../lazyboy-state/ceremonies/standup",
+  "./standup_fixture",
   import.meta.url,
 ).pathname;
 

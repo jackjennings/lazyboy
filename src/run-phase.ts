@@ -367,6 +367,7 @@ export async function executePhase(
     agentType: "pi" | "claude-code";
     contextFiles?: string[];
     sessionId?: string;
+    resume?: boolean;
     includePrinciples?: boolean;
   },
   agent: CodeAgent,
@@ -428,6 +429,7 @@ export async function executePhase(
     model: opts.model,
     thinking: opts.thinking,
     sessionId: opts.sessionId,
+    resume: opts.resume,
   });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
@@ -530,7 +532,7 @@ if (import.meta.main) {
       "session-id",
       "state-dir",
     ],
-    boolean: ["skip-principles"],
+    boolean: ["skip-principles", "resume"],
   });
 
   const ticketDir = args["ticket-dir"]!;
@@ -577,6 +579,7 @@ if (import.meta.main) {
       agentType,
       contextFiles,
       sessionId: args["session-id"] ?? undefined,
+      resume: args["resume"] ?? false,
       includePrinciples: !args["skip-principles"],
     },
     agentType === "claude-code"

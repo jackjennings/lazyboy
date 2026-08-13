@@ -2400,3 +2400,42 @@ Deno.test("executePhase: passes undefined sessionId to agent when not provided",
     await Deno.remove(homeDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "executePhase: passes resume: true to agent.runPhase when resume is true",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    let capturedResume: boolean | undefined;
+    const agent: CodeAgent = {
+      runPhase(opts) {
+        capturedResume = opts.resume;
+        return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+      },
+    };
+    try {
+      await executePhase(
+        {
+          ticketDir,
+          stateDir: dirname(ticketDir),
+          outputFile: "out.md",
+          phase: "implementation",
+          scopeDirs: [],
+          prompt: "do thing",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+          resume: true,
+        },
+        agent,
+      );
+      assertEquals(capturedResume, true);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);

@@ -1,5 +1,6 @@
 import type { WorktreeInfo } from "./state/types.ts";
 import { readTextFileSync, remove, writeTextFile } from "./filesystem.ts";
+import { bootId } from "./paths.ts";
 
 export interface ExecutorOptions {
   ticketDir: string;
@@ -17,6 +18,7 @@ export interface ExecutorOptions {
   contextFiles?: string[];
   pidFile?: string;
   sessionId?: string;
+  resume?: boolean;
   includePrinciples?: boolean;
   maxTurns?: number;
 }
@@ -67,6 +69,9 @@ export function buildPhaseArgs(opts: ExecutorOptions): string[] {
   if (opts.sessionId) {
     args.push("--session-id", opts.sessionId);
   }
+  if (opts.resume === true) {
+    args.push("--resume");
+  }
   if (opts.includePrinciples === false) {
     args.push("--skip-principles");
   }
@@ -109,7 +114,7 @@ export async function spawnPhase(opts: ExecutorOptions): Promise<void> {
   child.unref();
   await writeTextFile(
     `${opts.ticketDir}/${opts.pidFile ?? "run.pid"}`,
-    child.pid.toString(),
+    `${child.pid}\n${bootId()}`,
   );
 }
 
@@ -120,8 +125,10 @@ export function isPhaseAlive(ticketDir: string): boolean {
   } catch {
     return false;
   }
-  const pid = parseInt(content.trim(), 10);
+  const lines = content.trim().split("\n");
+  const pid = parseInt(lines[0], 10);
   if (isNaN(pid)) return false;
+  if (lines[1] !== undefined && lines[1] !== bootId()) return false;
   return isProcessAlive(pid);
 }
 

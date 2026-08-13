@@ -8,5 +8,6 @@ export interface CodeAgent {
     model: string;
     thinking: string;
     sessionId?: string;
+    resume?: boolean;
   }): Promise<{ stdout: string; stderr: string; code: number }>;
 }

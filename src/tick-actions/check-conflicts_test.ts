@@ -565,3 +565,205 @@ Deno.test(
     assertEquals(updated?.phaseSessionIds?.implementation, undefined);
   },
 );
+
+// ── rebase-blocked (no conflicted files) ─────────────────────────────────────
+
+Deno.test(
+  "checkConflictsAction: rebase fails with no conflicted files → parks as needs-attention, no spawn",
+  async () => {
+    const logged: object[] = [];
+    const written: TicketState[] = [];
+    const spawnCalls: object[] = [];
+    const gitCalls: { args: string[]; cwd: string }[] = [];
+
+    const result = await makeAction({
+      runGit: (args, cwd) => {
+        gitCalls.push({ args, cwd });
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({
+            code: 1,
+            stdout: "",
+            stderr: "error: cannot rebase: You have unstaged changes.",
+          });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+        }
+        if (args[0] === "status" && args[1] === "--short") {
+          return Promise.resolve({
+            code: 0,
+            stdout: " M file1.ts\n M file2.ts",
+            stderr: "",
+          });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      spawn: (opts) => {
+        spawnCalls.push(opts);
+        return Promise.resolve();
+      },
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+      appendLog: (_dir, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(spawnCalls.length, 0);
+    assertEquals(written.length, 1);
+    assertEquals(written[0].status, "needs-attention");
+
+    const logEntry = (logged as Record<string, unknown>[]).find(
+      (e) => e.event === "needs-attention",
+    );
+    assertNotEquals(logEntry, undefined);
+    assertEquals(logEntry!.reason, "rebase-blocked");
+    assertEquals(logEntry!.worktreePath, "/wt/myorg/myrepo");
+    assertEquals(logEntry!.branch, "gh-7");
+    assertStringIncludes(logEntry!.rebaseStderr as string, "unstaged");
+    assertEquals(logEntry!.dirtyFileCount, 2);
+    assertEquals(logEntry!.dirtyFileSample, [" M file1.ts", " M file2.ts"]);
+
+    assert(
+      gitCalls.some((c) => c.args[0] === "rebase" && c.args[1] === "--abort"),
+    );
+    assert(
+      gitCalls.some((c) => c.args[0] === "status" && c.args[1] === "--short"),
+    );
+    assertEquals(result?.status, "needs-attention");
+  },
+);
+
+Deno.test(
+  "checkConflictsAction: rebase-blocked path does not write a context file",
+  async () => {
+    let writeContextFileCalled = false;
+
+    await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({
+            code: 1,
+            stdout: "",
+            stderr: "error: cannot rebase: You have unstaged changes.",
+          });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      writeContextFile: () => {
+        writeContextFileCalled = true;
+        return Promise.resolve("ctx.md");
+      },
+      writeTicket: () => Promise.resolve(),
+      appendLog: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+
+    assertFalse(writeContextFileCalled);
+  },
+);
+
+Deno.test(
+  "checkConflictsAction: rebase-blocked log entry includes count and first 20 dirty file lines",
+  async () => {
+    const logged: object[] = [];
+    const allLines = Array.from({ length: 30 }, (_, i) => ` M file${i}.ts`);
+
+    await makeAction({
+      runGit: (args) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          return Promise.resolve({ code: 1, stdout: "", stderr: "blocked" });
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+        }
+        if (args[0] === "status" && args[1] === "--short") {
+          return Promise.resolve({
+            code: 0,
+            stdout: allLines.join("\n"),
+            stderr: "",
+          });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      appendLog: (_dir, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+      writeTicket: () => Promise.resolve(),
+    }).run(makeTicket(BASE), "/state");
+
+    const logEntry = (logged as Record<string, unknown>[]).find(
+      (e) =>
+        e.event === "needs-attention" &&
+        (e as Record<string, unknown>).reason === "rebase-blocked",
+    );
+    assertNotEquals(logEntry, undefined);
+    assertEquals(logEntry!.dirtyFileCount, 30);
+    assertEquals((logEntry!.dirtyFileSample as string[]).length, 20);
+    assertEquals(logEntry!.dirtyFileSample as string[], allLines.slice(0, 20));
+  },
+);
+
+Deno.test(
+  "checkConflictsAction: mixed worktrees — blocked takes priority over real conflict, no spawn",
+  async () => {
+    const spawnCalls: object[] = [];
+    const written: TicketState[] = [];
+
+    const result = await makeAction({
+      runGit: (args, cwd) => {
+        if (args[0] === "rebase" && args[1] === "origin/main") {
+          if (cwd === "/wt/a/repo") {
+            return Promise.resolve({
+              code: 1,
+              stdout: "",
+              stderr: "error: cannot rebase: You have unstaged changes.",
+            });
+          }
+          return Promise.resolve({
+            code: 1,
+            stdout: "",
+            stderr: "CONFLICT (content): Merge conflict in bar.ts",
+          });
+        }
+        if (args[0] === "diff" && cwd === "/wt/a/repo") {
+          return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+        }
+        if (args[0] === "diff" && cwd === "/wt/b/repo") {
+          return Promise.resolve({ code: 0, stdout: "bar.ts", stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+      },
+      spawn: (opts) => {
+        spawnCalls.push(opts);
+        return Promise.resolve();
+      },
+      writeContextFile: () => Promise.resolve("ctx.md"),
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+      appendLog: () => Promise.resolve(),
+    }).run(
+      makeTicket({
+        ...BASE,
+        worktrees: {
+          "a/repo": { path: "/wt/a/repo", branch: "gh-7" },
+          "b/repo": { path: "/wt/b/repo", branch: "gh-7" },
+        },
+      }),
+      "/state",
+    );
+
+    assertEquals(spawnCalls.length, 0);
+    assertEquals(written.length, 1);
+    assertEquals(written[0].status, "needs-attention");
+    assertEquals(result?.status, "needs-attention");
+  },
+);

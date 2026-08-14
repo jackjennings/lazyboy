@@ -54,17 +54,26 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
       const now = Temporal.Now.instant().toString();
       const ticketDir = join(stateDir, ticket.id);
 
-      type ConflictInfo = {
-        wt: { path: string; branch: string };
-        conflictedFiles: string[];
-        rebaseStderr: string;
-        contextFilename: string;
-      };
+      type ConflictResult =
+        | {
+          kind: "conflict";
+          wt: { path: string; branch: string };
+          conflictedFiles: string[];
+          rebaseStderr: string;
+          contextFilename: string;
+        }
+        | {
+          kind: "blocked";
+          wt: { path: string; branch: string };
+          rebaseStderr: string;
+          dirtyFileCount: number;
+          dirtyFileSample: string[];
+        };
 
       const conflictResults = await Promise.all(
         Object.values(ticket.worktrees)
           .filter((wt) => deps.worktreeExists(wt.path))
-          .map(async (wt): Promise<ConflictInfo | null> => {
+          .map(async (wt): Promise<ConflictResult | null> => {
             const fetch = await deps.runGit(
               ["fetch", "origin", "main"],
               wt.path,
@@ -117,6 +126,21 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
               .map((f) => f.trim())
               .filter((f) => f.length > 0);
 
+            if (conflictedFiles.length === 0) {
+              await deps.runGit(["rebase", "--abort"], wt.path);
+              const status = await deps.runGit(["status", "--short"], wt.path);
+              const dirtyLines = status.stdout
+                .split("\n")
+                .filter((l) => l.length > 0);
+              return {
+                kind: "blocked",
+                wt,
+                rebaseStderr: rebase.stderr,
+                dirtyFileCount: dirtyLines.length,
+                dirtyFileSample: dirtyLines.slice(0, 20),
+              };
+            }
+
             const safeBranch = sanitizeBranchForFilename(wt.branch);
             const contextContent =
               `# Conflict Context\n\n## Conflicted Files\n\n${
@@ -129,6 +153,7 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
             );
 
             return {
+              kind: "conflict",
               wt,
               conflictedFiles,
               rebaseStderr: rebase.stderr,
@@ -137,8 +162,32 @@ export function checkConflictsAction(deps: CheckConflictsDeps): TickAction {
           }),
       );
 
+      const firstBlocked = conflictResults.find(
+        (r): r is Extract<ConflictResult, { kind: "blocked" }> =>
+          r !== null && (r as ConflictResult).kind === "blocked",
+      );
+      if (firstBlocked) {
+        const updated: TicketState = {
+          ...ticket,
+          status: "needs-attention",
+          updated: now,
+        };
+        await deps.writeTicket(stateDir, updated);
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "needs-attention",
+          reason: "rebase-blocked",
+          worktreePath: firstBlocked.wt.path,
+          branch: firstBlocked.wt.branch,
+          rebaseStderr: firstBlocked.rebaseStderr,
+          dirtyFileCount: firstBlocked.dirtyFileCount,
+          dirtyFileSample: firstBlocked.dirtyFileSample,
+        });
+        return updated;
+      }
+
       const firstConflict = conflictResults.find(
-        (r): r is ConflictInfo => r !== null,
+        (r): r is Extract<ConflictResult, { kind: "conflict" }> =>
+          r !== null && (r as ConflictResult).kind === "conflict",
       );
       if (!firstConflict) return null;
 

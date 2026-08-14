@@ -55,7 +55,7 @@ export class JiraProvider implements Provider {
       email: this.email,
       apiToken: this.apiToken,
       issueKey: match[1],
-      targetStatusCategoryKey: "done",
+      targetStatusName: "Done",
       http: this.http,
     });
   }

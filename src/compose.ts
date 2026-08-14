@@ -676,6 +676,7 @@ export function composeTickDeps(
           email: Deno.env.get("JIRA_EMAIL") ?? "",
           apiToken: Deno.env.get("JIRA_API_TOKEN") ?? "",
           appendLog: appendTicketLog,
+          writeTicket,
           http,
         }),
         jiraDoneAction({

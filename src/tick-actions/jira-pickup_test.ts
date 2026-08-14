@@ -16,13 +16,15 @@ function makeAction(
     email: "test@example.com",
     apiToken: "token",
     appendLog: () => Promise.resolve(),
+    writeTicket: () => Promise.resolve(),
     http: new HttpClient(),
     ...overrides,
   });
 }
 
-function makeTransitionsFetch(
-  transitions: Array<{ id: string; to: { statusCategory: { key: string } } }>,
+function makeIssueFetch(
+  currentStatusName: string,
+  transitions: Array<{ id: string; to: { name: string } }>,
 ) {
   return (
     _url: string | URL | Request,
@@ -32,7 +34,13 @@ function makeTransitionsFetch(
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return Promise.resolve(
-      new Response(JSON.stringify({ transitions }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          fields: { status: { name: currentStatusName } },
+          transitions,
+        }),
+        { status: 200 },
+      ),
     );
   };
 }
@@ -61,7 +69,13 @@ Deno.test("jiraPickupAction: does not apply when status is not new", () => {
   );
 });
 
-Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progress id for correct issue key", async () => {
+Deno.test("jiraPickupAction: does not apply when providerPickedUp is true", () => {
+  assertFalse(
+    makeAction().applies(makeTicket({ ...BASE, providerPickedUp: true })),
+  );
+});
+
+Deno.test("jiraPickupAction: run calls GET issue endpoint then POST with in-progress id for correct issue key", async () => {
   const calls: Array<{ url: string; method: string; body?: string }> = [];
   const result = await makeAction({
     http: new HttpClient((url, init) => {
@@ -76,8 +90,9 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
       return Promise.resolve(
         new Response(
           JSON.stringify({
+            fields: { status: { name: "To Do" } },
             transitions: [
-              { id: "31", to: { statusCategory: { key: "in-progress" } } },
+              { id: "31", to: { name: "In Progress" } },
             ],
           }),
           { status: 200 },
@@ -85,9 +100,10 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
       );
     }),
   }).run(makeTicket(BASE), "/state");
-  assertEquals(result, null);
+  assert(result?.providerPickedUp);
   assertEquals(calls.length, 2);
-  assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
+  assertStringIncludes(calls[0].url, "/issue/PROJ-42?");
+  assertStringIncludes(calls[0].url, "fields=status");
   assertEquals(calls[0].method, "GET");
   assertStringIncludes(calls[1].url, "/issue/PROJ-42/transitions");
   assertEquals(calls[1].method, "POST");
@@ -97,13 +113,49 @@ Deno.test("jiraPickupAction: run calls GET transitions then POST with in-progres
   );
 });
 
-Deno.test("jiraPickupAction: run returns null on success", async () => {
+Deno.test("jiraPickupAction: run returns ticket with providerPickedUp: true on success", async () => {
   const result = await makeAction({
-    http: new HttpClient(makeTransitionsFetch([
-      { id: "31", to: { statusCategory: { key: "in-progress" } } },
+    http: new HttpClient(makeIssueFetch("To Do", [
+      { id: "31", to: { name: "In Progress" } },
     ])),
   }).run(makeTicket(BASE), "/state");
-  assertEquals(result, null);
+  assert(result?.providerPickedUp);
+});
+
+Deno.test("jiraPickupAction: run calls writeTicket with providerPickedUp: true on success", async () => {
+  const written: Array<{ id: string; providerPickedUp?: boolean }> = [];
+  await makeAction({
+    http: new HttpClient(makeIssueFetch("To Do", [
+      { id: "31", to: { name: "In Progress" } },
+    ])),
+    writeTicket: (_dir, t) => {
+      written.push({ id: t.id, providerPickedUp: t.providerPickedUp });
+      return Promise.resolve();
+    },
+  }).run(makeTicket(BASE), "/state");
+  assertEquals(written.length, 1);
+  assertEquals(written[0].id, "jira/PROJ-42");
+  assert(written[0].providerPickedUp);
+});
+
+Deno.test("jiraPickupAction: run skips POST when issue is already in In Progress", async () => {
+  const calls: Array<{ method: string }> = [];
+  const result = await makeAction({
+    http: new HttpClient((_url, init) => {
+      calls.push({ method: init?.method ?? "GET" });
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            fields: { status: { name: "In Progress" } },
+            transitions: [{ id: "31", to: { name: "In Progress" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+  }).run(makeTicket(BASE), "/state");
+  assert(result?.providerPickedUp);
+  assertEquals(calls.filter((c) => c.method === "POST").length, 0);
 });
 
 Deno.test("jiraPickupAction: run logs error and returns null when transition throws", async () => {
@@ -126,8 +178,8 @@ Deno.test("jiraPickupAction: run logs error and returns null when transition thr
 Deno.test("jiraPickupAction: run logs error when no matching transition found", async () => {
   const logged: object[] = [];
   await makeAction({
-    http: new HttpClient(makeTransitionsFetch([
-      { id: "10", to: { statusCategory: { key: "done" } } },
+    http: new HttpClient(makeIssueFetch("To Do", [
+      { id: "10", to: { name: "Done" } },
     ])),
     appendLog: (_stateDir, _id, entry) => {
       logged.push(entry);

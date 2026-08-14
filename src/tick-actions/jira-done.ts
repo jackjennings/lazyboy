@@ -34,7 +34,7 @@ export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
           email: opts.email,
           apiToken: opts.apiToken,
           issueKey,
-          targetStatusCategoryKey: "done",
+          targetStatusName: "Done",
           http: opts.http,
         });
       } catch (e) {

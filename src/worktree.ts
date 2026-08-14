@@ -219,7 +219,7 @@ export async function createWorktree(
   });
 
   const { code } = await runGit(
-    ["worktree", "add", "-b", ticketId, worktreePath, "main"],
+    ["worktree", "add", "-b", ticketId, worktreePath, "origin/main"],
     repoPath,
   );
   if (code !== 0) {

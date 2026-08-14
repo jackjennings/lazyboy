@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
   ARTIFACT_DESCRIPTORS,
   assertValidPhaseStatus,
@@ -95,6 +95,18 @@ Deno.test("assertValidPhaseStatus: throws for invalid combinations", () => {
   assertThrows(() => assertValidPhaseStatus("implementation", "new"), Error);
   assertThrows(() => assertValidPhaseStatus("implementation", "done"), Error);
   assertThrows(() => assertValidPhaseStatus("merge", "new"), Error);
+});
+
+Deno.test("assertValidPhaseStatus: throws for an unrecognized phase", () => {
+  const error = assertThrows(
+    () =>
+      assertValidPhaseStatus(
+        "implement" as TicketPhase,
+        "running",
+      ),
+    Error,
+  );
+  assertStringIncludes(error.message, "implement");
 });
 
 Deno.test("assertValidPhaseStatus: wont-do/done is valid", () => {

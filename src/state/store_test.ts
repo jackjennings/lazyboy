@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertFalse,
+  assertRejects,
   assertStringIncludes,
 } from "@std/assert";
 import { join } from "@std/path";
@@ -192,6 +193,36 @@ body
   assertEquals(ticket.status, "waiting");
   const mtime2 = (await Deno.stat(metaPath)).mtime;
   assertEquals(mtime1?.getTime(), mtime2?.getTime());
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("readTicket: names the ticket when the phase is unrecognized", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticketDir = join(dir, "jira", "NW-1");
+  await Deno.mkdir(ticketDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(ticketDir, "meta.md"),
+    `---
+id: jira/NW-1
+provider: jira
+title: Test
+url: https://example.atlassian.net/browse/NW-1
+phase: implement
+status: running
+scope: []
+created: "2026-08-14T00:00:00Z"
+updated: "2026-08-14T00:00:00Z"
+---
+
+body
+`,
+  );
+  const error = await assertRejects(
+    () => readTicket(dir, "jira/NW-1"),
+    Error,
+  );
+  assertStringIncludes(error.message, "jira/NW-1");
+  assertStringIncludes(error.message, "implement");
   await Deno.remove(dir, { recursive: true });
 });
 

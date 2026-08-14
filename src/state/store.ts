@@ -85,7 +85,14 @@ export async function readTicket(
     status = data.status as TicketStatus;
   }
 
-  assertValidPhaseStatus(phase, status);
+  try {
+    assertValidPhaseStatus(phase, status);
+  } catch (error) {
+    throw new Error(
+      `${metaPath}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
 
   const worktreesRaw = data.worktrees as
     | Record<string, { path: string; branch: string }>

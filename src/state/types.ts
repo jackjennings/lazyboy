@@ -33,7 +33,15 @@ export function assertValidPhaseStatus(
   phase: TicketPhase,
   status: TicketStatus,
 ): void {
-  if (!(VALID_STATUSES[phase] as TicketStatus[]).includes(status)) {
+  const statuses = VALID_STATUSES[phase] as TicketStatus[] | undefined;
+  if (!statuses) {
+    throw new Error(
+      `Unrecognized phase: ${phase} (known phases: ${
+        FULL_PHASE_SEQUENCE.join(", ")
+      })`,
+    );
+  }
+  if (!statuses.includes(status)) {
     throw new Error(
       `Invalid (phase, status) combination: (${phase}, ${status})`,
     );

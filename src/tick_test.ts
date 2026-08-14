@@ -4840,3 +4840,58 @@ Deno.test(
     assertFalse(writtenStatuses.includes("running"));
   },
 );
+
+Deno.test(
+  "advancePhase: revising includes state revision prompt content when file exists",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "revising",
+        worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+      });
+      await Deno.mkdir(join(stateDir, "prompts"), { recursive: true });
+      await Deno.writeTextFile(
+        join(stateDir, "prompts", "implementation-revision.md"),
+        "state revision supplement",
+      );
+      let spawnedPrompt = "";
+      await advancePhase(ticket, stateDir, {
+        ...makeTickDeps(),
+        spawn: (opts) => {
+          spawnedPrompt = opts.prompt;
+          return Promise.resolve();
+        },
+      });
+      assertStringIncludes(spawnedPrompt, "state revision supplement");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: revising state revision prompt absent does not change prompt",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "plan",
+        status: "revising",
+      });
+      await Deno.mkdir(join(stateDir, "prompts"), { recursive: true });
+      let spawnedPrompt = "";
+      await advancePhase(ticket, stateDir, {
+        ...makeTickDeps(),
+        spawn: (opts) => {
+          spawnedPrompt = opts.prompt;
+          return Promise.resolve();
+        },
+      });
+      assertFalse(spawnedPrompt.includes("plan-revision-sentinel"));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);

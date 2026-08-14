@@ -177,9 +177,13 @@ Deno.test(
       for await (const entry of Deno.readDir(join(stateDir, "prompts"))) {
         entries.push(entry.name);
       }
+      const revisionPhases = ["spec", "plan", "implementation"];
       assertEquals(
         entries.sort(),
-        PHASE_SEQUENCE.map((p) => `${p}.md`).sort(),
+        [
+          ...PHASE_SEQUENCE.map((p) => `${p}.md`),
+          ...revisionPhases.map((p) => `${p}-revision.md`),
+        ].sort(),
       );
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -309,6 +313,90 @@ Deno.test(
         if (entry.isDirectory) entries.push(entry.name);
       }
       assertEquals(entries, []);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: creates spec-revision, plan-revision, implementation-revision in prompts dir",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir);
+      for (const phase of ["spec", "plan", "implementation"]) {
+        const content = await Deno.readTextFile(
+          join(stateDir, "prompts", `${phase}-revision.md`),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: creates revision files in github repo subdirectory",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, ["jackjennings/lazyboy"]);
+      for (const phase of ["spec", "plan", "implementation"]) {
+        const content = await Deno.readTextFile(
+          join(
+            stateDir,
+            "prompts",
+            "github",
+            "jackjennings",
+            "lazyboy",
+            `${phase}-revision.md`,
+          ),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: creates revision files in jira project subdirectory",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await ensureStatePrompts(stateDir, [], "FOO");
+      for (const phase of ["spec", "plan", "implementation"]) {
+        const content = await Deno.readTextFile(
+          join(stateDir, "prompts", "jira", "FOO", `${phase}-revision.md`),
+        );
+        assertEquals(content, "");
+      }
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "ensureStatePrompts: does not overwrite existing revision files",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(stateDir, "prompts"), { recursive: true });
+      await Deno.writeTextFile(
+        join(stateDir, "prompts", "implementation-revision.md"),
+        "operator content",
+      );
+      await ensureStatePrompts(stateDir);
+      assertEquals(
+        await Deno.readTextFile(
+          join(stateDir, "prompts", "implementation-revision.md"),
+        ),
+        "operator content",
+      );
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }

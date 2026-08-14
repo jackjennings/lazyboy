@@ -304,6 +304,8 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
       args: ["branch", "-m", "main"],
       cwd: repoDir,
     }).output();
+    const { stdout: sha } = await runGit(["rev-parse", "HEAD"], repoDir);
+    await runGit(["update-ref", "refs/remotes/origin/main", sha], repoDir);
 
     info = await createWorktree(repoDir, ticketId, "jackjennings/lazyboy");
 

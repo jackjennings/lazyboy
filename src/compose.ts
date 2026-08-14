@@ -120,6 +120,18 @@ export async function ensureStatePrompts(
         }
       }
     }
+    for (const phase of ["spec", "plan", "implementation"]) {
+      const filePath = join(dir, `${phase}-revision.md`);
+      try {
+        await stat(filePath);
+      } catch (e) {
+        if (e instanceof Deno.errors.NotFound) {
+          await writeTextFile(filePath, "");
+        } else {
+          throw e;
+        }
+      }
+    }
   }
 
   await scaffoldPhaseFiles(promptsDir);

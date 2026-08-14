@@ -187,6 +187,12 @@ export async function advancePhase(
       ticket.provider,
       ticket.id,
     );
+    const revisingStateRevisionPrompt = await loadStatePrompt(
+      `${activePhase}-revision`,
+      stateDir,
+      ticket.provider,
+      ticket.id,
+    );
     let commentContext = "";
     try {
       const contextFiles: string[] = [];
@@ -208,6 +214,7 @@ export async function advancePhase(
       revisingSupplement,
       revisingArtifactSupplement,
       revisingStatePrompt,
+      revisingStateRevisionPrompt,
       commentContext,
     ]
       .filter((part) => part.length > 0)

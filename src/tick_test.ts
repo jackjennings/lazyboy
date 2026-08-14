@@ -4858,7 +4858,7 @@ Deno.test(
       );
       let spawnedPrompt = "";
       await advancePhase(ticket, stateDir, {
-        ...makeFakeTickDeps(),
+        ...makeTickDeps(),
         spawn: (opts) => {
           spawnedPrompt = opts.prompt;
           return Promise.resolve();
@@ -4883,7 +4883,7 @@ Deno.test(
       await Deno.mkdir(join(stateDir, "prompts"), { recursive: true });
       let spawnedPrompt = "";
       await advancePhase(ticket, stateDir, {
-        ...makeFakeTickDeps(),
+        ...makeTickDeps(),
         spawn: (opts) => {
           spawnedPrompt = opts.prompt;
           return Promise.resolve();

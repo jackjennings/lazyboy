@@ -13,16 +13,20 @@ import { assertSpyCall, assertSpyCalls, spy, stub } from "@std/testing/mock";
 import {
   advancePhase,
   appendTickLog,
-  resolvePhaseModel,
   selectCandidates,
   TickService,
 } from "./tick.ts";
 import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
-import type { TickDeps, TickServiceDeps } from "./tick.ts";
+import type { TickDeps } from "./tick.ts";
 import type { Lock } from "./lock.ts";
-import type { Config, TicketState } from "./state/types.ts";
+import type { TicketState } from "./state/types.ts";
 import { loadPromptFile } from "./phases/runners.ts";
-import { makeTicket, withLazyboyDir } from "./test-support.ts";
+import {
+  makeTickDeps,
+  makeTicket,
+  makeTickServiceDeps,
+  withLazyboyDir,
+} from "./test-support.ts";
 import type { Provider, WorkItem } from "./providers/types.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
@@ -34,19 +38,13 @@ Deno.test("advancePhase: new ticket starts intake", async () => {
     spawnedPhase = opts.phase;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "intake");
 });
@@ -58,19 +56,13 @@ Deno.test("advancePhase: running phase with dead PID sets waiting", async () => 
     written = { phase: t.phase, status: t.status };
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: writeTicketSpy,
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      writeTicket: writeTicketSpy,
+    }),
+  );
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "intake");
   assertEquals(written.status, "waiting");
@@ -87,19 +79,13 @@ Deno.test("advancePhase: implementation running with dead PID transitions to imp
     written = { phase: t.phase, status: t.status };
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: writeTicketSpy,
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      writeTicket: writeTicketSpy,
+    }),
+  );
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
   assertEquals(written.status, "waiting");
@@ -110,19 +96,14 @@ Deno.test("advancePhase: running phase with live PID does nothing", async () => 
   const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
     Promise.resolve()
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => true,
-    writeTicket: writeTicketSpy,
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      isProcessAlive: () => true,
+      writeTicket: writeTicketSpy,
+    }),
+  );
   assertSpyCalls(writeTicketSpy, 0);
 });
 
@@ -137,19 +118,13 @@ Deno.test("advancePhase: waiting + approved advances to next phase", async () =>
     spawnedPhase = opts.phase;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedPhase, "enrichment");
 });
@@ -161,19 +136,13 @@ Deno.test("advancePhase: waiting + not approved does nothing", async () => {
     approvals: [],
   });
   const spawnSpy = spy(() => Promise.resolve());
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCalls(spawnSpy, 0);
 });
 
@@ -198,22 +167,17 @@ Deno.test(
       written = { phase: t.phase, status: t.status };
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(written.phase, "merge");
     assertEquals(written.status, "waiting");
@@ -231,22 +195,17 @@ Deno.test(
     const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
       Promise.resolve()
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCalls(writeTicketSpy, 0);
   },
 );
@@ -265,19 +224,13 @@ Deno.test("advancePhase: implementation phase receives ticket worktrees", async 
     spawnedWorktrees = opts.worktrees;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
     "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-1" },
@@ -298,19 +251,13 @@ Deno.test("advancePhase: non-implementation phases receive empty worktrees", asy
     spawnedWorktrees = opts.worktrees;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
 });
@@ -328,19 +275,13 @@ Deno.test("advancePhase: new ticket spawn receives empty worktrees", async () =>
     spawnedWorktrees = opts.worktrees;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
 });
@@ -357,19 +298,13 @@ Deno.test("advancePhase: implementation phase with empty worktrees transitions t
     written = { phase: t.phase, status: t.status };
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: writeTicketSpy,
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      writeTicket: writeTicketSpy,
+    }),
+  );
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(written.phase, "implementation");
   assertEquals(written.status, "needs-attention");
@@ -380,19 +315,13 @@ Deno.test("advancePhase: new ticket logs status-only transition", async () => {
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+    }),
+  );
   assertSpyCall(appendLogSpy, 0);
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(appendLogSpy.calls[0].args[2], {
@@ -408,19 +337,14 @@ Deno.test("advancePhase: dead PID on non-impl phase logs status-only transition"
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(appendLogSpy, 0);
   assertEquals(appendLogSpy.calls[0].args[2], {
     event: "status-transition",
@@ -443,25 +367,25 @@ Deno.test("advancePhase: dead PID on implementation logs status-transition to wa
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
-  assertSpyCalls(appendLogSpy, 1);
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
+  assertSpyCalls(appendLogSpy, 2);
   assertEquals(logEntries[0], {
     event: "status-transition",
     phase: "implementation",
     from: "running",
     to: "waiting",
+  });
+  assertEquals(logEntries[1], {
+    event: "error",
+    context: "spawnOutlierAnalysis",
+    message: "no jackjennings/lazyboy worktree",
   });
 });
 
@@ -470,19 +394,15 @@ Deno.test("advancePhase: live PID does not log", async () => {
   const appendLogSpy = spy(
     (_dir: string, _id: string, _entry: object) => Promise.resolve(),
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => true,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      isProcessAlive: () => true,
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 0);
 });
 
@@ -499,19 +419,14 @@ Deno.test("advancePhase: implementation/waiting approved logs implementation →
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
     event: "phase-transition",
@@ -543,19 +458,14 @@ Deno.test(
       ],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: markPRsReadySpy,
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        markPRsReady: markPRsReadySpy,
+      }),
+    );
     assertSpyCall(markPRsReadySpy, 0, {
       args: [["https://github.com/o/r/pull/1"]],
     });
@@ -571,19 +481,14 @@ Deno.test(
       approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: markPRsReadySpy,
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        markPRsReady: markPRsReadySpy,
+      }),
+    );
     assertSpyCalls(markPRsReadySpy, 0);
   },
 );
@@ -598,19 +503,14 @@ Deno.test(
       prs: [],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: markPRsReadySpy,
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        markPRsReady: markPRsReadySpy,
+      }),
+    );
     assertSpyCalls(markPRsReadySpy, 0);
   },
 );
@@ -632,19 +532,14 @@ Deno.test(
       ],
     });
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: markPRsReadySpy,
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        markPRsReady: markPRsReadySpy,
+      }),
+    );
     assertSpyCalls(markPRsReadySpy, 0);
   },
 );
@@ -677,19 +572,16 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy2,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.reject(new Error("API error")),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        appendLog: appendLogSpy2,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        markPRsReady: () => Promise.reject(new Error("API error")),
+      }),
+    );
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(writtenTickets[0].phase, "merge");
     assertEquals(writtenTickets[0].status, "waiting");
@@ -723,19 +615,14 @@ Deno.test("advancePhase: approved waiting phase logs transition to next phase", 
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
     event: "phase-transition",
@@ -758,19 +645,14 @@ Deno.test("advancePhase: no worktrees logs plan → needs-attention", async () =
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
     event: "phase-transition",
@@ -789,19 +671,14 @@ Deno.test("advancePhase: log entry does not include ts (appended by appendTicket
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 1);
   assertFalse("ts" in logEntries[0]);
 });
@@ -813,19 +690,14 @@ Deno.test("advancePhase: revising status spawns plan with timestamped outputFile
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile));
 });
@@ -840,19 +712,14 @@ Deno.test("advancePhase: revising status transitions to running", async () => {
     writtenTickets.push(t);
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: writeTicketSpy,
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      writeTicket: writeTicketSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(writeTicketSpy, 0);
   assertEquals(writtenTickets[0].status, "running");
 });
@@ -866,19 +733,14 @@ Deno.test("advancePhase: revising status logs status-transition from revising to
       return Promise.resolve();
     },
   );
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: appendLogSpy,
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      appendLog: appendLogSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCalls(appendLogSpy, 1);
   assertEquals(logEntries[0], {
     event: "status-transition",
@@ -895,19 +757,14 @@ Deno.test("advancePhase: revising outputFile uses YYYYMMDDTHHMMSS prefix format"
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-plan\.md$/.test(spawnedOutputFile ?? ""));
 });
@@ -919,19 +776,14 @@ Deno.test("advancePhase: new status spawn receives timestamp-prefixed intake out
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-intake\.md$/.test(spawnedOutputFile));
 });
@@ -947,19 +799,14 @@ Deno.test("advancePhase: waiting+approved spawn receives timestamp-prefixed next
     spawnedOutputFile = opts.outputFile;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assert(/^\d{8}T\d{6}-enrichment\.md$/.test(spawnedOutputFile ?? ""));
 });
@@ -970,28 +817,25 @@ Deno.test(
     const ticket = makeTicket({ phase: "spec", status: "running" });
     const writtenTickets: TicketState[] = [];
     const logs: object[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseOutput: () => Promise.resolve(null),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
     const invalidLog = logs.find(
@@ -1010,25 +854,21 @@ Deno.test(
       outputRetries: 1,
     });
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
     assertEquals(waitingWrite?.outputRetries, undefined);
   },
@@ -1040,28 +880,25 @@ Deno.test(
     const ticket = makeTicket({ phase: "spec", status: "running" });
     const writtenTickets: TicketState[] = [];
     const logs: object[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseOutput: () => Promise.resolve("   \n  "),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("   \n  "),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
     const invalidLog = logs.find(
@@ -1076,25 +913,21 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "spec", status: "running" });
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "waiting");
   },
@@ -1105,11 +938,15 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const appendPrinciplesSpy = spy(() => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      readPhaseOutput: () => Promise.resolve("## Principles\n\nlearn X"),
-      appendPrinciples: appendPrinciplesSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        readPhaseOutput: () => Promise.resolve("## Principles\n\nlearn X"),
+        appendPrinciples: appendPrinciplesSpy,
+      }),
+    );
     assertSpyCalls(appendPrinciplesSpy, 1);
   },
 );
@@ -1119,11 +956,15 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const appendPrinciplesSpy = spy(() => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      readPhaseOutput: () => Promise.resolve("## What to Build\n\nstuff"),
-      appendPrinciples: appendPrinciplesSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        readPhaseOutput: () => Promise.resolve("## What to Build\n\nstuff"),
+        appendPrinciples: appendPrinciplesSpy,
+      }),
+    );
     assertSpyCalls(appendPrinciplesSpy, 0);
   },
 );
@@ -1133,11 +974,15 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const appendPrinciplesSpy = spy(() => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: appendPrinciplesSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        readPhaseOutput: () => Promise.resolve(null),
+        appendPrinciples: appendPrinciplesSpy,
+      }),
+    );
     assertSpyCalls(appendPrinciplesSpy, 0);
   },
 );
@@ -1148,25 +993,23 @@ Deno.test(
     const ticket = makeTicket({ phase: "spec", status: "running" });
     const writtenTickets: TicketState[] = [];
     const logs: object[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("some content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve("some content"),
+        readPhaseExitCode: () => Promise.resolve(null),
+      }),
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
     const invalidLog = logs.find(
@@ -1181,23 +1024,19 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "spec", status: "running" });
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-xyz"),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve("## What to Build\n\ncontent"),
+        readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-xyz"),
+      }),
+    );
     const waitingWrite = writtenTickets.find((t) => t.status === "waiting");
     assertEquals(waitingWrite?.phaseSessionIds?.["spec"], "sess-xyz");
   },
@@ -1217,22 +1056,17 @@ Deno.test(
       spawnedSessionId = opts.sessionId;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedSessionId, "sess-impl");
   },
@@ -1251,22 +1085,17 @@ Deno.test(
       spawnedSessionId = opts.sessionId;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedSessionId, undefined);
   },
@@ -1285,22 +1114,17 @@ Deno.test(
       spawnedSessionId = opts.sessionId;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedSessionId, undefined);
   },
@@ -1320,22 +1144,17 @@ Deno.test(
       spawnedSessionId = opts.sessionId;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedSessionId, "sess-merge-impl");
   },
@@ -1354,22 +1173,17 @@ Deno.test(
       spawnedSessionId = opts.sessionId;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedSessionId, undefined);
   },
@@ -1387,33 +1201,31 @@ Deno.test(
     const logs: object[] = [];
     let spawnedSessionId: string | undefined;
     let spawnedScope: string[] | undefined;
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnedSessionId = opts.sessionId;
-        spawnedScope = opts.scope;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnedSessionId = opts.sessionId;
+          spawnedScope = opts.scope;
+          return Promise.resolve();
+        },
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseOutput: () => Promise.resolve(null),
+        readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-recover"),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      readPhaseSessionId: (_dir, _phase) => Promise.resolve("sess-recover"),
-    });
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "running");
     assertEquals(final.outputRetries, 1);
@@ -1436,22 +1248,17 @@ Deno.test(
       notifiedNeedsAttention: true,
     });
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     const runningWrite = writtenTickets.find((t) => t.status === "running");
     assertEquals(runningWrite?.notifiedNeedsAttention, false);
   },
@@ -1463,25 +1270,23 @@ Deno.test(
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
     const logs: object[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("some content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(1),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve("some content"),
+        readPhaseExitCode: () => Promise.resolve(1),
+      }),
+    );
     const final = writtenTickets[writtenTickets.length - 1];
     assertEquals(final.status, "needs-attention");
     assertEquals(
@@ -1500,22 +1305,18 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("good content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve("good content"),
+      }),
+    );
     assertEquals(writtenTickets[writtenTickets.length - 1].status, "waiting");
   },
 );
@@ -1526,25 +1327,22 @@ Deno.test(
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
     const logs: object[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        logs.push(entry);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(""),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logs.push(entry);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve(""),
+      }),
+    );
     assertEquals(
       writtenTickets[writtenTickets.length - 1].status,
       "needs-attention",
@@ -1579,10 +1377,14 @@ Deno.test(
       const selfReviewSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
-      await advancePhase(ticket, stateDir, {
-        ...makeFakeTickDeps(),
-        selfReview: selfReviewSpy,
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          ...makeTickDeps(),
+          selfReview: selfReviewSpy,
+        }),
+      );
       assertSpyCalls(selfReviewSpy, 0);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -1605,10 +1407,14 @@ Deno.test(
       const selfReviewSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
-      await advancePhase(ticket, stateDir, {
-        ...makeFakeTickDeps(),
-        selfReview: selfReviewSpy,
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          ...makeTickDeps(),
+          selfReview: selfReviewSpy,
+        }),
+      );
       assertSpyCalls(selfReviewSpy, 1);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -1639,11 +1445,15 @@ Deno.test(
       const selfReviewSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
-      await advancePhase(ticket, stateDir, {
-        ...makeFakeTickDeps(),
-        selfReview: selfReviewSpy,
-        readPhaseOutput: () => Promise.resolve("second output"),
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          ...makeTickDeps(),
+          selfReview: selfReviewSpy,
+          readPhaseOutput: () => Promise.resolve("second output"),
+        }),
+      );
       assertSpyCalls(selfReviewSpy, 1);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -1687,45 +1497,6 @@ Deno.test("appendTickLog: tick log write succeeds when combined log write fails"
 
 // ── TickService ────────────────────────────────────────────────────────────────
 
-function makeFakeTickDeps(): TickDeps {
-  return {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-sonnet-4-6", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  };
-}
-
-function makeFakeServiceDeps(
-  overrides: Partial<TickServiceDeps> = {},
-): TickServiceDeps {
-  return {
-    stateDir: "/state",
-    concurrency: 1,
-    packageSources: [],
-    installPackages: () => Promise.resolve([]),
-    providers: [],
-    tickActions: [],
-    tickDeps: makeFakeTickDeps(),
-    runMigrations: (_dir, tickets) => Promise.resolve(tickets),
-    readLastWorked: () => Promise.resolve([]),
-    writeLastWorked: () => Promise.resolve(),
-    listTickets: () => Promise.resolve([]),
-    readTicket: (_id) => Promise.resolve(makeTicket()),
-    writeTicket: () => Promise.resolve(),
-    commitState: () => Promise.resolve(),
-    lock: { withLock: (fn) => fn() },
-    ...overrides,
-  };
-}
-
 Deno.test("TickService: lock.withLock called once per run()", async () => {
   let calls = 0;
   const lock: Lock = {
@@ -1734,7 +1505,7 @@ Deno.test("TickService: lock.withLock called once per run()", async () => {
       await fn();
     },
   };
-  const deps = makeFakeServiceDeps({ lock });
+  const deps = makeTickServiceDeps({ lock });
   await new TickService(deps).run();
   assertEquals(calls, 1);
 });
@@ -1744,7 +1515,7 @@ Deno.test(
   async () => {
     const listTicketsSpy = spy(() => Promise.resolve([]));
     const lock: Lock = { withLock: (_fn) => Promise.resolve() };
-    const deps = makeFakeServiceDeps({ lock, listTickets: listTicketsSpy });
+    const deps = makeTickServiceDeps({ lock, listTickets: listTicketsSpy });
     await new TickService(deps).run();
     assertSpyCalls(listTicketsSpy, 0);
   },
@@ -1754,7 +1525,7 @@ Deno.test(
   "TickService: installPackages called with packageSources before listTickets",
   async () => {
     const sequence: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       packageSources: ["npm:foo"],
       installPackages: spy(() => {
         sequence.push("install");
@@ -1782,7 +1553,7 @@ Deno.test(
       },
       close: () => Promise.resolve(),
     };
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve(["gh-1"]),
     });
@@ -1806,7 +1577,7 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const writtenTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
       writeTicket: spy((t: TicketState) => {
@@ -1839,10 +1610,10 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const appendLogSpy = spy(() => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
-      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      tickDeps: makeTickDeps({ ...makeTickDeps(), appendLog: appendLogSpy }),
     });
     await new TickService(deps).run();
     assertSpyCalls(appendLogSpy, 1);
@@ -1869,11 +1640,11 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const appendLogSpy = spy(() => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
       writeTicket: () => Promise.reject(new Error("write failed")),
-      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      tickDeps: makeTickDeps({ ...makeTickDeps(), appendLog: appendLogSpy }),
       exit: () => {},
     });
     await new TickService(deps).run();
@@ -1886,7 +1657,7 @@ Deno.test(
   async () => {
     const sequence: string[] = [];
     const ticket = makeTicket({ id: "gh-1", phase: "intake", status: "new" });
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       runMigrations: spy((_dir, tickets) => {
@@ -1915,7 +1686,7 @@ Deno.test(
       (_t: TicketState, _sd: string) =>
         Promise.resolve<TicketState | null>(null),
     );
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       tickActions: [{ applies: () => true, run: runSpy }],
@@ -1939,7 +1710,7 @@ Deno.test(
       (_t: TicketState, _sd: string) =>
         Promise.resolve<TicketState | null>(null),
     );
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       tickActions: [{ applies: appliesSpy, run: runSpy }],
@@ -1966,7 +1737,7 @@ Deno.test(
     });
     const store: Record<string, TicketState> = { "gh-1": t1, "gh-2": t2 };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
       readTicket: (id) => Promise.resolve(store[id]),
       writeLastWorked: writeLastWorkedSpy,
@@ -2001,7 +1772,7 @@ Deno.test(
       "gh-3": t3,
     };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3"]),
       readTicket: (id) => Promise.resolve(store[id]),
       readLastWorked: () => Promise.resolve(["gh-1"]),
@@ -2031,22 +1802,13 @@ Deno.test(
       "gh-2": waiting,
     };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
       readTicket: (id) => Promise.resolve(store[id]),
-      tickDeps: {
-        spawn: () => Promise.resolve(),
+      tickDeps: makeTickDeps({
         isProcessAlive: (id) => id === "gh-1",
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      },
+      }),
       writeLastWorked: writeLastWorkedSpy,
       concurrency: 2,
     });
@@ -2065,7 +1827,7 @@ Deno.test(
     });
     const store: Record<string, TicketState> = { "gh-1": running };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: (id) => Promise.resolve(store[id]),
       writeLastWorked: writeLastWorkedSpy,
@@ -2096,7 +1858,7 @@ Deno.test(
       "gh-3": mergeWaiting,
     };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3"]),
       readTicket: (id) => Promise.resolve(store[id]),
       writeLastWorked: writeLastWorkedSpy,
@@ -2117,7 +1879,7 @@ Deno.test(
     });
     const store: Record<string, TicketState> = { "gh-wont-do": wontDo };
     const writeLastWorkedSpy = spy((_ids: string[]) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-wont-do"]),
       readTicket: (id) => Promise.resolve(store[id]),
       writeLastWorked: writeLastWorkedSpy,
@@ -2132,7 +1894,7 @@ Deno.test(
   "TickService: commitState called after writeLastWorked",
   async () => {
     const sequence: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       writeLastWorked: spy(() => {
         sequence.push("writeLastWorked");
         return Promise.resolve();
@@ -2152,7 +1914,7 @@ Deno.test(
 
 Deno.test("TickService: exit(1) called when workflow throws", async () => {
   const exitSpy = spy((_code: number) => {});
-  const deps = makeFakeServiceDeps({
+  const deps = makeTickServiceDeps({
     listTickets: () => Promise.reject(new Error("workflow error")),
     exit: exitSpy,
   });
@@ -2164,7 +1926,7 @@ Deno.test(
   "TickService: writes tick-failed entry via injected appendTickLog when workflow throws",
   async () => {
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.reject(new Error("workflow error")),
       appendTickLog: (entry) => {
         captured.push(entry);
@@ -2186,7 +1948,7 @@ Deno.test(
   "TickService: writes tick-start then tick-end on successful workflow",
   async () => {
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       appendTickLog: (entry) => {
         captured.push(entry);
         return Promise.resolve();
@@ -2209,7 +1971,7 @@ Deno.test(
         await fn();
       },
     };
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       lock,
       installPackages: spy(() => {
         sequence.push("install");
@@ -2231,7 +1993,7 @@ Deno.test(
         await fn();
       },
     };
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       lock,
       installPackages: () => Promise.reject(new Error("install failed")),
       exit: () => {},
@@ -2251,7 +2013,7 @@ Deno.test(
         await fn();
       },
     };
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       lock,
       refreshAnthropicPricing: () =>
         Promise.reject(new Error("pricing failed")),
@@ -2292,23 +2054,14 @@ Deno.test(
       "gh-4": candidate2,
     };
     const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3", "gh-4"]),
       readTicket: (id) => Promise.resolve(store[id]),
       concurrency: 2,
-      tickDeps: {
+      tickDeps: makeTickDeps({
         spawn: spawnSpy,
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      },
+      }),
     });
     await new TickService(deps).run();
     assertSpyCalls(spawnSpy, 2);
@@ -2345,23 +2098,15 @@ Deno.test(
       "gh-4": candidate2,
     };
     const spawnSpy = spy((_opts: SpawnOpts) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2", "gh-3", "gh-4"]),
       readTicket: (id) => Promise.resolve(store[id]),
       concurrency: 2,
-      tickDeps: {
+      tickDeps: makeTickDeps({
         spawn: spawnSpy,
         isProcessAlive: (id) => id === "gh-1",
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      },
+      }),
     });
     await new TickService(deps).run();
     assertSpyCalls(spawnSpy, 1);
@@ -2372,7 +2117,7 @@ Deno.test(
   "TickService: notifyTickFailure called with error message when workflow throws",
   async () => {
     const captured: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.reject(new Error("auth failure")),
       notifyTickFailure: (error) => {
         captured.push(error);
@@ -2389,7 +2134,7 @@ Deno.test(
   "TickService: notifyTickFailure called with String(e) when non-Error thrown",
   async () => {
     const captured: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.reject("raw string error"),
       notifyTickFailure: (error) => {
         captured.push(error);
@@ -2406,7 +2151,7 @@ Deno.test(
   "TickService: notifyTickFailure called for pre-lock failures",
   async () => {
     const captured: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       installPackages: () => Promise.reject(new Error("install failed")),
       notifyTickFailure: (error) => {
         captured.push(error);
@@ -2423,7 +2168,7 @@ Deno.test(
   "TickService: exit(1) still fires when notifyTickFailure throws",
   async () => {
     const exitSpy = spy((_code: number) => {});
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.reject(new Error("workflow error")),
       notifyTickFailure: () => Promise.reject(new Error("notify failed")),
       exit: exitSpy,
@@ -2437,7 +2182,7 @@ Deno.test(
   "TickService: proceeds normally when notifyTickFailure is absent",
   async () => {
     const exitSpy = spy((_code: number) => {});
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.reject(new Error("workflow error")),
       exit: exitSpy,
     });
@@ -2457,14 +2202,14 @@ Deno.test(
       (_t: TicketState, _sd: string) =>
         Promise.resolve<TicketState | null>(null),
     );
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       tickActions: [
         { applies: () => true, run: () => Promise.reject(new Error("boom")) },
         { applies: () => true, run: runSpy },
       ],
-      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      tickDeps: makeTickDeps({ ...makeTickDeps(), appendLog: appendLogSpy }),
       concurrency: 0,
     });
     await new TickService(deps).run();
@@ -2495,7 +2240,7 @@ Deno.test(
       (_t: TicketState, _sd: string) =>
         Promise.resolve<TicketState | null>(null),
     );
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       tickActions: [
@@ -2507,7 +2252,7 @@ Deno.test(
         },
         { applies: () => true, run: runSpy },
       ],
-      tickDeps: { ...makeFakeTickDeps(), appendLog: appendLogSpy },
+      tickDeps: makeTickDeps({ ...makeTickDeps(), appendLog: appendLogSpy }),
       concurrency: 0,
     });
     await new TickService(deps).run();
@@ -2579,150 +2324,6 @@ Deno.test("selectCandidates: uses last surviving ID from end of lastWorked as an
   );
 });
 
-// ── resolvePhaseModel ────────────────────────────────────────────────────────
-
-function makeConfig(overrides: Partial<Config> = {}): Config {
-  return {
-    github: { repos: [] },
-    state: { dir: "" },
-    tick: {
-      concurrency: 1,
-      resolveCIFailures: true,
-      principles: true,
-      agentsMdMaxTokens: 8000,
-      maxTurns: 100,
-    },
-    codebase: { roots: [] },
-    pi: { provider: "anthropic", packages: [] },
-    agent: { type: "pi" },
-    ...overrides,
-  };
-}
-
-Deno.test("resolvePhaseModel: returns hardcoded defaults when no overrides", () => {
-  const config = makeConfig();
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "intake", ticket), {
-    model: "claude-haiku-4-5",
-    thinking: "off",
-  });
-  assertEquals(resolvePhaseModel(config, "spec", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "high",
-  });
-  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
-    model: "claude-opus-4-7",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: ci-fix defaults to claude-sonnet-4-6 / high", () => {
-  const config = makeConfig();
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "ci-fix", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: config default overrides hardcoded for ci-fix", () => {
-  const config = makeConfig({
-    phases: { defaults: { "ci-fix": { model: "claude-haiku-4-5" } } },
-  });
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "ci-fix", ticket), {
-    model: "claude-haiku-4-5",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: config default overrides hardcoded for conflict-resolution", () => {
-  const config = makeConfig({
-    phases: {
-      defaults: { "conflict-resolution": { model: "claude-sonnet-4-6" } },
-    },
-  });
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
-    model: "claude-sonnet-4-6",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: ticket phases override config for conflict-resolution", () => {
-  const config = makeConfig({
-    phases: {
-      defaults: { "conflict-resolution": { model: "claude-sonnet-4-6" } },
-    },
-  });
-  const ticket = makeTicket({
-    phases: {
-      "conflict-resolution": { model: "claude-haiku-4-5", thinking: "off" },
-    },
-  });
-  assertEquals(resolvePhaseModel(config, "conflict-resolution", ticket), {
-    model: "claude-haiku-4-5",
-    thinking: "off",
-  });
-});
-
-Deno.test("resolvePhaseModel: config default overrides hardcoded", () => {
-  const config = makeConfig({
-    phases: { defaults: { intake: { model: "claude-opus-4-5" } } },
-  });
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "intake", ticket), {
-    model: "claude-opus-4-5",
-    thinking: "off",
-  });
-});
-
-Deno.test("resolvePhaseModel: config default sets thinking only", () => {
-  const config = makeConfig({
-    phases: { defaults: { intake: { thinking: "high" } } },
-  });
-  const ticket = makeTicket();
-  assertEquals(resolvePhaseModel(config, "intake", ticket), {
-    model: "claude-haiku-4-5",
-    thinking: "high",
-  });
-});
-
-Deno.test("resolvePhaseModel: ticket phases override config for implementation", () => {
-  const config = makeConfig({
-    phases: { defaults: { implementation: { model: "claude-haiku-4-5" } } },
-  });
-  const ticket = makeTicket({
-    phases: { implementation: { model: "claude-opus-4-7", thinking: "max" } },
-  });
-  assertEquals(resolvePhaseModel(config, "implementation", ticket), {
-    model: "claude-opus-4-7",
-    thinking: "max",
-  });
-});
-
-Deno.test("resolvePhaseModel: ticket phases override config for any phase", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { intake: { model: "claude-opus-4-7", thinking: "max" } },
-  });
-  assertEquals(resolvePhaseModel(config, "intake", ticket), {
-    model: "claude-opus-4-7",
-    thinking: "max",
-  });
-});
-
-Deno.test("resolvePhaseModel: ticket phases model-only, thinking from hardcoded", () => {
-  const config = makeConfig();
-  const ticket = makeTicket({
-    phases: { intake: { model: "claude-opus-4-7" } },
-  });
-  assertEquals(resolvePhaseModel(config, "intake", ticket), {
-    model: "claude-opus-4-7",
-    thinking: "off",
-  });
-});
-
 Deno.test("advancePhase: spawn receives model and thinking from resolveModelConfig", async () => {
   const ticket = makeTicket({ phase: "intake", status: "new" });
   let spawnedModel = "";
@@ -2732,19 +2333,14 @@ Deno.test("advancePhase: spawn receives model and thinking from resolveModelConf
     spawnedThinking = opts.thinking;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "max" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      resolveModelConfig: () => ({ model: "claude-opus-4-7", thinking: "max" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedModel, "claude-opus-4-7");
   assertEquals(spawnedThinking, "max");
@@ -2757,22 +2353,16 @@ Deno.test("advancePhase: resolveModelConfig called with the phase being spawned"
     approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
   });
   let resolvedPhase = "";
-  await advancePhase(ticket, "/state", {
-    spawn: () => Promise.resolve(),
-    isProcessAlive: () => false,
-    writeTicket: () => Promise.resolve(),
-    writePhaseOutput: () => Promise.resolve(),
-    appendLog: () => Promise.resolve(),
-    resolveModelConfig: (phase, _t) => {
-      resolvedPhase = phase;
-      return { model: "m", thinking: "off" };
-    },
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      resolveModelConfig: (phase, _t) => {
+        resolvedPhase = phase;
+        return { model: "m", thinking: "off" };
+      },
+    }),
+  );
   assertEquals(resolvedPhase, "enrichment");
 });
 
@@ -2789,19 +2379,17 @@ Deno.test("advancePhase: implementation/revising spawns with ticket.worktrees", 
     spawnedWorktrees = opts.worktrees;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      writeTicket: async () => {},
+      writePhaseOutput: async () => {},
+      appendLog: async () => {},
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {
     "jackjennings/lazyboy": { path: "/tmp/wt", branch: "gh-99" },
@@ -2821,19 +2409,17 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
     spawnedWorktrees = opts.worktrees;
     return Promise.resolve();
   });
-  await advancePhase(ticket, "/state", {
-    spawn: spawnSpy,
-    isProcessAlive: () => false,
-    writeTicket: async () => {},
-    writePhaseOutput: async () => {},
-    appendLog: async () => {},
-    resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-    selfReview: () => Promise.resolve({ approved: false, reason: null }),
-    markPRsReady: () => Promise.resolve(),
-    readPhaseOutput: () => Promise.resolve("content"),
-    appendPrinciples: () => Promise.resolve(),
-    readPhaseExitCode: () => Promise.resolve(0),
-  });
+  await advancePhase(
+    ticket,
+    "/state",
+    makeTickDeps({
+      spawn: spawnSpy,
+      writeTicket: async () => {},
+      writePhaseOutput: async () => {},
+      appendLog: async () => {},
+      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+    }),
+  );
   assertSpyCall(spawnSpy, 0);
   assertEquals(spawnedWorktrees, {});
 });
@@ -2854,19 +2440,16 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: true, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.resolve({ approved: true, reason: null }),
+      }),
+    );
     assertSpyCalls(writeTicketSpy, 2);
     assertEquals(writtenTickets[0].status, "waiting");
     assertEquals(writtenTickets[0].approvals, []);
@@ -2901,19 +2484,15 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCalls(writeTicketSpy, 1);
     assertEquals(writtenTickets[0].approvals, []);
     assertEquals(logEntries.length, 1);
@@ -2936,19 +2515,16 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.reject(new Error("review exploded")),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () => Promise.reject(new Error("review exploded")),
+      }),
+    );
     assertSpyCalls(writeTicketSpy, 1);
     assertSpyCalls(appendLogSpy, 1);
   },
@@ -2963,19 +2539,14 @@ Deno.test(
       writtenTickets.push(t);
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCalls(writeTicketSpy, 1);
     assertEquals(writtenTickets[0].approvals, []);
   },
@@ -2996,23 +2567,19 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: writePhaseOutputSpy,
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () =>
-        Promise.resolve({
-          approved: false,
-          reason: "REJECT\nCriterion 1 violated.",
-        }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writePhaseOutput: writePhaseOutputSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: () =>
+          Promise.resolve({
+            approved: false,
+            reason: "REJECT\nCriterion 1 violated.",
+          }),
+      }),
+    );
     assertSpyCalls(writePhaseOutputSpy, 1);
     assertEquals(writePhaseOutputCalls[0][0], "/state");
     assertEquals(writePhaseOutputCalls[0][1], "gh-1");
@@ -3030,19 +2597,14 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writePhaseOutputSpy = spy(() => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: writePhaseOutputSpy,
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writePhaseOutput: writePhaseOutputSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCalls(writePhaseOutputSpy, 0);
   },
 );
@@ -3062,19 +2624,14 @@ Deno.test(
       capturedTicketDir = ticketDir;
       return Promise.resolve({ approved: false, reason: null });
     });
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: selfReviewSpy,
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        selfReview: selfReviewSpy,
+      }),
+    );
     assertEquals(capturedPhase, "intake");
     assertEquals(
       capturedTicketDir,
@@ -3100,22 +2657,17 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     const supplement = await Deno.readTextFile(
       new URL(
@@ -3144,19 +2696,14 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCall(spawnSpy, 0);
     const supplement = await Deno.readTextFile(
       new URL(
@@ -3186,22 +2733,17 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("implementation.md");
     assertEquals(spawnedPrompt, basePrompt);
@@ -3221,22 +2763,17 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
@@ -3256,26 +2793,21 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        buildRepoCorpusText: () =>
+          Promise.resolve(
+            "## Available Repositories\n\n- myorg/frontend (checked out at /code/myorg/frontend)\n",
+          ),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      buildRepoCorpusText: () =>
-        Promise.resolve(
-          "## Available Repositories\n\n- myorg/frontend (checked out at /code/myorg/frontend)\n",
-        ),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("intake.md");
     assertEquals(
@@ -3300,22 +2832,17 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     assertSpyCall(spawnSpy, 0);
     const basePrompt = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
@@ -3331,7 +2858,7 @@ Deno.test(
       status: "needs-attention",
     });
     const notifySpy = spy((_t: TicketState) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       notify: notifySpy,
@@ -3351,7 +2878,7 @@ Deno.test(
       status: "needs-attention",
     });
     const capturedTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       notify: (t) => {
@@ -3377,7 +2904,7 @@ Deno.test(
       approvals: [],
     });
     const notifySpy = spy((_t: TicketState) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       notify: notifySpy,
@@ -3397,7 +2924,7 @@ Deno.test(
       status: "needs-attention",
     });
     const commitSpy = spy(() => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       commitState: commitSpy,
@@ -3423,7 +2950,7 @@ Deno.test(
     });
     const store: Record<string, TicketState> = { "gh-1": t1, "gh-2": t2 };
     const notifySpy = spy((_t: TicketState) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1", "gh-2"]),
       readTicket: (id) => Promise.resolve(store[id]),
       notify: notifySpy,
@@ -3444,7 +2971,7 @@ Deno.test(
       notifiedNeedsAttention: true,
     });
     const notifySpy = spy((_t: TicketState) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       notify: notifySpy,
@@ -3464,7 +2991,7 @@ Deno.test(
       status: "needs-attention",
     });
     const writtenTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: () => Promise.resolve(ticket),
       notify: (_t) => Promise.resolve(),
@@ -3498,7 +3025,7 @@ Deno.test(
     let readCount = 0;
     const notifySpy = spy((_t: TicketState) => Promise.resolve());
     const writeTicketSpy = spy((_t: TicketState) => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       listTickets: () => Promise.resolve(["gh-1"]),
       readTicket: (_id) => {
         readCount++;
@@ -3522,7 +3049,7 @@ Deno.test(
       sequence.push("refresh");
       return Promise.resolve();
     });
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       refreshAnthropicPricing: refreshSpy,
       installPackages: spy(() => {
         sequence.push("install");
@@ -3540,7 +3067,7 @@ Deno.test(
   "TickService: proceeds normally when refreshAnthropicPricing is omitted",
   async () => {
     const installPackagesSpy = spy(() => Promise.resolve([]));
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       installPackages: installPackagesSpy,
     });
     await new TickService(deps).run();
@@ -3572,20 +3099,14 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+      }),
+    );
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
     assertEquals(calls[0][0], "gh-1");
     assertEquals(calls[0][1], "/state/gh-1");
@@ -3611,20 +3132,15 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+      }),
+    );
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
     assert(
       logEntries.some(
@@ -3659,20 +3175,14 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+      }),
+    );
     assertSpyCalls(spawnOutlierAnalysisSpy, 1);
     assertEquals(calls[0][0], "gh-1");
     assertEquals(calls[0][1], "/state/gh-1");
@@ -3697,20 +3207,15 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+      }),
+    );
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
     assert(
       logEntries.some(
@@ -3727,20 +3232,14 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "enrichment", status: "running" });
     const spawnOutlierAnalysisSpy = spy(() => Promise.resolve());
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        spawnOutlierAnalysis: spawnOutlierAnalysisSpy,
+      }),
+    );
     assertSpyCalls(spawnOutlierAnalysisSpy, 0);
   },
 );
@@ -3759,19 +3258,14 @@ Deno.test(
     const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
       Promise.resolve()
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: writeTicketSpy,
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCalls(writeTicketSpy, 1);
   },
 );
@@ -3792,19 +3286,14 @@ Deno.test(
         spawnedPrompt = opts.prompt;
         return Promise.resolve();
       });
-      await advancePhase(ticket, stateDir, {
-        spawn: spawnSpy,
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: spawnSpy,
+          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        }),
+      );
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE INTAKE CONTEXT");
     } finally {
@@ -3833,19 +3322,14 @@ Deno.test(
         spawnedPrompt = opts.prompt;
         return Promise.resolve();
       });
-      await advancePhase(ticket, stateDir, {
-        spawn: spawnSpy,
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: spawnSpy,
+          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        }),
+      );
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE ENRICHMENT CONTEXT");
     } finally {
@@ -3876,19 +3360,14 @@ Deno.test(
         spawnedPrompt = opts.prompt;
         return Promise.resolve();
       });
-      await advancePhase(ticket, stateDir, {
-        spawn: spawnSpy,
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: spawnSpy,
+          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        }),
+      );
       assertSpyCall(spawnSpy, 0);
       assertStringIncludes(spawnedPrompt, "STATE IMPL CONTEXT");
     } finally {
@@ -3910,19 +3389,14 @@ Deno.test(
         spawnedPrompt = opts.prompt;
         return Promise.resolve();
       });
-      await advancePhase(ticket, stateDir, {
-        spawn: spawnSpy,
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: spawnSpy,
+          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        }),
+      );
       assertSpyCall(spawnSpy, 0);
       assertFalse(spawnedPrompt.includes("\n\n\n"));
     } finally {
@@ -3940,19 +3414,15 @@ Deno.test(
       await Deno.mkdir(`${stateDir}/prompts/intake.md`);
       const ticket = makeTicket({ phase: "intake", status: "new" });
       await assertRejects(() =>
-        advancePhase(ticket, stateDir, {
-          spawn: () => Promise.resolve(),
-          isProcessAlive: () => false,
-          writeTicket: () => Promise.resolve(),
-          writePhaseOutput: () => Promise.resolve(),
-          appendLog: () => Promise.resolve(),
-          resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-          selfReview: () => Promise.resolve({ approved: false, reason: null }),
-          markPRsReady: () => Promise.resolve(),
-          readPhaseOutput: () => Promise.resolve("content"),
-          appendPrinciples: () => Promise.resolve(),
-          readPhaseExitCode: () => Promise.resolve(0),
-        })
+        advancePhase(
+          ticket,
+          stateDir,
+          makeTickDeps({
+            resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+            selfReview: () =>
+              Promise.resolve({ approved: false, reason: null }),
+          }),
+        )
       );
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -3962,7 +3432,7 @@ Deno.test(
 
 Deno.test("TickService: processLearnings called once per run", async () => {
   const processLearningsSpy = spy((): Promise<void> => Promise.resolve());
-  const deps = makeFakeServiceDeps({ processLearnings: processLearningsSpy });
+  const deps = makeTickServiceDeps({ processLearnings: processLearningsSpy });
   await new TickService(deps).run();
   assertSpyCalls(processLearningsSpy, 1);
 });
@@ -3971,7 +3441,7 @@ Deno.test(
   "TickService: processLearnings called before ticket processing",
   async () => {
     const sequence: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       processLearnings: spy((): Promise<void> => {
         sequence.push("processLearnings");
         return Promise.resolve();
@@ -3993,7 +3463,7 @@ Deno.test(
   "TickService: proceeds normally when processLearnings is omitted",
   async () => {
     const commitStateSpy = spy((): Promise<void> => Promise.resolve());
-    const deps = makeFakeServiceDeps({ commitState: commitStateSpy });
+    const deps = makeTickServiceDeps({ commitState: commitStateSpy });
     await new TickService(deps).run();
     assertSpyCalls(commitStateSpy, 1);
   },
@@ -4003,7 +3473,7 @@ Deno.test(
   "TickService: runCeremonies called after commitState",
   async () => {
     const sequence: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       commitState: spy(() => {
         sequence.push("commitState");
         return Promise.resolve();
@@ -4024,7 +3494,7 @@ Deno.test(
 Deno.test(
   "TickService: proceeds normally when runCeremonies is absent",
   async () => {
-    const deps = makeFakeServiceDeps();
+    const deps = makeTickServiceDeps();
     await new TickService(deps).run();
   },
 );
@@ -4044,7 +3514,7 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const writtenTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
       writeTicket: spy((t: TicketState) => {
@@ -4073,7 +3543,7 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const writtenTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
       writeTicket: spy((t: TicketState) => {
@@ -4102,7 +3572,7 @@ Deno.test(
       close: () => Promise.resolve(),
     };
     const writtenTickets: TicketState[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       providers: [provider],
       listTickets: () => Promise.resolve([]),
       writeTicket: spy((t: TicketState) => {
@@ -4119,7 +3589,7 @@ Deno.test(
   "TickService: scaffoldStatePrompts called before commitState",
   async () => {
     const sequence: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       scaffoldStatePrompts: spy(() => {
         sequence.push("scaffoldStatePrompts");
         return Promise.resolve();
@@ -4140,7 +3610,7 @@ Deno.test(
 Deno.test(
   "TickService: proceeds normally when scaffoldStatePrompts is absent",
   async () => {
-    const deps = makeFakeServiceDeps();
+    const deps = makeTickServiceDeps();
     await new TickService(deps).run();
   },
 );
@@ -4164,25 +3634,20 @@ Deno.test(
         status: "new",
       });
       let capturedPrompt = "";
-      await advancePhase(ticket, stateDir, {
-        spawn: (opts) => {
-          capturedPrompt = opts.prompt;
-          return Promise.resolve();
-        },
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({
-          model: "claude-sonnet-4-6",
-          thinking: "off",
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: (opts) => {
+            capturedPrompt = opts.prompt;
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
         }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      );
       assertEquals(capturedPrompt.includes("github intake supplement"), true);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -4201,25 +3666,21 @@ Deno.test(
         artifact: "notion",
       });
       const statuses: string[] = [];
-      await advancePhase(ticket, stateDir, {
-        spawn: () => Promise.resolve(),
-        isProcessAlive: () => false,
-        writeTicket: (_dir, t) => {
-          statuses.push(t.status);
-          return Promise.resolve();
-        },
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({
-          model: "claude-sonnet-4-6",
-          thinking: "off",
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          writeTicket: (_dir, t) => {
+            statuses.push(t.status);
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+          readPhaseOutput: () => Promise.resolve("output content"),
         }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve("output content"),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      );
       assertArrayIncludes(statuses, ["waiting", "needs-attention"]);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -4244,25 +3705,21 @@ Deno.test(
         worktrees: {},
       });
       let spawnedPhase: string | undefined;
-      await advancePhase(ticket, stateDir, {
-        spawn: (opts) => {
-          spawnedPhase = opts.phase;
-          return Promise.resolve();
-        },
-        isProcessAlive: () => false,
-        writeTicket: () => Promise.resolve(),
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({
-          model: "claude-sonnet-4-6",
-          thinking: "off",
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          spawn: (opts) => {
+            spawnedPhase = opts.phase;
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+          readPhaseOutput: () => Promise.resolve(null),
         }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: () => Promise.resolve(),
-        readPhaseOutput: () => Promise.resolve(null),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      );
       assertEquals(spawnedPhase, "implementation");
     } finally {
       await Deno.remove(stateDir, { recursive: true });
@@ -4288,26 +3745,23 @@ Deno.test(
       let writtenPhase: string | undefined;
       let writtenStatus: string | undefined;
       const markPRsReadySpy = spy(() => Promise.resolve());
-      await advancePhase(ticket, stateDir, {
-        spawn: () => Promise.resolve(),
-        isProcessAlive: () => false,
-        writeTicket: (_dir, t) => {
-          writtenPhase = t.phase;
-          writtenStatus = t.status;
-          return Promise.resolve();
-        },
-        writePhaseOutput: () => Promise.resolve(),
-        appendLog: () => Promise.resolve(),
-        resolveModelConfig: () => ({
-          model: "claude-sonnet-4-6",
-          thinking: "off",
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          writeTicket: (_dir, t) => {
+            writtenPhase = t.phase;
+            writtenStatus = t.status;
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+          markPRsReady: markPRsReadySpy,
+          readPhaseOutput: () => Promise.resolve(null),
         }),
-        selfReview: () => Promise.resolve({ approved: false, reason: null }),
-        markPRsReady: markPRsReadySpy,
-        readPhaseOutput: () => Promise.resolve(null),
-        appendPrinciples: () => Promise.resolve(),
-        readPhaseExitCode: () => Promise.resolve(0),
-      });
+      );
       assertEquals(writtenPhase, "merge");
       assertEquals(writtenStatus, "done");
       assertSpyCalls(markPRsReadySpy, 0);
@@ -4321,7 +3775,7 @@ Deno.test(
   "TickService: preflightGitHubCredentials called before processLearnings",
   async () => {
     const order: string[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       preflightGitHubCredentials: () => {
         order.push("preflight");
         return Promise.resolve();
@@ -4343,7 +3797,7 @@ Deno.test(
     const agentsMdPath = join(dir, "AGENTS.md");
     await Deno.writeTextFile(agentsMdPath, "word ".repeat(500));
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 10,
       listTickets: () => Promise.resolve(["gh-1"]),
@@ -4369,7 +3823,7 @@ Deno.test(
   "TickService: no agents-md-too-large event when agentsMdPaths is absent",
   async () => {
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       appendTickLog: (entry) => {
         captured.push(entry);
         return Promise.resolve();
@@ -4391,23 +3845,18 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        maxPromptTokens: 1,
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      maxPromptTokens: 1,
-    });
+    );
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,
     );
@@ -4427,7 +3876,7 @@ Deno.test(
     const agentsMdPath = join(dir, "AGENTS.md");
     await Deno.writeTextFile(agentsMdPath, "hi");
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 100000,
       listTickets: () => Promise.resolve(["gh-1"]),
@@ -4450,7 +3899,7 @@ Deno.test(
   "TickService: missing AGENTS.md is skipped silently and tick completes",
   async () => {
     const commitStateSpy = spy((): Promise<void> => Promise.resolve());
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       agentsMdPaths: ["/nonexistent/path/AGENTS.md"],
       agentsMdMaxTokens: 10,
       listTickets: () => Promise.resolve(["gh-1"]),
@@ -4472,7 +3921,7 @@ Deno.test(
     await Deno.writeTextFile(path1, "word ".repeat(500));
     await Deno.writeTextFile(path2, "word ".repeat(500));
     const captured: object[] = [];
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       agentsMdPaths: [path1, path2],
       agentsMdMaxTokens: 10,
       listTickets: () => Promise.resolve(["gh-1"]),
@@ -4499,23 +3948,18 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        maxPromptTokens: 1,
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      maxPromptTokens: 1,
-    });
+    );
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,
     );
@@ -4538,7 +3982,7 @@ Deno.test(
       captured.push(entry);
       return Promise.resolve();
     };
-    const deps = makeFakeServiceDeps({
+    const deps = makeTickServiceDeps({
       agentsMdPaths: [agentsMdPath],
       agentsMdMaxTokens: 10,
       listTickets: () => Promise.resolve(["gh-1"]),
@@ -4578,22 +4022,19 @@ Deno.test(
         return Promise.resolve();
       },
     );
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseExitCode: () => Promise.resolve(null),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
+    );
     assertEquals(spawnedPhase, "implementation");
     assertArrayIncludes(logEntries as Record<string, unknown>[], [
       { event: "phase-transition", from: "spec", to: "implementation" },
@@ -4614,22 +4055,18 @@ Deno.test(
       spawnedPhase = opts.phase;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        readPhaseExitCode: () => Promise.resolve(null),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-    });
+    );
     assertEquals(spawnedPhase, "plan");
   },
 );
@@ -4649,23 +4086,18 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        maxPromptTokens: 1,
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      maxPromptTokens: 1,
-    });
+    );
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,
     );
@@ -4684,23 +4116,18 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+        maxPromptTokens: 100_000,
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-      maxPromptTokens: 100_000,
-    });
+    );
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,
     );
@@ -4715,22 +4142,17 @@ Deno.test(
     const appendLogSpy = spy(
       (_dir: string, _id: string, _entry: object) => Promise.resolve(),
     );
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: appendLogSpy,
-      resolveModelConfig: () => ({
-        model: "claude-sonnet-4-6",
-        thinking: "off",
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
       }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    );
     const entries = appendLogSpy.calls.map(
       (c) => c.args[2] as Record<string, unknown>,
     );
@@ -4752,10 +4174,14 @@ Deno.test(
       capturedPrompt = p;
       return Promise.resolve(null);
     });
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      adjudicatePhaseModel: adjudicatePhaseModelSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        adjudicatePhaseModel: adjudicatePhaseModelSpy,
+      }),
+    );
     assertSpyCalls(adjudicatePhaseModelSpy, 1);
     assertExists(capturedPrompt);
   },
@@ -4773,18 +4199,22 @@ Deno.test(
     const adjudicatedModel = { model: "claude-opus-4-6", thinking: "max" };
     let resolveModelConfigTicket: TicketState | undefined;
     const writtenTickets: TicketState[] = [];
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      writeTicket: (_dir, t) => {
-        writtenTickets.push(t);
-        return Promise.resolve();
-      },
-      resolveModelConfig: (_phase, t) => {
-        resolveModelConfigTicket = t;
-        return { model: "claude-sonnet-4-6", thinking: "off" };
-      },
-      adjudicatePhaseModel: () => Promise.resolve(adjudicatedModel),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        writeTicket: (_dir, t) => {
+          writtenTickets.push(t);
+          return Promise.resolve();
+        },
+        resolveModelConfig: (_phase, t) => {
+          resolveModelConfigTicket = t;
+          return { model: "claude-sonnet-4-6", thinking: "off" };
+        },
+        adjudicatePhaseModel: () => Promise.resolve(adjudicatedModel),
+      }),
+    );
     assertEquals(
       resolveModelConfigTicket?.phases?.["implementation"],
       adjudicatedModel,
@@ -4807,14 +4237,18 @@ Deno.test(
       worktrees: { "jackjennings/lazyboy": { path: "/tmp/wt", branch: "b" } },
     });
     let resolveModelConfigTicket: TicketState | undefined;
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      resolveModelConfig: (_phase, t) => {
-        resolveModelConfigTicket = t;
-        return { model: "claude-sonnet-4-6", thinking: "off" };
-      },
-      adjudicatePhaseModel: () => Promise.resolve(null),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        resolveModelConfig: (_phase, t) => {
+          resolveModelConfigTicket = t;
+          return { model: "claude-sonnet-4-6", thinking: "off" };
+        },
+        adjudicatePhaseModel: () => Promise.resolve(null),
+      }),
+    );
     assertEquals(
       resolveModelConfigTicket?.phases?.["implementation"],
       undefined,
@@ -4831,10 +4265,14 @@ Deno.test(
       approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
     });
     const adjudicatePhaseModelSpy = spy(() => Promise.resolve(null));
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      adjudicatePhaseModel: adjudicatePhaseModelSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        adjudicatePhaseModel: adjudicatePhaseModelSpy,
+      }),
+    );
     assertSpyCalls(adjudicatePhaseModelSpy, 0);
   },
 );
@@ -5041,19 +4479,14 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCall(spawnSpy, 0);
     const revisionPrompt = await Deno.readTextFile(
       new URL("./phases/prompts/spec-revision.md", import.meta.url).pathname,
@@ -5075,19 +4508,14 @@ Deno.test(
       spawnedPrompt = opts.prompt;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      spawn: spawnSpy,
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertSpyCall(spawnSpy, 0);
     const authoringPrompt = await loadPromptFile("intake.md");
     assertStringIncludes(spawnedPrompt, authoringPrompt.trim());
@@ -5104,18 +4532,22 @@ Deno.test(
     });
     const written: TicketState[] = [];
     const logEntries: object[] = [];
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      writeTicket: (_dir, t) => {
-        written.push(t);
-        return Promise.resolve();
-      },
-      appendLog: (_dir, _id, entry) => {
-        logEntries.push(entry);
-        return Promise.resolve();
-      },
-      readPhaseOutput: () => Promise.resolve("valid output"),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        writeTicket: (_dir, t) => {
+          written.push(t);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          logEntries.push(entry);
+          return Promise.resolve();
+        },
+        readPhaseOutput: () => Promise.resolve("valid output"),
+      }),
+    );
     const last = written.at(-1)!;
     assertEquals(last.status, "needs-attention");
     assertArrayIncludes(logEntries as Record<string, unknown>[], [{
@@ -5143,11 +4575,15 @@ Deno.test(
       written.push(t);
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      writeTicket: writeTicketSpy,
-      markPRsReady: markPRsReadySpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        writeTicket: writeTicketSpy,
+        markPRsReady: markPRsReadySpy,
+      }),
+    );
     assertSpyCall(writeTicketSpy, 0);
     assertEquals(written[0].phase, "merge");
     assertEquals(written[0].status, "done");
@@ -5170,10 +4606,14 @@ Deno.test(
       spawnedPhase = opts.phase;
       return Promise.resolve();
     });
-    await advancePhase(ticket, "/state", {
-      ...makeFakeTickDeps(),
-      spawn: spawnSpy,
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        ...makeTickDeps(),
+        spawn: spawnSpy,
+      }),
+    );
     assertSpyCall(spawnSpy, 0);
     assertEquals(spawnedPhase, "implementation");
   },
@@ -5191,22 +4631,17 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "plan", status: "revising" });
     const spawnedPrompts: string[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnedPrompts.push(opts.prompt);
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnedPrompts.push(opts.prompt);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertFalse(spawnedPrompts[0].includes("comment-context"));
   },
 );
@@ -5231,22 +4666,17 @@ Deno.test(
       status: "revising",
     });
     const spawnedPrompts: string[] = [];
-    await advancePhase(ticket, stateDir, {
-      spawn: (opts) => {
-        spawnedPrompts.push(opts.prompt);
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: () => Promise.resolve(),
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      stateDir,
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnedPrompts.push(opts.prompt);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     assertStringIncludes(spawnedPrompts[0], "Newer comment");
     assertFalse(spawnedPrompts[0].includes("Older comment"));
     await Deno.remove(stateDir, { recursive: true });
@@ -5259,25 +4689,21 @@ Deno.test(
     const ticket = makeTicket({ phase: "intake", status: "new" });
     let writtenTicket: TicketState | undefined;
     let spawnOpts: SpawnOpts | undefined;
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnOpts = opts;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTicket = t;
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnOpts = opts;
+          return Promise.resolve();
+        },
+        writeTicket: (_dir, t) => {
+          writtenTicket = t;
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     const uuid = writtenTicket?.phaseSessionIds?.["intake"];
     assertExists(uuid);
     assert(/^[0-9a-f-]{36}$/.test(uuid));
@@ -5296,25 +4722,21 @@ Deno.test(
     });
     let writtenTicket: TicketState | undefined;
     let spawnOpts: SpawnOpts | undefined;
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnOpts = opts;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenTicket = t;
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve("content"),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(0),
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnOpts = opts;
+          return Promise.resolve();
+        },
+        writeTicket: (_dir, t) => {
+          writtenTicket = t;
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+      }),
+    );
     const uuid = writtenTicket?.phaseSessionIds?.["enrichment"];
     assertExists(uuid);
     assert(/^[0-9a-f-]{36}$/.test(uuid));
@@ -5334,30 +4756,29 @@ Deno.test(
     const writtenStatuses: string[] = [];
     const loggedEvents: string[] = [];
     let spawnOpts: SpawnOpts | undefined;
-    await advancePhase(ticket, "/state", {
-      spawn: (opts) => {
-        spawnOpts = opts;
-        return Promise.resolve();
-      },
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenStatuses.push(t.status);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: (_dir, _id, entry) => {
-        loggedEvents.push((entry as { event: string }).event);
-        return Promise.resolve();
-      },
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-      readRunPidBootStamp: () => Promise.resolve("old-boot"),
-      currentBootId: () => "new-boot",
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: (opts) => {
+          spawnOpts = opts;
+          return Promise.resolve();
+        },
+        writeTicket: (_dir, t) => {
+          writtenStatuses.push(t.status);
+          return Promise.resolve();
+        },
+        appendLog: (_dir, _id, entry) => {
+          loggedEvents.push((entry as { event: string }).event);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(null),
+        readRunPidBootStamp: () => Promise.resolve("old-boot"),
+        currentBootId: () => "new-boot",
+      }),
+    );
     assert(writtenStatuses.includes("running"));
     assert(loggedEvents.includes("phase-resumed"));
     assertExists(spawnOpts);
@@ -5375,24 +4796,21 @@ Deno.test(
       phaseSessionIds: { intake: "uuid-stored" },
     });
     const writtenStatuses: string[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenStatuses.push(t.status);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-      readRunPidBootStamp: () => Promise.resolve("same-boot"),
-      currentBootId: () => "same-boot",
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenStatuses.push(t.status);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(null),
+        readRunPidBootStamp: () => Promise.resolve("same-boot"),
+        currentBootId: () => "same-boot",
+      }),
+    );
     assert(writtenStatuses.includes("needs-attention"));
     assertFalse(writtenStatuses.includes("running"));
   },
@@ -5403,24 +4821,21 @@ Deno.test(
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenStatuses: string[] = [];
-    await advancePhase(ticket, "/state", {
-      spawn: () => Promise.resolve(),
-      isProcessAlive: () => false,
-      writeTicket: (_dir, t) => {
-        writtenStatuses.push(t.status);
-        return Promise.resolve();
-      },
-      writePhaseOutput: () => Promise.resolve(),
-      appendLog: () => Promise.resolve(),
-      resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-      selfReview: () => Promise.resolve({ approved: false, reason: null }),
-      markPRsReady: () => Promise.resolve(),
-      readPhaseOutput: () => Promise.resolve(null),
-      appendPrinciples: () => Promise.resolve(),
-      readPhaseExitCode: () => Promise.resolve(null),
-      readRunPidBootStamp: () => Promise.resolve("old-boot"),
-      currentBootId: () => "new-boot",
-    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: (_dir, t) => {
+          writtenStatuses.push(t.status);
+          return Promise.resolve();
+        },
+        resolveModelConfig: () => ({ model: "m", thinking: "off" }),
+        readPhaseOutput: () => Promise.resolve(null),
+        readPhaseExitCode: () => Promise.resolve(null),
+        readRunPidBootStamp: () => Promise.resolve("old-boot"),
+        currentBootId: () => "new-boot",
+      }),
+    );
     assert(writtenStatuses.includes("needs-attention"));
     assertFalse(writtenStatuses.includes("running"));
   },

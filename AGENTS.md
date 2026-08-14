@@ -75,13 +75,14 @@ Tickets carry `phase: TicketPhase` and `status: TicketStatus`.
 
 When a phase agent exits without creating its output file
 (`phase-output-invalid: missing`), `advancePhase` attempts one recovery before
-transitioning to `needs-attention`: it reads `log.ndjson` for the last
-`phase-end` entry whose `phase` matches the current phase, resumes that session
-with a corrective prompt, and writes `outputRetries: 1` on `TicketState`. On the
-next tick, if the file is now present, `outputRetries` is cleared to `undefined`
-when the ticket is written to `waiting`. If the file is still absent, the ticket
-transitions to `needs-attention` as normal. Recovery is skipped when
-`readTicketLog` is absent from `TickDeps` (unit-test degradation path).
+transitioning to `needs-attention`: it resumes the phase's recorded session
+(`ticket.phaseSessionIds[phase]`, populated from the sidecar by
+`TickDeps.readPhaseSessionId`) with a corrective prompt, and writes
+`outputRetries: 1` on `TicketState`. On the next tick, if the file is now
+present, `outputRetries` is cleared to `undefined` when the ticket is written to
+`waiting`. If the file is still absent, the ticket transitions to
+`needs-attention` as normal. Recovery is skipped when no session ID was recorded
+for the phase.
 
 ## Approval log
 
@@ -374,8 +375,22 @@ transitions themselves.
 
 Modules expose `*Deps` interfaces for testing (`TickDeps`, `TickServiceDeps`,
 `InstallDeps`, `PidFileLockDeps`). Keep the surface minimal — inject only what
-tests substitute. `TickServiceDeps` is the full surface of `TickService`; tests
-satisfy it with plain object literals, touching no filesystem, git, or network.
+tests substitute. `TickServiceDeps` is the full surface of `TickService`.
+
+Members are **required by default**. Mark one optional only when `undefined`
+carries meaning of its own — an unset config knob with a documented fallback
+(`TickDeps.maxPromptTokens` → `DEFAULT_MAX_PROMPT_TOKENS`,
+`TickServiceDeps.agentsMdMaxTokens` → feature off). An optional _function_ means
+a `composeTickDeps` omission silently disables a whole behavior with no error
+and no log entry, so a new injected function is required, called
+unconditionally, and wired in `composeTickDeps` — do not reintroduce
+`deps.thing?.()` as a "test degradation path".
+
+Tests build both interfaces with `makeTickDeps` / `makeTickServiceDeps`
+(`src/test-support.ts`), passing only the members under test as overrides; the
+factories supply inert defaults and touch no filesystem, git, or network. Adding
+a required member means adding one default there, not editing call sites. Do not
+hand-roll a deps literal in a test.
 
 Production helpers that satisfy a `*Deps` interface live in the same module as
 the interface and are named tool-agnostically (e.g. `isPackageInstalled` in
@@ -441,13 +456,13 @@ override every phase in `[phases.defaults]`, including `"conflict-resolution"`.
 ## Per-phase model configuration
 
 Model and thinking are resolved independently, in order, by
-`resolvePhaseModel(config, phase, ticket)` (`src/tick.ts`; wrapped by
+`resolvePhaseModel(config, phase, ticket)` (`src/phases/model.ts`; wrapped by
 `TickDeps.resolveModelConfig`):
 
 1. `ticket.phases?.[phase]?.{model,thinking}` frontmatter (set by the plan agent
    for `implementation`; available for any phase).
 2. `config.phases?.defaults?.[phase]?.{model,thinking}`.
-3. `PHASE_MODEL_DEFAULTS` (exported from `src/tick.ts`).
+3. `PHASE_MODEL_DEFAULTS` (exported from `src/phases/model.ts`).
 
 ```toml
 [phases.defaults.intake]
@@ -496,8 +511,7 @@ example).
 To add one:
 
 - Give it a distinct `pidFile` name (not `run.pid`).
-- Add an optional method to `TickDeps`; guard the call in `advancePhase` with
-  `?.`.
+- Add a required method to `TickDeps` and a default to `makeTickDeps`.
 - Wire it in `composeTickDeps`.
 - Never write `ticket.status` or `ticket.phase` from the subprocess.
 
@@ -817,10 +831,10 @@ environment.
 and a failure there cannot affect the fix path. The pipeline never creates
 GitHub issues.
 
-**Phase key:** `"ci-fix"` in `PHASE_MODEL_DEFAULTS` (`src/tick.ts`). Default:
-`{ model: "claude-sonnet-4-6", thinking: "high" }`. Override via `config.toml`
-`[phases.defaults.ci-fix]` or `ticket.phases["ci-fix"]`. Bedrock users must
-override this phase the same way as `"conflict-resolution"`.
+**Phase key:** `"ci-fix"` in `PHASE_MODEL_DEFAULTS` (`src/phases/model.ts`).
+Default: `{ model: "claude-sonnet-4-6", thinking: "high" }`. Override via
+`config.toml` `[phases.defaults.ci-fix]` or `ticket.phases["ci-fix"]`. Bedrock
+users must override this phase the same way as `"conflict-resolution"`.
 
 **Agent prompt:** lives inline in `compose.ts`, consistent with
 `conflict-resolution`. It tells the agent to fetch the log with

@@ -21,7 +21,6 @@ import type { InstallResult } from "./packages.ts";
 import {
   type ApprovalEntry,
   ARTIFACT_DESCRIPTORS,
-  type Config,
   isApproved,
   type TicketState,
   type WorktreeInfo,
@@ -29,33 +28,7 @@ import {
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
 import { mkdir, readDir, readTextFile, writeTextFile } from "./filesystem.ts";
 
-export const PHASE_MODEL_DEFAULTS: Record<
-  ActivePhase | "conflict-resolution" | "ci-fix",
-  { model: string; thinking: string }
-> = {
-  intake: { model: "claude-haiku-4-5", thinking: "off" },
-  enrichment: { model: "claude-sonnet-4-6", thinking: "off" },
-  spec: { model: "claude-sonnet-4-6", thinking: "high" },
-  plan: { model: "claude-sonnet-4-6", thinking: "high" },
-  implementation: { model: "claude-sonnet-4-6", thinking: "high" },
-  "conflict-resolution": { model: "claude-opus-4-7", thinking: "high" },
-  "ci-fix": { model: "claude-sonnet-4-6", thinking: "high" },
-};
-
-export function resolvePhaseModel(
-  config: Config,
-  phase: ActivePhase | "conflict-resolution" | "ci-fix",
-  ticket: TicketState,
-): { model: string; thinking: string } {
-  const ticketOverride = ticket.phases?.[phase];
-  const configDefault = config.phases?.defaults?.[phase];
-  const hardcoded = PHASE_MODEL_DEFAULTS[phase];
-  return {
-    model: ticketOverride?.model ?? configDefault?.model ?? hardcoded.model,
-    thinking: ticketOverride?.thinking ?? configDefault?.thinking ??
-      hardcoded.thinking,
-  };
-}
+const DEFAULT_MAX_PROMPT_TOKENS = 5_000;
 
 export interface TickDeps {
   spawn: (opts: {
@@ -103,23 +76,23 @@ export interface TickDeps {
     ticketDir: string,
     phase: string,
   ) => Promise<number | null>;
-  readPhaseSessionId?: (
+  readPhaseSessionId: (
     ticketDir: string,
     phase: string,
   ) => Promise<string | null>;
   maxPromptTokens?: number;
-  buildRepoCorpusText?: () => Promise<string>;
-  spawnOutlierAnalysis?: (
+  buildRepoCorpusText: () => Promise<string>;
+  spawnOutlierAnalysis: (
     ticketId: string,
     ticketDir: string,
     lazboyWorktreePath: string,
     phase: "implementation" | "plan",
   ) => Promise<void>;
-  adjudicatePhaseModel?: (
+  adjudicatePhaseModel: (
     prompt: string,
   ) => Promise<{ model: string; thinking: string } | null>;
-  readRunPidBootStamp?: (ticketDir: string) => Promise<string | null>;
-  currentBootId?: () => string;
+  readRunPidBootStamp: (ticketDir: string) => Promise<string | null>;
+  currentBootId: () => string;
 }
 
 export interface TickServiceDeps {
@@ -138,22 +111,22 @@ export interface TickServiceDeps {
   writeTicket(ticket: TicketState): Promise<void>;
   commitState(): Promise<void>;
   lock: Lock;
-  exit?(code: number): void;
-  refreshAnthropicPricing?(): Promise<void>;
-  processLearnings?(): Promise<void>;
-  notify?(ticket: TicketState): Promise<void>;
-  appendTickLog?(entry: object): Promise<void>;
-  agentsMdPaths?: string[];
+  exit(code: number): void;
+  refreshAnthropicPricing(): Promise<void>;
+  processLearnings(): Promise<void>;
+  notify(ticket: TicketState): Promise<void>;
+  appendTickLog(entry: object): Promise<void>;
+  agentsMdPaths: string[];
   agentsMdMaxTokens?: number;
-  runCeremonies?(): Promise<void>;
-  scaffoldStatePrompts?(): Promise<void>;
-  generateShortTitle?(
+  runCeremonies(): Promise<void>;
+  scaffoldStatePrompts(): Promise<void>;
+  generateShortTitle(
     title: string,
     context?: string,
   ): Promise<string | null>;
-  notifyTickFailure?(error: string): Promise<void>;
-  preflightGitHubCredentials?(): Promise<void>;
-  writeTickProgress?: (label: string | null) => Promise<void>;
+  notifyTickFailure(error: string): Promise<void>;
+  preflightGitHubCredentials(): Promise<void>;
+  writeTickProgress: (label: string | null) => Promise<void>;
 }
 
 export function selectCandidates(
@@ -239,7 +212,7 @@ export async function advancePhase(
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");
-    const threshold = deps.maxPromptTokens ?? 5_000;
+    const threshold = deps.maxPromptTokens ?? DEFAULT_MAX_PROMPT_TOKENS;
     const tokens = estimateTokenCount(prompt);
     if (tokens > threshold) {
       await deps.appendLog(stateDir, ticket.id, {
@@ -292,7 +265,7 @@ export async function advancePhase(
       "intake",
       ticket.artifact,
     );
-    const corpusText = (await deps.buildRepoCorpusText?.()) ?? "";
+    const corpusText = await deps.buildRepoCorpusText();
     const intakeStatePrompt = await loadStatePrompt(
       "intake",
       stateDir,
@@ -308,7 +281,7 @@ export async function advancePhase(
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");
-    const threshold = deps.maxPromptTokens ?? 5_000;
+    const threshold = deps.maxPromptTokens ?? DEFAULT_MAX_PROMPT_TOKENS;
     const tokens = estimateTokenCount(prompt);
     if (tokens > threshold) {
       await deps.appendLog(stateDir, ticket.id, {
@@ -350,13 +323,14 @@ export async function advancePhase(
 
   if (ticket.status === "running") {
     if (!deps.isProcessAlive(ticket.id)) {
-      const storedBootId = deps.readRunPidBootStamp
-        ? await deps.readRunPidBootStamp(join(stateDir, ticket.id))
-        : null;
+      const storedBootId = await deps.readRunPidBootStamp(
+        join(stateDir, ticket.id),
+      );
       await deleteRunPid(join(stateDir, ticket.id));
-      const sessionIdFromSidecar = deps.readPhaseSessionId
-        ? await deps.readPhaseSessionId(join(stateDir, ticket.id), ticket.phase)
-        : null;
+      const sessionIdFromSidecar = await deps.readPhaseSessionId(
+        join(stateDir, ticket.id),
+        ticket.phase,
+      );
       const phaseSessionIds = sessionIdFromSidecar !== null
         ? { ...ticket.phaseSessionIds, [ticket.phase]: sessionIdFromSidecar }
         : ticket.phaseSessionIds;
@@ -380,10 +354,9 @@ export async function advancePhase(
         ticket.phase,
       );
       if (exitCode === null) {
-        const currentId = deps.currentBootId?.();
+        const currentId = deps.currentBootId();
         if (
           storedBootId !== null &&
-          currentId !== undefined &&
           storedBootId !== currentId &&
           waitingTicket.phaseSessionIds?.[ticket.phase]
         ) {
@@ -615,7 +588,7 @@ export async function advancePhase(
           );
         }
       }
-      if (ticket.phase === "implementation" && deps.spawnOutlierAnalysis) {
+      if (ticket.phase === "implementation") {
         const wt = ticket.worktrees["jackjennings/lazyboy"];
         if (wt) {
           deps.spawnOutlierAnalysis(
@@ -632,7 +605,7 @@ export async function advancePhase(
           });
         }
       }
-      if (ticket.phase === "plan" && deps.spawnOutlierAnalysis) {
+      if (ticket.phase === "plan") {
         const wt = ticket.worktrees["jackjennings/lazyboy"];
         if (wt) {
           deps.spawnOutlierAnalysis(
@@ -736,7 +709,7 @@ export async function advancePhase(
     const prompt = [basePrompt, supplement, artifactSupplement, statePrompt]
       .filter((part) => part.length > 0)
       .join("\n\n");
-    const threshold = deps.maxPromptTokens ?? 5_000;
+    const threshold = deps.maxPromptTokens ?? DEFAULT_MAX_PROMPT_TOKENS;
     const tokens = estimateTokenCount(prompt);
     if (tokens > threshold) {
       await deps.appendLog(stateDir, ticket.id, {
@@ -747,7 +720,7 @@ export async function advancePhase(
       });
     }
     let resolvedTicket = ticket;
-    if (next === "implementation" && deps.adjudicatePhaseModel) {
+    if (next === "implementation") {
       try {
         const override = await deps.adjudicatePhaseModel(prompt);
         if (override !== null) {
@@ -824,23 +797,23 @@ export class TickService {
   async run(): Promise<void> {
     const deps = this.#deps;
     try {
-      await deps.refreshAnthropicPricing?.();
+      await deps.refreshAnthropicPricing();
       await deps.installPackages(deps.packageSources);
       await deps.lock.withLock(async () => {
-        await (deps.appendTickLog ?? appendTickLog)({
+        await deps.appendTickLog({
           event: "tick-start",
         });
         try {
           await this.#runWorkflow(deps);
         } catch (e) {
-          await (deps.appendTickLog ?? appendTickLog)({
+          await deps.appendTickLog({
             ts: Temporal.Now.instant().toString(),
             event: "tick-failed",
             error: e instanceof Error ? e.message : String(e),
           });
           throw e;
         }
-        await (deps.appendTickLog ?? appendTickLog)({
+        await deps.appendTickLog({
           event: "tick-end",
         });
       });
@@ -848,25 +821,24 @@ export class TickService {
       const errorStr = e instanceof Error ? e.message : String(e);
       console.error(e);
       try {
-        await deps.notifyTickFailure?.(errorStr);
+        await deps.notifyTickFailure(errorStr);
       } catch {
         // notification failure must not suppress original error or change exit code
       }
-      (deps.exit ?? Deno.exit)(1);
+      deps.exit(1);
     }
   }
 
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
-    await deps.preflightGitHubCredentials?.();
-    await deps.processLearnings?.();
+    await deps.preflightGitHubCredentials();
+    await deps.processLearnings();
     const existingIds = new Set(await deps.listTickets());
     for (const provider of deps.providers) {
       const newItems = await provider.fetchNew(existingIds);
       for (const item of newItems) {
-        const shortTitle = deps.generateShortTitle
-          ? (await deps.generateShortTitle(item.title, item.description)) ??
-            undefined
-          : undefined;
+        const shortTitle =
+          (await deps.generateShortTitle(item.title, item.description)) ??
+            undefined;
         await deps.writeTicket({
           id: item.id,
           provider: item.provider,
@@ -911,7 +883,7 @@ export class TickService {
         try {
           if (action.applies(processedTickets[i])) {
             if (action.label) {
-              await deps.writeTickProgress?.(
+              await deps.writeTickProgress(
                 `${action.label} [${ticketIndex}/${totalNonWontDo}]`,
               );
             }
@@ -937,7 +909,7 @@ export class TickService {
         }
       }
     }
-    await deps.writeTickProgress?.(null);
+    await deps.writeTickProgress(null);
 
     for (let i = 0; i < processedTickets.length; i++) {
       const ticket = processedTickets[i];
@@ -951,7 +923,7 @@ export class TickService {
         ) {
           continue;
         }
-        await deps.notify?.(freshTicket);
+        await deps.notify(freshTicket);
         const updated = { ...freshTicket, notifiedNeedsAttention: true };
         await deps.writeTicket(updated);
         processedTickets[i] = updated;
@@ -992,12 +964,8 @@ export class TickService {
       if (willSpawn && running >= deps.concurrency) continue;
       if (willSpawn) {
         running++;
-        if (
-          deps.agentsMdPaths &&
-          deps.agentsMdPaths.length > 0 &&
-          deps.agentsMdMaxTokens &&
-          deps.agentsMdMaxTokens > 0
-        ) {
+        const agentsMdMaxTokens = deps.agentsMdMaxTokens ?? 0;
+        if (deps.agentsMdPaths.length > 0 && agentsMdMaxTokens > 0) {
           for (const agentsMdPath of deps.agentsMdPaths) {
             let content: string;
             try {
@@ -1006,12 +974,12 @@ export class TickService {
               continue;
             }
             const tokens = estimateTokenCount(content);
-            if (tokens > deps.agentsMdMaxTokens) {
-              await (deps.appendTickLog ?? appendTickLog)({
+            if (tokens > agentsMdMaxTokens) {
+              await deps.appendTickLog({
                 event: "agents-md-too-large",
                 path: agentsMdPath,
                 tokens,
-                maxTokens: deps.agentsMdMaxTokens,
+                maxTokens: agentsMdMaxTokens,
               });
             }
           }
@@ -1021,9 +989,9 @@ export class TickService {
     }
 
     await deps.writeLastWorked(selectedIds);
-    await deps.scaffoldStatePrompts?.();
+    await deps.scaffoldStatePrompts();
     await deps.commitState();
-    await deps.runCeremonies?.();
+    await deps.runCeremonies();
   }
 }
 

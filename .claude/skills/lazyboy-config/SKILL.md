@@ -65,8 +65,8 @@ Only `[github].repos` and `[state].dir` are required; everything else defaults.
 Phase keys: `intake`, `enrichment`, `spec`, `plan`, `implementation`,
 `"conflict-resolution"`, `"ci-fix"` (the hyphenated two need TOML quoting).
 Resolution order is ticket frontmatter → `[phases.defaults]` →
-`PHASE_MODEL_DEFAULTS` (`src/tick.ts`). `thinking` accepts `off`, `minimal`,
-`low`, `medium`, `high`, `xhigh`, `max`.
+`PHASE_MODEL_DEFAULTS` (`src/phases/model.ts`). `thinking` accepts `off`,
+`minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
 
 ```toml
 [phases.defaults.intake]

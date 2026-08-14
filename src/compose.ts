@@ -66,11 +66,8 @@ import {
 } from "./packages.ts";
 import { createMigrationRunner } from "./migrations/runner.ts";
 import type { Migration, StoreMigration } from "./migrations/types.ts";
-import {
-  appendTickLog,
-  resolvePhaseModel,
-  type TickServiceDeps,
-} from "./tick.ts";
+import { appendTickLog, type TickServiceDeps } from "./tick.ts";
+import { resolvePhaseModel } from "./phases/model.ts";
 import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import {
   captureCommandRunner,
@@ -819,6 +816,8 @@ export function composeTickDeps(
   return {
     stateDir,
     concurrency: config.tick.concurrency,
+    exit: (code) => Deno.exit(code),
+    appendTickLog,
     packageSources: config.pi.packages,
     installPackages: (sources) =>
       installPackages(sources, {
@@ -1217,10 +1216,8 @@ export function composeTickDeps(
     },
     agentsMdPaths: config.tick.agentsMdMaxTokens > 0
       ? config.codebase.roots.map(expandHome).map((r) => join(r, "AGENTS.md"))
-      : undefined,
-    agentsMdMaxTokens: config.tick.agentsMdMaxTokens > 0
-      ? config.tick.agentsMdMaxTokens
-      : undefined,
+      : [],
+    agentsMdMaxTokens: config.tick.agentsMdMaxTokens,
     writeTickProgress: async (label: string | null) => {
       const path = join(lazyboyDir(), "tick-progress.json");
       if (label === null) {

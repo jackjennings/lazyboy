@@ -89,6 +89,16 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "createWorktreeAction: does not apply when artifact requires no worktrees",
+  () => {
+    assertEquals(
+      makeAction().applies(makeTicket({ ...BASE, artifact: "work" })),
+      false,
+    );
+  },
+);
+
 // ── run: GitHub ticket ───────────────────────────────────────────────────────
 
 Deno.test(

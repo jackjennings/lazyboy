@@ -1443,3 +1443,37 @@ Intent text.
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test(
+  "writeTicket/readTicket: workItems round-trips through YAML frontmatter",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const items = [
+        { url: "https://github.com/x/y/issues/10", title: "New issue" },
+      ];
+      const ticket = makeTicket({ artifact: "work", workItems: items });
+      await writeTicket(dir, ticket);
+      const read = await readTicket(dir, ticket.id);
+      assertEquals(read.workItems, items);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "writeTicket/readTicket: absent workItems reads as undefined",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await writeTicket(dir, makeTicket(BASE));
+      const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
+      assertFalse(raw.includes("workItems:"));
+      const read = await readTicket(dir, "gh-1");
+      assertEquals(read.workItems, undefined);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);

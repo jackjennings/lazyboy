@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
-import { isApproved } from "../state/types.ts";
+import { ARTIFACT_DESCRIPTORS, isApproved } from "../state/types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
 import {
   extractGitHubSlug,
@@ -36,7 +36,8 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         ticket.phase === "intake" &&
         ticket.status === "waiting" &&
         isApproved(ticket) &&
-        Object.keys(ticket.worktrees).length === 0
+        Object.keys(ticket.worktrees).length === 0 &&
+        ARTIFACT_DESCRIPTORS[ticket.artifact].requiresWorktrees
       );
     },
     async run(

@@ -176,6 +176,34 @@ export async function findAllPhaseOutputs(
   return results;
 }
 
+export async function findLatestSelfReview(
+  ticketDir: string,
+  phaseName: string,
+  afterTimestamp: string,
+): Promise<{ filename: string; fullText: string } | null> {
+  const pattern = new RegExp(
+    `^\\d{8}T\\d{6}-${phaseName}-self-review\\.md$`,
+  );
+  const matches: string[] = [];
+  try {
+    for await (const entry of readDir(ticketDir)) {
+      if (entry.isFile && pattern.test(entry.name)) {
+        matches.push(entry.name);
+      }
+    }
+  } catch {
+    /* dir missing */
+  }
+  if (matches.length === 0) return null;
+  matches.sort();
+  const newest = matches[matches.length - 1];
+  if (newest.slice(0, 15) <= afterTimestamp) return null;
+  const fullText = await readTextFile(join(ticketDir, newest));
+  const firstLine = fullText.split("\n")[0].trim().toUpperCase();
+  if (!firstLine.startsWith("REJECT")) return null;
+  return { filename: newest, fullText };
+}
+
 export function renderTabBar(
   tabs: Array<{ phaseName: string }>,
   activeIndex: number,
@@ -466,6 +494,18 @@ export class ErrorOverlay implements Component, Focusable {
   }
 }
 
+function rejectionBannerLines(
+  phaseName: string,
+  fullText: string,
+  width: number,
+): string[] {
+  const header = bold(red(`Self-review rejected: ${phaseName}`));
+  const bodyLines = fullText
+    .split("\n")
+    .flatMap((line) => (line ? wrapTextWithAnsi(red(line), width) : [""]));
+  return [header, ...bodyLines];
+}
+
 export async function review(
   id: string,
   {
@@ -503,6 +543,18 @@ export async function review(
     if (!text.trim()) {
       console.error("review input is empty");
       Deno.exit(1);
+    }
+    const selfReviewRejection = await findLatestSelfReview(
+      ticketDir,
+      found.phaseName,
+      found.filename.slice(0, 15),
+    );
+    if (selfReviewRejection !== null) {
+      console.error(
+        `Self-review rejected [${found.phaseName}]: ${
+          selfReviewRejection.fullText.split("\n")[0].trim()
+        }`,
+      );
     }
     const now = Temporal.Now.zonedDateTimeISO("UTC");
     const timestamp = formatTimestamp(now);
@@ -553,6 +605,33 @@ export async function review(
         headings: extractHeadings(rawContent),
         totalSourceLines: rawContent.split("\n").length,
       });
+    }
+  }
+
+  const tabRejections = await Promise.all(
+    tabs.map((tab) =>
+      findLatestSelfReview(
+        ticketDir,
+        tab.phaseName,
+        tab.filename.slice(0, 15),
+      )
+    ),
+  );
+
+  for (let i = 0; i < tabs.length; i++) {
+    const selfReview = tabRejections[i];
+    if (selfReview !== null) {
+      const originalGetLines = tabContents[i].getLines;
+      const phaseName = tabs[i].phaseName;
+      const fullText = selfReview.fullText;
+      tabContents[i] = {
+        ...tabContents[i],
+        getLines: (width) => [
+          ...rejectionBannerLines(phaseName, fullText, width),
+          "",
+          ...originalGetLines(width),
+        ],
+      };
     }
   }
 

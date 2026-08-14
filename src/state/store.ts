@@ -133,6 +133,10 @@ export async function readTicket(
     lastSeenCommentTimestamp: normalizeTimestamp(
       data.lastSeenCommentTimestamp,
     ),
+    providerDone: data.providerDone as boolean | undefined,
+    ciHandledRunIds: data.ciHandledRunIds as string[] | undefined,
+    phaseSessionIds: data.phaseSessionIds as TicketState["phaseSessionIds"],
+    notifiedNeedsAttention: data.notifiedNeedsAttention as boolean | undefined,
   };
 
   if (needsMigration) {
@@ -176,6 +180,25 @@ export async function writeTicket(
   }
   if (ticket.lastSeenCommentTimestamp !== undefined) {
     frontmatter.lastSeenCommentTimestamp = ticket.lastSeenCommentTimestamp;
+  }
+  if (ticket.providerDone !== undefined) {
+    frontmatter.providerDone = ticket.providerDone;
+  }
+  if (ticket.ciHandledRunIds !== undefined) {
+    frontmatter.ciHandledRunIds = ticket.ciHandledRunIds;
+  }
+  if (ticket.phaseSessionIds !== undefined) {
+    const definedSessionIds = Object.fromEntries(
+      Object.entries(ticket.phaseSessionIds).filter(
+        ([, sessionId]) => sessionId !== undefined,
+      ),
+    );
+    if (Object.keys(definedSessionIds).length > 0) {
+      frontmatter.phaseSessionIds = definedSessionIds;
+    }
+  }
+  if (ticket.notifiedNeedsAttention !== undefined) {
+    frontmatter.notifiedNeedsAttention = ticket.notifiedNeedsAttention;
   }
   const raw = matter.stringify(ticket.body, frontmatter);
   await writeTextFile(join(dir, "meta.md"), raw);

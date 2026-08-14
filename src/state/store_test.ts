@@ -245,6 +245,95 @@ Deno.test("writeTicket: round-trips lastSeenCommentTimestamp through meta.md", a
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("writeTicket: round-trips providerDone through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "jira/NW-1",
+    provider: "jira",
+    phase: "merge",
+    status: "done",
+    providerDone: true,
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "jira/NW-1");
+  assert(read.providerDone);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: omits providerDone from frontmatter when not set", async () => {
+  const dir = await Deno.makeTempDir();
+  await writeTicket(dir, makeTicket({ id: "gh-1" }));
+  const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
+  assertFalse(raw.includes("providerDone"));
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: round-trips ciHandledRunIds through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-2",
+    ciHandledRunIds: ["123-1", "123-2"],
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-2");
+  assertEquals(read.ciHandledRunIds, ["123-1", "123-2"]);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: round-trips phaseSessionIds through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-3",
+    phaseSessionIds: { implementation: "d5a1440e-14f5-498d-a29c-cf777bc969d5" },
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-3");
+  assertEquals(
+    read.phaseSessionIds?.implementation,
+    "d5a1440e-14f5-498d-a29c-cf777bc969d5",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: drops phaseSessionIds entries cleared to undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-5",
+    phaseSessionIds: { spec: "abc", implementation: undefined },
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-5");
+  assertEquals(read.phaseSessionIds?.spec, "abc");
+  assertFalse("implementation" in (read.phaseSessionIds ?? {}));
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: omits phaseSessionIds when every entry is undefined", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-6",
+    phaseSessionIds: { implementation: undefined },
+  });
+  await writeTicket(dir, ticket);
+  const raw = await Deno.readTextFile(join(dir, "gh-6", "meta.md"));
+  assertFalse(raw.includes("phaseSessionIds"));
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("writeTicket: round-trips notifiedNeedsAttention through meta.md", async () => {
+  const dir = await Deno.makeTempDir();
+  const ticket: TicketState = makeTicket({
+    id: "gh-4",
+    phase: "spec",
+    status: "needs-attention",
+    notifiedNeedsAttention: true,
+  });
+  await writeTicket(dir, ticket);
+  const read = await readTicket(dir, "gh-4");
+  assert(read.notifiedNeedsAttention);
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("readTicket: normalizes an unquoted lastSeenCommentTimestamp to an ISO string", async () => {
   const dir = await Deno.makeTempDir();
   const ticketDir = join(dir, "gh-8");

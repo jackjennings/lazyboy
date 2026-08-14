@@ -60,6 +60,12 @@ pass → advance pass → commit.
   default). Each ticket is a directory in it; `meta.md` holds YAML frontmatter
   (via `gray-matter`) and phase output files (`intake.md`, …) live alongside.
   `commitState` runs `git add -A && git commit` there after each tick.
+- `writeTicket` (`src/state/store.ts`) serializes an explicit allowlist of
+  frontmatter keys, and `readTicket` parses one. A new `TicketState` field that
+  must survive across ticks has to be added to **both** — adding it to the type
+  alone compiles fine and then silently drops on every write. This produced a
+  live bug: `providerDone` was never persisted, so `jiraDoneAction` re-fired
+  every tick and transitioned already-Done Jira issues to Done again.
 
 ## Phase state machine
 

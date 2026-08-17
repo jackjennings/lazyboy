@@ -17,6 +17,7 @@ import {
   extractGitHubSlug,
   findLocalRepo,
   formatRepoCorpus,
+  initLocalRepo,
   listRepoCorpus,
   parseIntakeScope,
   parseRemoteSlug,
@@ -364,19 +365,59 @@ Deno.test("parseIntakeScope: returns [] for empty scope list", () => {
 Deno.test("parseIntakeScope: extracts single local path entry", () => {
   const content =
     "## Proposed Scope\n\n```yaml\nscope:\n  - /code/myorg/repo\n```\n\n## Reasoning\n\nText.\n";
-  assertEquals(parseIntakeScope(content), ["/code/myorg/repo"]);
+  assertEquals(parseIntakeScope(content), [
+    { entry: "/code/myorg/repo", isNew: false },
+  ]);
 });
 
 Deno.test("parseIntakeScope: extracts multiple entries", () => {
   const content =
     "## Proposed Scope\n\n```yaml\nscope:\n  - ~/code/org/a\n  - org/repo\n```\n\n## Reasoning\n\nText.\n";
-  assertEquals(parseIntakeScope(content), ["~/code/org/a", "org/repo"]);
+  assertEquals(parseIntakeScope(content), [
+    { entry: "~/code/org/a", isNew: false },
+    { entry: "org/repo", isNew: false },
+  ]);
 });
 
 Deno.test("parseIntakeScope: ignores content after the section", () => {
   const content =
     "## Proposed Scope\n\n```yaml\nscope:\n  - /code/repo\n```\n\n## Reasoning\n\nAnother section with ```yaml\nscope:\n  - /other\n````.\n";
-  assertEquals(parseIntakeScope(content), ["/code/repo"]);
+  assertEquals(parseIntakeScope(content), [
+    { entry: "/code/repo", isNew: false },
+  ]);
+});
+
+Deno.test("parseIntakeScope: detects (new) suffix on GitHub slug", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - org/new-repo (new)\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), [
+    { entry: "org/new-repo", isNew: true },
+  ]);
+});
+
+Deno.test("parseIntakeScope: handles (new) with extra whitespace", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - org/new-repo  (new)\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), [
+    { entry: "org/new-repo", isNew: true },
+  ]);
+});
+
+Deno.test("parseIntakeScope: (new) on local path is detected with isNew: true", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - /usr/local/myproject (new)\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), [
+    { entry: "/usr/local/myproject", isNew: true },
+  ]);
+});
+
+Deno.test("parseIntakeScope: mixes (new) and plain entries", () => {
+  const content =
+    "## Proposed Scope\n\n```yaml\nscope:\n  - org/existing\n  - org/new-repo (new)\n```\n\n## Reasoning\n\nText.\n";
+  assertEquals(parseIntakeScope(content), [
+    { entry: "org/existing", isNew: false },
+    { entry: "org/new-repo", isNew: true },
+  ]);
 });
 
 // ── resolveGitHubSlug ────────────────────────────────────────────────────────
@@ -566,6 +607,110 @@ Deno.test("removeWorktree: throws when worktree path does not exist", async () =
     () => removeWorktree({ path: "/nonexistent/path", branch: "any" }),
     Error,
   );
+});
+
+Deno.test(
+  "createWorktree: falls back to main when origin/main does not exist",
+  async () => {
+    const repoDir = await Deno.makeTempDir();
+    const ticketId = `gh-noremote-${Date.now()}`;
+    let info: WorktreeInfo | undefined;
+
+    try {
+      await new Deno.Command("git", {
+        args: ["init", "-b", "main"],
+        cwd: repoDir,
+      })
+        .output();
+      await new Deno.Command("git", {
+        args: ["config", "user.email", "test@test.com"],
+        cwd: repoDir,
+      }).output();
+      await new Deno.Command("git", {
+        args: ["config", "user.name", "Test"],
+        cwd: repoDir,
+      }).output();
+      await new Deno.Command("git", {
+        args: ["config", "commit.gpgsign", "false"],
+        cwd: repoDir,
+      }).output();
+      await new Deno.Command("git", {
+        args: [
+          "-c",
+          "user.name=lazyboy",
+          "-c",
+          "user.email=lazyboy@localhost",
+          "-c",
+          "commit.gpgsign=false",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "init",
+        ],
+        cwd: repoDir,
+      }).output();
+
+      info = await createWorktree(repoDir, ticketId, "jackjennings/lazyboy");
+
+      const stat = await Deno.stat(info.path);
+      assert(stat.isDirectory);
+      assertEquals(info.branch, ticketId);
+    } finally {
+      if (info) {
+        await new Deno.Command("git", {
+          args: ["worktree", "remove", "--force", info.path],
+          cwd: repoDir,
+        }).output();
+      }
+      await Deno.remove(
+        join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", ticketId),
+        { recursive: true },
+      );
+      await Deno.remove(repoDir, { recursive: true });
+    }
+  },
+);
+
+// ── initLocalRepo ─────────────────────────────────────────────────────────────
+
+Deno.test("initLocalRepo: creates repo with main branch and empty commit", async () => {
+  const home = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME")!;
+  Deno.env.set("HOME", home);
+  try {
+    const repoDir = await initLocalRepo("myorg/my-new-repo");
+    assertEquals(
+      repoDir,
+      join(home, ".lazyboy", "repositories", "myorg", "my-new-repo"),
+    );
+    const stat = await Deno.stat(repoDir);
+    assert(stat.isDirectory);
+    const { code, stdout } = await runGit(
+      ["rev-parse", "--abbrev-ref", "HEAD"],
+      repoDir,
+    );
+    assertEquals(code, 0);
+    assertEquals(stdout, "main");
+  } finally {
+    Deno.env.set("HOME", originalHome);
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("initLocalRepo: is idempotent when repo already exists", async () => {
+  const home = await Deno.makeTempDir();
+  const originalHome = Deno.env.get("HOME")!;
+  Deno.env.set("HOME", home);
+  try {
+    const first = await initLocalRepo("myorg/my-new-repo");
+    const second = await initLocalRepo("myorg/my-new-repo");
+    assertEquals(first, second);
+    const { code } = await runGit(["status"], first);
+    assertEquals(code, 0);
+  } finally {
+    Deno.env.set("HOME", originalHome);
+    await Deno.remove(home, { recursive: true });
+  }
 });
 
 // ── runGit ───────────────────────────────────────────────────────────────────

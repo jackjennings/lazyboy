@@ -53,6 +53,23 @@ self-reflection results automated updates to prompts in the state repository
 proposals to update the documentation or AGENT.md instructions of projects under
 modification.
 
+### New repository scope
+
+When a ticket's purpose is to create a new GitHub repository, intake can mark it
+with a `(new)` suffix in `## Proposed Scope`:
+
+```yaml
+scope:
+  - jackjennings/lazyboy
+  - jackjennings/lazyboy-extensions (new)
+```
+
+`lazyboy` initializes the repository locally at intake (no GitHub action yet),
+so the ticket runs through enrichment → spec → plan normally. Plan approval is
+the human gate before any remote is created. Once the plan is approved,
+`lazyboy` creates the GitHub repository, adds the remote, and pushes `main`
+before implementation begins.
+
 ## Usage
 
 ```bash

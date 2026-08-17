@@ -54,6 +54,13 @@ Combine tasks that touch the same file unless each one introduces
 independently-verifiable behavior. A task that adds a five-line helper next to
 another five-line helper in the same file is one task, not two.
 
+## New repositories
+
+If `meta.md` contains a non-empty `newRepos` field, open your plan output with a
+`## Repositories to Create` section that lists each slug and a one-sentence
+reason. Place this section before all tasks. The human reviewing the plan must
+see the new repository names without hunting for them.
+
 ## Writing the plan
 
 This is the last thing you do. Write a step-by-step implementation plan

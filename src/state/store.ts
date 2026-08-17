@@ -128,6 +128,7 @@ export async function readTicket(
     scope: data.scope ?? [],
     worktrees,
     prs,
+    newRepos: data.newRepos as string[] | undefined,
     created: data.created,
     updated: data.updated,
     body: content.trim(),
@@ -175,6 +176,7 @@ export async function writeTicket(
     updated: ticket.updated,
   };
   if (ticket.prs !== undefined) frontmatter.prs = ticket.prs;
+  if (ticket.newRepos !== undefined) frontmatter.newRepos = ticket.newRepos;
   if (ticket.outputRetries !== undefined) {
     frontmatter.outputRetries = ticket.outputRetries;
   }

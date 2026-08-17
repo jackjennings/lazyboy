@@ -7,13 +7,18 @@ import { deriveProjectPath } from "./project-path.ts";
 
 const PROMPT_DIR = new URL("./prompts/", import.meta.url).pathname;
 
-async function renderTemplate(content: string): Promise<string> {
-  const markers = [...content.matchAll(/\{\{([a-z][a-z0-9-]*)\}\}/g)];
-  if (markers.length === 0) return content;
+export interface PromptResult {
+  content: string;
+  partials: string[];
+}
 
+async function renderTemplate(content: string): Promise<PromptResult> {
+  const markers = [...content.matchAll(/\{\{([a-z][a-z0-9-]*)\}\}/g)];
+  if (markers.length === 0) return { content, partials: [] };
+
+  const partialNames = [...new Set(markers.map(([, name]) => name))];
   const partials = new Map<string, string>();
-  for (const [, name] of markers) {
-    if (partials.has(name)) continue;
+  for (const name of partialNames) {
     const partialPath = join(PROMPT_DIR, "partials", `${name}.md`);
     try {
       partials.set(name, await readTextFile(partialPath));
@@ -25,31 +30,36 @@ async function renderTemplate(content: string): Promise<string> {
     }
   }
 
-  return content.replace(
-    /\{\{([a-z][a-z0-9-]*)\}\}/g,
-    (_, name) => partials.get(name)!,
-  );
+  return {
+    content: content.replace(
+      /\{\{([a-z][a-z0-9-]*)\}\}/g,
+      (_, name) => partials.get(name)!,
+    ),
+    partials: partialNames,
+  };
 }
 
-export function loadPrompt(phase: ActivePhase): Promise<string> {
-  return readTextFile(join(PROMPT_DIR, `${phase}.md`)).then(renderTemplate);
+export async function loadPrompt(phase: ActivePhase): Promise<PromptResult> {
+  const raw = await readTextFile(join(PROMPT_DIR, `${phase}.md`));
+  return renderTemplate(raw);
 }
 
-export function loadPromptFile(filename: string): Promise<string> {
-  return readTextFile(join(PROMPT_DIR, filename)).then(renderTemplate);
+export async function loadPromptFile(filename: string): Promise<PromptResult> {
+  const raw = await readTextFile(join(PROMPT_DIR, filename));
+  return renderTemplate(raw);
 }
 
 export async function loadProviderPrompt(
   phase: string,
   provider: string,
-): Promise<string> {
+): Promise<PromptResult> {
   try {
     const content = await readTextFile(
       join(PROMPT_DIR, `${provider}-${phase}.md`),
     );
     return renderTemplate(content);
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return "";
+    if (e instanceof Deno.errors.NotFound) return { content: "", partials: [] };
     throw e;
   }
 }
@@ -57,42 +67,48 @@ export async function loadProviderPrompt(
 export async function loadArtifactPrompt(
   phase: string,
   artifacts: ArtifactType[],
-): Promise<string> {
+): Promise<PromptResult> {
   const parts: string[] = [];
+  const allPartials: string[] = [];
   for (const artifact of artifacts) {
     try {
       const content = await readTextFile(
         join(PROMPT_DIR, `${artifact}-${phase}.md`),
       );
-      parts.push(await renderTemplate(content));
+      const result = await renderTemplate(content);
+      parts.push(result.content);
+      allPartials.push(...result.partials);
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
   }
-  return parts.join("\n");
+  return {
+    content: parts.join("\n"),
+    partials: [...new Set(allPartials)],
+  };
 }
 
-export async function loadRevisionPrompt(phase: string): Promise<string> {
+export async function loadRevisionPrompt(phase: string): Promise<PromptResult> {
   try {
     const content = await readTextFile(
       join(PROMPT_DIR, `${phase}-revision.md`),
     );
     return renderTemplate(content);
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return "";
+    if (e instanceof Deno.errors.NotFound) return { content: "", partials: [] };
     throw e;
   }
 }
 
-async function readPromptFile(path: string): Promise<string> {
-  let content: string;
+async function readPromptFile(path: string): Promise<PromptResult> {
+  let raw: string;
   try {
-    content = await readTextFile(path);
+    raw = await readTextFile(path);
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return "";
+    if (e instanceof Deno.errors.NotFound) return { content: "", partials: [] };
     throw e;
   }
-  return renderTemplate(content);
+  return renderTemplate(raw);
 }
 
 export async function loadStatePrompt(
@@ -100,7 +116,7 @@ export async function loadStatePrompt(
   stateDir: string,
   provider?: string,
   ticketId?: string,
-): Promise<string> {
+): Promise<PromptResult> {
   const paths: string[] = [join(stateDir, "prompts", `${phase}.md`)];
 
   if (provider && ticketId) {
@@ -114,12 +130,17 @@ export async function loadStatePrompt(
   }
 
   const parts: string[] = [];
+  const allPartials: string[] = [];
   for (const path of paths) {
-    const rendered = await readPromptFile(path);
-    if (rendered.length > 0) parts.push(rendered);
+    const result = await readPromptFile(path);
+    if (result.content.length > 0) parts.push(result.content);
+    allPartials.push(...result.partials);
   }
 
-  return parts.join("\n\n");
+  return {
+    content: parts.join("\n\n"),
+    partials: [...new Set(allPartials)],
+  };
 }
 
 export function nextPhase(current: ActivePhase): ActivePhase | "done" {

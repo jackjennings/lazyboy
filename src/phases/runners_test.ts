@@ -1,4 +1,6 @@
 import {
+  assert,
+  assertArrayIncludes,
   assertEquals,
   assertFalse,
   assertGreater,
@@ -16,10 +18,10 @@ import {
 } from "./runners.ts";
 
 Deno.test(
-  "loadProviderPrompt: returns empty string when supplement file is absent",
+  "loadProviderPrompt: returns empty content when supplement file is absent",
   async () => {
     const result = await loadProviderPrompt("intake", "github");
-    assertEquals(result, "");
+    assertEquals(result.content, "");
   },
 );
 
@@ -27,7 +29,7 @@ Deno.test(
   "loadProviderPrompt: returns file content when supplement file exists",
   async () => {
     const result = await loadProviderPrompt("implementation", "github");
-    assertGreater(result.length, 0);
+    assertGreater(result.content.length, 0);
   },
 );
 
@@ -43,7 +45,7 @@ Deno.test("phase prompts: no prompt instructs the agent to print its response", 
     "plan-revision",
   ];
   for (const phase of phases) {
-    const content = await loadPromptFile(`${phase}.md`);
+    const { content } = await loadPromptFile(`${phase}.md`);
     assertFalse(
       content.includes("Print your response directly"),
       `${phase}.md still contains "Print your response directly"`,
@@ -62,7 +64,7 @@ Deno.test(
         "custom intake context",
       );
       const result = await loadStatePrompt("intake", dir);
-      assertEquals(result, "custom intake context");
+      assertEquals(result.content, "custom intake context");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -70,12 +72,12 @@ Deno.test(
 );
 
 Deno.test(
-  "loadStatePrompt: returns empty string when file does not exist",
+  "loadStatePrompt: returns empty content when file does not exist",
   async () => {
     const dir = await Deno.makeTempDir();
     try {
       const result = await loadStatePrompt("intake", dir);
-      assertEquals(result, "");
+      assertEquals(result.content, "");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -99,7 +101,7 @@ Deno.test(
 Deno.test("phase prompts: all five phase prompts include ## Principles instruction", async () => {
   const phases = ["intake", "enrichment", "spec", "plan", "implementation"];
   for (const phase of phases) {
-    const content = await loadPromptFile(`${phase}.md`);
+    const { content } = await loadPromptFile(`${phase}.md`);
     assertStringIncludes(
       content,
       "## Principles",
@@ -116,7 +118,7 @@ Deno.test(
       await Deno.mkdir(`${dir}/prompts`);
       await Deno.writeTextFile(`${dir}/prompts/intake.md`, "{{principles}}");
       const result = await loadStatePrompt("intake", dir);
-      assertStringIncludes(result, "## Principles");
+      assertStringIncludes(result.content, "## Principles");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -145,7 +147,7 @@ Deno.test(
       await Deno.mkdir(`${dir}/prompts`);
       await Deno.writeTextFile(`${dir}/prompts/intake.md`, "plain content");
       const result = await loadStatePrompt("intake", dir);
-      assertEquals(result, "plain content");
+      assertEquals(result.content, "plain content");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -162,7 +164,7 @@ Deno.test("phase prompts: every prompt instructs the agent to write to the outpu
     "implementation-revision",
   ];
   for (const phase of phases) {
-    const content = await loadPromptFile(`${phase}.md`);
+    const { content } = await loadPromptFile(`${phase}.md`);
     assertStringIncludes(
       content,
       "output file path",
@@ -188,7 +190,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "github supplement");
+      assertEquals(result.content, "github supplement");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -212,7 +214,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "top\n\nprovider");
+      assertEquals(result.content, "top\n\nprovider");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -238,7 +240,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "repo specific");
+      assertEquals(result.content, "repo specific");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -269,7 +271,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "top\n\nprovider\n\nproject");
+      assertEquals(result.content, "top\n\nprovider\n\nproject");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -294,7 +296,7 @@ Deno.test(
         "jira",
         "jira/FOO-123",
       );
-      assertEquals(result, "jira board content");
+      assertEquals(result.content, "jira board content");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -314,7 +316,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "top only");
+      assertEquals(result.content, "top only");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -322,7 +324,7 @@ Deno.test(
 );
 
 Deno.test(
-  "loadStatePrompt: returns empty string when all levels absent",
+  "loadStatePrompt: returns empty content when all levels absent",
   async () => {
     const dir = await Deno.makeTempDir();
     try {
@@ -332,7 +334,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "");
+      assertEquals(result.content, "");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -363,7 +365,7 @@ Deno.test(
         "github",
         "github/jackjennings/lazyboy/295",
       );
-      assertEquals(result, "provider");
+      assertEquals(result.content, "provider");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -378,7 +380,7 @@ Deno.test(
       await Deno.mkdir(join(dir, "prompts"), { recursive: true });
       await Deno.writeTextFile(join(dir, "prompts", "intake.md"), "top only");
       const result = await loadStatePrompt("intake", dir);
-      assertEquals(result, "top only");
+      assertEquals(result.content, "top only");
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -386,28 +388,28 @@ Deno.test(
 );
 
 Deno.test(
-  "loadArtifactPrompt: returns empty string when no artifact has a prompt file",
+  "loadArtifactPrompt: returns empty content when no artifact has a prompt file",
   async () => {
     const result = await loadArtifactPrompt("spec", ["code"]);
-    assertEquals(result.length, 0);
+    assertEquals(result.content.length, 0);
   },
 );
 
 Deno.test("loadArtifactPrompt: document-spec returns non-empty content", async () => {
   const result = await loadArtifactPrompt("spec", ["document"]);
-  assertGreater(result.length, 0);
+  assertGreater(result.content.length, 0);
 });
 
 Deno.test("loadArtifactPrompt: document-plan returns non-empty content", async () => {
   const result = await loadArtifactPrompt("plan", ["document"]);
-  assertGreater(result.length, 0);
+  assertGreater(result.content.length, 0);
 });
 
 Deno.test(
   "loadArtifactPrompt: document-implementation returns non-empty content",
   async () => {
     const result = await loadArtifactPrompt("implementation", ["document"]);
-    assertGreater(result.length, 0);
+    assertGreater(result.content.length, 0);
   },
 );
 
@@ -416,8 +418,8 @@ Deno.test(
   async () => {
     const single = await loadArtifactPrompt("spec", ["document"]);
     const multi = await loadArtifactPrompt("spec", ["code", "document"]);
-    assertEquals(multi, single);
-    assertGreater(multi.length, 0);
+    assertEquals(multi.content, single.content);
+    assertGreater(multi.content.length, 0);
   },
 );
 
@@ -425,15 +427,15 @@ Deno.test(
   "loadRevisionPrompt: returns file content when revision file exists",
   async () => {
     const result = await loadRevisionPrompt("spec");
-    assertGreater(result.length, 0);
+    assertGreater(result.content.length, 0);
   },
 );
 
 Deno.test(
-  "loadRevisionPrompt: returns empty string when no revision file exists",
+  "loadRevisionPrompt: returns empty content when no revision file exists",
   async () => {
     const result = await loadRevisionPrompt("unknown-xyz-revision-test");
-    assertEquals(result, "");
+    assertEquals(result.content, "");
   },
 );
 
@@ -450,5 +452,57 @@ Deno.test(
     } finally {
       readStub.restore();
     }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: returns notion in partials when partial marker present",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(`${dir}/prompts`);
+      await Deno.writeTextFile(`${dir}/prompts/intake.md`, "{{notion}}");
+      const result = await loadStatePrompt("intake", dir);
+      assertArrayIncludes(result.partials, ["notion"]);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadStatePrompt: partials from multiple levels are combined",
+  async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.mkdir(join(dir, "prompts", "github"), { recursive: true });
+      await Deno.writeTextFile(
+        join(dir, "prompts", "spec.md"),
+        "{{notion}}",
+      );
+      await Deno.writeTextFile(
+        join(dir, "prompts", "github", "spec.md"),
+        "{{principles}}",
+      );
+      const result = await loadStatePrompt(
+        "spec",
+        dir,
+        "github",
+        "github/jackjennings/lazyboy/295",
+      );
+      assertArrayIncludes(result.partials, ["notion"]);
+      assertArrayIncludes(result.partials, ["principles"]);
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "loadPromptFile: returns partials array alongside content",
+  async () => {
+    const result = await loadPromptFile("intake.md");
+    assertEquals(typeof result.content, "string");
+    assert(Array.isArray(result.partials));
   },
 );

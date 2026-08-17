@@ -93,6 +93,13 @@ export interface TickDeps {
   ) => Promise<{ model: string; thinking: string } | null>;
   readRunPidBootStamp: (ticketDir: string) => Promise<string | null>;
   currentBootId: () => string;
+  checkToolAvailability: (
+    partialNames: string[],
+    effectivePath: string,
+  ) => Promise<
+    | { ok: true }
+    | { ok: false; tool: string; missing: "binary" | "env-var"; name: string }
+  >;
 }
 
 export interface TickServiceDeps {
@@ -174,23 +181,24 @@ export async function advancePhase(
       isMergeRevision ? "merge" : activePhase
     }.md`;
     const isImplementationRevision = activePhase === "implementation";
-    const revisionPrompt = await loadRevisionPrompt(activePhase);
-    const basePrompt = revisionPrompt || await loadPrompt(activePhase);
-    const revisingSupplement = await loadProviderPrompt(
+    const { content: revisionContent } = await loadRevisionPrompt(activePhase);
+    const basePrompt = revisionContent ||
+      (await loadPrompt(activePhase)).content;
+    const { content: revisingSupplement } = await loadProviderPrompt(
       activePhase,
       ticket.provider,
     );
-    const revisingArtifactSupplement = await loadArtifactPrompt(
+    const { content: revisingArtifactSupplement } = await loadArtifactPrompt(
       activePhase,
       ticket.artifacts,
     );
-    const revisingStatePrompt = await loadStatePrompt(
+    const { content: revisingStatePrompt } = await loadStatePrompt(
       activePhase,
       stateDir,
       ticket.provider,
       ticket.id,
     );
-    const revisingStateRevisionPrompt = await loadStatePrompt(
+    const { content: revisingStateRevisionPrompt } = await loadStatePrompt(
       `${activePhase}-revision`,
       stateDir,
       ticket.provider,
@@ -267,17 +275,17 @@ export async function advancePhase(
   }
 
   if (ticket.status === "new") {
-    const intakeBase = await loadPrompt("intake");
-    const intakeSupplement = await loadProviderPrompt(
+    const { content: intakeBase } = await loadPrompt("intake");
+    const { content: intakeSupplement } = await loadProviderPrompt(
       "intake",
       ticket.provider,
     );
-    const intakeArtifactSupplement = await loadArtifactPrompt(
+    const { content: intakeArtifactSupplement } = await loadArtifactPrompt(
       "intake",
       ticket.artifacts,
     );
     const corpusText = await deps.buildRepoCorpusText();
-    const intakeStatePrompt = await loadStatePrompt(
+    const { content: intakeStatePrompt } = await loadStatePrompt(
       "intake",
       stateDir,
       ticket.provider,
@@ -722,19 +730,28 @@ export async function advancePhase(
       });
       return;
     }
-    const basePrompt = await loadPrompt(effectiveNext);
-    const supplement = await loadProviderPrompt(effectiveNext, ticket.provider);
-    const artifactSupplement = await loadArtifactPrompt(
-      effectiveNext,
-      ticket.artifacts,
-    );
-    const statePrompt = await loadStatePrompt(
-      effectiveNext,
-      stateDir,
-      ticket.provider,
-      ticket.id,
-    );
-    const prompt = [basePrompt, supplement, artifactSupplement, statePrompt]
+    const { content: basePromptContent, partials: basePartials } =
+      await loadPrompt(effectiveNext);
+    const { content: supplement, partials: suppPartials } =
+      await loadProviderPrompt(effectiveNext, ticket.provider);
+    const { content: artifactSupplement, partials: artPartials } =
+      await loadArtifactPrompt(
+        effectiveNext,
+        ticket.artifacts,
+      );
+    const { content: statePrompt, partials: statePartials } =
+      await loadStatePrompt(
+        effectiveNext,
+        stateDir,
+        ticket.provider,
+        ticket.id,
+      );
+    const prompt = [
+      basePromptContent,
+      supplement,
+      artifactSupplement,
+      statePrompt,
+    ]
       .filter((part) => part.length > 0)
       .join("\n\n");
     const threshold = deps.maxPromptTokens ?? DEFAULT_MAX_PROMPT_TOKENS;
@@ -746,6 +763,39 @@ export async function advancePhase(
         tokens,
         maxTokens: threshold,
       });
+    }
+    const allPartials = [
+      ...new Set([
+        ...basePartials,
+        ...suppPartials,
+        ...artPartials,
+        ...statePartials,
+      ]),
+    ];
+    const binDir = new URL("../bin", import.meta.url).pathname;
+    const existingPath = Deno.env.get("PATH") ?? "";
+    const effectivePath = existingPath ? `${binDir}:${existingPath}` : binDir;
+    const preflightResult = await deps.checkToolAvailability(
+      allPartials,
+      effectivePath,
+    );
+    if (!preflightResult.ok) {
+      await deps.writeTicket(stateDir, {
+        ...ticket,
+        phase: effectiveNext,
+        status: "needs-attention",
+        updated: now,
+      });
+      await deps.appendLog(stateDir, ticket.id, {
+        event: "phase-transition",
+        from: ticket.phase,
+        to: "needs-attention",
+        reason: "tool-unavailable",
+        tool: preflightResult.tool,
+        missing: preflightResult.missing,
+        name: preflightResult.name,
+      });
+      return;
     }
     let resolvedTicket = ticket;
     if (next === "implementation") {

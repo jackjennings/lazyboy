@@ -40,6 +40,7 @@ export function makeTickDeps(overrides: Partial<TickDeps> = {}): TickDeps {
     adjudicatePhaseModel: () => Promise.resolve(null),
     readRunPidBootStamp: () => Promise.resolve(null),
     currentBootId: () => "boot",
+    checkToolAvailability: () => Promise.resolve({ ok: true }),
     ...overrides,
   };
 }

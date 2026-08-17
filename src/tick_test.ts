@@ -2909,7 +2909,7 @@ Deno.test(
       }),
     );
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await loadPromptFile("implementation.md");
+    const { content: basePrompt } = await loadPromptFile("implementation.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
@@ -2939,7 +2939,7 @@ Deno.test(
       }),
     );
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await loadPromptFile("intake.md");
+    const { content: basePrompt } = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
@@ -2973,7 +2973,7 @@ Deno.test(
       }),
     );
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await loadPromptFile("intake.md");
+    const { content: basePrompt } = await loadPromptFile("intake.md");
     assertEquals(
       spawnedPrompt,
       basePrompt +
@@ -3008,7 +3008,7 @@ Deno.test(
       }),
     );
     assertSpyCall(spawnSpy, 0);
-    const basePrompt = await loadPromptFile("intake.md");
+    const { content: basePrompt } = await loadPromptFile("intake.md");
     assertEquals(spawnedPrompt, basePrompt);
   },
 );
@@ -5128,6 +5128,56 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: preflight failure parks ticket with tool-unavailable and skips spawn",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+    });
+    let writtenTicket: Partial<TicketState> = {};
+    const writeTicketSpy = spy((_dir: string, t: TicketState) => {
+      writtenTicket = t;
+      return Promise.resolve();
+    });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    const spawnSpy = spy(() => Promise.resolve());
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        writeTicket: writeTicketSpy,
+        appendLog: appendLogSpy,
+        spawn: spawnSpy,
+        checkToolAvailability: () =>
+          Promise.resolve({
+            ok: false as const,
+            tool: "notion",
+            missing: "binary" as const,
+            name: "notion-fetch",
+          }),
+      }),
+    );
+    assertSpyCall(writeTicketSpy, 0);
+    assertEquals(writtenTicket.phase, "enrichment");
+    assertEquals(writtenTicket.status, "needs-attention");
+    assertSpyCalls(spawnSpy, 0);
+    assertSpyCall(appendLogSpy, 0);
+    assertEquals(appendLogSpy.calls[0].args[2], {
+      event: "phase-transition",
+      from: "intake",
+      to: "needs-attention",
+      reason: "tool-unavailable",
+      tool: "notion",
+      missing: "binary",
+      name: "notion-fetch",
+    });
+  },
+);
+
+Deno.test(
   "advancePhase: code+document ticket with documents transitions to merge/waiting",
   async () => {
     const stateDir = await Deno.makeTempDir();
@@ -5175,6 +5225,44 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: preflight env-var failure parks with env-var missing detail",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+    });
+    const appendLogSpy = spy(
+      (_dir: string, _id: string, _entry: object) => Promise.resolve(),
+    );
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        appendLog: appendLogSpy,
+        checkToolAvailability: () =>
+          Promise.resolve({
+            ok: false as const,
+            tool: "notion",
+            missing: "env-var" as const,
+            name: "NOTION_TOKEN",
+          }),
+      }),
+    );
+    assertSpyCall(appendLogSpy, 0);
+    assertEquals(appendLogSpy.calls[0].args[2], {
+      event: "phase-transition",
+      from: "intake",
+      to: "needs-attention",
+      reason: "tool-unavailable",
+      tool: "notion",
+      missing: "env-var",
+      name: "NOTION_TOKEN",
+    });
+  },
+);
+
+Deno.test(
   "advancePhase: code+document ticket with no worktrees blocks entry to implementation",
   async () => {
     const stateDir = await Deno.makeTempDir();
@@ -5212,5 +5300,31 @@ Deno.test(
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
+  },
+);
+
+Deno.test(
+  "advancePhase: preflight success proceeds to spawn",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [{ timestamp: "t", actor: "human", phase: "intake" }],
+    });
+    let spawnedPhase = "";
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedPhase = opts.phase;
+      return Promise.resolve();
+    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        checkToolAvailability: () => Promise.resolve({ ok: true }),
+      }),
+    );
+    assertSpyCall(spawnSpy, 0);
+    assertEquals(spawnedPhase, "enrichment");
   },
 );

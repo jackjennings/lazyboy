@@ -8,6 +8,7 @@ import {
 } from "./outlier-detection.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { loadPromptFile } from "./phases/runners.ts";
+import { checkToolAvailability } from "./phases/tool-preflight.ts";
 import { deriveProjectPath } from "./phases/project-path.ts";
 import {
   appendTicketLog,
@@ -1083,7 +1084,7 @@ export function composeTickDeps(
         const outputSuffix = phase === "plan"
           ? "plan-outlier-analysis"
           : "outlier-analysis";
-        const prompt = await loadPromptFile(promptFile);
+        const { content: prompt } = await loadPromptFile(promptFile);
         const outputFile = `${
           compactTimestamp(Temporal.Now.zonedDateTimeISO("UTC"))
         }-${outputSuffix}.md`;
@@ -1105,6 +1106,13 @@ export function composeTickDeps(
           thinking: "high",
           pidFile,
         });
+      },
+      checkToolAvailability: (
+        partialNames: string[],
+        effectivePath: string,
+      ) => {
+        const env = Deno.env.toObject();
+        return checkToolAvailability(partialNames, effectivePath, env);
       },
       maxPromptTokens: config.tick.maxPromptTokens,
     },

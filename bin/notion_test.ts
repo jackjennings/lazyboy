@@ -12,14 +12,14 @@ import {
   runPage,
   runSearch,
   searchResultsToMarkdown,
-} from "./notion-fetch";
+} from "./notion";
 import type { Client } from "@notionhq/client";
 import type {
   BlockObjectResponse,
   RichTextItemResponse,
 } from "@notionhq/client/build/src/api-endpoints";
 
-const scriptPath = new URL("./notion-fetch", import.meta.url).pathname;
+const scriptPath = new URL("./notion", import.meta.url).pathname;
 
 // ── parseNotionId ─────────────────────────────────────────────────────────────
 
@@ -59,7 +59,6 @@ Deno.test("parseNotionId — returns null for non-URL input", () => {
 // ── CLI subprocess tests ──────────────────────────────────────────────────────
 
 Deno.test("CLI exits 1 with error when NOTION_TOKEN is unset", async () => {
-  const { NOTION_TOKEN: _removed, ...envWithout } = Deno.env.toObject();
   const result = await new Deno.Command("deno", {
     args: [
       "run",
@@ -69,7 +68,7 @@ Deno.test("CLI exits 1 with error when NOTION_TOKEN is unset", async () => {
       "page",
       "https://www.notion.so/abc1234567890abcdef1234567890ab",
     ],
-    env: envWithout,
+    env: { ...Deno.env.toObject(), NOTION_TOKEN: "" },
   }).output();
   assertEquals(result.code, 1);
   assertEquals(

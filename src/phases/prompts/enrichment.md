@@ -29,4 +29,4 @@ planning.
 
 {{principles}}
 
-{{notion-fetch}}
+{{notion}}

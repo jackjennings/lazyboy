@@ -424,11 +424,11 @@ if (import.meta.main) {
   const known = ["page", "database", "search", "create", "append"];
   if (!subcommand || !known.includes(subcommand)) {
     console.error(
-      "usage: notion-fetch page <url>\n" +
-        "       notion-fetch database <url>\n" +
-        "       notion-fetch search <query>\n" +
-        "       notion-fetch create <parent-page-url> <title>\n" +
-        "       notion-fetch append <page-url>",
+      "usage: notion page <url>\n" +
+        "       notion database <url>\n" +
+        "       notion search <query>\n" +
+        "       notion create <parent-page-url> <title>\n" +
+        "       notion append <page-url>",
     );
     Deno.exit(1);
   }
@@ -441,7 +441,7 @@ if (import.meta.main) {
       const title = rest.slice(1).join(" ");
       if (!parentUrl || !title) {
         console.error(
-          "usage: notion-fetch create <parent-page-url> <title>",
+          "usage: notion create <parent-page-url> <title>",
         );
         Deno.exit(1);
       }
@@ -450,7 +450,7 @@ if (import.meta.main) {
     } else if (subcommand === "append") {
       const pageUrl = rest[0];
       if (!pageUrl) {
-        console.error("usage: notion-fetch append <page-url>");
+        console.error("usage: notion append <page-url>");
         Deno.exit(1);
       }
       const markdown = await new Response(Deno.stdin.readable).text();
@@ -459,11 +459,11 @@ if (import.meta.main) {
       const arg = rest[0];
       if (!arg) {
         console.error(
-          "usage: notion-fetch page <url>\n" +
-            "       notion-fetch database <url>\n" +
-            "       notion-fetch search <query>\n" +
-            "       notion-fetch create <parent-page-url> <title>\n" +
-            "       notion-fetch append <page-url>",
+          "usage: notion page <url>\n" +
+            "       notion database <url>\n" +
+            "       notion search <query>\n" +
+            "       notion create <parent-page-url> <title>\n" +
+            "       notion append <page-url>",
         );
         Deno.exit(1);
       }

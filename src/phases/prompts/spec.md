@@ -47,4 +47,4 @@ Any API, data model, or interface changes required.
 
 {{principles}}
 
-{{notion-fetch}}
+{{notion}}

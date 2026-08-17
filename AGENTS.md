@@ -30,11 +30,11 @@ deno task test:file src/foo_test.ts     # run a single test file
 deno task start tick                    # run the tick loop once
 deno run --allow-all src/index.ts status
 
-notion-fetch page <url>           # fetch a Notion page as Markdown (requires NOTION_TOKEN)
-notion-fetch database <url>       # fetch a Notion database as a Markdown table
-notion-fetch search <query>       # search the Notion workspace
-notion-fetch create <parent-url> <title>  # create a child Notion page (prints new URL)
-notion-fetch append <page-url>            # append Markdown from stdin to a Notion page
+notion page <url>           # fetch a Notion page as Markdown (requires NOTION_TOKEN)
+notion database <url>       # fetch a Notion database as a Markdown table
+notion search <query>       # search the Notion workspace
+notion create <parent-url> <title>  # create a child Notion page (prints new URL)
+notion append <page-url>            # append Markdown from stdin to a Notion page
 ```
 
 Every new subcommand must have a 3-character zsh alias (`l` + first two unique

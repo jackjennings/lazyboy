@@ -25,6 +25,10 @@ within one. Each entry must be one of:
   out locally.
 - **GitHub URL**: `https://github.com/org/repo[/anything]`. Treated identically
   to the slug form.
+- **New GitHub repository**: `org/repo (new)` — append the literal `(new)`
+  suffix to a slug when the ticket's purpose is to create that repository. Use
+  this only when the repository does not exist yet; a plain slug that 404s is
+  still an error, not automatically treated as new.
 
 Use the slug or URL form for any GitHub repository that may not be present on
 the local machine (for example, a dependency or reference repository mentioned

@@ -348,7 +348,8 @@ cause (`agent-failed`, `non-zero-exit`, `missing`, `output-file-missing`,
 `github-slug-extraction-failed`, `clone-failed`, `worktree-creation-failed`,
 `push-failed`, `no-verdict-line`, `incomplete`, `pr-fetch-failed`,
 `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`, `no-commit`,
-`context-file-unreadable`). Reuse an existing label when it fits; add a new one
+`context-file-unreadable`, `new-marker-on-local-path`, `local-repo-init-failed`,
+`repo-creation-failed`). Reuse an existing label when it fits; add a new one
 only for a genuinely new cause, and never put free prose in `reason` (that
 belongs in a separate field or the `error` message). Work-item identity is the
 ticket directory itself — do not add an `id` or `ticketId` field to per-ticket

@@ -144,7 +144,9 @@ export function formatRepoCorpus(candidates: RepoCandidate[]): string {
   return ["## Available Repositories", "", ...lines].join("\n") + "\n";
 }
 
-export function parseIntakeScope(content: string): string[] {
+export function parseIntakeScope(
+  content: string,
+): Array<{ entry: string; isNew: boolean }> {
   const sectionStart = content.search(/^## Proposed Scope$/m);
   if (sectionStart === -1) return [];
   const afterSection = content.slice(sectionStart);
@@ -153,7 +155,7 @@ export function parseIntakeScope(content: string): string[] {
   const yaml = codeBlockMatch[1];
   const lines = yaml.split("\n");
   let inScope = false;
-  const results: string[] = [];
+  const results: Array<{ entry: string; isNew: boolean }> = [];
   for (const line of lines) {
     if (/^scope:\s*$/.test(line)) {
       inScope = true;
@@ -162,7 +164,10 @@ export function parseIntakeScope(content: string): string[] {
     if (inScope) {
       const itemMatch = line.match(/^\s+-\s+(.+)$/);
       if (itemMatch) {
-        results.push(itemMatch[1].trim());
+        const raw = itemMatch[1].trim();
+        const isNew = /\s+\(new\)\s*$/.test(raw);
+        const entry = isNew ? raw.replace(/\s+\(new\)\s*$/, "").trim() : raw;
+        results.push({ entry, isNew });
       } else if (line.trim() && !/^\s/.test(line)) {
         break;
       }
@@ -218,8 +223,13 @@ export async function createWorktree(
     recursive: true,
   });
 
+  const { code: verifyCode } = await runGit(
+    ["rev-parse", "--verify", "origin/main"],
+    repoPath,
+  );
+  const baseRef = verifyCode === 0 ? "origin/main" : "main";
   const { code } = await runGit(
-    ["worktree", "add", "-b", ticketId, worktreePath, "origin/main"],
+    ["worktree", "add", "-b", ticketId, worktreePath, baseRef],
     repoPath,
   );
   if (code !== 0) {
@@ -229,6 +239,42 @@ export async function createWorktree(
   }
 
   return { path: worktreePath, branch: ticketId };
+}
+
+export async function initLocalRepo(slug: string): Promise<string> {
+  const home = Deno.env.get("HOME")!;
+  const [org, repo] = slug.split("/");
+  const orgDir = join(home, ".lazyboy", "repositories", org);
+  const repoDir = join(orgDir, repo);
+  await mkdir(orgDir, { recursive: true });
+  try {
+    await stat(repoDir);
+    return repoDir;
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const { code: initCode, stderr: initErr } = await runGit(
+    ["init", "-b", "main", repoDir],
+    orgDir,
+  );
+  if (initCode !== 0) throw new Error(`git init failed: ${initErr}`);
+  const { code: commitCode, stderr: commitErr } = await runGit(
+    [
+      "-c",
+      "user.name=lazyboy",
+      "-c",
+      "user.email=lazyboy@localhost",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "init",
+    ],
+    repoDir,
+  );
+  if (commitCode !== 0) throw new Error(`git commit failed: ${commitErr}`);
+  return repoDir;
 }
 
 export async function removeWorktree(wt: WorktreeInfo): Promise<void> {

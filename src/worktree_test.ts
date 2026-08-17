@@ -91,6 +91,27 @@ Deno.test("parseRemoteSlug: returns null for empty string", () => {
   assertEquals(parseRemoteSlug(""), null);
 });
 
+Deno.test("parseRemoteSlug: extracts slug from SSH alias remote with .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github-sdx:smarterdx/impression-ui.git"),
+    "smarterdx/impression-ui",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from SSH alias remote without .git suffix", () => {
+  assertEquals(
+    parseRemoteSlug("git@github-sdx:org/repo"),
+    "org/repo",
+  );
+});
+
+Deno.test("parseRemoteSlug: extracts slug from different SSH alias remote", () => {
+  assertEquals(
+    parseRemoteSlug("git@github-work:myorg/repo.git"),
+    "myorg/repo",
+  );
+});
+
 // ── findLocalRepo ────────────────────────────────────────────────────────────
 
 Deno.test("findLocalRepo: finds repo by matching origin remote", async () => {
@@ -230,6 +251,17 @@ Deno.test("listRepoCorpus: local match wins over configuredRepos duplicate", asy
 Deno.test("listRepoCorpus: returns empty array when no roots and no configuredRepos", async () => {
   const result = await listRepoCorpus([], []);
   assertEquals(result, []);
+});
+
+Deno.test("listRepoCorpus: finds repo cloned via SSH host alias", async () => {
+  const root = await Deno.makeTempDir();
+  const repoPath = join(root, "myorg", "myrepo");
+  await initRepoWithRemote(repoPath, "git@github-sdx:myorg/myrepo.git");
+
+  const result = await listRepoCorpus([root], []);
+  assertEquals(result, [{ slug: "myorg/myrepo", localPath: repoPath }]);
+
+  await Deno.remove(root, { recursive: true });
 });
 
 // ── formatRepoCorpus ─────────────────────────────────────────────────────────

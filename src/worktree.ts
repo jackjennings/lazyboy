@@ -9,7 +9,7 @@ export function extractGitHubSlug(url: string): string {
 }
 
 export function parseRemoteSlug(url: string): string | null {
-  const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+  const match = url.match(/github[^:/]*[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
   if (!match) return null;
   return `${match[1]}/${match[2]}`;
 }

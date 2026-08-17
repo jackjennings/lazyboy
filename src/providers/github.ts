@@ -222,6 +222,26 @@ export class GitHubProvider implements Provider {
     }
   }
 
+  async createRepo(slug: string): Promise<string> {
+    const org = slug.split("/")[0];
+    const { token } = this.accountResolver(org);
+    const env: Record<string, string> = {};
+    const path = Deno.env.get("PATH");
+    const home = Deno.env.get("HOME");
+    if (path) env.PATH = path;
+    if (home) env.HOME = home;
+    if (token) env.GH_TOKEN = token;
+    const result = await new Deno.Command("gh", {
+      args: ["repo", "create", slug, "--private"],
+      env,
+    }).output();
+    if (result.code !== 0) {
+      const stderr = new TextDecoder().decode(result.stderr).trim();
+      throw new Error(`gh repo create failed for ${slug}: ${stderr}`);
+    }
+    return `https://github.com/${slug}`;
+  }
+
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const items: WorkItem[] = [];
     for (const repo of this.repos) {

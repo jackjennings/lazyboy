@@ -41,11 +41,13 @@ import {
   createWorktree,
   findLocalRepo,
   formatRepoCorpus,
+  initLocalRepo,
   listRepoCorpus,
   removeWorktree,
   runGit,
 } from "./worktree.ts";
 import { createWorktreeAction } from "./tick-actions/create-worktree.ts";
+import { createRemoteRepoAction } from "./tick-actions/create-remote-repo.ts";
 import { checkMergedPRAction } from "./tick-actions/check-merged-pr.ts";
 import { cleanOrphanedWorktreesAction } from "./tick-actions/clean-orphaned-worktrees.ts";
 import { reconcilePRsAction } from "./tick-actions/reconcile-prs.ts";
@@ -345,6 +347,7 @@ export function composeTickDeps(
       },
       cloneRemoteRepo: (slug: string) =>
         cloneRemoteRepo(slug, (s, d, cwd) => githubProvider.clone(s, d, cwd)),
+      initLocalRepo,
       stat: exists,
       appendLog: appendTicketLog,
       applyWorktreeInclude: async (
@@ -363,6 +366,13 @@ export function composeTickDeps(
           );
         }
       },
+    }),
+    createRemoteRepoAction({
+      createRepo: (slug) => githubProvider.createRepo(slug),
+      isPhaseAlive: (ticketId) => isPhaseAlive(join(stateDir, ticketId)),
+      writeTicket,
+      appendLog: appendTicketLog,
+      runGit,
     }),
     reconcilePRsAction({
       readImplementationOutput: async (ticketDir: string) => {

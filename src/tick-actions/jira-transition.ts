@@ -5,7 +5,7 @@ export async function jiraTransition(opts: {
   email: string;
   apiToken: string;
   issueKey: string;
-  targetStatusCategoryKey: string;
+  targetStatusName: string;
   http: HttpClient;
 }): Promise<void> {
   const auth = btoa(`${opts.email}:${opts.apiToken}`);
@@ -15,27 +15,32 @@ export async function jiraTransition(opts: {
     "Content-Type": "application/json",
   };
 
-  const transitionsUrl =
-    `${opts.baseUrl}/rest/api/3/issue/${opts.issueKey}/transitions`;
-  const res = await opts.http.get(transitionsUrl, { headers });
+  const issueUrl =
+    `${opts.baseUrl}/rest/api/3/issue/${opts.issueKey}?fields=status&expand=transitions`;
+  const res = await opts.http.get(issueUrl, { headers });
   if (!res.ok) {
-    throw new Error(`Jira API error: ${res.status} ${transitionsUrl}`);
+    throw new Error(`Jira API error: ${res.status} ${issueUrl}`);
   }
   const data = (await res.json()) as {
-    transitions: Array<{
-      id: string;
-      to: { statusCategory: { key: string } };
-    }>;
+    fields: { status: { name: string } };
+    transitions: Array<{ id: string; to: { name: string } }>;
   };
+
+  if (data.fields.status.name === opts.targetStatusName) {
+    return;
+  }
+
   const transition = data.transitions.find(
-    (t) => t.to.statusCategory.key === opts.targetStatusCategoryKey,
+    (t) => t.to.name === opts.targetStatusName,
   );
   if (!transition) {
     throw new Error(
-      `No transition to ${opts.targetStatusCategoryKey} available for ${opts.issueKey}`,
+      `No transition to "${opts.targetStatusName}" available for ${opts.issueKey}`,
     );
   }
 
+  const transitionsUrl =
+    `${opts.baseUrl}/rest/api/3/issue/${opts.issueKey}/transitions`;
   const postRes = await opts.http.post(transitionsUrl, {
     headers,
     body: JSON.stringify({ transition: { id: transition.id } }),

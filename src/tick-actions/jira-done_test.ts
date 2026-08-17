@@ -23,8 +23,9 @@ function makeAction(
   });
 }
 
-function makeTransitionsFetch(
-  transitions: Array<{ id: string; to: { statusCategory: { key: string } } }>,
+function makeIssueFetch(
+  currentStatusName: string,
+  transitions: Array<{ id: string; to: { name: string } }>,
 ) {
   return (
     _url: string | URL | Request,
@@ -34,13 +35,19 @@ function makeTransitionsFetch(
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return Promise.resolve(
-      new Response(JSON.stringify({ transitions }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          fields: { status: { name: currentStatusName } },
+          transitions,
+        }),
+        { status: 200 },
+      ),
     );
   };
 }
 
-const successFetch = makeTransitionsFetch([
-  { id: "41", to: { statusCategory: { key: "done" } } },
+const successFetch = makeIssueFetch("To Do", [
+  { id: "41", to: { name: "Done" } },
 ]);
 
 const BASE = {
@@ -105,7 +112,7 @@ Deno.test("jiraDoneAction: run calls writeTicket with providerDone: true on succ
   assert(written[0].providerDone);
 });
 
-Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for correct issue key", async () => {
+Deno.test("jiraDoneAction: run calls GET issue endpoint then POST with done id for correct issue key", async () => {
   const calls: Array<{ url: string; method: string; body?: string }> = [];
   await makeAction({
     http: new HttpClient((url, init) => {
@@ -120,8 +127,9 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
       return Promise.resolve(
         new Response(
           JSON.stringify({
+            fields: { status: { name: "To Do" } },
             transitions: [
-              { id: "41", to: { statusCategory: { key: "done" } } },
+              { id: "41", to: { name: "Done" } },
             ],
           }),
           { status: 200 },
@@ -129,13 +137,34 @@ Deno.test("jiraDoneAction: run calls GET transitions then POST with done id for 
       );
     }),
   }).run(makeTicket(BASE), "/state");
-  assertStringIncludes(calls[0].url, "/issue/PROJ-42/transitions");
+  assertStringIncludes(calls[0].url, "/issue/PROJ-42?");
+  assertStringIncludes(calls[0].url, "fields=status");
   assertEquals(calls[0].method, "GET");
   assertEquals(calls[1].method, "POST");
   assertEquals(
     JSON.parse(calls[1].body!),
     { transition: { id: "41" } },
   );
+});
+
+Deno.test("jiraDoneAction: run skips POST when issue is already in Done", async () => {
+  const calls: Array<{ method: string }> = [];
+  const result = await makeAction({
+    http: new HttpClient((_url, init) => {
+      calls.push({ method: init?.method ?? "GET" });
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            fields: { status: { name: "Done" } },
+            transitions: [{ id: "41", to: { name: "Done" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+  }).run(makeTicket(BASE), "/state");
+  assert(result?.providerDone);
+  assertEquals(calls.filter((c) => c.method === "POST").length, 0);
 });
 
 Deno.test("jiraDoneAction: run logs error and returns null when transition throws", async () => {

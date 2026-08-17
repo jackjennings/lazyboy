@@ -221,8 +221,9 @@ Deno.test("close transitions the issue to the done status category", async () =>
         return Promise.resolve(
           new Response(
             JSON.stringify({
+              fields: { status: { name: "To Do" } },
               transitions: [
-                { id: "31", to: { statusCategory: { key: "done" } } },
+                { id: "31", to: { name: "Done" } },
               ],
             }),
             { status: 200 },
@@ -233,9 +234,9 @@ Deno.test("close transitions the issue to the done status category", async () =>
     }),
   });
   await provider.close(`${BASE_URL}/browse/PROJ-1`);
-  assertEquals(
+  assertStringIncludes(
     requests[0].url,
-    `${BASE_URL}/rest/api/3/issue/PROJ-1/transitions`,
+    `/rest/api/3/issue/PROJ-1?`,
   );
   assertEquals(requests[1].method, "POST");
   assertEquals(JSON.parse(requests[1].body!), { transition: { id: "31" } });

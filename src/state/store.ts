@@ -141,6 +141,7 @@ export async function readTicket(
       data.lastSeenCommentTimestamp,
     ),
     providerDone: data.providerDone as boolean | undefined,
+    providerPickedUp: data.providerPickedUp as boolean | undefined,
     ciHandledRunIds: data.ciHandledRunIds as string[] | undefined,
     phaseSessionIds: data.phaseSessionIds as TicketState["phaseSessionIds"],
     notifiedNeedsAttention: data.notifiedNeedsAttention as boolean | undefined,
@@ -190,6 +191,9 @@ export async function writeTicket(
   }
   if (ticket.providerDone !== undefined) {
     frontmatter.providerDone = ticket.providerDone;
+  }
+  if (ticket.providerPickedUp !== undefined) {
+    frontmatter.providerPickedUp = ticket.providerPickedUp;
   }
   if (ticket.ciHandledRunIds !== undefined) {
     frontmatter.ciHandledRunIds = ticket.ciHandledRunIds;

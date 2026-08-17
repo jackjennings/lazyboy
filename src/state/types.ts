@@ -83,6 +83,7 @@ export interface TicketState {
   ciHandledRunIds?: string[];
   lastSeenCommentTimestamp?: string;
   providerDone?: boolean;
+  providerPickedUp?: boolean;
   outputRetries?: number;
   phaseSessionIds?: Partial<Record<string, string>>;
   notifiedNeedsAttention?: boolean;

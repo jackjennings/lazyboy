@@ -8,6 +8,7 @@ export interface JiraPickupDeps {
   email: string;
   apiToken: string;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   http: HttpClient;
 }
 
@@ -15,7 +16,11 @@ export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
   return {
     label: "Picking up Jira",
     applies(ticket: TicketState): boolean {
-      return ticket.provider === "jira" && ticket.status === "new";
+      return (
+        ticket.provider === "jira" &&
+        ticket.status === "new" &&
+        !ticket.providerPickedUp
+      );
     },
     async run(
       ticket: TicketState,
@@ -28,7 +33,7 @@ export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
           email: opts.email,
           apiToken: opts.apiToken,
           issueKey,
-          targetStatusCategoryKey: "in-progress",
+          targetStatusName: "In Progress",
           http: opts.http,
         });
       } catch (e) {
@@ -37,8 +42,11 @@ export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
           context: "jiraPickup",
           message: String(e),
         });
+        return null;
       }
-      return null;
+      const updated: TicketState = { ...ticket, providerPickedUp: true };
+      await opts.writeTicket(stateDir, updated);
+      return updated;
     },
   };
 }

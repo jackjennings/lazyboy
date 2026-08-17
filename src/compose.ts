@@ -1,5 +1,6 @@
 import { CeremonyRunner } from "./ceremonies.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
+import { AgentsMdConsolidationCeremony } from "./ceremonies/agents-md-consolidation.ts";
 import { dirname, join } from "@std/path";
 import {
   detectImplementationOutlier,
@@ -831,6 +832,15 @@ export function composeTickDeps(
         commitState: async () => {
           await ensureRunPidGitignored(stateDir);
           await commitState(stateDir, "ceremony: documentation-gaps");
+        },
+        notify: desktopNotifier,
+      }),
+      new AgentsMdConsolidationCeremony({
+        repoDir: new URL("../", import.meta.url).pathname,
+        run: captureCommandRunner(),
+        commitState: async () => {
+          await ensureRunPidGitignored(stateDir);
+          await commitState(stateDir, "ceremony: agents-md-consolidation");
         },
         notify: desktopNotifier,
       }),

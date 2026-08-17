@@ -288,9 +288,14 @@ export function formatDetailView(
   attentionReason?: string | null,
   phaseBreakdown?: PhaseRow[] | null,
 ): string {
+  const lastApproval = ticket.approvals.at(-1);
+  const approvedStr = lastApproval?.phase === ticket.phase
+    ? lastApproval.actor
+    : "—";
   const lines = [
     `${"Phase".padEnd(8)} ${ticket.phase}`,
     `${"Status".padEnd(8)} ${ticket.status}`,
+    `Approved ${approvedStr}`,
     `${"Tokens".padEnd(8)} ${formatTokens(tokens)}`,
     `${"Cost".padEnd(8)} ${formatCost(costResult)}`,
     `${"PRs".padEnd(8)} ${formatPrs(ticket.prs)}`,

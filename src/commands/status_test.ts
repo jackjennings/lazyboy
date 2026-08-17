@@ -772,6 +772,55 @@ Deno.test("formatDetailView: Reason is the last line", () => {
   assert(lines[lines.length - 1].startsWith("Reason"));
 });
 
+// ── formatDetailView (Approved line) ─────────────────────────────────────────
+
+Deno.test("formatDetailView: renders em-dash for Approved when approvals is empty", () => {
+  const ticket = makeTicket({ approvals: [] });
+  const out = formatDetailView(ticket, null, { cost: null, partial: false });
+  assertStringIncludes(out, "Approved —");
+});
+
+Deno.test(
+  "formatDetailView: renders em-dash for Approved when last approval is for a different phase",
+  () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      approvals: [{
+        timestamp: "2026-08-17T20:00:00Z",
+        actor: "human",
+        phase: "intake",
+      }],
+    });
+    const out = formatDetailView(ticket, null, { cost: null, partial: false });
+    assertStringIncludes(out, "Approved —");
+  },
+);
+
+Deno.test(
+  "formatDetailView: renders actor for Approved when last approval matches current phase",
+  () => {
+    const ticket = makeTicket({
+      phase: "spec",
+      approvals: [{
+        timestamp: "2026-08-17T20:00:00Z",
+        actor: "human",
+        phase: "spec",
+      }],
+    });
+    const out = formatDetailView(ticket, null, { cost: null, partial: false });
+    assertStringIncludes(out, "Approved human");
+  },
+);
+
+Deno.test("formatDetailView: renders Approved between Status and Tokens", () => {
+  const ticket = makeTicket({});
+  const out = formatDetailView(ticket, null, { cost: null, partial: false });
+  assert(
+    out.indexOf("Approved") > out.indexOf("Status") &&
+      out.indexOf("Tokens") > out.indexOf("Approved"),
+  );
+});
+
 // ── buildPhaseBreakdown ────────────────────────────────────────────────────────
 
 Deno.test("buildPhaseBreakdown: groups files by phase key and sums all token fields", () => {

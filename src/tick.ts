@@ -860,7 +860,7 @@ export class TickService {
           created: Temporal.Now.instant().toString(),
           updated: Temporal.Now.instant().toString(),
           body: item.description,
-          artifact: "pr",
+          artifact: "code",
         });
         await deps.tickDeps.appendLog(deps.stateDir, item.id, {
           event: "ticket-captured",

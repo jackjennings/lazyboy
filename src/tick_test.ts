@@ -1461,6 +1461,70 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "advancePhase: plan phase with non-empty newRepos skips self-review",
+  async () => {
+    const stateDir = Deno.makeTempDirSync();
+    try {
+      const ticket = makeTicket({
+        phase: "plan",
+        status: "running",
+        newRepos: ["myorg/new-repo"],
+      });
+      const ticketDir = join(stateDir, ticket.id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100001-plan.md"),
+        "content",
+      );
+      const selfReviewSpy = spy(() =>
+        Promise.resolve({ approved: false, reason: null })
+      );
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          ...makeTickDeps(),
+          selfReview: selfReviewSpy,
+        }),
+      );
+      assertSpyCalls(selfReviewSpy, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: plan phase without newRepos calls self-review normally",
+  async () => {
+    const stateDir = Deno.makeTempDirSync();
+    try {
+      const ticket = makeTicket({ phase: "plan", status: "running" });
+      const ticketDir = join(stateDir, ticket.id);
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "20260101T100001-plan.md"),
+        "content",
+      );
+      const selfReviewSpy = spy(() =>
+        Promise.resolve({ approved: false, reason: null })
+      );
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          ...makeTickDeps(),
+          selfReview: selfReviewSpy,
+        }),
+      );
+      assertSpyCalls(selfReviewSpy, 1);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
 // ── appendTickLog ─────────────────────────────────────────────────────────────
 
 Deno.test("appendTickLog: writes to combined log without id field", async () => {

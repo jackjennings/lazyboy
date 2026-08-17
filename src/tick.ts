@@ -555,7 +555,9 @@ export async function advancePhase(
       } catch {
         // directory unreadable — proceed with normal self-review
       }
-      if (!feedbackPrecedesOutput) {
+      const skipSelfReview = ticket.phase === "plan" &&
+        (ticket.newRepos?.length ?? 0) > 0;
+      if (!feedbackPrecedesOutput && !skipSelfReview) {
         let selfReviewResult: { approved: boolean; reason: string | null } = {
           approved: false,
           reason: null,

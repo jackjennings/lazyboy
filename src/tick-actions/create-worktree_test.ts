@@ -28,6 +28,7 @@ function makeAction(
     writeTicket: () => Promise.resolve(),
     readIntakeOutput: () => Promise.resolve(null),
     cloneRemoteRepo: () => Promise.reject(new Error("no clone")),
+    initLocalRepo: () => Promise.resolve("/repos/org/new-repo"),
     stat: () => Promise.resolve(false),
     appendLog: () => Promise.resolve(),
     applyWorktreeInclude: () => Promise.resolve(),
@@ -515,5 +516,88 @@ Deno.test(
     assertSpyCalls(applySpy, 2);
     const srcPaths = applySpy.calls.map((c) => c.args[1] as string).sort();
     assertEquals(srcPaths, ["/code/myorg/myrepo", "/code/other/repo"]);
+  },
+);
+
+// ── run: (new) marker ────────────────────────────────────────────────────────
+
+Deno.test(
+  "createWorktreeAction: (new) slug calls initLocalRepo and writes newRepos",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - other/new-repo (new)\n```\n\n## Reasoning\n\nText.\n";
+    const initSpy = spy((_slug: string) =>
+      Promise.resolve("/repos/other/new-repo")
+    );
+    const written: TicketState[] = [];
+    const result = await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      initLocalRepo: initSpy,
+      findLocalRepo: (_, slug) =>
+        slug === "myorg/myrepo"
+          ? Promise.resolve("/code/myorg/myrepo")
+          : Promise.resolve(null),
+      createWorktree: (_repo, _id, slug) =>
+        Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
+      writeTicket: (_dir, t) => {
+        written.push(t);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    assertSpyCalls(initSpy, 1);
+    assertEquals(initSpy.calls[0].args[0], "other/new-repo");
+    assertEquals(result?.newRepos, ["other/new-repo"]);
+    assertEquals(written[0].newRepos, ["other/new-repo"]);
+    assertEquals(result?.status, "waiting");
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: (new) on local path → needs-attention with new-marker-on-local-path",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - /usr/local/myproject (new)\n```\n\n## Reasoning\n\nText.\n";
+    const logged: object[] = [];
+    const result = await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(result?.status, "needs-attention");
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "new-marker-on-local-path",
+    );
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: initLocalRepo failure → needs-attention with local-repo-init-failed",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - other/new-repo (new)\n```\n\n## Reasoning\n\nText.\n";
+    const logged: object[] = [];
+    const result = await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      initLocalRepo: () => Promise.reject(new Error("git init failed")),
+      appendLog: (_sd, _id, entry) => {
+        logged.push(entry);
+        return Promise.resolve();
+      },
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(result?.status, "needs-attention");
+    assertEquals(
+      (logged[0] as Record<string, unknown>).reason,
+      "local-repo-init-failed",
+    );
+    assertEquals(
+      (logged[0] as Record<string, unknown>).slug,
+      "other/new-repo",
+    );
   },
 );

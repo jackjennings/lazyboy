@@ -80,6 +80,7 @@ export interface TicketState {
   scope: string[];
   worktrees: Record<string, WorktreeInfo>;
   prs?: PrEntry[];
+  newRepos?: string[];
   ciHandledRunIds?: string[];
   lastSeenCommentTimestamp?: string;
   providerDone?: boolean;

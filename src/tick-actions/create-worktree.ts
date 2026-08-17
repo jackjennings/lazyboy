@@ -19,6 +19,7 @@ export interface CreateWorktreeDeps {
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   readIntakeOutput: (ticketDir: string) => Promise<string | null>;
   cloneRemoteRepo: (slug: string) => Promise<string>;
+  initLocalRepo: (slug: string) => Promise<string>;
   stat: (path: string) => Promise<boolean>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
   applyWorktreeInclude: (
@@ -52,6 +53,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
 
       const resolvedLocalPaths: string[] = [];
       const githubSlugs = new Set<string>();
+      const newRepoSlugs: string[] = [];
 
       if (ticket.provider === "github") {
         try {
@@ -71,15 +73,31 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         }
       }
 
-      for (const entry of scopeEntries) {
+      for (const { entry, isNew } of scopeEntries) {
         if (entry.startsWith("/") || entry.startsWith("~/")) {
+          if (isNew) {
+            const updated = {
+              ...ticket,
+              status: "needs-attention" as const,
+              updated: now,
+            };
+            await deps.writeTicket(stateDir, updated);
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "needs-attention",
+              reason: "new-marker-on-local-path",
+            });
+            return updated;
+          }
           const expanded = entry.startsWith("~/")
             ? join(Deno.env.get("HOME")!, entry.slice(2))
             : entry;
           if (await deps.stat(expanded)) resolvedLocalPaths.push(expanded);
         } else {
           const slug = resolveGitHubSlug(entry);
-          if (slug) githubSlugs.add(slug);
+          if (slug) {
+            githubSlugs.add(slug);
+            if (isNew) newRepoSlugs.push(slug);
+          }
         }
       }
 
@@ -99,13 +117,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
 
       const resolvedRepos: Array<{ slug: string; repoPath: string }> = [];
       for (const slug of githubSlugs) {
-        const localPath = await deps.findLocalRepo(deps.roots, slug);
-        if (localPath) {
-          resolvedRepos.push({ slug, repoPath: localPath });
-        } else {
+        if (newRepoSlugs.includes(slug)) {
           try {
-            const clonedPath = await deps.cloneRemoteRepo(slug);
-            resolvedRepos.push({ slug, repoPath: clonedPath });
+            const initedPath = await deps.initLocalRepo(slug);
+            resolvedRepos.push({ slug, repoPath: initedPath });
           } catch (e) {
             const updated = {
               ...ticket,
@@ -115,11 +130,35 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
             await deps.writeTicket(stateDir, updated);
             await deps.appendLog(stateDir, ticket.id, {
               event: "needs-attention",
-              reason: "clone-failed",
+              reason: "local-repo-init-failed",
               slug,
               message: String(e),
             });
             return updated;
+          }
+        } else {
+          const localPath = await deps.findLocalRepo(deps.roots, slug);
+          if (localPath) {
+            resolvedRepos.push({ slug, repoPath: localPath });
+          } else {
+            try {
+              const clonedPath = await deps.cloneRemoteRepo(slug);
+              resolvedRepos.push({ slug, repoPath: clonedPath });
+            } catch (e) {
+              const updated = {
+                ...ticket,
+                status: "needs-attention" as const,
+                updated: now,
+              };
+              await deps.writeTicket(stateDir, updated);
+              await deps.appendLog(stateDir, ticket.id, {
+                event: "needs-attention",
+                reason: "clone-failed",
+                slug,
+                message: String(e),
+              });
+              return updated;
+            }
           }
         }
       }
@@ -160,6 +199,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         ...ticket,
         scope: resolvedLocalPaths,
         worktrees,
+        ...(newRepoSlugs.length > 0 ? { newRepos: newRepoSlugs } : {}),
         updated: now,
       };
       await deps.writeTicket(stateDir, updated);

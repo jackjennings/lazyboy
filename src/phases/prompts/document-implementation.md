@@ -1,5 +1,4 @@
-This ticket produces a Notion document. Do not create worktrees or pull
-requests.
+This ticket produces a document. Do not create worktrees or pull requests.
 
 Follow these steps:
 
@@ -7,11 +6,11 @@ Follow these steps:
    the parent URL from the plan. Record the returned page URL.
 2. Pipe the document text from the plan into `notion append <page-url>` to
    upload the content.
-3. Edit `meta.md` to add a `notionPages` field to the YAML frontmatter with the
+3. Edit `meta.md` to add a `documents` field to the YAML frontmatter with the
    resulting page URL and document title:
 
 ```yaml
-notionPages:
+documents:
   - url: <returned-url>
     title: <document-title>
 ```

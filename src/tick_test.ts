@@ -3827,7 +3827,7 @@ Deno.test(
       const ticket = makeTicket({
         phase: "implementation",
         status: "running",
-        artifact: "notion",
+        artifact: "document",
       });
       const statuses: string[] = [];
       await advancePhase(
@@ -3860,7 +3860,7 @@ Deno.test(
       const ticket = makeTicket({
         phase: "plan",
         status: "waiting",
-        artifact: "notion",
+        artifact: "document",
         approvals: [{
           timestamp: "2026-01-01T00:00:00Z",
           actor: "human",
@@ -3899,7 +3899,7 @@ Deno.test(
       const ticket = makeTicket({
         phase: "implementation",
         status: "waiting",
-        artifact: "notion",
+        artifact: "document",
         approvals: [{
           timestamp: "2026-01-01T00:00:00Z",
           actor: "human",
@@ -4694,7 +4694,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "running",
-      artifact: "notion",
+      artifact: "document",
     });
     const written: TicketState[] = [];
     const logEntries: object[] = [];
@@ -4731,9 +4731,9 @@ Deno.test(
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      artifact: "notion",
+      artifact: "document",
       approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
-      notionPages: [{ url: "https://notion.so/page", title: "Doc" }],
+      documents: [{ url: "https://notion.so/page", title: "Doc" }],
     });
     const written: TicketState[] = [];
     const markPRsReadySpy = spy((_urls: string[]) => Promise.resolve());
@@ -4763,7 +4763,7 @@ Deno.test(
     const ticket = makeTicket({
       phase: "plan",
       status: "waiting",
-      artifact: "notion",
+      artifact: "document",
       approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
       worktrees: {},
     });

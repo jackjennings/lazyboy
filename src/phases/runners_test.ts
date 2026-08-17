@@ -393,20 +393,20 @@ Deno.test(
   },
 );
 
-Deno.test("loadArtifactPrompt: notion-spec returns non-empty content", async () => {
-  const result = await loadArtifactPrompt("spec", "notion");
+Deno.test("loadArtifactPrompt: document-spec returns non-empty content", async () => {
+  const result = await loadArtifactPrompt("spec", "document");
   assertGreater(result.length, 0);
 });
 
-Deno.test("loadArtifactPrompt: notion-plan returns non-empty content", async () => {
-  const result = await loadArtifactPrompt("plan", "notion");
+Deno.test("loadArtifactPrompt: document-plan returns non-empty content", async () => {
+  const result = await loadArtifactPrompt("plan", "document");
   assertGreater(result.length, 0);
 });
 
 Deno.test(
-  "loadArtifactPrompt: notion-implementation returns non-empty content",
+  "loadArtifactPrompt: document-implementation returns non-empty content",
   async () => {
-    const result = await loadArtifactPrompt("implementation", "notion");
+    const result = await loadArtifactPrompt("implementation", "document");
     assertGreater(result.length, 0);
   },
 );

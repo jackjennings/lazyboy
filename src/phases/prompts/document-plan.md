@@ -1,4 +1,4 @@
-This ticket produces a Notion document, not a code change.
+This ticket produces a document, not a code change.
 
 Your plan must contain:
 

@@ -84,10 +84,10 @@ export const ARTIFACT_DESCRIPTORS = {
     missingReason: "no-prs",
     mergeStatus: "waiting",
   },
-  notion: {
+  document: {
     requiresWorktrees: false,
     requiresPRs: false,
-    completionField: "notionPages",
+    completionField: "documents",
     missingReason: "no-pages",
     mergeStatus: "done",
   },
@@ -127,7 +127,7 @@ export interface TicketState {
   body: string;
   phases?: PhaseModelConfig;
   artifact: ArtifactType;
-  notionPages?: { url: string; title: string }[];
+  documents?: { url: string; title: string }[];
   workItems?: { url: string; title: string }[];
 }
 

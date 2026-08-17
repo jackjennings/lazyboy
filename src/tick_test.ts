@@ -4496,7 +4496,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: intake revising uses authoring prompt when no revision file exists",
+  "advancePhase: intake revising uses revision prompt when intake-revision.md exists",
   async () => {
     const ticket = makeTicket({
       phase: "intake",
@@ -4517,8 +4517,10 @@ Deno.test(
       }),
     );
     assertSpyCall(spawnSpy, 0);
-    const authoringPrompt = await loadPromptFile("intake.md");
-    assertStringIncludes(spawnedPrompt, authoringPrompt.trim());
+    const revisionPrompt = await Deno.readTextFile(
+      new URL("./phases/prompts/intake-revision.md", import.meta.url).pathname,
+    );
+    assertStringIncludes(spawnedPrompt, revisionPrompt.trim());
   },
 );
 

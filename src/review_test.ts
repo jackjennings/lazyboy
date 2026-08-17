@@ -17,6 +17,7 @@ import {
   ErrorOverlay,
   findAllPhaseOutputs,
   findLatestPhaseOutput,
+  findLatestSelfReview,
   formatTimestamp,
   renderDiff,
   renderTabBar,
@@ -626,6 +627,95 @@ Deno.test("findAllPhaseOutputs: excludes feedback files", async () => {
     const result = await findAllPhaseOutputs(tempDir);
     assertEquals(result.length, 1);
     assertEquals(result[0].filename, "20260629T154506-spec.md");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+// ── findLatestSelfReview ──────────────────────────────────────────────────────
+
+Deno.test("findLatestSelfReview: returns null when no self-review file exists", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    assertEquals(
+      await findLatestSelfReview(tempDir, "plan", "20260812T031620"),
+      null,
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestSelfReview: returns null when self-review timestamp is not strictly after afterTimestamp", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260812T031620-plan-self-review.md"),
+      "REJECT reason",
+    );
+    assertEquals(
+      await findLatestSelfReview(tempDir, "plan", "20260812T031620"),
+      null,
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestSelfReview: returns null when first line does not start with REJECT", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260812T032227-plan-self-review.md"),
+      "APPROVE",
+    );
+    assertEquals(
+      await findLatestSelfReview(tempDir, "plan", "20260812T031620"),
+      null,
+    );
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestSelfReview: returns filename and fullText for valid rejection after afterTimestamp", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const content = "REJECT plan has no task sections\nmore detail";
+    await Deno.writeTextFile(
+      join(tempDir, "20260812T032227-plan-self-review.md"),
+      content,
+    );
+    const result = await findLatestSelfReview(
+      tempDir,
+      "plan",
+      "20260812T031620",
+    );
+    assertEquals(result?.filename, "20260812T032227-plan-self-review.md");
+    assertEquals(result?.fullText, content);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("findLatestSelfReview: returns newest self-review, skips stale ones", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(
+      join(tempDir, "20260807T191215-plan-self-review.md"),
+      "REJECT old",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260812T032227-plan-self-review.md"),
+      "REJECT newer",
+    );
+    const result = await findLatestSelfReview(
+      tempDir,
+      "plan",
+      "20260812T031620",
+    );
+    assertEquals(result?.filename, "20260812T032227-plan-self-review.md");
+    assertEquals(result?.fullText, "REJECT newer");
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }

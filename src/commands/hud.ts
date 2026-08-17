@@ -339,6 +339,7 @@ export const hud: Command = {
     async function refresh() {
       const logWasAtEnd = logPane.isAtEnd(tui.terminal.columns);
       const savedLogOffset = logPane.scrollOffset;
+      const savedStatusOffset = statusPane.scrollOffset;
 
       const [{ header, statusLines }, logLines] = await Promise.all([
         readState(stateDir, config),
@@ -349,6 +350,7 @@ export const hud: Command = {
       currentStatusLines = statusLines;
       currentLogLines = logLines;
       statusPane.setContent((_w) => currentStatusLines);
+      statusPane.scrollOffset = savedStatusOffset;
       logPane.setContent((_w) => logPaneLines(currentLogLines));
 
       if (logWasAtEnd) {

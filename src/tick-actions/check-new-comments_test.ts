@@ -41,6 +41,7 @@ function makeConfig(overrides: { checkNewComments?: boolean } = {}) {
     },
     github: { repos: [] },
     state: { dir: "/state" },
+    extensions: { dir: "" },
     codebase: { roots: [] },
     pi: { provider: "anthropic", packages: [] },
     agent: { type: "pi" as const },

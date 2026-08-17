@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertFalse,
+  assertNotEquals,
   assertStringIncludes,
 } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
@@ -28,6 +29,7 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
 function makeRunner(
   stateDir: string,
   opts: {
+    extensionsDir?: string;
     appendTickLog?: (entry: object) => Promise<void>;
     now?: () => Temporal.ZonedDateTime;
     ceremonies?: ConstructorParameters<typeof CeremonyRunner>[1];
@@ -45,6 +47,7 @@ function makeRunner(
   return new CeremonyRunner(
     {
       stateDir,
+      extensionsDir: opts.extensionsDir ?? stateDir,
       appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
       now: opts.now,
       runClaude: opts.runClaude,
@@ -1092,5 +1095,77 @@ Deno.test("CeremonyRunner: a corrupt approvals file does not destroy stored appr
     assertEquals(await Deno.readTextFile(approvalsFile), "{ not json");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: discovers ceremonies from extensionsDir, not stateDir", async () => {
+  const stateDir = await Deno.makeTempDir();
+  const extensionsDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(join(extensionsDir, "ceremonies", "standup"), {
+      recursive: true,
+    });
+    await Deno.writeTextFile(
+      join(extensionsDir, "ceremonies", "standup", "config.toml"),
+      'time = "09:00"\n',
+    );
+    const { ceremony, runCount } = makeCountedCeremony("standup");
+    await makeRunner(stateDir, {
+      extensionsDir,
+      now: () => TEST_NOW,
+      ceremonies: [ceremony],
+    }).run();
+    assertEquals(runCount(), 1);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
+  }
+});
+
+Deno.test("CeremonyRunner: output written to stateDir/ceremonies/<name>/output when extensionsDir differs", async () => {
+  using _lazyboy = withLazyboyDir();
+  const stateDir = await Deno.makeTempDir();
+  const extensionsDir = await Deno.makeTempDir();
+  try {
+    const dir = join(extensionsDir, "ceremonies", "docs-gap");
+    await Deno.mkdir(dir, { recursive: true });
+    await Deno.writeTextFile(join(dir, "config.toml"), 'time = "09:00"');
+    await Deno.writeTextFile(join(dir, "prompt.md"), "List gaps.");
+    await writeApprovals({
+      "docs-gap": { hash: await ceremonyHash(dir) },
+    });
+    await makeRunner(stateDir, {
+      extensionsDir,
+      now: () => TEST_NOW,
+      runClaude: () => Promise.resolve({ stdout: "Gaps found.\n", code: 0 }),
+    }).run();
+    const outputDir = join(stateDir, "ceremonies", "docs-gap", "output");
+    const files: string[] = [];
+    for await (const entry of Deno.readDir(outputDir)) {
+      files.push(entry.name);
+    }
+    assertEquals(files.length, 1);
+    assert(files[0].startsWith("20260727"));
+    assert(files[0].endsWith("-docs-gap.md"));
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
+  }
+});
+
+Deno.test("ceremonyHash: output/ subdir is included in hash when present", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(dir, "prompt.md"), "do something\n");
+    const hashWithout = await ceremonyHash(dir);
+    await Deno.mkdir(join(dir, "output"), { recursive: true });
+    await Deno.writeTextFile(
+      join(dir, "output", "20260727-result.md"),
+      "done\n",
+    );
+    const hashWith = await ceremonyHash(dir);
+    assertNotEquals(hashWithout, hashWith);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
   }
 });

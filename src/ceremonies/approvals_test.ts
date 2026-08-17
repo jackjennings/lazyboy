@@ -61,18 +61,6 @@ Deno.test("ceremonyHash: changes when a file changes", async () => {
   }
 });
 
-Deno.test("ceremonyHash: ignores the output directory", async () => {
-  const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
-  try {
-    const before = await ceremonyHash(dir);
-    await Deno.mkdir(join(dir, "output"), { recursive: true });
-    await Deno.writeTextFile(join(dir, "output", "20260811T090000-x.md"), "r");
-    assertEquals(await ceremonyHash(dir), before);
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-  }
-});
-
 Deno.test("ceremonyHash: covers nested files outside output", async () => {
   const dir = await makeCeremonyDir({ "lib/helper.ts": "export const a = 1;" });
   try {
@@ -229,20 +217,6 @@ Deno.test("ceremonyHash: editing through an in-root symlink changes the hash", a
     assert(await ceremonyHash(dir) !== before);
   } finally {
     await Deno.remove(dir, { recursive: true });
-  }
-});
-
-Deno.test("ceremonyHash: ignores the output directory when symlinked", async () => {
-  const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
-  const outputDir = await Deno.makeTempDir();
-  try {
-    const before = await ceremonyHash(dir);
-    await Deno.symlink(outputDir, join(dir, "output"));
-    await Deno.writeTextFile(join(outputDir, "result.md"), "output");
-    assertEquals(await ceremonyHash(dir), before);
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-    await Deno.remove(outputDir, { recursive: true });
   }
 });
 

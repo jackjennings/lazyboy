@@ -93,19 +93,22 @@ Deno.test(
   },
 );
 
-async function makeStateDir(name: string): Promise<string> {
+async function makeTestDirs(
+  name: string,
+): Promise<{ stateDir: string; extensionsDir: string }> {
   const stateDir = await Deno.makeTempDir();
-  const dir = join(stateDir, "ceremonies", name);
+  const extensionsDir = await Deno.makeTempDir();
+  const dir = join(extensionsDir, "ceremonies", name);
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(join(dir, "prompt.md"), "x\n");
-  return stateDir;
+  return { stateDir, extensionsDir };
 }
 
 Deno.test("performApproveCeremony: writes the hash and timestamp", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     let written: ApprovalRecord = {};
-    await performApproveCeremony(stateDir, "digest", {
+    await performApproveCeremony(stateDir, extensionsDir, "digest", {
       readApprovalsFn: () => Promise.resolve({}),
       writeApprovalsFn: (record) => {
         written = record;
@@ -117,14 +120,15 @@ Deno.test("performApproveCeremony: writes the hash and timestamp", async () => {
     assertEquals(typeof written.digest.approvedAt, "string");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: preserves other entries", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     let written: ApprovalRecord = {};
-    await performApproveCeremony(stateDir, "digest", {
+    await performApproveCeremony(stateDir, extensionsDir, "digest", {
       readApprovalsFn: () => Promise.resolve({ other: { hash: "sha256:1" } }),
       writeApprovalsFn: (record) => {
         written = record;
@@ -135,16 +139,18 @@ Deno.test("performApproveCeremony: preserves other entries", async () => {
     assertEquals(written.other.hash, "sha256:1");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: rejects an unknown ceremony", async () => {
   const stateDir = await Deno.makeTempDir();
+  const extensionsDir = await Deno.makeTempDir();
   try {
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "missing", {
+        performApproveCeremony(stateDir, extensionsDir, "missing", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn,
           hashFn: () => Promise.resolve("sha256:x"),
@@ -154,15 +160,16 @@ Deno.test("performApproveCeremony: rejects an unknown ceremony", async () => {
     );
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: rejects a built-in ceremony", async () => {
-  const stateDir = await makeStateDir("documentation-gaps");
+  const { stateDir, extensionsDir } = await makeTestDirs("documentation-gaps");
   try {
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "documentation-gaps", {
+        performApproveCeremony(stateDir, extensionsDir, "documentation-gaps", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn: () => Promise.resolve(),
           hashFn: () => Promise.resolve("sha256:x"),
@@ -172,18 +179,19 @@ Deno.test("performApproveCeremony: rejects a built-in ceremony", async () => {
     );
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test(
   "performApproveCeremony: rejects an empty name even when a ceremony exists",
   async () => {
-    const stateDir = await makeStateDir("digest");
+    const { stateDir, extensionsDir } = await makeTestDirs("digest");
     try {
       const writeApprovalsFn = spy(() => Promise.resolve());
       await assertRejects(
         () =>
-          performApproveCeremony(stateDir, "", {
+          performApproveCeremony(stateDir, extensionsDir, "", {
             readApprovalsFn: () => Promise.resolve({}),
             writeApprovalsFn,
             hashFn: () => Promise.resolve("sha256:x"),
@@ -194,17 +202,18 @@ Deno.test(
       assertSpyCalls(writeApprovalsFn, 0);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(extensionsDir, { recursive: true });
     }
   },
 );
 
 Deno.test("performApproveCeremony: rejects a name containing /", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "foo/bar", {
+        performApproveCeremony(stateDir, extensionsDir, "foo/bar", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn,
           hashFn: () => Promise.resolve("sha256:x"),
@@ -215,16 +224,17 @@ Deno.test("performApproveCeremony: rejects a name containing /", async () => {
     assertSpyCalls(writeApprovalsFn, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: rejects a name containing ..", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "..", {
+        performApproveCeremony(stateDir, extensionsDir, "..", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn,
           hashFn: () => Promise.resolve("sha256:x"),
@@ -235,16 +245,17 @@ Deno.test("performApproveCeremony: rejects a name containing ..", async () => {
     assertSpyCalls(writeApprovalsFn, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test(
   "performApproveCeremony: clears a stale lastWarnedWindow on approval",
   async () => {
-    const stateDir = await makeStateDir("digest");
+    const { stateDir, extensionsDir } = await makeTestDirs("digest");
     try {
       let written: ApprovalRecord = {};
-      await performApproveCeremony(stateDir, "digest", {
+      await performApproveCeremony(stateDir, extensionsDir, "digest", {
         readApprovalsFn: () =>
           Promise.resolve({
             digest: { hash: "sha256:old", lastWarnedWindow: "2026-08-01" },
@@ -260,17 +271,18 @@ Deno.test(
       assertEquals(written.digest.lastWarnedWindow, undefined);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(extensionsDir, { recursive: true });
     }
   },
 );
 
 Deno.test('performApproveCeremony: rejects the name "."', async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, ".", {
+        performApproveCeremony(stateDir, extensionsDir, ".", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn,
           hashFn: () => Promise.resolve("sha256:x"),
@@ -281,39 +293,47 @@ Deno.test('performApproveCeremony: rejects the name "."', async () => {
     assertSpyCalls(writeApprovalsFn, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: rejects a name with a quote", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, 'x" & (do shell script "id") & "y', {
-          readApprovalsFn: () => Promise.resolve({}),
-          writeApprovalsFn,
-          hashFn: () => Promise.resolve("sha256:x"),
-        }),
+        performApproveCeremony(
+          stateDir,
+          extensionsDir,
+          'x" & (do shell script "id") & "y',
+          {
+            readApprovalsFn: () => Promise.resolve({}),
+            writeApprovalsFn,
+            hashFn: () => Promise.resolve("sha256:x"),
+          },
+        ),
       Error,
       "Invalid ceremony name",
     );
     assertSpyCalls(writeApprovalsFn, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: rejects a directory that can never run", async () => {
   const stateDir = await Deno.makeTempDir();
+  const extensionsDir = await Deno.makeTempDir();
   try {
-    await Deno.mkdir(join(stateDir, "ceremonies", "empty"), {
+    await Deno.mkdir(join(extensionsDir, "ceremonies", "empty"), {
       recursive: true,
     });
     const writeApprovalsFn = spy(() => Promise.resolve());
     await assertRejects(
       () =>
-        performApproveCeremony(stateDir, "empty", {
+        performApproveCeremony(stateDir, extensionsDir, "empty", {
           readApprovalsFn: () => Promise.resolve({}),
           writeApprovalsFn,
           hashFn: () => Promise.resolve("sha256:x"),
@@ -324,17 +344,19 @@ Deno.test("performApproveCeremony: rejects a directory that can never run", asyn
     assertSpyCalls(writeApprovalsFn, 0);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: accepts a directory with only an index.ts", async () => {
   const stateDir = await Deno.makeTempDir();
+  const extensionsDir = await Deno.makeTempDir();
   try {
-    const dir = join(stateDir, "ceremonies", "coded");
+    const dir = join(extensionsDir, "ceremonies", "coded");
     await Deno.mkdir(dir, { recursive: true });
     await Deno.writeTextFile(join(dir, "index.ts"), "export default () => {};");
     const writeApprovalsFn = spy(() => Promise.resolve());
-    await performApproveCeremony(stateDir, "coded", {
+    await performApproveCeremony(stateDir, extensionsDir, "coded", {
       readApprovalsFn: () => Promise.resolve({}),
       writeApprovalsFn,
       hashFn: () => Promise.resolve("sha256:x"),
@@ -342,34 +364,41 @@ Deno.test("performApproveCeremony: accepts a directory with only an index.ts", a
     assertSpyCalls(writeApprovalsFn, 1);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test("performApproveCeremony: returns the recorded hash and hashed paths", async () => {
-  const stateDir = await makeStateDir("digest");
+  const { stateDir, extensionsDir } = await makeTestDirs("digest");
   try {
-    const result = await performApproveCeremony(stateDir, "digest", {
-      readApprovalsFn: () => Promise.resolve({}),
-      writeApprovalsFn: () => Promise.resolve(),
-      hashFn: () => Promise.resolve("sha256:deadbeef"),
-    });
+    const result = await performApproveCeremony(
+      stateDir,
+      extensionsDir,
+      "digest",
+      {
+        readApprovalsFn: () => Promise.resolve({}),
+        writeApprovalsFn: () => Promise.resolve(),
+        hashFn: () => Promise.resolve("sha256:deadbeef"),
+      },
+    );
     assertEquals(result.hash, "sha256:deadbeef");
     assertEquals(result.lines.length, 1);
     assertStringIncludes(result.lines[0], "prompt.md ");
   } finally {
     await Deno.remove(stateDir, { recursive: true });
+    await Deno.remove(extensionsDir, { recursive: true });
   }
 });
 
 Deno.test(
   "performApproveCeremony: rejects when manifest contains an out-of-root directory symlink",
   async () => {
-    const stateDir = await makeStateDir("my-ceremony");
+    const { stateDir, extensionsDir } = await makeTestDirs("my-ceremony");
     try {
       const writeApprovalsFn = spy(() => Promise.resolve());
       await assertRejects(
         () =>
-          performApproveCeremony(stateDir, "my-ceremony", {
+          performApproveCeremony(stateDir, extensionsDir, "my-ceremony", {
             readApprovalsFn: () => Promise.resolve({}),
             writeApprovalsFn,
             hashFn: () => Promise.resolve("sha256:x"),
@@ -385,6 +414,7 @@ Deno.test(
       assertSpyCalls(writeApprovalsFn, 0);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(extensionsDir, { recursive: true });
     }
   },
 );

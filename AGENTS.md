@@ -185,12 +185,16 @@ from `apfel` falls through to `claude` rather than being parsed loosely. The
 body is passed after a `--` separator in both calls — a principles block starts
 with `-`, which either CLI otherwise rejects as an unknown option.
 
-## State-dir ceremonies
+## Ceremonies
 
-`{stateDir}/ceremonies/<name>/` may define its behavior as `prompt.md`
-(existing) or `index.ts` (`CeremonyModule`, `src/ceremonies/types.ts`) — a
-default-exported function receiving a `CeremonyContext`. `index.ts` wins when
-both are present.
+Ceremony source lives in `{extensionsDir}/ceremonies/<name>/` (from
+`[extensions] dir` in `config.toml`, defaulting to `~/.lazyboy/extensions`).
+Ceremony output is written to `{stateDir}/ceremonies/<name>/output/` — always
+the state dir, never the extensions dir.
+
+Each ceremony directory may define its behavior as `prompt.md` (existing) or
+`index.ts` (`CeremonyModule`, `src/ceremonies/types.ts`) — a default-exported
+function receiving a `CeremonyContext`. `index.ts` wins when both are present.
 
 The approval gate (`CeremonyRunner#runCeremony`, `src/ceremonies.ts`) runs after
 the schedule check and before `ceremony.run()`. `ModuleCeremony.run()`
@@ -272,19 +276,6 @@ same directory and `rename`s it, so a partial write cannot corrupt the file.
 depends on. Treat widening it as a compatibility commitment: add members
 deliberately, and never expose `TickDeps`, `runGit`, or a raw `CommandRunner`
 through it — state-dir code is agent-authored and untrusted until approved.
-
-### The `output/` caveat
-
-The walk skips the ceremony's own top-level `output/` so a ceremony can write
-its results without revoking itself. The cost is that **approved code which
-imports or evaluates anything under `outputDir` — or anywhere else in the state
-dir — voids the guarantee**, because that content is outside the hash and a
-state-dir writer can change it freely afterwards. The exclusion is applied
-before the walk dispatches on entry type, so a symlinked `output` pointing
-anywhere is excluded too. Reviewing a ceremony for approval means reading it for
-code that loads further code, not only for what the code itself does. Do not
-narrow the exclusion to make this safer — the ceremony must be able to write
-there — and do not extend it to further paths.
 
 ## Runtime dir (`lazyboyDir`)
 

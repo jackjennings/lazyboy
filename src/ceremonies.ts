@@ -21,6 +21,7 @@ const CEREMONY_TIMEOUT_MS = 300_000;
 
 export interface CeremonyRunnerDeps {
   stateDir: string;
+  extensionsDir: string;
   appendTickLog(entry: object): Promise<void>;
   now?: () => Temporal.ZonedDateTime;
   runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
@@ -68,7 +69,7 @@ export class CeremonyRunner {
   }
 
   async run(): Promise<void> {
-    const ceremoniesDir = join(this.#deps.stateDir, "ceremonies");
+    const ceremoniesDir = join(this.#deps.extensionsDir, "ceremonies");
     const dirEntries: Deno.DirEntry[] = [];
     try {
       for await (const entry of readDir(ceremoniesDir)) {
@@ -133,7 +134,7 @@ export class CeremonyRunner {
     await this.#runCeremony(
       new PromptCeremony({
         name,
-        stateDir: this.#deps.stateDir,
+        ceremonyDir,
         appendTickLog: this.#deps.appendTickLog,
         runClaude: this.#deps.runClaude,
       }),
@@ -215,7 +216,12 @@ export class CeremonyRunner {
       nanosecond: 0,
     });
 
-    const outputDir = join(ceremonyDir, "output");
+    const outputDir = join(
+      this.#deps.stateDir,
+      "ceremonies",
+      ceremony.name,
+      "output",
+    );
     const window = await this.#dueWindow({
       config,
       now,

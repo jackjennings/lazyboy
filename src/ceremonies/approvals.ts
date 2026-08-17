@@ -119,8 +119,6 @@ async function collectManifestEntries(
     const full = join(dir, entry.name);
     const path = relative(state.base, full);
 
-    if (dir === state.base && entry.name === "output") continue;
-
     if (entry.isDirectory) {
       entries.push(...await collectManifestEntries(full, state));
     } else if (entry.isFile) {

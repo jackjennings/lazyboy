@@ -7,6 +7,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     github: { repos: [] },
     state: { dir: "" },
+    extensions: { dir: "" },
     tick: {
       concurrency: 1,
       resolveCIFailures: true,

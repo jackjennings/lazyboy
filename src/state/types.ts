@@ -171,6 +171,7 @@ export interface Config {
     orgs?: Record<string, string>;
   };
   state: { dir: string };
+  extensions: { dir: string };
   tick: {
     concurrency: number;
     resolveCIFailures: boolean;

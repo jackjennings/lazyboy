@@ -15,7 +15,7 @@ const EFFORT_LEVELS = new Set([
 
 export interface PromptCeremonyDeps {
   name: string;
-  stateDir: string;
+  ceremonyDir: string;
   appendTickLog(entry: object): Promise<void>;
   runClaude?: (args: string[]) => Promise<{ stdout: string; code: number }>;
 }
@@ -30,7 +30,7 @@ export class PromptCeremony implements Ceremony {
   }
 
   async run(now: Temporal.ZonedDateTime, outputDir: string): Promise<void> {
-    const ceremonyDir = join(this.#deps.stateDir, "ceremonies", this.name);
+    const ceremonyDir = this.#deps.ceremonyDir;
 
     let model = "claude-sonnet-4-6";
     let thinking = "off";

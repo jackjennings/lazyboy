@@ -140,8 +140,8 @@ Deno.test(
   },
 );
 
-Deno.test("ARTIFACT_DESCRIPTORS: pr descriptor values", () => {
-  const d = ARTIFACT_DESCRIPTORS["pr"];
+Deno.test("ARTIFACT_DESCRIPTORS: code descriptor values", () => {
+  const d = ARTIFACT_DESCRIPTORS["code"];
   assertEquals(d.requiresWorktrees, true);
   assertEquals(d.requiresPRs, true);
   assertEquals(d.completionField, "prs");

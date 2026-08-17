@@ -1185,14 +1185,14 @@ Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter
   }
 });
 
-Deno.test("writeTicket/readTicket: absent artifact reads as 'pr' default", async () => {
+Deno.test("writeTicket/readTicket: absent artifact reads as 'code' default", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await writeTicket(dir, makeTicket(BASE));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
     assertFalse(raw.includes("artifact:"));
     const read = await readTicket(dir, "gh-1");
-    assertEquals(read.artifact, "pr");
+    assertEquals(read.artifact, "code");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

@@ -90,7 +90,7 @@ export interface TicketState {
   updated: string;
   body: string;
   phases?: PhaseModelConfig;
-  artifact: "pr" | "notion";
+  artifact: "code" | "notion";
   notionPages?: { url: string; title: string }[];
 }
 
@@ -109,10 +109,10 @@ export interface ArtifactDescriptor {
 }
 
 export const ARTIFACT_DESCRIPTORS: Record<
-  "pr" | "notion",
+  "code" | "notion",
   ArtifactDescriptor
 > = {
-  pr: {
+  code: {
     requiresWorktrees: true,
     requiresPRs: true,
     completionField: "prs",

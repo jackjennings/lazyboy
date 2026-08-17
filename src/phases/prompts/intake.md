@@ -56,12 +56,12 @@ One short paragraph explaining why you chose these directories.
 
 Identify whether this ticket will produce:
 
-- **`pr`** (default): code changes delivered via a pull request.
+- **`code`** (default): code changes delivered via a pull request.
 - **`notion`**: a document written to Notion (RFC, proposal, or similar); no
   code changes, no pull requests.
 
 If the ticket body clearly describes a document to be written to Notion, write
 `artifact: notion` to the YAML frontmatter of `meta.md` using the Edit tool.
-Otherwise omit it (the default is `pr`).
+Otherwise omit it (the default is `code`).
 
 {{principles}}

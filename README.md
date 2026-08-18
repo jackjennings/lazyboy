@@ -337,6 +337,7 @@ completion setup is needed when using the plugin.
 | `lco` | `lazyboy completion` |
 | `lrt` | `lazyboy retry`      |
 | `ldc` | `lazyboy decline`    |
+| `lrw` | `lazyboy rewind`     |
 | `lrv` | `lazyboy review`     |
 | `lsh` | `lazyboy shell`      |
 | `lta` | `lazyboy tail`       |

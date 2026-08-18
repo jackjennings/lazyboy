@@ -873,12 +873,26 @@ export class TickService {
     }
 
     const ids = (await deps.listTickets()).sort();
-    const tickets = await Promise.all(
+    const settled = await Promise.allSettled(
       ids.map((id) => deps.readTicket(id)),
     );
+    const validTickets: TicketState[] = [];
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i];
+      if (result.status === "fulfilled") {
+        validTickets.push(result.value);
+      } else {
+        const err = result.reason;
+        await deps.appendTickLog({
+          event: "ticket-read-error",
+          id: ids[i],
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     const migratedTickets = await deps.runMigrations(
       deps.stateDir,
-      tickets,
+      validTickets,
     );
 
     const processedTickets = [...migratedTickets];

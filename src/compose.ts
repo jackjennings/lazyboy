@@ -809,6 +809,7 @@ export function composeTickDeps(
   const ceremonies = new CeremonyRunner(
     {
       stateDir,
+      extensionsDir: config.extensions.dir,
       appendTickLog,
       notify: desktopNotifier,
       listTickets: () => listTickets(stateDir),

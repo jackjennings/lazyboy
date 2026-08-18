@@ -1071,3 +1071,62 @@ check_new_comments = "yes"
   );
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadConfig: defaults extensions.dir to lazyboyDir()/extensions when [extensions] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  const lazyboyDir = await Deno.makeTempDir();
+  const originalLazyboyDir = Deno.env.get("LAZYBOY_DIR");
+  Deno.env.set("LAZYBOY_DIR", lazyboyDir);
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+`,
+  );
+  try {
+    const cfg = await loadConfig(join(dir, "config.toml"));
+    assertEquals(cfg.extensions.dir, join(lazyboyDir, "extensions"));
+  } finally {
+    if (originalLazyboyDir !== undefined) {
+      Deno.env.set("LAZYBOY_DIR", originalLazyboyDir);
+    } else {
+      Deno.env.delete("LAZYBOY_DIR");
+    }
+    await Deno.remove(dir, { recursive: true });
+    await Deno.remove(lazyboyDir, { recursive: true });
+  }
+});
+
+Deno.test("loadConfig: parses [extensions] dir and expands home", async () => {
+  const dir = await Deno.makeTempDir();
+  const home = Deno.env.get("HOME")!;
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = ["jackjennings/lazyboy"]
+
+[state]
+dir = "~/code/jackjennings/projects"
+
+[tick]
+concurrency = 1
+
+[extensions]
+dir = "~/my-extensions"
+`,
+  );
+  try {
+    const cfg = await loadConfig(join(dir, "config.toml"));
+    assertEquals(cfg.extensions.dir, join(home, "my-extensions"));
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});

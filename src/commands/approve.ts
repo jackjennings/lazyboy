@@ -41,7 +41,8 @@ export async function performApprove(
 }
 
 export async function performApproveCeremony(
-  stateDir: string,
+  _stateDir: string,
+  extensionsDir: string,
   name: string,
   deps: {
     readApprovalsFn?: () => Promise<ApprovalRecord>;
@@ -59,7 +60,7 @@ export async function performApproveCeremony(
   if (BUILT_IN_CEREMONY_NAMES.includes(name)) {
     throw new Error(`${name} is a built-in ceremony and needs no approval`);
   }
-  const ceremonyDir = join(stateDir, "ceremonies", name);
+  const ceremonyDir = join(extensionsDir, "ceremonies", name);
   if (!await exists(ceremonyDir)) {
     throw new Error(`No ceremony named ${name}`);
   }
@@ -111,7 +112,12 @@ export const approve: Command = {
     const stateDir = expandHome(config.state.dir);
     if (id.startsWith("ceremony/")) {
       const name = id.slice("ceremony/".length);
-      const { hash, lines } = await performApproveCeremony(stateDir, name);
+      const extensionsDir = config.extensions.dir;
+      const { hash, lines } = await performApproveCeremony(
+        stateDir,
+        extensionsDir,
+        name,
+      );
       console.log(`Approved ceremony ${name}`);
       console.log(`  hash: ${hash}`);
       for (const line of lines) {

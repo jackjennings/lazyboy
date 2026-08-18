@@ -7,7 +7,7 @@ const TEST_NOW = Temporal.ZonedDateTime.from(
 );
 
 function makeCeremony(
-  stateDir: string,
+  ceremonyDir: string,
   opts: {
     name?: string;
     appendTickLog?: (entry: object) => Promise<void>;
@@ -16,7 +16,7 @@ function makeCeremony(
 ): PromptCeremony {
   return new PromptCeremony({
     name: opts.name ?? "docs-gap",
-    stateDir,
+    ceremonyDir,
     appendTickLog: opts.appendTickLog ?? (() => Promise.resolve()),
     runClaude: opts.runClaude,
   });
@@ -35,7 +35,7 @@ Deno.test("PromptCeremony: writes output file with correct name and content", as
     );
 
     const outputDir = join(ceremonyDir, "output");
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       runClaude: () => Promise.resolve({ stdout: "Output content\n", code: 0 }),
     }).run(TEST_NOW, outputDir);
@@ -68,7 +68,7 @@ Deno.test("PromptCeremony: missing prompt.md logs ceremony-warning and writes no
 
     const warnings: object[] = [];
     const outputDir = join(ceremonyDir, "output");
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       appendTickLog: (entry) => {
         warnings.push(entry);
@@ -107,7 +107,7 @@ Deno.test("PromptCeremony: non-zero claude exit logs ceremony-warning and writes
 
     const warnings: object[] = [];
     const outputDir = join(ceremonyDir, "output");
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       appendTickLog: (entry) => {
         warnings.push(entry);
@@ -150,7 +150,7 @@ Deno.test("PromptCeremony: model key in config.toml passed to claude as --model 
     );
 
     let capturedArgs: string[] = [];
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       runClaude: (args) => {
         capturedArgs = args;
@@ -178,7 +178,7 @@ Deno.test("PromptCeremony: thinking = high passes --effort high to claude", asyn
     );
 
     let capturedArgs: string[] = [];
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       runClaude: (args) => {
         capturedArgs = args;
@@ -206,7 +206,7 @@ Deno.test("PromptCeremony: no thinking key omits --effort from claude args", asy
     );
 
     let capturedArgs: string[] = [];
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       runClaude: (args) => {
         capturedArgs = args;
@@ -233,7 +233,7 @@ Deno.test("PromptCeremony: prompt includes today's date and prompt.md content", 
     );
 
     let capturedPrompt = "";
-    await makeCeremony(stateDir, {
+    await makeCeremony(ceremonyDir, {
       name,
       runClaude: (args) => {
         capturedPrompt = args[0];

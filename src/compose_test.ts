@@ -15,6 +15,7 @@ function makeConfig(overrides: Partial<Config["github"]> = {}): Config {
   return {
     github: { repos: [], ...overrides },
     state: { dir: "/tmp" },
+    extensions: { dir: "/tmp/extensions" },
     tick: {
       concurrency: 1,
       resolveCIFailures: true,

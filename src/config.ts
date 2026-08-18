@@ -2,6 +2,7 @@ import { parse } from "@std/toml";
 import { join } from "@std/path";
 import type { Config, PhaseModelConfig } from "./state/types.ts";
 import { readTextFile } from "./filesystem.ts";
+import { lazyboyDir } from "./paths.ts";
 
 export async function loadConfig(path?: string): Promise<Config> {
   const configPath = path ??
@@ -147,6 +148,13 @@ export async function loadConfig(path?: string): Promise<Config> {
     }
   }
 
+  const extensionsRaw = parsed.extensions as
+    | Record<string, unknown>
+    | undefined;
+  const extensionsDir = typeof extensionsRaw?.dir === "string"
+    ? expandHome(extensionsRaw.dir)
+    : join(lazyboyDir(), "extensions");
+
   return {
     github: {
       repos: githubRaw.repos as string[],
@@ -156,6 +164,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     state: {
       dir: expandHome((parsed.state as Record<string, unknown>).dir as string),
     },
+    extensions: { dir: extensionsDir },
     tick: {
       concurrency: (tickRaw?.concurrency as number) ?? 1,
       resolveCIFailures: (resolveCIFailuresRaw as boolean | undefined) ?? true,

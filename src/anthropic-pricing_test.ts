@@ -11,7 +11,7 @@ import {
   parseAnthropicPricingPage,
   refreshAnthropicPricingIfStale,
 } from "./anthropic-pricing.ts";
-import type { PhaseUsage } from "./state/types.ts";
+import type { PhaseModelUsage } from "./state/types.ts";
 
 // ── parseAnthropicPricingPage ────────────────────────────────────────────────
 
@@ -183,14 +183,15 @@ ${HEADER}
 
 // ── calculateAnthropicCost ───────────────────────────────────────────────────
 
-function makeUsage(overrides: Partial<PhaseUsage> = {}): PhaseUsage {
+function makeModelUsage(
+  overrides: Partial<PhaseModelUsage> = {},
+): PhaseModelUsage {
   return {
     input: 0,
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
     model: "claude-haiku-4-5",
-    durationMs: 1000,
     ...overrides,
   };
 }
@@ -207,7 +208,7 @@ const HAIKU_PRICING = {
 Deno.test(
   "calculateAnthropicCost: exact model match returns correct cost",
   () => {
-    const usage = makeUsage({
+    const usage = makeModelUsage({
       input: 1_000_000,
       output: 1_000_000,
       model: "claude-haiku-4-5",
@@ -220,7 +221,7 @@ Deno.test(
 Deno.test(
   "calculateAnthropicCost: includes all token types in calculation",
   () => {
-    const usage = makeUsage({
+    const usage = makeModelUsage({
       input: 1_000_000,
       output: 1_000_000,
       cacheRead: 1_000_000,
@@ -235,7 +236,7 @@ Deno.test(
 Deno.test(
   "calculateAnthropicCost: strips 8-digit date suffix for lookup",
   () => {
-    const usage = makeUsage({ model: "claude-haiku-4-5-20251001" });
+    const usage = makeModelUsage({ model: "claude-haiku-4-5-20251001" });
     const cost = calculateAnthropicCost(usage, HAIKU_PRICING);
     assertNotEquals(cost, null);
   },
@@ -244,7 +245,7 @@ Deno.test(
 Deno.test(
   "calculateAnthropicCost: returns null when model not found after stripping",
   () => {
-    const usage = makeUsage({ model: "claude-unknown-model" });
+    const usage = makeModelUsage({ model: "claude-unknown-model" });
     const cost = calculateAnthropicCost(usage, HAIKU_PRICING);
     assertEquals(cost, null);
   },
@@ -253,7 +254,7 @@ Deno.test(
 Deno.test(
   "calculateAnthropicCost: returns null for empty models map",
   () => {
-    const usage = makeUsage({ model: "claude-haiku-4-5" });
+    const usage = makeModelUsage({ model: "claude-haiku-4-5" });
     const cost = calculateAnthropicCost(usage, {});
     assertEquals(cost, null);
   },

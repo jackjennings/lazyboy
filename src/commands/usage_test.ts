@@ -26,14 +26,16 @@ function makeUsage({
   tools?: Record<string, number>;
 }): PhaseUsage {
   return {
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    model,
     durationMs: 0,
-    costUsd,
-    tools,
+    ...(tools !== undefined ? { tools } : {}),
+    models: [{
+      model,
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      ...(costUsd !== undefined ? { costUsd } : {}),
+    }],
   };
 }
 
@@ -203,6 +205,66 @@ Deno.test("aggregateUsage: initializes tools to empty object when no record has 
   const g = result.get("claude-haiku-4-5")!;
   assertEquals(g.tools, {});
 });
+
+Deno.test("aggregateUsage: two-model record sums tokens per model separately", () => {
+  const result = aggregateUsage([{
+    durationMs: 0,
+    models: [
+      {
+        model: "claude-haiku-4-5",
+        input: 10,
+        output: 5,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+      {
+        model: "claude-sonnet-4-6",
+        input: 100,
+        output: 50,
+        cacheRead: 1000,
+        cacheWrite: 0,
+      },
+    ],
+  }]);
+  assertEquals(result.size, 2);
+  const haiku = result.get("claude-haiku-4-5")!;
+  assertEquals(haiku.input, 10);
+  assertEquals(haiku.output, 5);
+  const sonnet = result.get("claude-sonnet-4-6")!;
+  assertEquals(sonnet.input, 100);
+  assertEquals(sonnet.output, 50);
+  assertEquals(sonnet.cacheRead, 1000);
+});
+
+Deno.test(
+  "aggregateUsage: tools attributed to primary model (highest input+output)",
+  () => {
+    const result = aggregateUsage([{
+      durationMs: 0,
+      tools: { read: 5, bash: 2 },
+      models: [
+        {
+          model: "claude-haiku-4-5",
+          input: 5,
+          output: 2,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+        {
+          model: "claude-sonnet-4-6",
+          input: 100,
+          output: 50,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+      ],
+    }]);
+    const haiku = result.get("claude-haiku-4-5")!;
+    const sonnet = result.get("claude-sonnet-4-6")!;
+    assertEquals(haiku.tools, {});
+    assertEquals(sonnet.tools, { read: 5, bash: 2 });
+  },
+);
 
 // ── formatUsageOutput ──────────────────────────────────────────────────────────
 

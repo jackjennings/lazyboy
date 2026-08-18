@@ -18,8 +18,8 @@ type ModelGroup = {
 
 export function aggregateUsage(records: PhaseUsage[]): Map<string, ModelGroup> {
   const groups = new Map<string, ModelGroup>();
-  for (const r of records) {
-    const key = r.model.replace(/-\d{8}$/, "");
+
+  function getOrCreate(key: string): ModelGroup {
     let g = groups.get(key);
     if (!g) {
       g = {
@@ -34,17 +34,31 @@ export function aggregateUsage(records: PhaseUsage[]): Map<string, ModelGroup> {
       };
       groups.set(key, g);
     }
-    g.input += r.input;
-    g.output += r.output;
-    g.cacheRead += r.cacheRead;
-    g.cacheWrite += r.cacheWrite;
-    g.count++;
-    if (r.costUsd !== undefined) {
-      g.cost += r.costUsd;
-      g.costCount++;
+    return g;
+  }
+
+  for (const r of records) {
+    for (const m of r.models) {
+      const key = m.model.replace(/-\d{8}$/, "");
+      const g = getOrCreate(key);
+      g.input += m.input;
+      g.output += m.output;
+      g.cacheRead += m.cacheRead;
+      g.cacheWrite += m.cacheWrite;
+      g.count++;
+      if (m.costUsd !== undefined) {
+        g.cost += m.costUsd;
+        g.costCount++;
+      }
     }
-    for (const [name, count] of Object.entries(r.tools ?? {})) {
-      g.tools[name] = (g.tools[name] ?? 0) + count;
+    if (r.tools && r.models.length > 0) {
+      const primary = r.models.reduce((a, b) =>
+        a.input + a.output >= b.input + b.output ? a : b
+      );
+      const g = getOrCreate(primary.model.replace(/-\d{8}$/, ""));
+      for (const [name, count] of Object.entries(r.tools)) {
+        g.tools[name] = (g.tools[name] ?? 0) + count;
+      }
     }
   }
   return groups;

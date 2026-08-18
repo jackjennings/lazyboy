@@ -2,7 +2,7 @@ import { join } from "@std/path";
 import { bgGreen, bgRed, green, red, white, yellow } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
-import { readUsageFiles } from "../usage.ts";
+import { coerceLegacyPhaseUsage, readUsageFiles } from "../usage.ts";
 import { isLaunchdEnabled } from "../launchd.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type {
@@ -64,7 +64,12 @@ export async function readTicketTokens(
   const files = await readUsageFiles(ticketDir);
   if (!files || files.length === 0) return null;
   return files.reduce(
-    (sum, u) => sum + u.input + u.output + u.cacheRead + u.cacheWrite,
+    (sum, u) =>
+      sum +
+      u.models.reduce(
+        (s, m) => s + m.input + m.output + m.cacheRead + m.cacheWrite,
+        0,
+      ),
     0,
   );
 }
@@ -74,9 +79,14 @@ export async function readTicketCost(
 ): Promise<{ cost: number | null; partial: boolean }> {
   const files = await readUsageFiles(ticketDir);
   if (!files || files.length === 0) return { cost: null, partial: false };
-  const withCost = files.filter((u) => u.costUsd !== undefined);
+  const withCost = files.filter((u) =>
+    u.models.some((m) => m.costUsd !== undefined)
+  );
   if (withCost.length === 0) return { cost: null, partial: false };
-  const cost = withCost.reduce((sum, u) => sum + u.costUsd!, 0);
+  const cost = withCost.reduce(
+    (sum, u) => sum + u.models.reduce((s, m) => s + (m.costUsd ?? 0), 0),
+    0,
+  );
   return { cost, partial: withCost.length < files.length };
 }
 
@@ -89,7 +99,10 @@ async function readNamedUsageFiles(
       if (!entry.isFile || !entry.name.endsWith(".usage.json")) continue;
       try {
         const raw = await readTextFile(join(ticketDir, entry.name));
-        files.push({ name: entry.name, usage: JSON.parse(raw) as PhaseUsage });
+        files.push({
+          name: entry.name,
+          usage: coerceLegacyPhaseUsage(JSON.parse(raw)),
+        });
       } catch {
         return null;
       }
@@ -143,8 +156,10 @@ export function buildPhaseBreakdown(
       group = { tokens: 0, turns: null, revisions: 0 };
       groups.set(key, group);
     }
-    group.tokens += usage.input + usage.output + usage.cacheRead +
-      usage.cacheWrite;
+    group.tokens += usage.models.reduce(
+      (s, m) => s + m.input + m.output + m.cacheRead + m.cacheWrite,
+      0,
+    );
     group.revisions++;
     if (usage.turns !== undefined) {
       group.turns = (group.turns ?? 0) + usage.turns;
@@ -195,12 +210,22 @@ export async function readAllTicketUsage(
   }
   const tokens = files.reduce(
     (sum, { usage: u }) =>
-      sum + u.input + u.output + u.cacheRead + u.cacheWrite,
+      sum +
+      u.models.reduce(
+        (s, m) => s + m.input + m.output + m.cacheRead + m.cacheWrite,
+        0,
+      ),
     0,
   );
-  const withCost = files.filter(({ usage: u }) => u.costUsd !== undefined);
+  const withCost = files.filter(({ usage: u }) =>
+    u.models.some((m) => m.costUsd !== undefined)
+  );
   const costResult = withCost.length === 0 ? { cost: null, partial: false } : {
-    cost: withCost.reduce((sum, { usage: u }) => sum + u.costUsd!, 0),
+    cost: withCost.reduce(
+      (sum, { usage: u }) =>
+        sum + u.models.reduce((s, m) => s + (m.costUsd ?? 0), 0),
+      0,
+    ),
     partial: withCost.length < files.length,
   };
   const rows = buildPhaseBreakdown(files);

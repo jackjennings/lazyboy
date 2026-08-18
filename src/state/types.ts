@@ -141,16 +141,20 @@ export type PhaseModelConfig = Partial<
   Record<string, { model?: string; thinking?: string; skip?: boolean }>
 >;
 
-export interface PhaseUsage {
+export interface PhaseModelUsage {
+  model: string;
   input: number;
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  model: string;
+  costUsd?: number;
+}
+
+export interface PhaseUsage {
   durationMs: number;
   turns?: number;
-  costUsd?: number;
   tools?: Record<string, number>;
+  models: PhaseModelUsage[];
 }
 
 export type LearningStatus =

@@ -829,23 +829,27 @@ Deno.test("buildPhaseBreakdown: groups files by phase key and sums all token fie
     {
       name: "20260806T050000-intake.usage.json",
       usage: {
-        input: 10,
-        output: 5,
-        cacheRead: 100,
-        cacheWrite: 50,
-        model: "m",
         durationMs: 0,
+        models: [{
+          model: "m",
+          input: 10,
+          output: 5,
+          cacheRead: 100,
+          cacheWrite: 50,
+        }],
       },
     },
     {
       name: "20260806T160000-enrichment.usage.json",
       usage: {
-        input: 20,
-        output: 8,
-        cacheRead: 200,
-        cacheWrite: 30,
-        model: "m",
         durationMs: 0,
+        models: [{
+          model: "m",
+          input: 20,
+          output: 8,
+          cacheRead: 200,
+          cacheWrite: 30,
+        }],
       },
     },
   ]);
@@ -864,23 +868,27 @@ Deno.test(
       {
         name: "20260806T050000-ci-fix-wf_abc123.usage.json",
         usage: {
-          input: 10,
-          output: 5,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T160000-ci-fix-wf_xyz789.usage.json",
         usage: {
-          input: 20,
-          output: 8,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 20,
+            output: 8,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
     ]);
@@ -896,25 +904,29 @@ Deno.test("buildPhaseBreakdown: sums turns across files in a group", () => {
     {
       name: "20260806T050000-implementation.usage.json",
       usage: {
-        input: 10,
-        output: 5,
-        cacheRead: 0,
-        cacheWrite: 0,
-        model: "m",
         durationMs: 0,
         turns: 4,
+        models: [{
+          model: "m",
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+        }],
       },
     },
     {
       name: "20260806T160000-implementation.usage.json",
       usage: {
-        input: 20,
-        output: 8,
-        cacheRead: 0,
-        cacheWrite: 0,
-        model: "m",
         durationMs: 0,
         turns: 6,
+        models: [{
+          model: "m",
+          input: 20,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+        }],
       },
     },
   ]);
@@ -926,12 +938,14 @@ Deno.test("buildPhaseBreakdown: turns is null when no file in the group defines 
     {
       name: "20260806T050000-intake.usage.json",
       usage: {
-        input: 10,
-        output: 5,
-        cacheRead: 0,
-        cacheWrite: 0,
-        model: "m",
         durationMs: 0,
+        models: [{
+          model: "m",
+          input: 10,
+          output: 5,
+          cacheRead: 0,
+          cacheWrite: 0,
+        }],
       },
     },
   ]);
@@ -945,24 +959,28 @@ Deno.test(
       {
         name: "20260806T050000-implementation.usage.json",
         usage: {
-          input: 10,
-          output: 5,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
           turns: 4,
+          models: [{
+            model: "m",
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T160000-implementation.usage.json",
         usage: {
-          input: 20,
-          output: 8,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 20,
+            output: 8,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
     ]);
@@ -977,34 +995,40 @@ Deno.test(
       {
         name: "20260806T160000-ci-fix-wf_x.usage.json",
         usage: {
-          input: 5,
-          output: 2,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 5,
+            output: 2,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T050000-intake.usage.json",
         usage: {
-          input: 10,
-          output: 5,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T070000-custom-phase.usage.json",
         usage: {
-          input: 3,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 3,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
     ]);
@@ -1021,34 +1045,40 @@ Deno.test(
       {
         name: "20260806T160000-spec.usage.json",
         usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T050000-intake.usage.json",
         usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
       {
         name: "20260806T070000-enrichment.usage.json",
         usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          model: "m",
           durationMs: 0,
+          models: [{
+            model: "m",
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+          }],
         },
       },
     ]);

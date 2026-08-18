@@ -1041,9 +1041,9 @@ Deno.test(
         join(ticketDir, "result.usage.json"),
       );
       const usage = JSON.parse(usageRaw);
-      assertEquals(usage.input, 5);
-      assertEquals(usage.output, 3);
-      assertEquals(usage.model, "claude-sonnet-4-6");
+      assertEquals(usage.models[0].input, 5);
+      assertEquals(usage.models[0].output, 3);
+      assertEquals(usage.models[0].model, "claude-sonnet-4-6");
       const logContent = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
       const logLines = logContent.trim().split("\n");
       const endEntry = JSON.parse(logLines[logLines.length - 1]);
@@ -1247,11 +1247,11 @@ Deno.test(
   () => {
     const result = extractUsageAndText(singleTurnNdjson, 1234);
     assertEquals(result.text, "Hello!");
-    assertEquals(result.usage?.input, 10);
-    assertEquals(result.usage?.output, 5);
-    assertEquals(result.usage?.cacheRead, 100);
-    assertEquals(result.usage?.cacheWrite, 50);
-    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.models[0].input, 10);
+    assertEquals(result.usage?.models[0].output, 5);
+    assertEquals(result.usage?.models[0].cacheRead, 100);
+    assertEquals(result.usage?.models[0].cacheWrite, 50);
+    assertEquals(result.usage?.models[0].model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 1234);
     assertEquals(result.usage?.turns, 1);
   },
@@ -1303,11 +1303,11 @@ Deno.test(
   () => {
     const result = extractUsageAndText(multiTurnNdjson, 500);
     assertEquals(result.text, "Second.");
-    assertEquals(result.usage?.input, 10);
-    assertEquals(result.usage?.output, 10);
-    assertEquals(result.usage?.cacheRead, 100);
-    assertEquals(result.usage?.cacheWrite, 50);
-    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.models[0].input, 10);
+    assertEquals(result.usage?.models[0].output, 10);
+    assertEquals(result.usage?.models[0].cacheRead, 100);
+    assertEquals(result.usage?.models[0].cacheWrite, 50);
+    assertEquals(result.usage?.models[0].model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 500);
     assertEquals(result.usage?.turns, 2);
   },
@@ -1382,8 +1382,8 @@ Deno.test(
     });
     const result = extractUsageAndText(ndjson, 50);
     assertEquals(result.text, "");
-    assertEquals(result.usage?.input, 1);
-    assertEquals(result.usage?.output, 2);
+    assertEquals(result.usage?.models[0].input, 1);
+    assertEquals(result.usage?.models[0].output, 2);
     assertEquals(result.usage?.turns, 1);
   },
 );
@@ -1453,11 +1453,12 @@ Deno.test(
   () => {
     const result = extractClaudeCodeUsageAndText(claudeCodeResultNdjson, 999);
     assertEquals(result.text, "final assistant text");
-    assertEquals(result.usage?.input, 100);
-    assertEquals(result.usage?.output, 50);
-    assertEquals(result.usage?.cacheRead, 10);
-    assertEquals(result.usage?.cacheWrite, 5);
-    assertEquals(result.usage?.model, "claude-sonnet-4-6");
+    assertEquals(result.usage?.models.length, 1);
+    assertEquals(result.usage?.models[0].input, 100);
+    assertEquals(result.usage?.models[0].output, 50);
+    assertEquals(result.usage?.models[0].cacheRead, 10);
+    assertEquals(result.usage?.models[0].cacheWrite, 5);
+    assertEquals(result.usage?.models[0].model, "claude-sonnet-4-6");
     assertEquals(result.usage?.durationMs, 999);
     assertEquals(result.usage?.turns, 2);
   },
@@ -1473,7 +1474,47 @@ Deno.test(
       modelUsage: { "claude-opus-4-8[1m]": { inputTokens: 1 } },
     });
     const result = extractClaudeCodeUsageAndText(ndjson, 100);
-    assertEquals(result.usage?.model, "claude-opus-4-8");
+    assertEquals(result.usage?.models[0].model, "claude-opus-4-8");
+  },
+);
+
+Deno.test(
+  "extractClaudeCodeUsageAndText: two-model modelUsage attributes cache tokens to primary model",
+  () => {
+    const ndjson = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: "text",
+      num_turns: 43,
+      usage: {
+        input_tokens: 177,
+        output_tokens: 7751,
+        cache_read_input_tokens: 1822762,
+        cache_creation_input_tokens: 43186,
+      },
+      modelUsage: {
+        "claude-haiku-4-5-20251001": { inputTokens: 10, outputTokens: 5 },
+        "claude-sonnet-4-6": { inputTokens: 167, outputTokens: 7746 },
+      },
+    });
+    const result = extractClaudeCodeUsageAndText(ndjson, 244618);
+    assertEquals(result.usage?.models.length, 2);
+    const sonnet = result.usage!.models.find(
+      (m) => m.model === "claude-sonnet-4-6",
+    )!;
+    const haiku = result.usage!.models.find(
+      (m) => m.model === "claude-haiku-4-5-20251001",
+    )!;
+    assertEquals(sonnet.input, 167);
+    assertEquals(sonnet.output, 7746);
+    assertEquals(sonnet.cacheRead, 1822762);
+    assertEquals(sonnet.cacheWrite, 43186);
+    assertEquals(haiku.input, 10);
+    assertEquals(haiku.output, 5);
+    assertEquals(haiku.cacheRead, 0);
+    assertEquals(haiku.cacheWrite, 0);
+    assertEquals(result.usage?.turns, 43);
+    assertEquals(result.usage?.durationMs, 244618);
   },
 );
 
@@ -1617,8 +1658,8 @@ Deno.test(
       const usage = JSON.parse(
         await Deno.readTextFile(join(ticketDir, "result.usage.json")),
       );
-      assertEquals(usage.input, 7);
-      assertEquals(usage.output, 4);
+      assertEquals(usage.models[0].input, 7);
+      assertEquals(usage.models[0].output, 4);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -1755,7 +1796,7 @@ Deno.test(
       );
       const usage = JSON.parse(usageRaw);
       // 1_000_000 * 3/1_000_000 + 1_000_000 * 15/1_000_000 = 18
-      assertEquals(usage.costUsd, 18);
+      assertEquals(usage.models[0].costUsd, 18);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });

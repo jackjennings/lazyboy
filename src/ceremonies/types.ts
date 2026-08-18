@@ -25,7 +25,10 @@ export type CeremonyModule = (
   context: CeremonyContext,
 ) => Promise<void> | void;
 
-export const BUILT_IN_CEREMONY_NAMES = ["documentation-gaps"];
+export const BUILT_IN_CEREMONY_NAMES = [
+  "documentation-gaps",
+  "agents-md-consolidation",
+];
 
 const CEREMONY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 

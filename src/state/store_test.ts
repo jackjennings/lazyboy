@@ -1211,44 +1211,6 @@ Deno.test("writeTicket/readTicket: documents round-trips through YAML frontmatte
   }
 });
 
-Deno.test("readTicket: artifact 'notion' and notionPages in YAML read as 'document' and documents", async () => {
-  const dir = await Deno.makeTempDir();
-  try {
-    const id = "gh-1";
-    await Deno.mkdir(join(dir, id), { recursive: true });
-    await Deno.writeTextFile(
-      join(dir, id, "meta.md"),
-      `---
-id: ${id}
-provider: github
-title: T
-url: https://github.com/org/repo/issues/1
-phase: implementation
-status: waiting
-approvals: []
-scope: []
-worktrees: {}
-created: '2026-01-01T00:00:00Z'
-updated: '2026-01-01T00:00:00Z'
-artifact: notion
-notionPages:
-  - url: https://notion.so/abc
-    title: Doc
----
-body
-`,
-    );
-    const read = await readTicket(dir, id);
-    assertEquals(read.artifact, "document");
-    assertEquals(read.documents, [{
-      url: "https://notion.so/abc",
-      title: "Doc",
-    }]);
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-  }
-});
-
 Deno.test(
   "writeTicket/readTicket: round-trips phases.plan.skip: true",
   async () => {

@@ -118,8 +118,6 @@ export async function readTicket(
     })
     : undefined;
 
-  const rawArtifact = data.artifact as string | undefined;
-  const migratedArtifact = rawArtifact === "notion" ? "document" : rawArtifact;
   const ticket: TicketState = {
     id: data.id,
     provider: data.provider,
@@ -139,12 +137,10 @@ export async function readTicket(
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
     artifact:
-      (migratedArtifact && migratedArtifact in ARTIFACT_DESCRIPTORS
-        ? migratedArtifact
+      (data.artifact && data.artifact in ARTIFACT_DESCRIPTORS
+        ? data.artifact
         : "code") as ArtifactType,
-    documents: (data.documents ?? data.notionPages) as
-      | { url: string; title: string }[]
-      | undefined,
+    documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(
       data.lastSeenCommentTimestamp,

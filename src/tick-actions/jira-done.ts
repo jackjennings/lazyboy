@@ -7,6 +7,7 @@ export interface JiraDoneDeps {
   baseUrl: string;
   email: string;
   apiToken: string;
+  targetStatusName: string;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
   http: HttpClient;
@@ -34,7 +35,7 @@ export function jiraDoneAction(opts: JiraDoneDeps): TickAction {
           email: opts.email,
           apiToken: opts.apiToken,
           issueKey,
-          targetStatusName: "Done",
+          targetStatusName: opts.targetStatusName,
           http: opts.http,
         });
       } catch (e) {

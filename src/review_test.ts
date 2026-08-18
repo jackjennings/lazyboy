@@ -1408,7 +1408,7 @@ Deno.test(
         assertSpyCalls(errorStub, 1);
         assertStringIncludes(
           errorStub.calls[0].args[0] as string,
-          "No phase output found",
+          `No output for phase "spec" on ticket ${ticketId}`,
         );
       });
     } finally {
@@ -1655,6 +1655,112 @@ Deno.test(
           logStub.restore();
         }
         assertSpyCalls(logStub, 0);
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path exits 1 with phase-specific error when ticket.phase has no output",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/50";
+      await initGitRepo(stateDir);
+      const run = (cmd: string[]) =>
+        new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir })
+          .output();
+      await writeTicket(
+        stateDir,
+        makeTicket({
+          id: ticketId,
+          phase: "implementation",
+          status: "needs-attention",
+        }),
+      );
+      await Deno.writeTextFile(
+        join(stateDir, ticketId, "20260101T000000-spec.md"),
+        "spec output",
+      );
+      await run(["git", "add", "-A"]);
+      await run(["git", "commit", "-m", "initial"]);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("feedback text"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 1);
+        assertSpyCalls(errorStub, 1);
+        assertEquals(
+          errorStub.calls[0].args[0],
+          `No output for phase "implementation" on ticket ${ticketId}`,
+        );
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "review: piped path writes no feedback file when ticket.phase has no output",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/51";
+      await initGitRepo(stateDir);
+      const run = (cmd: string[]) =>
+        new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir })
+          .output();
+      await writeTicket(
+        stateDir,
+        makeTicket({
+          id: ticketId,
+          phase: "implementation",
+          status: "needs-attention",
+        }),
+      );
+      await Deno.writeTextFile(
+        join(stateDir, ticketId, "20260101T000000-spec.md"),
+        "spec output",
+      );
+      await run(["git", "add", "-A"]);
+      await run(["git", "commit", "-m", "initial"]);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("feedback text"),
+          });
+        } catch {
+          // expected
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        const entries: string[] = [];
+        for await (const entry of Deno.readDir(join(stateDir, ticketId))) {
+          entries.push(entry.name);
+        }
+        assertFalse(entries.some((e) => e.endsWith("-feedback.md")));
       });
     } finally {
       await Deno.remove(stateDir, { recursive: true });

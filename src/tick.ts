@@ -29,6 +29,7 @@ import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
 import { mkdir, readDir, readTextFile, writeTextFile } from "./filesystem.ts";
 
 const DEFAULT_MAX_PROMPT_TOKENS = 5_000;
+const TICK_DEADLINE_MS = 4 * 60 * 60 * 1000;
 
 export interface TickDeps {
   spawn: (opts: {
@@ -127,6 +128,7 @@ export interface TickServiceDeps {
   notifyTickFailure(error: string): Promise<void>;
   preflightGitHubCredentials(): Promise<void>;
   writeTickProgress: (label: string | null) => Promise<void>;
+  deadlineMs?: number;
 }
 
 export function selectCandidates(
@@ -797,6 +799,8 @@ export async function appendTickLog(entry: object): Promise<void> {
   }
 }
 
+class TickDeadlineError extends Error {}
+
 export class TickService {
   #deps: TickServiceDeps;
 
@@ -806,28 +810,55 @@ export class TickService {
 
   async run(): Promise<void> {
     const deps = this.#deps;
+    const deadlineMs = deps.deadlineMs ?? TICK_DEADLINE_MS;
+    let deadlineTimerId: ReturnType<typeof setTimeout> | undefined;
     try {
       await deps.refreshAnthropicPricing();
       await deps.installPackages(deps.packageSources);
-      await deps.lock.withLock(async () => {
+      try {
+        await Promise.race([
+          deps.lock.withLock(async () => {
+            await deps.appendTickLog({
+              event: "tick-start",
+            });
+            try {
+              await this.#runWorkflow(deps);
+            } catch (e) {
+              await deps.appendTickLog({
+                ts: Temporal.Now.instant().toString(),
+                event: "tick-failed",
+                error: e instanceof Error ? e.message : String(e),
+              });
+              throw e;
+            }
+            await deps.appendTickLog({
+              event: "tick-end",
+            });
+          }),
+          new Promise<never>((_, reject) => {
+            deadlineTimerId = setTimeout(
+              () => reject(new TickDeadlineError()),
+              deadlineMs,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(deadlineTimerId);
+      }
+    } catch (e) {
+      if (e instanceof TickDeadlineError) {
         await deps.appendTickLog({
-          event: "tick-start",
+          event: "tick-deadline-exceeded",
+          deadlineMs,
         });
         try {
-          await this.#runWorkflow(deps);
-        } catch (e) {
-          await deps.appendTickLog({
-            ts: Temporal.Now.instant().toString(),
-            event: "tick-failed",
-            error: e instanceof Error ? e.message : String(e),
-          });
-          throw e;
+          await deps.notifyTickFailure("tick deadline exceeded");
+        } catch {
+          // notification failure must not suppress exit
         }
-        await deps.appendTickLog({
-          event: "tick-end",
-        });
-      });
-    } catch (e) {
+        deps.exit(1);
+        return;
+      }
       const errorStr = e instanceof Error ? e.message : String(e);
       console.error(e);
       try {

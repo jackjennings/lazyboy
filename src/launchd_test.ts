@@ -48,6 +48,13 @@ Deno.test("plistContent: does not contain StandardErrorPath", () => {
   );
 });
 
+Deno.test("plistContent: ExitTimeOut is 30 seconds", () => {
+  const content = plistContent("/home/user/.lazyboy");
+  assertStringIncludes(content, "<key>ExitTimeOut</key>");
+  const afterKey = content.slice(content.indexOf("<key>ExitTimeOut</key>"));
+  assertStringIncludes(afterKey, "<integer>30</integer>");
+});
+
 Deno.test(
   "detectLaunchdEnabled: returns false when launchctl is not found",
   async () => {

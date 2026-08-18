@@ -7,6 +7,7 @@ import {
   type AutocompleteSuggestions,
   Editor,
   type EditorTheme,
+  isKeyRelease,
   matchesKey,
   ProcessTerminal,
   TUI,
@@ -438,6 +439,9 @@ export const hud: Command = {
     })();
 
     tui.addInputListener((data) => {
+      if (isKeyRelease(data)) {
+        return { consume: true };
+      }
       if (matchesKey(data, "ctrl+c")) {
         tui.stop();
         Deno.exit(0);

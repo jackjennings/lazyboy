@@ -16,6 +16,7 @@ import {
   type Component,
   Editor,
   type Focusable,
+  isKeyRelease,
   KeybindingsManager,
   Markdown,
   type MarkdownTheme,
@@ -792,6 +793,9 @@ export async function review(
   editor.onSubmit = handleSubmit;
 
   tui.addInputListener((data) => {
+    if (isKeyRelease(data)) {
+      return { consume: true };
+    }
     if (matchesKey(data, "ctrl+c")) {
       killServer();
       Deno.removeSignalListener("SIGTERM", sigtermHandler);

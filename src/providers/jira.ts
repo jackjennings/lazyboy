@@ -26,6 +26,7 @@ export class JiraProvider implements Provider {
   private email: string;
   private apiToken: string;
   private project: string;
+  private doneStatusName: string;
   private http: HttpClient;
   private run: CommandRunner;
 
@@ -34,6 +35,7 @@ export class JiraProvider implements Provider {
     email: string;
     apiToken: string;
     project: string;
+    doneStatusName: string;
     http: HttpClient;
     run?: CommandRunner;
   }) {
@@ -41,6 +43,7 @@ export class JiraProvider implements Provider {
     this.email = opts.email;
     this.apiToken = opts.apiToken;
     this.project = opts.project;
+    this.doneStatusName = opts.doneStatusName;
     this.http = opts.http;
     this.run = opts.run ?? captureCommandRunner();
   }
@@ -55,7 +58,7 @@ export class JiraProvider implements Provider {
       email: this.email,
       apiToken: this.apiToken,
       issueKey: match[1],
-      targetStatusName: "Done",
+      targetStatusName: this.doneStatusName,
       http: this.http,
     });
   }

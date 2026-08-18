@@ -40,6 +40,7 @@ Deno.test("fetchNew returns all items when knownIds is empty", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -63,6 +64,7 @@ Deno.test("fetchNew filters known IDs", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -88,6 +90,7 @@ Deno.test("fetchNew does not re-create an issue tracked under its legacy jira-<K
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -109,6 +112,7 @@ Deno.test("fetchNew uses POST to /rest/api/3/search/jql", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, init) => {
       capturedUrl = url as string;
       capturedMethod = init?.method ?? "GET";
@@ -128,6 +132,7 @@ Deno.test("fetchNew throws on non-2xx response", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(new Response("Unauthorized", { status: 401 }))
     ),
@@ -145,6 +150,7 @@ Deno.test("fetchNew skips issues with missing fields", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -170,6 +176,7 @@ Deno.test("fetchNew description is empty string when fields.description is null"
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -189,6 +196,7 @@ Deno.test("fetchNew description is empty string when fields.description is undef
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -211,6 +219,7 @@ Deno.test("close transitions the issue to the done status category", async () =>
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, init) => {
       requests.push({
         url: url as string,
@@ -248,6 +257,7 @@ Deno.test("close throws on unrecognized URL", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient(),
   });
   await assertRejects(
@@ -270,6 +280,7 @@ Deno.test("fetchNew description is Markdown when fields.description is an ADF ob
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -319,6 +330,7 @@ Deno.test("fetchNew appends parent context when issue has one parent", async () 
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
         return Promise.resolve(
@@ -357,6 +369,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: new HttpClient((url, _init) => {
         if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
@@ -414,6 +427,7 @@ Deno.test("fetchNew description is unchanged when issue has no parent", async ()
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((_url, _init) =>
       Promise.resolve(
         new Response(
@@ -435,6 +449,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: new HttpClient((url, _init) => {
         if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
@@ -464,6 +479,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: new HttpClient((url, _init) => {
         if ((url as string) === `${BASE_URL}/rest/api/3/search/jql`) {
           return Promise.resolve(
@@ -491,6 +507,7 @@ Deno.test("fetchNew fetches comments from the Jira comment endpoint", async () =
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -524,6 +541,7 @@ Deno.test("fetchNew appends kept comments to description", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -567,6 +585,7 @@ Deno.test("fetchNew omits rejected comments from description", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -608,6 +627,7 @@ Deno.test("fetchNew appends no Comments section when issue has no comments", asy
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -634,6 +654,7 @@ Deno.test("fetchNew formats comment date as YYYY-MM-DD", async () => {
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -675,6 +696,7 @@ Deno.test("fetchNew separates multiple kept comments with blank lines", async ()
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -726,6 +748,7 @@ Deno.test("fetchNew fail-open: includes all comments when judge throws", async (
     email: "test@example.com",
     apiToken: "token",
     project: "PROJ",
+    doneStatusName: "Done",
     http: new HttpClient((url, _init) => {
       const urlStr = url as string;
       if (urlStr.includes("/rest/api/3/search")) {
@@ -764,6 +787,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: new HttpClient((url, _init) => {
         const urlStr = url as string;
         if (urlStr.includes("/rest/api/3/search")) {
@@ -829,6 +853,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: makeCommentHttp(),
       run: (args) =>
         args[0] === "apfel"
@@ -852,6 +877,7 @@ Deno.test(
       email: "test@example.com",
       apiToken: "token",
       project: "PROJ",
+      doneStatusName: "Done",
       http: makeCommentHttp(),
       run: (args) =>
         args[0] === "apfel"
@@ -865,3 +891,35 @@ Deno.test(
     assertFalse(items[0].description.includes("## Comments"));
   },
 );
+
+Deno.test("close uses configured done status name", async () => {
+  const requests: Array<{ url: string; method?: string; body?: string }> = [];
+  const provider = new JiraProvider({
+    baseUrl: BASE_URL,
+    email: "test@example.com",
+    apiToken: "token",
+    project: "PROJ",
+    doneStatusName: "Closed",
+    http: new HttpClient((url, init) => {
+      requests.push({
+        url: url as string,
+        method: init?.method,
+        body: init?.body as string,
+      });
+      if (init?.method !== "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              fields: { status: { name: "To Do" } },
+              transitions: [{ id: "41", to: { name: "Closed" } }],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }),
+  });
+  await provider.close(`${BASE_URL}/browse/PROJ-1`);
+  assertEquals(JSON.parse(requests[1].body!), { transition: { id: "41" } });
+});

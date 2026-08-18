@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+for dir in /usr/local/bin /opt/homebrew/bin "$HOME/.local/bin"; do
+  [ -d "$dir" ] || continue
+  case ":$PATH:" in *":$dir:"*) ;; *) PATH="$dir:$PATH" ;; esac
+done
+export PATH
 
 LAZYBOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -12,6 +16,12 @@ if [ -f "$HOME/.config/lazyboy/env" ]; then
   # shellcheck source=/dev/null
   source "$HOME/.config/lazyboy/env"
   set +a
+fi
+
+# host-specific additions stay out of the repo; tick.sh owns the append so a
+# malformed value cannot clobber the entry `exec deno` depends on.
+if [ -n "$LAZYBOY_PATH" ]; then
+  export PATH="$LAZYBOY_PATH:$PATH"
 fi
 
 exec deno run --allow-all "$LAZYBOY_DIR/src/index.ts" tick

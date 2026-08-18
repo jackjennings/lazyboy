@@ -1073,6 +1073,65 @@ Deno.test(
 );
 
 Deno.test(
+  "advancePhase: implementation revision resumes the recorded session",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+      phaseSessionIds: { implementation: "sess-impl" },
+    });
+    let spawnedResume: boolean | undefined;
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedResume = opts.resume;
+      return Promise.resolve();
+    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+      }),
+    );
+    assertSpyCall(spawnSpy, 0);
+    assert(spawnedResume);
+  },
+);
+
+Deno.test(
+  "advancePhase: revision without a recorded session does not resume",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "revising",
+      worktrees: { "jackjennings/lazyboy": { path: "/wt", branch: "b" } },
+    });
+    let spawnedResume: boolean | undefined = true;
+    const spawnSpy = spy((opts: SpawnOpts) => {
+      spawnedResume = opts.resume;
+      return Promise.resolve();
+    });
+    await advancePhase(
+      ticket,
+      "/state",
+      makeTickDeps({
+        spawn: spawnSpy,
+        resolveModelConfig: () => ({
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+        }),
+      }),
+    );
+    assertSpyCall(spawnSpy, 0);
+    assertFalse(spawnedResume);
+  },
+);
+
+Deno.test(
   "advancePhase: implementation revision with no phaseSessionIds spawns without sessionId",
   async () => {
     const ticket = makeTicket({

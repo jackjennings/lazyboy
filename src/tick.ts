@@ -246,6 +246,7 @@ export async function advancePhase(
       model: revisingModel,
       thinking: revisingThinking,
       sessionId,
+      resume: sessionId !== undefined,
     });
     await deps.writeTicket(stateDir, {
       ...ticket,

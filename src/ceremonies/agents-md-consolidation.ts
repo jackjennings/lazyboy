@@ -14,21 +14,6 @@ export interface AgentsMdConsolidationCeremonyDeps {
 
 const BRANCH = "ceremony/agents-md-consolidation";
 
-const SYSTEM_PROMPT =
-  `You are an AGENTS.md consolidation assistant for a software project.
-
-Review the provided AGENTS.md and remove content that reduces its value:
-
-- Remove exact and near-exact duplicate bullets or sections, keeping the more complete version.
-- Remove bullets that narrate how existing code works — descriptions of what a function does, how a data flow operates — content a reader could verify by reading the source.
-- Preserve all bullets that state a prohibition ("never X"), a hard constraint ("must X"), an invariant, or an operator-facing configuration rule.
-- Preserve all bullets that describe non-obvious behavior, surprising edge cases, or cross-module wiring not obvious from reading a single file.
-- When in doubt, preserve.
-
-If there is nothing to remove, return exactly: NO_CHANGES
-
-Otherwise, return the full consolidated AGENTS.md text with no additional commentary.`;
-
 function parseGitHubSlug(remoteUrl: string): string | null {
   const sshMatch = remoteUrl.match(/git@github\.com:(.+?)(?:\.git)?$/);
   if (sshMatch) return sshMatch[1];
@@ -37,6 +22,12 @@ function parseGitHubSlug(remoteUrl: string): string | null {
   );
   if (httpsMatch) return httpsMatch[1];
   return null;
+}
+
+async function loadSystemPrompt(): Promise<string> {
+  return await readTextFile(
+    new URL("./agents-md-consolidation.md", import.meta.url),
+  );
 }
 
 export class AgentsMdConsolidationCeremony implements Ceremony {
@@ -82,11 +73,12 @@ export class AgentsMdConsolidationCeremony implements Ceremony {
     }
 
     const beforeLineCount = agentsMdContent.split("\n").length;
+    const systemPrompt = await loadSystemPrompt();
     const model = new ClaudeLanguageModel(this.#deps.run, {
       model: "claude-sonnet-4-6",
     });
     const result = await model.generateText({
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt,
       prompt: agentsMdContent,
     });
 

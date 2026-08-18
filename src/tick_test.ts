@@ -1776,6 +1776,47 @@ Deno.test(
 );
 
 Deno.test(
+  "TickService: unreadable ticket logs ticket-read-error and valid tickets proceed",
+  async () => {
+    using _dir = withLazyboyDir();
+    const validTicket = makeTicket({
+      id: "gh-valid",
+      phase: "intake",
+      status: "new",
+    });
+    const tickLogEntries: Record<string, unknown>[] = [];
+    const migratedTickets: TicketState[][] = [];
+    const deps = makeTickServiceDeps({
+      listTickets: () => Promise.resolve(["gh-bad", "gh-valid"]),
+      readTicket: (id) =>
+        id === "gh-bad"
+          ? Promise.reject(new Error("invalid phase"))
+          : Promise.resolve(validTicket),
+      appendTickLog: (entry) => {
+        tickLogEntries.push(entry as Record<string, unknown>);
+        return Promise.resolve();
+      },
+      runMigrations: (_dir, tickets) => {
+        migratedTickets.push([...tickets]);
+        return Promise.resolve(tickets);
+      },
+    });
+    await new TickService(deps).run();
+
+    const readError = tickLogEntries.find(
+      (e) => e.event === "ticket-read-error",
+    );
+    assertExists(readError);
+    assertEquals(readError.id, "gh-bad");
+    assertEquals(readError.message, "invalid phase");
+
+    assertEquals(migratedTickets.length, 1);
+    assertEquals(migratedTickets[0].length, 1);
+    assertEquals(migratedTickets[0][0].id, "gh-valid");
+  },
+);
+
+Deno.test(
   "TickService: runMigrations called before tick actions",
   async () => {
     const sequence: string[] = [];

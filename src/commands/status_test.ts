@@ -15,6 +15,7 @@ import { makeTicket } from "../test-support.ts";
 import {
   buildPhaseBreakdown,
   compareTickets,
+  formatBrokenRow,
   formatDetailView,
   formatPhaseBreakdown,
   formatStatusHeader,
@@ -1343,4 +1344,25 @@ Deno.test("formatStatusRow: new, revising, done statuses are not colored", () =>
     assertStringIncludes(row, s.padEnd(17));
     assertEquals(row, stripAnsiCode(row));
   }
+});
+
+// ── formatBrokenRow ───────────────────────────────────────────────────────────
+
+Deno.test("formatBrokenRow: id is padded to 36 chars in red", () => {
+  const row = formatBrokenRow("github/a/repo/1", "invalid phase");
+  assertStringIncludes(row, red("github/a/repo/1".padEnd(36)));
+});
+
+Deno.test("formatBrokenRow: message follows the red id", () => {
+  const row = formatBrokenRow("github/a/repo/1", "invalid phase");
+  assertStringIncludes(
+    stripAnsiCode(row),
+    "github/a/repo/1".padEnd(36) + " invalid phase",
+  );
+});
+
+Deno.test("formatBrokenRow: long id is not truncated", () => {
+  const id = "github/jackjennings/lazyboy/515";
+  const row = formatBrokenRow(id, "parse error");
+  assertStringIncludes(stripAnsiCode(row), id);
 });

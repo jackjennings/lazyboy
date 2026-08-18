@@ -337,6 +337,10 @@ export function shouldHideTicket(phase: string, status: string): boolean {
   return (phase === "merge" && status === "done") || phase === "wont-do";
 }
 
+export function formatBrokenRow(id: string, message: string): string {
+  return `${red(id.padEnd(36))} ${message}`;
+}
+
 function terminalWidth(fallback: number): number {
   try {
     return Deno.consoleSize().columns;
@@ -405,15 +409,31 @@ export const status: Command = {
       console.log("No active tickets.");
       Deno.exit(0);
     }
-    const tickets = await Promise.all(
+    const results = await Promise.allSettled(
       ids.map((id) => readTicket(stateDir, id)),
     );
-    tickets.sort(compareTickets);
+    const validTickets: TicketState[] = [];
+    const brokenRows: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === "fulfilled") {
+        validTickets.push(result.value);
+      } else {
+        const err = result.reason;
+        brokenRows.push(
+          formatBrokenRow(
+            ids[i],
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
+      }
+    }
+    validTickets.sort(compareTickets);
     const showAll = args.includes("--all");
     const visible = showAll
-      ? tickets
-      : tickets.filter((t) => !shouldHideTicket(t.phase, t.status));
-    if (visible.length === 0) {
+      ? validTickets
+      : validTickets.filter((t) => !shouldHideTicket(t.phase, t.status));
+    if (visible.length === 0 && brokenRows.length === 0) {
       console.log("No active tickets (run with --all to show completed).");
       Deno.exit(0);
     }
@@ -433,6 +453,9 @@ export const status: Command = {
           t.shortTitle ?? t.title,
         ),
       );
+    }
+    for (const row of brokenRows) {
+      console.log(row);
     }
   },
 };

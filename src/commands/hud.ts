@@ -17,6 +17,7 @@ import { isLaunchdEnabled } from "../launchd.ts";
 import { isPhaseAlive } from "../executor.ts";
 import {
   compareTickets,
+  formatBrokenRow,
   formatStatusHeader,
   formatStatusRow,
   formatTokens,
@@ -24,6 +25,7 @@ import {
   shouldHideTicket,
 } from "./status.ts";
 import { listTickets, readTicket } from "../state/store.ts";
+import type { TicketState } from "../state/types.ts";
 import { ScrollPane } from "../ui/scroll-pane.ts";
 import type { Command } from "./types.ts";
 import { mkdir, open, readTextFile } from "../filesystem.ts";
@@ -105,7 +107,25 @@ async function readState(
     isLaunchdEnabled(),
     listTickets(stateDir),
   ]);
-  const tickets = await Promise.all(ids.map((id) => readTicket(stateDir, id)));
+  const settled = await Promise.allSettled(
+    ids.map((id) => readTicket(stateDir, id)),
+  );
+  const tickets: TicketState[] = [];
+  const brokenRows: string[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i];
+    if (result.status === "fulfilled") {
+      tickets.push(result.value);
+    } else {
+      const err = result.reason;
+      brokenRows.push(
+        formatBrokenRow(
+          ids[i],
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
+    }
+  }
   tickets.sort(compareTickets);
   const visible = tickets.filter((t) => !shouldHideTicket(t.phase, t.status));
   const tokenTotals = await Promise.all(
@@ -126,6 +146,7 @@ async function readState(
         t.shortTitle ?? t.title,
       )
     ),
+    ...brokenRows,
   ];
   let progress: string | undefined;
   try {

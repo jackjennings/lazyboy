@@ -15,6 +15,7 @@ function makeAction(
     baseUrl: "https://myorg.atlassian.net",
     email: "test@example.com",
     apiToken: "token",
+    targetStatusName: "In Progress",
     appendLog: () => Promise.resolve(),
     writeTicket: () => Promise.resolve(),
     http: new HttpClient(),
@@ -188,4 +189,31 @@ Deno.test("jiraPickupAction: run logs error when no matching transition found", 
   }).run(makeTicket(BASE), "/state");
   assertEquals((logged[0] as Record<string, string>).event, "error");
   assertEquals((logged[0] as Record<string, string>).context, "jiraPickup");
+});
+
+Deno.test("jiraPickupAction: run transitions to the configured status name", async () => {
+  const calls: Array<{ url: string; method: string; body?: string }> = [];
+  await makeAction({
+    targetStatusName: "In Review",
+    http: new HttpClient((url, init) => {
+      calls.push({
+        url: url as string,
+        method: init?.method ?? "GET",
+        body: init?.body as string | undefined,
+      });
+      if (init?.method === "POST") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            fields: { status: { name: "To Do" } },
+            transitions: [{ id: "55", to: { name: "In Review" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+  }).run(makeTicket(BASE), "/state");
+  assertEquals(JSON.parse(calls[1].body!), { transition: { id: "55" } });
 });

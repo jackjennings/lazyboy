@@ -16,6 +16,7 @@ function makeAction(
     baseUrl: "https://myorg.atlassian.net",
     email: "test@example.com",
     apiToken: "token",
+    targetStatusName: "Done",
     writeTicket: () => Promise.resolve(),
     appendLog: () => Promise.resolve(),
     http: new HttpClient(),
@@ -196,4 +197,31 @@ Deno.test("jiraDoneAction: run does not call writeTicket when transition throws"
     },
   }).run(makeTicket(BASE), "/state");
   assertEquals(written.length, 0);
+});
+
+Deno.test("jiraDoneAction: run transitions to the configured status name", async () => {
+  const calls: Array<{ url: string; method: string; body?: string }> = [];
+  await makeAction({
+    targetStatusName: "Resolved",
+    http: new HttpClient((url, init) => {
+      calls.push({
+        url: url as string,
+        method: init?.method ?? "GET",
+        body: init?.body as string | undefined,
+      });
+      if (init?.method === "POST") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            fields: { status: { name: "To Do" } },
+            transitions: [{ id: "99", to: { name: "Resolved" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    }),
+  }).run(makeTicket(BASE), "/state");
+  assertEquals(JSON.parse(calls[1].body!), { transition: { id: "99" } });
 });

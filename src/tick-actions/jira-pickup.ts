@@ -7,6 +7,7 @@ export interface JiraPickupDeps {
   baseUrl: string;
   email: string;
   apiToken: string;
+  targetStatusName: string;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   http: HttpClient;
@@ -33,7 +34,7 @@ export function jiraPickupAction(opts: JiraPickupDeps): TickAction {
           email: opts.email,
           apiToken: opts.apiToken,
           issueKey,
-          targetStatusName: "In Progress",
+          targetStatusName: opts.targetStatusName,
           http: opts.http,
         });
       } catch (e) {

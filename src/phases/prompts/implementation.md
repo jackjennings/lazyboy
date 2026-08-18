@@ -136,6 +136,10 @@ message. Then push the branch and open a pull request using the `gh` CLI. Always
 create pull requests in draft mode — lazyboy automatically promotes them to
 ready-for-review when the implementation phase is approved.
 
+{{pr-description}}
+
+{{pr-media}}
+
 Before running `gh pr create`, check the worktree for a pull request template.
 Look for each path in order and stop at the first match:
 

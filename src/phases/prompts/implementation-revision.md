@@ -59,6 +59,10 @@ gh pr edit <url> --body '<description>'
 If `ticket.prs` is absent, empty, or every entry has `merged: true` or
 `closed: true`, do nothing — skip this step entirely.
 
+{{pr-description}}
+
+{{pr-media}}
+
 {{agents-md-update}}
 
 Do not write any files outside the repository worktree and the output file path

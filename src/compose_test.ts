@@ -5,6 +5,7 @@ import {
   ensureStatePrompts,
   GitHubAuthError,
   preflightGitHubCredentials,
+  readPhaseOutput,
   resolveGitHubAccount,
 } from "./compose.ts";
 import { PHASE_SEQUENCE } from "./phases/types.ts";
@@ -710,6 +711,80 @@ Deno.test(
       } else Deno.env.delete("GITHUB_TOKEN_PERSONAL");
       if (savedToken !== undefined) Deno.env.set("GITHUB_TOKEN", savedToken);
       else Deno.env.delete("GITHUB_TOKEN");
+    }
+  },
+);
+
+// ── readPhaseOutput ───────────────────────────────────────────────────────────
+
+Deno.test(
+  "readPhaseOutput: no .exit file → null",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      const result = await readPhaseOutput(ticketDir, "intake");
+      assertEquals(result, null);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readPhaseOutput: .exit present but no .md → null",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(ticketDir, "20260817T120000-intake.md.exit"),
+        "0",
+      );
+      const result = await readPhaseOutput(ticketDir, "intake");
+      assertEquals(result, null);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readPhaseOutput: .exit present and .md present → returns content",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(ticketDir, "20260817T120000-intake.md.exit"),
+        "0",
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260817T120000-intake.md"),
+        "phase output content",
+      );
+      const result = await readPhaseOutput(ticketDir, "intake");
+      assertEquals(result, "phase output content");
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "readPhaseOutput: prior run .md present, current run .exit present but no .md → null",
+  async () => {
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        join(ticketDir, "20260817T110000-intake.md"),
+        "prior run content",
+      );
+      await Deno.writeTextFile(
+        join(ticketDir, "20260817T120000-intake.md.exit"),
+        "0",
+      );
+      const result = await readPhaseOutput(ticketDir, "intake");
+      assertEquals(result, null);
+    } finally {
+      await Deno.remove(ticketDir, { recursive: true });
     }
   },
 );

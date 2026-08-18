@@ -137,12 +137,10 @@ export async function readTicket(
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
     artifact:
-      (data.artifact in ARTIFACT_DESCRIPTORS
+      (data.artifact && data.artifact in ARTIFACT_DESCRIPTORS
         ? data.artifact
         : "code") as ArtifactType,
-    notionPages: data.notionPages as
-      | { url: string; title: string }[]
-      | undefined,
+    documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(
       data.lastSeenCommentTimestamp,
@@ -191,8 +189,8 @@ export async function writeTicket(
   }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
   if (ticket.artifact !== "code") frontmatter.artifact = ticket.artifact;
-  if (ticket.notionPages !== undefined) {
-    frontmatter.notionPages = ticket.notionPages;
+  if (ticket.documents !== undefined) {
+    frontmatter.documents = ticket.documents;
   }
   if (ticket.workItems !== undefined) {
     frontmatter.workItems = ticket.workItems;

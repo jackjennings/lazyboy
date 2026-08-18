@@ -397,10 +397,10 @@ Deno.test(
 );
 
 Deno.test(
-  "reconcilePRsAction: does not apply when artifact is notion",
+  "reconcilePRsAction: does not apply when artifact is document",
   () => {
     assertEquals(
-      makeAction().applies(makeTicket({ artifact: "notion" })),
+      makeAction().applies(makeTicket({ artifact: "document" })),
       false,
     );
   },

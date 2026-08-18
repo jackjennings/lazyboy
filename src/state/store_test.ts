@@ -1176,10 +1176,10 @@ Deno.test("removeLearning: is a no-op when file not found", async () => {
 Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    const ticket = makeTicket({ artifact: "notion" });
+    const ticket = makeTicket({ artifact: "document" });
     await writeTicket(dir, ticket);
     const read = await readTicket(dir, ticket.id);
-    assertEquals(read.artifact, "notion");
+    assertEquals(read.artifact, "document");
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -1198,14 +1198,14 @@ Deno.test("writeTicket/readTicket: absent artifact reads as 'code' default", asy
   }
 });
 
-Deno.test("writeTicket/readTicket: notionPages round-trips through YAML frontmatter", async () => {
+Deno.test("writeTicket/readTicket: documents round-trips through YAML frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   try {
     const pages = [{ url: "https://notion.so/abc", title: "Doc" }];
-    const ticket = makeTicket({ artifact: "notion", notionPages: pages });
+    const ticket = makeTicket({ artifact: "document", documents: pages });
     await writeTicket(dir, ticket);
     const read = await readTicket(dir, ticket.id);
-    assertEquals(read.notionPages, pages);
+    assertEquals(read.documents, pages);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

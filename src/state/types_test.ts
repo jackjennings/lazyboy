@@ -149,11 +149,11 @@ Deno.test("ARTIFACT_DESCRIPTORS: code descriptor values", () => {
   assertEquals(d.mergeStatus, "waiting");
 });
 
-Deno.test("ARTIFACT_DESCRIPTORS: notion descriptor values", () => {
-  const d = ARTIFACT_DESCRIPTORS["notion"];
+Deno.test("ARTIFACT_DESCRIPTORS: document descriptor values", () => {
+  const d = ARTIFACT_DESCRIPTORS["document"];
   assertEquals(d.requiresWorktrees, false);
   assertEquals(d.requiresPRs, false);
-  assertEquals(d.completionField, "notionPages");
+  assertEquals(d.completionField, "documents");
   assertEquals(d.missingReason, "no-pages");
   assertEquals(d.mergeStatus, "done");
 });

@@ -11,6 +11,7 @@ alias ldi='lazyboy disable'
 alias lco='lazyboy completion'
 alias lrt='lazyboy retry'
 alias ldc='lazyboy decline'
+alias lrw='lazyboy rewind'
 alias lrv='lazyboy review'
 alias lsh='lazyboy shell'
 alias lta='lazyboy tail'
@@ -23,6 +24,7 @@ source <(lazyboy completion zsh)
 compdef lap=lazyboy
 compdef lrt=lazyboy
 compdef ldc=lazyboy
+compdef lrw=lazyboy
 compdef lrv=lazyboy
 compdef lsh=lazyboy
 compdef lta=lazyboy

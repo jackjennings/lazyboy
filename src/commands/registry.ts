@@ -14,6 +14,7 @@ import { tail } from "./tail.ts";
 import { update } from "./update.ts";
 import { hud } from "./hud.ts";
 import { usage } from "./usage.ts";
+import { rewind } from "./rewind.ts";
 import type { Command } from "./types.ts";
 
 export const commands: Command[] = [
@@ -28,6 +29,7 @@ export const commands: Command[] = [
   completions,
   retry,
   decline,
+  rewind,
   review,
   shell,
   tail,

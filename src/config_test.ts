@@ -1130,3 +1130,118 @@ dir = "~/my-extensions"
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("loadConfig parses [jira.statuses] fields", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+project = "PROJ"
+
+[jira.statuses]
+pickup = "In Review"
+done = "Closed"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.jira?.statuses?.pickup, "In Review");
+  assertEquals(cfg.jira?.statuses?.done, "Closed");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig leaves jira.statuses undefined when [jira.statuses] absent", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+project = "PROJ"
+`,
+  );
+  const cfg = await loadConfig(join(dir, "config.toml"));
+  assertEquals(cfg.jira?.statuses, undefined);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [jira.statuses].pickup is not a string", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+project = "PROJ"
+
+[jira.statuses]
+pickup = 42
+done = "Done"
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [jira.statuses].pickup must be a string",
+  );
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadConfig throws when [jira.statuses].done is not a string", async () => {
+  const dir = await Deno.makeTempDir();
+  await Deno.writeTextFile(
+    join(dir, "config.toml"),
+    `
+[github]
+repos = []
+
+[state]
+dir = "~/code"
+
+[tick]
+concurrency = 1
+
+[jira]
+base_url = "https://myorg.atlassian.net"
+project = "PROJ"
+
+[jira.statuses]
+pickup = "In Progress"
+done = 99
+`,
+  );
+  await assertRejects(
+    () => loadConfig(join(dir, "config.toml")),
+    Error,
+    "config.toml: [jira.statuses].done must be a string",
+  );
+  await Deno.remove(dir, { recursive: true });
+});

@@ -674,12 +674,15 @@ export function composeTickDeps(
               `a conforming message.\n\n` +
               `Commit your work, but do not push — the tick loop force-pushes the branch for you. ` +
               `Do not create pull requests and do not create issues.\n\n` +
-              `End your output with exactly one line: \`VERDICT: FIXED\`, \`VERDICT: INFRA\`, or ` +
-              `\`VERDICT: UNFIXABLE\`. Use INFRA only for an infrastructure failure, and UNFIXABLE ` +
-              `only when the failure genuinely requires a human decision. When the verdict is ` +
-              `FIXED, add one more line immediately after: ` +
-              `\`LEARNING: <one or two sentences describing what the implementation phase should ` +
-              `have checked or validated to catch this failure before it reached CI>\`.`;
+              `lazyboy reads only the output file below — nothing you say in your final reply is ` +
+              `seen. The last line written to that file, via the Write or Edit tool, must be ` +
+              `exactly one of: \`VERDICT: FIXED\`, \`VERDICT: INFRA\`, or \`VERDICT: UNFIXABLE\`, ` +
+              `with no markdown formatting (no bold, no heading, no bullet). Use INFRA only for an ` +
+              `infrastructure failure, and UNFIXABLE only when the failure genuinely requires a ` +
+              `human decision. When the verdict is FIXED, add one more line immediately after it ` +
+              `in the same file: \`LEARNING: <one or two sentences describing what the ` +
+              `implementation phase should have checked or validated to catch this failure before ` +
+              `it reached CI>\`.`;
             return spawnPhase({
               ticketDir: opts.ticketDir,
               stateDir,

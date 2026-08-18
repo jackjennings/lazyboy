@@ -891,7 +891,9 @@ export function composeTickDeps(
           ticketDir: opts.ticketDir,
           stateDir,
           prompt: opts.prompt,
-          scopeDirs: opts.scope.map(expandHome),
+          scopeDirs: opts.scope
+            .filter((s) => s.startsWith("/") || s.startsWith("~/"))
+            .map(expandHome),
           outputFile: opts.outputFile,
           githubToken: resolveGitHubAccount(
             deriveOrgFromTicketDir(opts.ticketDir, stateDir),

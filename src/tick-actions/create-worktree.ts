@@ -53,6 +53,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         : [];
 
       const resolvedLocalPaths: string[] = [];
+      const resolvedScopeSlugs: string[] = [];
       const githubSlugs = new Set<string>();
       const newRepoSlugs: string[] = [];
 
@@ -97,6 +98,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
           const slug = resolveGitHubSlug(entry);
           if (slug) {
             githubSlugs.add(slug);
+            resolvedScopeSlugs.push(slug);
             if (isNew) newRepoSlugs.push(slug);
           }
         }
@@ -198,7 +200,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
 
       const updated = {
         ...ticket,
-        scope: resolvedLocalPaths,
+        scope: [...resolvedLocalPaths, ...resolvedScopeSlugs],
         worktrees,
         ...(newRepoSlugs.length > 0 ? { newRepos: newRepoSlugs } : {}),
         updated: now,

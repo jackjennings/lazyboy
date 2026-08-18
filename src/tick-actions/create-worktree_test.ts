@@ -586,6 +586,38 @@ Deno.test(
 );
 
 Deno.test(
+  "createWorktreeAction: GitHub ticket, intake extra GitHub slug → slug persisted in scope",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - other/repo\n```\n\n## Reasoning\n\nText.\n";
+    const result = await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      findLocalRepo: (_, slug) => Promise.resolve(`/code/${slug}`),
+      createWorktree: (_repo, _id, slug) =>
+        Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(result?.scope, ["other/repo"]);
+  },
+);
+
+Deno.test(
+  "createWorktreeAction: GitHub ticket, intake GitHub URL as extra scope → resolved slug persisted",
+  async () => {
+    const intakeContent =
+      "## Proposed Scope\n\n```yaml\nscope:\n  - https://github.com/other/repo/issues/5\n```\n\n## Reasoning\n\nText.\n";
+    const result = await makeAction({
+      readIntakeOutput: () => Promise.resolve(intakeContent),
+      findLocalRepo: (_, slug) => Promise.resolve(`/code/${slug}`),
+      createWorktree: (_repo, _id, slug) =>
+        Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
+    }).run(makeTicket(BASE), "/state");
+
+    assertEquals(result?.scope, ["other/repo"]);
+  },
+);
+
+Deno.test(
   "createWorktreeAction: initLocalRepo failure → needs-attention with local-repo-init-failed",
   async () => {
     const intakeContent =

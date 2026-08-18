@@ -1,4 +1,9 @@
-import { assertEquals } from "@std/assert";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { HttpClient } from "./http-client.ts";
 
@@ -59,4 +64,53 @@ Deno.test("HttpClient method overrides any method set in init", async () => {
   const client = new HttpClient(stubFetch);
   await client.get("https://example.com", { method: "DELETE" });
   assertEquals(stubFetch.calls[0].args[1]?.method, "GET");
+});
+
+Deno.test("HttpClient sets a default timeout signal when init has no signal", async () => {
+  const stubFetch = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, { status: 200 })),
+  );
+  const client = new HttpClient(stubFetch);
+  await client.get("https://example.com");
+  assertExists(stubFetch.calls[0].args[1]?.signal);
+});
+
+Deno.test("HttpClient forwards caller-provided signal without creating a timeout", async () => {
+  const callerSignal = AbortSignal.abort();
+  const stubFetch = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, { status: 200 })),
+  );
+  const client = new HttpClient(stubFetch);
+  await client.get("https://example.com", { signal: callerSignal });
+  assertStrictEquals(stubFetch.calls[0].args[1]?.signal, callerSignal);
+});
+
+Deno.test("HttpClient rejects with TimeoutError when request exceeds timeoutMs", async () => {
+  const hangingFetch = (_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        "abort",
+        () => reject(init.signal!.reason),
+      );
+    });
+  const client = new HttpClient(hangingFetch, 1);
+  const error = await assertRejects(
+    () => client.get("https://example.com"),
+    DOMException,
+  );
+  assertEquals(error.name, "TimeoutError");
+});
+
+Deno.test("HttpClient applies signal fallback to post and patch", async () => {
+  const stubFetch = spy(
+    (_url: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, { status: 200 })),
+  );
+  const client = new HttpClient(stubFetch);
+  await client.post("https://example.com");
+  await client.patch("https://example.com");
+  assertExists(stubFetch.calls[0].args[1]?.signal);
+  assertExists(stubFetch.calls[1].args[1]?.signal);
 });

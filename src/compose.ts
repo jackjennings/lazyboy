@@ -83,7 +83,6 @@ import { PidFileLock } from "./lock.ts";
 import { selfReview } from "./self-review.ts";
 import { applyLearning } from "./apply-learning.ts";
 import { processLearnings as runLearnings } from "./learnings.ts";
-import { findLatestPhaseOutput } from "./review.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
 import type { Config } from "./state/types.ts";
 import {
@@ -284,6 +283,32 @@ export function deriveOrgFromTicketDir(
   const parts = ticketDir.slice(stateDir.length + 1).split("/");
   if (parts[0] !== "github") return "";
   return parts[1] ?? "";
+}
+
+export async function readPhaseOutput(
+  ticketDir: string,
+  phase: string,
+): Promise<string | null> {
+  const pattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md\\.exit$`);
+  const matches: string[] = [];
+  try {
+    for await (const entry of readDir(ticketDir)) {
+      if (entry.isFile && pattern.test(entry.name)) {
+        matches.push(entry.name);
+      }
+    }
+  } catch {
+    // dir missing
+  }
+  if (matches.length === 0) return null;
+  matches.sort();
+  const exitFilename = matches[matches.length - 1];
+  const outputFilename = exitFilename.slice(0, -".exit".length);
+  try {
+    return await readTextFile(join(ticketDir, outputFilename));
+  } catch {
+    return null;
+  }
 }
 
 export function composeTickDeps(
@@ -897,11 +922,7 @@ export function composeTickDeps(
           run: captureCommandRunner(),
           worktreePath,
         }),
-      readPhaseOutput: async (ticketDir, phase) => {
-        const found = await findLatestPhaseOutput(ticketDir);
-        if (!found || found.phaseName !== phase) return null;
-        return await readTextFile(join(ticketDir, found.filename));
-      },
+      readPhaseOutput,
       appendPrinciples: async (sd, ticketId, phase, outputContent) => {
         if (!config.tick.principles) return;
         const extracted = extractPrinciples(outputContent);

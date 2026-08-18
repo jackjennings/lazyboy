@@ -126,7 +126,7 @@ export interface TicketState {
   updated: string;
   body: string;
   phases?: PhaseModelConfig;
-  artifact: ArtifactType;
+  artifacts: ArtifactType[];
   documents?: { url: string; title: string }[];
   workItems?: { url: string; title: string }[];
 }

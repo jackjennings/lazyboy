@@ -93,7 +93,7 @@ Deno.test(
   "createWorktreeAction: does not apply when artifact requires no worktrees",
   () => {
     assertEquals(
-      makeAction().applies(makeTicket({ ...BASE, artifact: "work" })),
+      makeAction().applies(makeTicket({ ...BASE, artifacts: ["work"] })),
       false,
     );
   },

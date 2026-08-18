@@ -15,7 +15,7 @@ Deno.test("makeTicket: returns base shape with no args", () => {
   assertEquals(t.created, "2026-01-01T00:00:00Z");
   assertEquals(t.updated, "2026-01-01T00:00:00Z");
   assertEquals(t.body, "");
-  assertEquals(t.artifact, "code");
+  assertEquals(t.artifacts, ["code"]);
 });
 
 Deno.test("makeTicket: spreads overrides over base", () => {

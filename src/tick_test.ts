@@ -3820,14 +3820,14 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket in implementation/running with no notionPages moves to needs-attention",
+  "advancePhase: document ticket in implementation/running with no documents moves to needs-attention",
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
       const ticket = makeTicket({
         phase: "implementation",
         status: "running",
-        artifact: "document",
+        artifacts: ["document"],
       });
       const statuses: string[] = [];
       await advancePhase(
@@ -3853,14 +3853,14 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket in plan/waiting/approved with no worktrees spawns implementation",
+  "advancePhase: document ticket in plan/waiting/approved with no worktrees spawns implementation",
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
       const ticket = makeTicket({
         phase: "plan",
         status: "waiting",
-        artifact: "document",
+        artifacts: ["document"],
         approvals: [{
           timestamp: "2026-01-01T00:00:00Z",
           actor: "human",
@@ -3892,14 +3892,14 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket in implementation/waiting/approved transitions to merge/done without calling markPRsReady",
+  "advancePhase: document ticket in implementation/waiting/approved transitions to merge/done without calling markPRsReady",
   async () => {
     const stateDir = await Deno.makeTempDir();
     try {
       const ticket = makeTicket({
         phase: "implementation",
         status: "waiting",
-        artifact: "document",
+        artifacts: ["document"],
         approvals: [{
           timestamp: "2026-01-01T00:00:00Z",
           actor: "human",
@@ -4689,12 +4689,12 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket at implementation/running with no notionPages → needs-attention with reason no-pages",
+  "advancePhase: document ticket at implementation/running with no documents → needs-attention with reason no-pages",
   async () => {
     const ticket = makeTicket({
       phase: "implementation",
       status: "running",
-      artifact: "document",
+      artifacts: ["document"],
     });
     const written: TicketState[] = [];
     const logEntries: object[] = [];
@@ -4717,21 +4717,19 @@ Deno.test(
     const last = written.at(-1)!;
     assertEquals(last.status, "needs-attention");
     assertArrayIncludes(logEntries as Record<string, unknown>[], [{
-      event: "phase-transition",
-      from: "implementation",
-      to: "needs-attention",
+      event: "needs-attention",
       reason: "no-pages",
     }]);
   },
 );
 
 Deno.test(
-  "advancePhase: notion ticket at implementation/waiting approved with notionPages → merge/done",
+  "advancePhase: document ticket at implementation/waiting approved with documents → merge/done",
   async () => {
     const ticket = makeTicket({
       phase: "implementation",
       status: "waiting",
-      artifact: "document",
+      artifacts: ["document"],
       approvals: [{ timestamp: "t", actor: "human", phase: "implementation" }],
       documents: [{ url: "https://notion.so/page", title: "Doc" }],
     });
@@ -4758,12 +4756,12 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: notion ticket at plan/waiting approved with no worktrees proceeds to implementation",
+  "advancePhase: document ticket at plan/waiting approved with no worktrees proceeds to implementation",
   async () => {
     const ticket = makeTicket({
       phase: "plan",
       status: "waiting",
-      artifact: "document",
+      artifacts: ["document"],
       approvals: [{ timestamp: "t", actor: "human", phase: "plan" }],
       worktrees: {},
     });
@@ -5085,5 +5083,134 @@ Deno.test(
     ]);
     assertSpyCalls(notifyTickFailureSpy, 1);
     assertSpyCall(exitSpy, 0, { args: [1] });
+  },
+);
+
+Deno.test(
+  "advancePhase: code+document ticket with empty documents → needs-attention with no-pages",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "running",
+        artifacts: ["code", "document"],
+      });
+      const written: Array<{ status: string }> = [];
+      const logged: Array<Record<string, string>> = [];
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          writeTicket: (_dir, t) => {
+            written.push({ status: t.status });
+            return Promise.resolve();
+          },
+          appendLog: (_dir, _id, entry) => {
+            logged.push(entry as Record<string, string>);
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+          readPhaseOutput: () => Promise.resolve("output content"),
+        }),
+      );
+      const attention = logged.find((e) => e.event === "needs-attention");
+      assertEquals(attention?.reason, "no-pages");
+      const lastWritten = written.at(-1);
+      assertEquals(lastWritten?.status, "needs-attention");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: code+document ticket with documents transitions to merge/waiting",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "implementation",
+        status: "waiting",
+        artifacts: ["code", "document"],
+        documents: [{ url: "https://notion.so/abc", title: "Doc" }],
+        prs: [{
+          url: "https://github.com/org/repo/pull/1",
+          title: "PR",
+          dependsOn: [],
+          merged: false,
+        }],
+        approvals: [{
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human",
+          phase: "implementation",
+        }],
+      });
+      let writtenPhase: string | undefined;
+      let writtenStatus: string | undefined;
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          writeTicket: (_dir, t) => {
+            writtenPhase = t.phase;
+            writtenStatus = t.status;
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+        }),
+      );
+      assertEquals(writtenPhase, "merge");
+      assertEquals(writtenStatus, "waiting");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "advancePhase: code+document ticket with no worktrees blocks entry to implementation",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticket = makeTicket({
+        phase: "plan",
+        status: "waiting",
+        artifacts: ["code", "document"],
+        approvals: [{
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human",
+          phase: "plan",
+        }],
+        worktrees: {},
+      });
+      let writtenPhase: string | undefined;
+      let writtenStatus: string | undefined;
+      await advancePhase(
+        ticket,
+        stateDir,
+        makeTickDeps({
+          writeTicket: (_dir, t) => {
+            writtenPhase = t.phase;
+            writtenStatus = t.status;
+            return Promise.resolve();
+          },
+          resolveModelConfig: () => ({
+            model: "claude-sonnet-4-6",
+            thinking: "off",
+          }),
+        }),
+      );
+      assertEquals(writtenPhase, "implementation");
+      assertEquals(writtenStatus, "needs-attention");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
   },
 );

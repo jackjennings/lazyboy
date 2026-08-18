@@ -19,7 +19,7 @@ import {
   writeTicket,
 } from "./store.ts";
 import { makeTicket, withLazyboyDir } from "../test-support.ts";
-import type { LearningState, TicketState } from "./types.ts";
+import type { ArtifactType, LearningState, TicketState } from "./types.ts";
 
 const BASE = { id: "gh-1" };
 
@@ -1173,26 +1173,28 @@ Deno.test("removeLearning: is a no-op when file not found", async () => {
   }
 });
 
-Deno.test("writeTicket/readTicket: artifact round-trips through YAML frontmatter", async () => {
+Deno.test("writeTicket/readTicket: artifacts round-trips through YAML frontmatter", async () => {
   const dir = await Deno.makeTempDir();
   try {
-    const ticket = makeTicket({ artifact: "document" });
+    const ticket = makeTicket({ artifacts: ["document"] });
     await writeTicket(dir, ticket);
+    const raw = await Deno.readTextFile(join(dir, ticket.id, "meta.md"));
+    assertStringIncludes(raw, "artifacts:");
     const read = await readTicket(dir, ticket.id);
-    assertEquals(read.artifact, "document");
+    assertEquals(read.artifacts, ["document"]);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
 });
 
-Deno.test("writeTicket/readTicket: absent artifact reads as 'code' default", async () => {
+Deno.test("writeTicket/readTicket: absent artifacts reads as ['code'] default", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await writeTicket(dir, makeTicket(BASE));
     const raw = await Deno.readTextFile(join(dir, "gh-1", "meta.md"));
-    assertFalse(raw.includes("artifact:"));
+    assertFalse(raw.includes("artifacts:"));
     const read = await readTicket(dir, "gh-1");
-    assertEquals(read.artifact, "code");
+    assertEquals(read.artifacts, ["code"]);
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
@@ -1202,7 +1204,7 @@ Deno.test("writeTicket/readTicket: documents round-trips through YAML frontmatte
   const dir = await Deno.makeTempDir();
   try {
     const pages = [{ url: "https://notion.so/abc", title: "Doc" }];
-    const ticket = makeTicket({ artifact: "document", documents: pages });
+    const ticket = makeTicket({ artifacts: ["document"], documents: pages });
     await writeTicket(dir, ticket);
     const read = await readTicket(dir, ticket.id);
     assertEquals(read.documents, pages);
@@ -1452,7 +1454,7 @@ Deno.test(
       const items = [
         { url: "https://github.com/x/y/issues/10", title: "New issue" },
       ];
-      const ticket = makeTicket({ artifact: "work", workItems: items });
+      const ticket = makeTicket({ artifacts: ["work"], workItems: items });
       await writeTicket(dir, ticket);
       const read = await readTicket(dir, ticket.id);
       assertEquals(read.workItems, items);
@@ -1477,3 +1479,47 @@ Deno.test(
     }
   },
 );
+
+Deno.test("readTicket: legacy scalar artifact:notion converts to artifacts:[document]", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticketDir = join(dir, "gh-legacy");
+    await Deno.mkdir(ticketDir);
+    await Deno.writeTextFile(
+      join(ticketDir, "meta.md"),
+      `---
+id: gh-legacy
+provider: github
+title: T
+url: https://github.com/x/y/issues/99
+phase: intake
+status: new
+artifact: notion
+scope: []
+worktrees: {}
+approvals: []
+created: "2026-01-01T00:00:00Z"
+updated: "2026-01-01T00:00:00Z"
+---
+`,
+    );
+    const ticket = await readTicket(dir, "gh-legacy");
+    assertEquals(ticket.artifacts, ["document"] as ArtifactType[]);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("writeTicket/readTicket: artifacts:[code,document] round-trips", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    const ticket = makeTicket({ artifacts: ["code", "document"] });
+    await writeTicket(dir, ticket);
+    const raw = await Deno.readTextFile(join(dir, ticket.id, "meta.md"));
+    assertStringIncludes(raw, "artifacts:");
+    const read = await readTicket(dir, ticket.id);
+    assertEquals(read.artifacts, ["code", "document"] as ArtifactType[]);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});

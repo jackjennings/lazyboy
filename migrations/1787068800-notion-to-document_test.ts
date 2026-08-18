@@ -19,9 +19,9 @@ notionPages:
 body
 `,
     );
-    const ticket = makeTicket({ id, artifact: "code" });
+    const ticket = makeTicket({ id });
     const result = await migration.run(ticket, dir);
-    assertEquals(result.artifact, "document");
+    assertEquals(result.artifacts, ["document"]);
     assertEquals(result.documents, [{
       url: "https://notion.so/abc",
       title: "My Doc",
@@ -48,9 +48,13 @@ documents:
 body
 `,
     );
-    const ticket = makeTicket({ id, artifact: "document", documents: pages });
+    const ticket = makeTicket({
+      id,
+      artifacts: ["document"],
+      documents: pages,
+    });
     const result = await migration.run(ticket, dir);
-    assertEquals(result.artifact, "document");
+    assertEquals(result.artifacts, ["document"]);
     assertEquals(result.documents, pages);
   } finally {
     await Deno.remove(dir, { recursive: true });
@@ -70,9 +74,9 @@ artifact: code
 body
 `,
     );
-    const ticket = makeTicket({ id, artifact: "code" });
+    const ticket = makeTicket({ id });
     const result = await migration.run(ticket, dir);
-    assertEquals(result.artifact, "code");
+    assertEquals(result.artifacts, ["code"]);
     assertEquals(result.documents, undefined);
   } finally {
     await Deno.remove(dir, { recursive: true });

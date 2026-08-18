@@ -58,21 +58,19 @@ One short paragraph explaining why you chose these directories.
 
 ## Artifact type
 
-Identify whether this ticket will produce:
+Identify which artifact configurations apply to this ticket:
 
-- **`code`** (default): code changes delivered via a pull request.
-- **`notion`**: a document written to Notion (RFC, proposal, or similar); no
-  code changes, no pull requests.
-- **`work`**: decomposition or analysis whose output is one or more new issues
-  (GitHub or Jira, chosen by the spec agent based on the originating ticket's
-  provider) rather than code or a document. Use this when the ticket body asks
-  to break something down, investigate a scope, or produce a list of follow-on
-  tasks.
+- **`code` only** (default): code changes delivered via a pull request. Omit
+  `artifacts` from the frontmatter — the default is `["code"]`.
+- **`notion` only**: a document written to Notion (RFC, proposal, or similar);
+  no code changes, no pull requests. Write `artifacts: [notion]` to `meta.md`.
+- **`code` + `notion`**: code changes delivered via a pull request _and_ a
+  companion Notion document (e.g. an architecture document alongside a proof of
+  concept implementation). Write `artifacts: [code, notion]` to `meta.md`.
 
-If the ticket body clearly describes a document to be written to Notion, write
-`artifact: notion` to the YAML frontmatter of `meta.md` using the Edit tool. If
-the ticket clearly describes decomposition work, write `artifact: work` to the
-YAML frontmatter of `meta.md` using the Edit tool. Otherwise omit it (the
-default is `code`).
+Use `notion`-only when the ticket body clearly describes a document to write and
+no code changes are expected. Use `code + notion` when both a PR and a Notion
+document are expected. Use `work` for decomposition or analysis tickets whose
+output is one or more new issues; write `artifacts: [work]` to `meta.md`.
 
 {{principles}}

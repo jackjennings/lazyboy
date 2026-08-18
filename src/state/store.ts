@@ -136,10 +136,19 @@ export async function readTicket(
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
-    artifact:
-      (data.artifact && data.artifact in ARTIFACT_DESCRIPTORS
-        ? data.artifact
-        : "code") as ArtifactType,
+    artifacts: (() => {
+      if (Array.isArray(data.artifacts)) {
+        return data.artifacts as ArtifactType[];
+      }
+      const legacy = data.artifact as string | undefined;
+      if (!legacy) return ["code" as ArtifactType];
+      const LEGACY_MAP: Record<string, string> = { notion: "document" };
+      const mapped = LEGACY_MAP[legacy] ?? legacy;
+      if (mapped in ARTIFACT_DESCRIPTORS) {
+        return [mapped as ArtifactType];
+      }
+      return ["code" as ArtifactType];
+    })(),
     documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(
@@ -188,7 +197,9 @@ export async function writeTicket(
     frontmatter.shortTitle = ticket.shortTitle;
   }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
-  if (ticket.artifact !== "code") frontmatter.artifact = ticket.artifact;
+  const isDefaultArtifacts = ticket.artifacts.length === 1 &&
+    ticket.artifacts[0] === "code";
+  if (!isDefaultArtifacts) frontmatter.artifacts = ticket.artifacts;
   if (ticket.documents !== undefined) {
     frontmatter.documents = ticket.documents;
   }

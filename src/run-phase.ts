@@ -21,6 +21,7 @@ import { deriveProjectPath } from "./phases/project-path.ts";
 import matter from "gray-matter";
 import { captureCommandRunner, type CommandRunner } from "./apfel.ts";
 import { filterPrinciples } from "./judge-principles.ts";
+import { selfReview } from "./self-review.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -588,6 +589,21 @@ export async function executePhase(
     }
   }
 
+  try {
+    const selfApproveResult = await selfReview({
+      phase: opts.phase,
+      ticketDir: opts.ticketDir,
+      run: captureCommandRunner(),
+      worktreePath: opts.worktrees["jackjennings/lazyboy"]?.path,
+    });
+    await writeTextFile(
+      join(opts.ticketDir, opts.outputFile + ".selfapprove"),
+      JSON.stringify(selfApproveResult),
+    );
+  } catch {
+    // sidecar write failure does not affect the returned exit code
+  }
+
   return result.code;
 }
 
@@ -610,6 +626,33 @@ export async function readPhaseSessionId(
   matches.sort();
   try {
     return await readTextFile(join(ticketDir, matches[matches.length - 1]));
+  } catch {
+    return null;
+  }
+}
+
+export async function readSelfApprove(
+  ticketDir: string,
+  phase: string,
+): Promise<{ approved: boolean; reason: string | null } | null> {
+  const pattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md\\.selfapprove$`);
+  const matches: string[] = [];
+  try {
+    for await (const entry of readDir(ticketDir)) {
+      if (entry.isFile && pattern.test(entry.name)) {
+        matches.push(entry.name);
+      }
+    }
+  } catch {
+    // dir missing
+  }
+  if (matches.length === 0) return null;
+  matches.sort();
+  try {
+    const content = await readTextFile(
+      join(ticketDir, matches[matches.length - 1]),
+    );
+    return JSON.parse(content) as { approved: boolean; reason: string | null };
   } catch {
     return null;
   }

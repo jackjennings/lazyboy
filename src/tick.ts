@@ -57,11 +57,10 @@ export interface TickDeps {
     phase: ActivePhase,
     ticket: TicketState,
   ) => { model: string; thinking: string };
-  selfReview: (
-    phase: string,
+  readSelfApprove: (
     ticketDir: string,
-    worktreePath?: string,
-  ) => Promise<{ approved: boolean; reason: string | null }>;
+    phase: string,
+  ) => Promise<{ approved: boolean; reason: string | null } | null>;
   markPRsReady: (prUrls: string[]) => Promise<void>;
   readPhaseOutput: (
     ticketDir: string,
@@ -579,19 +578,11 @@ export async function advancePhase(
       const skipSelfReview = ticket.phase === "plan" &&
         (ticket.newRepos?.length ?? 0) > 0;
       if (!feedbackPrecedesOutput && !skipSelfReview) {
-        let selfReviewResult: { approved: boolean; reason: string | null } = {
-          approved: false,
-          reason: null,
-        };
-        try {
-          selfReviewResult = await deps.selfReview(
-            ticket.phase,
-            join(stateDir, ticket.id),
-            ticket.worktrees["jackjennings/lazyboy"]?.path,
-          );
-        } catch {
-          // treated as { approved: false, reason: null }
-        }
+        const sidecar = await deps.readSelfApprove(
+          join(stateDir, ticket.id),
+          ticket.phase,
+        );
+        const selfReviewResult = sidecar ?? { approved: false, reason: null };
         if (selfReviewResult.approved) {
           const agentEntry: ApprovalEntry = {
             timestamp: Temporal.Now.instant().toString(),

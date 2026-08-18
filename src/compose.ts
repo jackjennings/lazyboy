@@ -25,6 +25,7 @@ import {
   dedupePrinciples,
   extractPrinciples,
   readPhaseSessionId,
+  readSelfApprove,
 } from "./run-phase.ts";
 import { judgePrinciples } from "./judge-principles.ts";
 import { expandHome } from "./config.ts";
@@ -93,7 +94,6 @@ import {
 import { generateShortTitle as apfelGenerateShortTitle } from "./short-title.ts";
 import { makeDesktopNotifier, makeNotify } from "./notify.ts";
 import { PidFileLock } from "./lock.ts";
-import { selfReview } from "./self-review.ts";
 import { applyLearning } from "./apply-learning.ts";
 import { processLearnings as runLearnings } from "./learnings.ts";
 import { refreshAnthropicPricingIfStale } from "./anthropic-pricing.ts";
@@ -990,13 +990,7 @@ export function composeTickDeps(
       appendLog: appendTicketLog,
       resolveModelConfig: (phase, ticket) =>
         resolvePhaseModel(config, phase, ticket),
-      selfReview: (phase, ticketDir, worktreePath) =>
-        selfReview({
-          phase,
-          ticketDir,
-          run: captureCommandRunner(),
-          worktreePath,
-        }),
+      readSelfApprove: (ticketDir, phase) => readSelfApprove(ticketDir, phase),
       readPhaseOutput,
       appendPrinciples: async (sd, ticketId, phase, outputContent) => {
         if (!config.tick.principles) return;

@@ -30,6 +30,8 @@ export function plistContent(lazboyDir: string): string {
   <true/>
   <key>AbandonProcessGroup</key>
   <true/>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
 </dict>
 </plist>
 `;

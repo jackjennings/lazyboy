@@ -5061,3 +5061,29 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "TickService: deadline exceeded logs tick-deadline-exceeded, notifies, and exits 1",
+  async () => {
+    const captured: object[] = [];
+    const notifyTickFailureSpy = spy((_msg: string) => Promise.resolve());
+    const exitSpy = spy((_code: number) => {});
+    const deps = makeTickServiceDeps({
+      deadlineMs: 1,
+      lock: { withLock: (fn) => fn() },
+      preflightGitHubCredentials: () => new Promise<void>(() => {}),
+      appendTickLog: (entry) => {
+        captured.push(entry);
+        return Promise.resolve();
+      },
+      notifyTickFailure: notifyTickFailureSpy,
+      exit: exitSpy,
+    });
+    await new TickService(deps).run();
+    assertArrayIncludes(captured, [
+      { event: "tick-deadline-exceeded", deadlineMs: 1 },
+    ]);
+    assertSpyCalls(notifyTickFailureSpy, 1);
+    assertSpyCall(exitSpy, 0, { args: [1] });
+  },
+);

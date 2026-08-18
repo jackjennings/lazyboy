@@ -68,6 +68,40 @@ export interface ApprovalEntry {
   phase: TicketPhase;
 }
 
+export interface ArtifactDescriptor {
+  requiresWorktrees: boolean;
+  requiresPRs: boolean;
+  completionField: keyof TicketState;
+  missingReason: string;
+  mergeStatus: "waiting" | "done";
+}
+
+export const ARTIFACT_DESCRIPTORS = {
+  code: {
+    requiresWorktrees: true,
+    requiresPRs: true,
+    completionField: "prs",
+    missingReason: "no-prs",
+    mergeStatus: "waiting",
+  },
+  notion: {
+    requiresWorktrees: false,
+    requiresPRs: false,
+    completionField: "notionPages",
+    missingReason: "no-pages",
+    mergeStatus: "done",
+  },
+  work: {
+    requiresWorktrees: false,
+    requiresPRs: false,
+    completionField: "workItems",
+    missingReason: "no-work-items",
+    mergeStatus: "done",
+  },
+} satisfies Record<string, ArtifactDescriptor>;
+
+export type ArtifactType = keyof typeof ARTIFACT_DESCRIPTORS;
+
 export interface TicketState {
   id: string;
   provider: string;
@@ -92,8 +126,9 @@ export interface TicketState {
   updated: string;
   body: string;
   phases?: PhaseModelConfig;
-  artifact: "code" | "notion";
+  artifact: ArtifactType;
   notionPages?: { url: string; title: string }[];
+  workItems?: { url: string; title: string }[];
 }
 
 export function isApproved(ticket: TicketState): boolean {
@@ -101,34 +136,6 @@ export function isApproved(ticket: TicketState): boolean {
   if (!last) return false;
   return last.phase === ticket.phase;
 }
-
-export interface ArtifactDescriptor {
-  requiresWorktrees: boolean;
-  requiresPRs: boolean;
-  completionField: "prs" | "notionPages";
-  missingReason: string;
-  mergeStatus: "waiting" | "done";
-}
-
-export const ARTIFACT_DESCRIPTORS: Record<
-  "code" | "notion",
-  ArtifactDescriptor
-> = {
-  code: {
-    requiresWorktrees: true,
-    requiresPRs: true,
-    completionField: "prs",
-    missingReason: "no-prs",
-    mergeStatus: "waiting",
-  },
-  notion: {
-    requiresWorktrees: false,
-    requiresPRs: false,
-    completionField: "notionPages",
-    missingReason: "no-pages",
-    mergeStatus: "done",
-  },
-};
 
 export type PhaseModelConfig = Partial<
   Record<string, { model?: string; thinking?: string; skip?: boolean }>

@@ -63,9 +63,16 @@ Identify whether this ticket will produce:
 - **`code`** (default): code changes delivered via a pull request.
 - **`notion`**: a document written to Notion (RFC, proposal, or similar); no
   code changes, no pull requests.
+- **`work`**: decomposition or analysis whose output is one or more new issues
+  (GitHub or Jira, chosen by the spec agent based on the originating ticket's
+  provider) rather than code or a document. Use this when the ticket body asks
+  to break something down, investigate a scope, or produce a list of follow-on
+  tasks.
 
 If the ticket body clearly describes a document to be written to Notion, write
-`artifact: notion` to the YAML frontmatter of `meta.md` using the Edit tool.
-Otherwise omit it (the default is `code`).
+`artifact: notion` to the YAML frontmatter of `meta.md` using the Edit tool. If
+the ticket clearly describes decomposition work, write `artifact: work` to the
+YAML frontmatter of `meta.md` using the Edit tool. Otherwise omit it (the
+default is `code`).
 
 {{principles}}

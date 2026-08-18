@@ -19,7 +19,22 @@ export async function loadConfig(path?: string): Promise<Config> {
     if (typeof jiraRaw.project !== "string") {
       throw new Error("config.toml: [jira].project is required");
     }
-    jira = { baseUrl: jiraRaw.base_url, project: jiraRaw.project };
+    let jiraStatuses: { pickup: string; done: string } | undefined;
+    const statusesRaw = jiraRaw.statuses as Record<string, unknown> | undefined;
+    if (statusesRaw !== undefined) {
+      if (typeof statusesRaw.pickup !== "string") {
+        throw new Error("config.toml: [jira.statuses].pickup must be a string");
+      }
+      if (typeof statusesRaw.done !== "string") {
+        throw new Error("config.toml: [jira.statuses].done must be a string");
+      }
+      jiraStatuses = { pickup: statusesRaw.pickup, done: statusesRaw.done };
+    }
+    jira = {
+      baseUrl: jiraRaw.base_url,
+      project: jiraRaw.project,
+      statuses: jiraStatuses,
+    };
   }
   const todoTxtRaw = parsed.todo_txt as Record<string, unknown> | undefined;
   let todoTxt: Config["todoTxt"];

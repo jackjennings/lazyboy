@@ -3,7 +3,6 @@ import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
 import {
   type ApprovalEntry,
-  ARTIFACT_DESCRIPTORS,
   type ArtifactType,
   assertValidPhaseStatus,
   type LearningState,
@@ -136,19 +135,9 @@ export async function readTicket(
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
-    artifacts: (() => {
-      if (Array.isArray(data.artifacts)) {
-        return data.artifacts as ArtifactType[];
-      }
-      const legacy = data.artifact as string | undefined;
-      if (!legacy) return ["code" as ArtifactType];
-      const LEGACY_MAP: Record<string, string> = { notion: "document" };
-      const mapped = LEGACY_MAP[legacy] ?? legacy;
-      if (mapped in ARTIFACT_DESCRIPTORS) {
-        return [mapped as ArtifactType];
-      }
-      return ["code" as ArtifactType];
-    })(),
+    artifacts: Array.isArray(data.artifacts)
+      ? (data.artifacts as ArtifactType[])
+      : ["code" as ArtifactType],
     documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(

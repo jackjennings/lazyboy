@@ -1480,36 +1480,6 @@ Deno.test(
   },
 );
 
-Deno.test("readTicket: legacy scalar artifact:notion converts to artifacts:[document]", async () => {
-  const dir = await Deno.makeTempDir();
-  try {
-    const ticketDir = join(dir, "gh-legacy");
-    await Deno.mkdir(ticketDir);
-    await Deno.writeTextFile(
-      join(ticketDir, "meta.md"),
-      `---
-id: gh-legacy
-provider: github
-title: T
-url: https://github.com/x/y/issues/99
-phase: intake
-status: new
-artifact: notion
-scope: []
-worktrees: {}
-approvals: []
-created: "2026-01-01T00:00:00Z"
-updated: "2026-01-01T00:00:00Z"
----
-`,
-    );
-    const ticket = await readTicket(dir, "gh-legacy");
-    assertEquals(ticket.artifacts, ["document"] as ArtifactType[]);
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-  }
-});
-
 Deno.test("writeTicket/readTicket: artifacts:[code,document] round-trips", async () => {
   const dir = await Deno.makeTempDir();
   try {

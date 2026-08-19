@@ -18,6 +18,9 @@ import {
   writeTextFile,
 } from "./filesystem.ts";
 import { deriveProjectPath } from "./phases/project-path.ts";
+import matter from "gray-matter";
+import { captureCommandRunner, type CommandRunner } from "./apfel.ts";
+import { filterPrinciples } from "./judge-principles.ts";
 
 export function getPiEnvironmentVariables(
   home: string,
@@ -80,22 +83,89 @@ function selectLatestPhaseFiles(
   return [latest];
 }
 
+const PRINCIPLES_THRESHOLD = 20;
+const PRINCIPLES_TOP_K = 5;
+
 export async function buildContextFiles(
-  { ticketDir, stateDir, includePrinciples = true }: {
+  {
+    ticketDir,
+    stateDir,
+    includePrinciples = true,
+    run,
+  }: {
     ticketDir: string;
     stateDir: string;
     includePrinciples?: boolean;
+    run?: CommandRunner;
   },
-): Promise<string[]> {
+): Promise<{ contextFiles: string[]; tempPrinciplesFile?: string }> {
   const principlesPath = join(stateDir, "principles.md");
   const contextFiles: string[] = [];
+  let tempPrinciplesFile: string | undefined;
+
   if (includePrinciples) {
+    let principlesText: string | null = null;
     try {
-      await stat(principlesPath);
-      contextFiles.push(`@${principlesPath}`);
+      principlesText = await readTextFile(principlesPath);
     } catch {
       /* principles.md doesn't exist yet */
     }
+
+    if (principlesText !== null) {
+      const allEntries = parsePrincipleEntries(principlesText);
+      if (run !== undefined && allEntries.length > PRINCIPLES_THRESHOLD) {
+        let filtered = false;
+        try {
+          const metaRaw = await readTextFile(join(ticketDir, "meta.md"));
+          const { data, content } = matter(metaRaw);
+          const title = typeof data.title === "string" ? data.title : "";
+          const problemMatch = content.match(
+            /## Problem\n([\s\S]*?)(?=\n## |\s*$)/,
+          );
+          const problem = problemMatch
+            ? problemMatch[1].trim()
+            : content.trim();
+          const filterContext = [title, problem].filter(Boolean).join("\n\n");
+
+          const indices = await filterPrinciples(
+            allEntries.map((e) => e.raw),
+            filterContext,
+            PRINCIPLES_TOP_K,
+            run,
+          );
+          if (indices === null) throw new Error("llm-failed");
+
+          const selected = [...indices]
+            .sort((a, b) => a - b)
+            .map((i) => allEntries[i].raw)
+            .join("\n");
+
+          tempPrinciplesFile = await Deno.makeTempFile({ suffix: ".md" });
+          await writeTextFile(tempPrinciplesFile, selected);
+          contextFiles.push(`@${tempPrinciplesFile}`);
+          await appendPhaseLog(ticketDir, {
+            event: "principles-filtered",
+            total: allEntries.length,
+            included: indices.length,
+          });
+          filtered = true;
+        } catch (e) {
+          const reason = e instanceof Error && e.message === "llm-failed"
+            ? "llm-failed"
+            : "meta-unreadable";
+          await appendPhaseLog(ticketDir, {
+            event: "principles-filter-failed",
+            reason,
+          }).catch(() => {});
+        }
+        if (!filtered) {
+          contextFiles.push(`@${principlesPath}`);
+        }
+      } else {
+        contextFiles.push(`@${principlesPath}`);
+      }
+    }
+
     if (stateDir) {
       const relative = ticketDir.slice(stateDir.length + 1);
       const provider = relative.split("/")[0];
@@ -118,6 +188,7 @@ export async function buildContextFiles(
       }
     }
   }
+
   contextFiles.push(`@${ticketDir}/meta.md`);
   for (const phase of CONTEXT_PHASE_SEQUENCE) {
     const phaseFiles: string[] = [];
@@ -140,7 +211,8 @@ export async function buildContextFiles(
       contextFiles.push(`@${ticketDir}/${f}`);
     }
   }
-  return contextFiles;
+
+  return { contextFiles, tempPrinciplesFile };
 }
 
 export async function appendPhaseLog(
@@ -391,6 +463,7 @@ export async function executePhase(
     sessionId?: string;
     resume?: boolean;
     includePrinciples?: boolean;
+    run?: CommandRunner;
   },
   agent: CodeAgent,
 ): Promise<number> {
@@ -407,11 +480,14 @@ export async function executePhase(
     await setupClaudeCodeDirectories(opts.homeDir);
   }
 
-  const contextFiles = opts.contextFiles ??
-    await buildContextFiles({
+  const run = opts.run ?? captureCommandRunner();
+  const { contextFiles, tempPrinciplesFile } = opts.contextFiles
+    ? { contextFiles: opts.contextFiles, tempPrinciplesFile: undefined }
+    : await buildContextFiles({
       ticketDir: opts.ticketDir,
       stateDir: opts.stateDir,
       includePrinciples: opts.includePrinciples,
+      run,
     });
 
   const allPaths = [
@@ -442,17 +518,28 @@ export async function executePhase(
   }
 
   const startMs = Temporal.Now.instant().epochMilliseconds;
-  const result = await agent.runPhase({
-    prompt: opts.prompt + pathContext,
-    contextFiles,
-    cwd,
-    env,
-    provider: opts.provider,
-    model: opts.model,
-    thinking: opts.thinking,
-    sessionId: opts.sessionId,
-    resume: opts.resume,
-  });
+  let result: { stdout: string; stderr: string; code: number };
+  try {
+    result = await agent.runPhase({
+      prompt: opts.prompt + pathContext,
+      contextFiles,
+      cwd,
+      env,
+      provider: opts.provider,
+      model: opts.model,
+      thinking: opts.thinking,
+      sessionId: opts.sessionId,
+      resume: opts.resume,
+    });
+  } finally {
+    if (tempPrinciplesFile !== undefined) {
+      try {
+        await remove(tempPrinciplesFile);
+      } catch {
+        /* deletion failure silently ignored */
+      }
+    }
+  }
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
   const { usage } = opts.agentType === "claude-code"

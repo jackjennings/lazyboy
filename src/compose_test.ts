@@ -1,7 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import {
-  deriveOrgFromTicketDir,
   ensureStatePrompts,
   GitHubAuthError,
   preflightGitHubCredentials,
@@ -30,27 +29,6 @@ function makeConfig(overrides: Partial<Config["github"]> = {}): Config {
   };
 }
 
-Deno.test("deriveOrgFromTicketDir: github ticket returns org segment", () => {
-  assertEquals(
-    deriveOrgFromTicketDir("/state/github/jackjennings/lazyboy/289", "/state"),
-    "jackjennings",
-  );
-});
-
-Deno.test("deriveOrgFromTicketDir: jira ticket returns empty string", () => {
-  assertEquals(
-    deriveOrgFromTicketDir("/state/jira/PROJ-123", "/state"),
-    "",
-  );
-});
-
-Deno.test("deriveOrgFromTicketDir: github ticket missing repo segment returns empty string", () => {
-  assertEquals(
-    deriveOrgFromTicketDir("/state/github", "/state"),
-    "",
-  );
-});
-
 Deno.test("resolveGitHubAccount: accounts absent falls back to GITHUB_TOKEN/GITHUB_LOGIN", () => {
   Deno.env.set("GITHUB_TOKEN", "tok_fallback");
   Deno.env.set("GITHUB_LOGIN", "login_fallback");
@@ -71,6 +49,22 @@ Deno.test("resolveGitHubAccount: accounts present, org mapped → returns accoun
   assertEquals(result.token, "tok_personal");
   assertEquals(result.login, "jackjennings");
 });
+
+Deno.test(
+  "resolveGitHubAccount: currentSlug org used for token resolution after org transfer",
+  () => {
+    Deno.env.set("NEW_ORG_TOKEN", "newtoken");
+    const cfg = makeConfig({
+      repos: ["oldorg/repo"],
+      accounts: {
+        neworgAccount: { tokenEnv: "NEW_ORG_TOKEN", login: "new-user" },
+      },
+      orgs: { neworg: "neworgAccount" },
+    });
+    const { token } = resolveGitHubAccount("oldorg/repo", cfg, "neworg/repo");
+    assertEquals(token, "newtoken");
+  },
+);
 
 Deno.test("resolveGitHubAccount: accounts present, org not in orgs → falls back to GITHUB_TOKEN/GITHUB_LOGIN", () => {
   Deno.env.set("GITHUB_TOKEN", "tok_fallback");

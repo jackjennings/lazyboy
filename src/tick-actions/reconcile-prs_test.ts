@@ -464,3 +464,37 @@ Deno.test(
     assertSpyCalls(writeTicketSpy, 1);
   },
 );
+
+Deno.test(
+  "reconcilePRsAction: worktree-key resolved via alias when PR URL carries renamed slug",
+  async () => {
+    const ticket = makeTicket({
+      phase: "implementation",
+      status: "waiting",
+      worktrees: {
+        "org/old-name": { path: "/wt", branch: "github/org/old-name/1" },
+      },
+      prs: [],
+    });
+    let resolvedKey = "";
+    await reconcilePRsAction({
+      readImplementationOutput: () =>
+        Promise.resolve("https://github.com/org/new-name/pull/5"),
+      getPRInfo: () =>
+        Promise.resolve({
+          url: "https://github.com/org/new-name/pull/5",
+          title: "PR",
+          baseRefName: "main",
+          headRefName: "github/org/old-name/1",
+        }),
+      writeTicket: (_stateDir, t) => {
+        resolvedKey = t.prs![0].worktreeKey ?? "";
+        return Promise.resolve();
+      },
+      appendLog: () => Promise.resolve(),
+      aliasesForSlug: (slug) =>
+        slug === "org/new-name" ? ["org/old-name", "org/new-name"] : [slug],
+    }).run(ticket, "/state");
+    assertEquals(resolvedKey, "org/old-name");
+  },
+);

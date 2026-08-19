@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import type { TicketState } from "../state/types.ts";
+import { parsePrUrl, slugOf } from "../providers/github/identity.ts";
 
 export type CIConclusion =
   | "failure"
@@ -92,8 +93,8 @@ export function spawnCIFixAction(deps: SpawnCIFixDeps): TickAction {
         const runKey = ciFixRunKey(ciResult.runId, ciResult.attempt);
         if (handledKeys.has(runKey)) continue;
 
-        const repoMatch = pr.url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//);
-        const repo = repoMatch ? repoMatch[1] : "unknown/unknown";
+        const prParsed = parsePrUrl(pr.url);
+        const repo = prParsed ? slugOf(prParsed) : "unknown/unknown";
 
         const worktree = pr.worktreeKey
           ? ticket.worktrees[pr.worktreeKey]

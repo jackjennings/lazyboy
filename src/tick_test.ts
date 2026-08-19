@@ -28,6 +28,7 @@ import {
   withLazyboyDir,
 } from "./test-support.ts";
 import type { Provider, WorkItem } from "./providers/types.ts";
+import { CorruptRepoIdentitiesError } from "./providers/github/repo-identity.ts";
 
 type SpawnOpts = Parameters<TickDeps["spawn"]>[0];
 
@@ -5212,5 +5213,38 @@ Deno.test(
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
+  },
+);
+
+Deno.test(
+  "TickService: CorruptRepoIdentitiesError skips capture, advance still runs, logs repo-identity-unavailable",
+  async () => {
+    using lb = withLazyboyDir();
+    let fetchNewCalled = false;
+    let migratesCalled = false;
+
+    const ticket = makeTicket({ phase: "intake", status: "waiting" });
+
+    await new TickService(makeTickServiceDeps({
+      reconcileRepoIdentities: () =>
+        Promise.reject(new CorruptRepoIdentitiesError("bad table")),
+      providers: [{
+        fetchNew: () => {
+          fetchNewCalled = true;
+          return Promise.resolve([]);
+        },
+      } as unknown as Provider],
+      listTickets: () => Promise.resolve([ticket.id]),
+      readTicket: () => Promise.resolve(ticket),
+      runMigrations: (_dir, tickets) => {
+        migratesCalled = true;
+        return Promise.resolve(tickets);
+      },
+    })).run();
+
+    assertFalse(fetchNewCalled);
+    assert(migratesCalled);
+    const log = await Deno.readTextFile(join(lb.path, "tick.ndjson"));
+    assertStringIncludes(log, '"repo-identity-unavailable"');
   },
 );

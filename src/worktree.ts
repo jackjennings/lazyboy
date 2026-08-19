@@ -1,18 +1,13 @@
 import { join } from "@std/path";
 import type { WorktreeInfo } from "./state/types.ts";
 import { mkdir, readDir, stat } from "./filesystem.ts";
+import {
+  extractGitHubSlug,
+  parseRemoteSlug,
+  resolveGitHubSlug,
+} from "./providers/github/identity.ts";
 
-export function extractGitHubSlug(url: string): string {
-  const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
-  if (!match) throw new Error(`Cannot extract GitHub slug from URL: ${url}`);
-  return match[1];
-}
-
-export function parseRemoteSlug(url: string): string | null {
-  const match = url.match(/[:/]([^/:]+)\/([^/:]+?)(?:\.git)?$/);
-  if (!match) return null;
-  return `${match[1]}/${match[2]}`;
-}
+export { extractGitHubSlug, parseRemoteSlug, resolveGitHubSlug };
 
 export const GIT_TIMEOUT_MS = 120_000;
 
@@ -60,6 +55,7 @@ export async function runGit(
 export async function findLocalRepo(
   roots: string[],
   slug: string,
+  aliasesForSlug: (slug: string) => string[] = (s) => [s],
 ): Promise<string | null> {
   for (const root of roots) {
     try {
@@ -74,7 +70,12 @@ export async function findLocalRepo(
               ["remote", "get-url", "origin"],
               candidatePath,
             );
-            if (code === 0 && stdout.includes(slug)) return candidatePath;
+            if (code === 0) {
+              const remoteSlug = parseRemoteSlug(stdout);
+              if (remoteSlug && aliasesForSlug(slug).includes(remoteSlug)) {
+                return candidatePath;
+              }
+            }
           }
         } catch {
           // org-level directory is not readable — skip
@@ -176,37 +177,28 @@ export function parseIntakeScope(
   return results;
 }
 
-const SLUG_RE = /^([a-zA-Z0-9_.\-]+)\/([a-zA-Z0-9_.\-]+)$/;
-const GITHUB_URL_RE = /^\/([^/]+)\/([^/]+)/;
-
-export function resolveGitHubSlug(entry: string): string | null {
-  if (entry.startsWith("https://github.com/")) {
-    const path = entry.slice("https://github.com".length);
-    const match = path.match(GITHUB_URL_RE);
-    if (!match || !match[2]) return null;
-    return `${match[1]}/${match[2]}`;
-  }
-  if (entry.startsWith("/") || entry.startsWith("~/")) return null;
-  const match = entry.match(SLUG_RE);
-  if (!match) return null;
-  return `${match[1]}/${match[2]}`;
-}
-
 export async function cloneRemoteRepo(
   slug: string,
   clone: (slug: string, destDir: string, cwd: string) => Promise<void>,
+  aliasesForSlug: (slug: string) => string[] = (s) => [s],
 ): Promise<string> {
   const home = Deno.env.get("HOME")!;
+
+  for (const alias of aliasesForSlug(slug)) {
+    const [aOrg, aRepo] = alias.split("/");
+    const aliasDir = join(home, ".lazyboy", "repositories", aOrg, aRepo);
+    try {
+      await stat(aliasDir);
+      return aliasDir;
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    }
+  }
+
   const [org, repo] = slug.split("/");
   const orgDir = join(home, ".lazyboy", "repositories", org);
   const repoDir = join(orgDir, repo);
   await mkdir(orgDir, { recursive: true });
-  try {
-    await stat(repoDir);
-    return repoDir;
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
-  }
   await clone(slug, repo, orgDir);
   return repoDir;
 }

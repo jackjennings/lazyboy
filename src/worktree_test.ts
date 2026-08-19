@@ -785,3 +785,75 @@ Deno.test("runGit: returns timeout shape when git subprocess hangs", async () =>
     await Deno.remove(tmpDir, { recursive: true });
   }
 });
+
+// ── alias-aware findLocalRepo ─────────────────────────────────────────────────
+
+Deno.test("findLocalRepo: matches a checkout whose remote is any alias", async () => {
+  const home = await Deno.makeTempDir();
+  const orgDir = join(home, "code", "org");
+  const repoDir = join(orgDir, "old-name");
+  await Deno.mkdir(repoDir, { recursive: true });
+  await runGit(["init", "-b", "main", repoDir], orgDir);
+  await runGit(
+    ["remote", "add", "origin", "https://github.com/org/new-name.git"],
+    repoDir,
+  );
+  const result = await findLocalRepo(
+    [join(home, "code")],
+    "org/old-name",
+    (slug) =>
+      slug === "org/old-name" ? ["org/old-name", "org/new-name"] : [slug],
+  );
+  assertEquals(result, repoDir);
+  await Deno.remove(home, { recursive: true });
+});
+
+Deno.test(
+  "findLocalRepo: org/lazyboy does not match a remote for org/lazyboy-core",
+  async () => {
+    const home = await Deno.makeTempDir();
+    const orgDir = join(home, "code", "org");
+    const repoDir = join(orgDir, "lazyboy-core");
+    await Deno.mkdir(repoDir, { recursive: true });
+    await runGit(["init", "-b", "main", repoDir], orgDir);
+    await runGit(
+      ["remote", "add", "origin", "https://github.com/org/lazyboy-core.git"],
+      repoDir,
+    );
+    const result = await findLocalRepo([join(home, "code")], "org/lazyboy");
+    assertEquals(result, null);
+    await Deno.remove(home, { recursive: true });
+  },
+);
+
+Deno.test("cloneRemoteRepo: reuses existing cache directory for any alias", async () => {
+  const home = await Deno.makeTempDir();
+  const savedHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", home);
+  try {
+    const existingDir = join(
+      home,
+      ".lazyboy",
+      "repositories",
+      "org",
+      "old-name",
+    );
+    await Deno.mkdir(existingDir, { recursive: true });
+    let cloneCalled = false;
+    const result = await cloneRemoteRepo(
+      "org/new-name",
+      () => {
+        cloneCalled = true;
+        return Promise.resolve();
+      },
+      (slug) =>
+        slug === "org/new-name" ? ["org/old-name", "org/new-name"] : [slug],
+    );
+    assertFalse(cloneCalled);
+    assertEquals(result, existingDir);
+  } finally {
+    if (savedHome !== undefined) Deno.env.set("HOME", savedHome);
+    else Deno.env.delete("HOME");
+    await Deno.remove(home, { recursive: true });
+  }
+});

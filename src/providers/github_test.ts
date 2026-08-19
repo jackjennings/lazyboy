@@ -11,7 +11,7 @@ import { compareSortKeys } from "./types.ts";
 import { HttpClient } from "../http-client.ts";
 
 function fixedResolver(token: string, login: string) {
-  return (_org: string) => ({ token, login });
+  return (_slug: string) => ({ token, login });
 }
 
 Deno.test("fetchNew filters out known IDs", async () => {
@@ -98,15 +98,17 @@ Deno.test("fetchNew returns all when knownIds is empty", async () => {
   assertEquals(items[0].id, "github/jackjennings/lazyboy/1");
 });
 
-Deno.test("fetchNew passes org-resolved token and login to http.get", async () => {
+Deno.test("fetchNew passes slug-resolved token and login to http.get", async () => {
   const receivedArgs: Array<{ url: string; token: string }> = [];
   const provider = new GitHubProvider({
     repos: ["jackjennings/lazyboy", "workorg/app"],
-    accountResolver: (org) => {
-      if (org === "jackjennings") {
+    accountResolver: (slug) => {
+      if (slug === "jackjennings/lazyboy") {
         return { token: "tok_personal", login: "jack" };
       }
-      if (org === "workorg") return { token: "tok_work", login: "work-user" };
+      if (slug === "workorg/app") {
+        return { token: "tok_work", login: "work-user" };
+      }
       return { token: "tok_default", login: "default" };
     },
     http: new HttpClient((url, init) => {
@@ -184,12 +186,12 @@ Deno.test("GitHubProvider.close calls http.patch with correct API URL and body",
   assertEquals(patchedBody, { state: "closed", state_reason: "completed" });
 });
 
-Deno.test("GitHubProvider.close passes org-resolved token to http.patch", async () => {
+Deno.test("GitHubProvider.close passes slug-resolved token to http.patch", async () => {
   let receivedToken = "";
   const provider = new GitHubProvider({
     repos: [],
-    accountResolver: (org) => ({
-      token: org === "myorg" ? "tok_org" : "tok_default",
+    accountResolver: (slug) => ({
+      token: slug.split("/")[0] === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
     http: new HttpClient((_url, init) => {
@@ -412,12 +414,12 @@ Deno.test("GitHubProvider.prState: throws on unrecognized PR URL", async () => {
   );
 });
 
-Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to http.get merge check", async () => {
+Deno.test("GitHubProvider.isPRMerged: passes slug-resolved token to http.get merge check", async () => {
   let receivedToken = "";
   const provider = new GitHubProvider({
     repos: [],
-    accountResolver: (org) => ({
-      token: org === "myorg" ? "tok_org" : "tok_default",
+    accountResolver: (slug) => ({
+      token: slug.split("/")[0] === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
     http: new HttpClient((_url, init) => {
@@ -431,13 +433,13 @@ Deno.test("GitHubProvider.isPRMerged: passes org-resolved token to http.get merg
   assertEquals(receivedToken, "tok_org");
 });
 
-Deno.test("GitHubProvider.prMetadata: passes org-resolved token and correct endpoint", async () => {
+Deno.test("GitHubProvider.prMetadata: passes slug-resolved token and correct endpoint", async () => {
   let receivedToken = "";
   let calledUrl = "";
   const provider = new GitHubProvider({
     repos: [],
-    accountResolver: (org) => ({
-      token: org === "myorg" ? "tok_org" : "tok_default",
+    accountResolver: (slug) => ({
+      token: slug.split("/")[0] === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
     http: new HttpClient((url, init) => {
@@ -496,8 +498,8 @@ Deno.test("GitHubProvider.clone: calls _clone with slug, destDir, cwd, and resol
     | undefined;
   const provider = new GitHubProvider({
     repos: [],
-    accountResolver: (org) => ({
-      token: org === "myorg" ? "tok_org" : "tok_default",
+    accountResolver: (slug) => ({
+      token: slug.split("/")[0] === "myorg" ? "tok_org" : "tok_default",
       login: "user",
     }),
     http: new HttpClient(),
@@ -528,3 +530,69 @@ Deno.test("GitHubProvider.clone: propagates _clone error", async () => {
     "clone failed",
   );
 });
+
+Deno.test(
+  "GitHubProvider.fetchNew: builds id from canonical, requests current",
+  async () => {
+    const requested: string[] = [];
+    const http = new HttpClient((url) => {
+      requested.push(url as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{
+            number: 1,
+            title: "T",
+            body: "B",
+            html_url: "https://github.com/org/new/issues/1",
+          }]),
+          { status: 200 },
+        ),
+      );
+    });
+    const provider = new GitHubProvider({
+      repos: ["org/old"],
+      accountResolver: () => ({ token: "t", login: "user" }),
+      resolveRepo: (slug) =>
+        slug === "org/old"
+          ? { canonical: "org/old", current: "org/new" }
+          : null,
+      http,
+    });
+    const items = await provider.fetchNew(new Set());
+    assertEquals(items.length, 1);
+    assertEquals(items[0].id, "github/org/old/1");
+    assert(requested.some((u) => u.includes("/repos/org/new/issues")));
+    assertFalse(requested.some((u) => u.includes("/repos/org/old/issues")));
+  },
+);
+
+Deno.test(
+  "GitHubProvider.fetchNew: null resolveRepo skips that repository",
+  async () => {
+    const provider = new GitHubProvider({
+      repos: ["blocked/repo", "fine/repo"],
+      accountResolver: () => ({ token: "t", login: "user" }),
+      resolveRepo: (slug) =>
+        slug === "blocked/repo" ? null : { canonical: slug, current: slug },
+      http: new HttpClient((url) => {
+        if ((url as string).includes("fine/repo")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([{
+                number: 2,
+                title: "T",
+                body: "B",
+                html_url: "https://github.com/fine/repo/issues/2",
+              }]),
+              { status: 200 },
+            ),
+          );
+        }
+        throw new Error("should not call blocked/repo");
+      }),
+    });
+    const items = await provider.fetchNew(new Set());
+    assertEquals(items.length, 1);
+    assertEquals(items[0].id, "github/fine/repo/2");
+  },
+);

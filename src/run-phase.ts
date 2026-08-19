@@ -140,7 +140,7 @@ export async function buildContextFiles(
             .map((i) => allEntries[i].raw)
             .join("\n");
 
-          tempPrinciplesFile = await Deno.makeTempFile({ suffix: ".md" });
+          tempPrinciplesFile = join(ticketDir, "principles-filtered.md");
           await writeTextFile(tempPrinciplesFile, selected);
           contextFiles.push(`@${tempPrinciplesFile}`);
           await appendPhaseLog(ticketDir, {
@@ -481,8 +481,8 @@ export async function executePhase(
   }
 
   const run = opts.run ?? captureCommandRunner();
-  const { contextFiles, tempPrinciplesFile } = opts.contextFiles
-    ? { contextFiles: opts.contextFiles, tempPrinciplesFile: undefined }
+  const { contextFiles } = opts.contextFiles
+    ? { contextFiles: opts.contextFiles }
     : await buildContextFiles({
       ticketDir: opts.ticketDir,
       stateDir: opts.stateDir,
@@ -518,28 +518,17 @@ export async function executePhase(
   }
 
   const startMs = Temporal.Now.instant().epochMilliseconds;
-  let result: { stdout: string; stderr: string; code: number };
-  try {
-    result = await agent.runPhase({
-      prompt: opts.prompt + pathContext,
-      contextFiles,
-      cwd,
-      env,
-      provider: opts.provider,
-      model: opts.model,
-      thinking: opts.thinking,
-      sessionId: opts.sessionId,
-      resume: opts.resume,
-    });
-  } finally {
-    if (tempPrinciplesFile !== undefined) {
-      try {
-        await remove(tempPrinciplesFile);
-      } catch {
-        /* deletion failure silently ignored */
-      }
-    }
-  }
+  const result = await agent.runPhase({
+    prompt: opts.prompt + pathContext,
+    contextFiles,
+    cwd,
+    env,
+    provider: opts.provider,
+    model: opts.model,
+    thinking: opts.thinking,
+    sessionId: opts.sessionId,
+    resume: opts.resume,
+  });
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
   const { usage } = opts.agentType === "claude-code"

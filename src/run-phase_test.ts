@@ -2903,10 +2903,10 @@ Deno.test(
   },
 );
 
-// ── executePhase: temp principles file lifecycle ──────────────────────────────
+// ── executePhase: filtered principles file lifecycle ─────────────────────────
 
 Deno.test(
-  "executePhase: deletes temp principles file after agent completes successfully",
+  "executePhase: persists filtered principles file in ticket directory after agent completes",
   async () => {
     const stateDir = await Deno.makeTempDir();
     const homeDir = await Deno.makeTempDir();
@@ -2922,10 +2922,8 @@ Deno.test(
       );
       await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
 
-      let capturedContextFiles: string[] = [];
       const agent: CodeAgent = {
-        runPhase(opts) {
-          capturedContextFiles = opts.contextFiles;
+        runPhase() {
           return Promise.resolve({ stdout: "", stderr: "", code: 0 });
         },
       };
@@ -2951,14 +2949,9 @@ Deno.test(
         agent,
       );
 
-      const tempFile = capturedContextFiles
-        .map((f) => f.slice(1))
-        .find((f) => !f.startsWith(stateDir));
-      assertExists(tempFile);
-      await assertRejects(
-        () => Deno.stat(tempFile!),
-        Deno.errors.NotFound,
-      );
+      const filteredFile = join(ticketDir, "principles-filtered.md");
+      const info = await Deno.stat(filteredFile);
+      assert(info.isFile);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
@@ -2967,11 +2960,10 @@ Deno.test(
 );
 
 Deno.test(
-  "executePhase: deletes temp principles file even when agent runPhase throws",
+  "executePhase: persists filtered principles file in ticket directory even when agent throws",
   async () => {
     const stateDir = await Deno.makeTempDir();
     const homeDir = await Deno.makeTempDir();
-    let tempFilePath: string | undefined;
     try {
       const ticketDir = join(stateDir, "github", "acme", "repo", "1");
       await Deno.mkdir(ticketDir, { recursive: true });
@@ -2985,10 +2977,7 @@ Deno.test(
       await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
 
       const agent: CodeAgent = {
-        runPhase(opts) {
-          tempFilePath = opts.contextFiles
-            .map((f) => f.slice(1))
-            .find((f) => !f.startsWith(stateDir));
+        runPhase() {
           throw new Error("agent crashed");
         },
       };
@@ -3019,11 +3008,9 @@ Deno.test(
         "agent crashed",
       );
 
-      assertExists(tempFilePath);
-      await assertRejects(
-        () => Deno.stat(tempFilePath!),
-        Deno.errors.NotFound,
-      );
+      const filteredFile = join(ticketDir, "principles-filtered.md");
+      const info = await Deno.stat(filteredFile);
+      assert(info.isFile);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });

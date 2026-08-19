@@ -534,8 +534,8 @@ export async function review(
   }
 
   const found = await findLatestPhaseOutput(ticketDir);
-  if (!found) {
-    console.error(`No phase output found for ${id}`);
+  if (!found || found.phaseName !== ticket.phase) {
+    console.error(`No output for phase "${ticket.phase}" on ticket ${id}`);
     Deno.exit(1);
   }
 
@@ -559,7 +559,7 @@ export async function review(
     }
     const now = Temporal.Now.zonedDateTimeISO("UTC");
     const timestamp = formatTimestamp(now);
-    const feedbackFile = `${timestamp}-${found.phaseName}-feedback.md`;
+    const feedbackFile = `${timestamp}-${ticket.phase}-feedback.md`;
     await writePhaseOutput(stateDir, id, feedbackFile, text);
     const updated = await readTicket(stateDir, id);
     await writeTicket(stateDir, {
@@ -775,7 +775,7 @@ export async function review(
       Deno.exit(0);
     }
     const timestamp = formatTimestamp(now);
-    const feedbackFile = `${timestamp}-${found!.phaseName}-feedback.md`;
+    const feedbackFile = `${timestamp}-${ticket.phase}-feedback.md`;
     await writePhaseOutput(stateDir, id, feedbackFile, text);
     const updated = await readTicket(stateDir, id);
     await writeTicket(stateDir, {

@@ -1,11 +1,13 @@
 import {
   assertArrayIncludes,
   assertEquals,
+  assertFalse,
   assertNotEquals,
   assertRejects,
+  assertStringIncludes,
 } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
-import { judgePrinciples } from "./judge-principles.ts";
+import { filterPrinciples, judgePrinciples } from "./judge-principles.ts";
 import type { CommandRunner } from "./apfel.ts";
 
 const KEEP_LOCAL = JSON.stringify({ verdict: "KEEP_LOCAL" });
@@ -156,4 +158,97 @@ Deno.test("judgePrinciples: passes apfel a schema file holding the verdict schem
     "SKIP",
   ]);
   await assertRejects(() => Deno.stat(schemaPath), Deno.errors.NotFound);
+});
+
+// ── filterPrinciples ──────────────────────────────────────────────────────────
+
+Deno.test("filterPrinciples: returns indices from LLM response", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [2, 0] })));
+  const result = await filterPrinciples(
+    ["- A", "- B", "- C"],
+    "context",
+    5,
+    run,
+  );
+  assertEquals(result, [2, 0]);
+});
+
+Deno.test("filterPrinciples: returns null when all LLM calls fail", async () => {
+  const run: CommandRunner = spy(() =>
+    Promise.resolve({ code: 1, stdout: "" })
+  );
+  assertEquals(await filterPrinciples(["- A"], "ctx", 5, run), null);
+});
+
+Deno.test("filterPrinciples: returns null when response indices is not an array", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: "wrong" })));
+  assertEquals(await filterPrinciples(["- A"], "ctx", 5, run), null);
+});
+
+Deno.test("filterPrinciples: returns null when result object has no indices field", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ verdict: "KEEP" })));
+  assertEquals(await filterPrinciples(["- A"], "ctx", 5, run), null);
+});
+
+Deno.test("filterPrinciples: filters out-of-bounds indices from response", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [0, 5, -1] })));
+  const result = await filterPrinciples(["- A", "- B", "- C"], "ctx", 5, run);
+  assertEquals(result, [0]);
+});
+
+Deno.test("filterPrinciples: returns empty array when all returned indices are out of bounds", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [99] })));
+  assertEquals(await filterPrinciples(["- A"], "ctx", 5, run), []);
+});
+
+Deno.test("filterPrinciples: deduplicates repeated indices", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [0, 0, 1] })));
+  const result = await filterPrinciples(["- A", "- B"], "ctx", 5, run);
+  assertEquals(result?.length, 2);
+});
+
+Deno.test("filterPrinciples: caps results to topK", async () => {
+  const entries = Array.from({ length: 10 }, (_, i) => `- e${i}`);
+  const run = runner(
+    alwaysReturn(JSON.stringify({ indices: [0, 1, 2, 3, 4, 5, 6] })),
+  );
+  const result = await filterPrinciples(entries, "ctx", 3, run);
+  assertEquals(result?.length, 3);
+});
+
+Deno.test("filterPrinciples: uses FallbackLanguageModel, tries apfel first then claude", async () => {
+  const run = runner(apfelUnavailable(JSON.stringify({ indices: [0] })));
+  assertNotEquals(await filterPrinciples(["- A"], "ctx", 5, run), null);
+  assertSpyCalls(run as ReturnType<typeof spy>, 2);
+  assertEquals(callArgs(run, 0)[0], "apfel");
+  assertEquals(callArgs(run, 1)[0], "claude");
+});
+
+Deno.test("filterPrinciples: includes context and numbered entries in prompt", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [] })));
+  await filterPrinciples(["- entry A", "- entry B"], "ticket context", 5, run);
+  const args = callArgs(run, 0);
+  const promptArg = args[args.length - 1];
+  assertStringIncludes(promptArg, "ticket context");
+  assertStringIncludes(promptArg, "0: - entry A");
+  assertStringIncludes(promptArg, "1: - entry B");
+});
+
+Deno.test("filterPrinciples: returns null when LLM throws", async () => {
+  const run: CommandRunner = spy(() =>
+    Promise.reject(new Error("spawn failed"))
+  );
+  assertEquals(await filterPrinciples(["- A"], "ctx", 5, run), null);
+});
+
+Deno.test("filterPrinciples: does not include non-integer indices", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [0.5, 1] })));
+  const result = await filterPrinciples(["- A", "- B"], "ctx", 5, run);
+  assertEquals(result, [1]);
+});
+
+Deno.test("filterPrinciples: assertFalse indices includes non-integer", async () => {
+  const run = runner(alwaysReturn(JSON.stringify({ indices: [0, 1] })));
+  const result = await filterPrinciples(["- A", "- B"], "ctx", 5, run);
+  assertFalse(result === null);
 });

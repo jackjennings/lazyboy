@@ -59,7 +59,6 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
 
       const park = async (
         contextPath: string,
-        _outputPath: string | null,
         reason: string,
         fields: Record<string, unknown>,
       ): Promise<TicketState> => {
@@ -114,16 +113,14 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
         const outputContent = await deps.readFile(outputPath);
 
         if (outputContent === null) {
-          return await park(contextPath, null, "output-file-missing", {
-            runId,
-          });
+          return await park(contextPath, "output-file-missing", { runId });
         }
 
         const verdictMatch = outputContent.match(
           /^VERDICT:\s*(FIXED|INFRA|UNFIXABLE)/im,
         );
         if (!verdictMatch) {
-          return await park(contextPath, outputPath, "no-verdict-line", {
+          return await park(contextPath, "no-verdict-line", {
             runId,
             outputExcerpt: outputContent.trim().slice(0, 200),
           });
@@ -135,23 +132,17 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
           | "UNFIXABLE";
 
         if (verdict === "UNFIXABLE") {
-          return await park(contextPath, outputPath, "ci-unfixable", {
-            runId,
-            prUrl,
-          });
+          return await park(contextPath, "ci-unfixable", { runId, prUrl });
         }
 
         if (verdict === "FIXED") {
           if (worktreePath === "" || branch === "") {
-            return await park(contextPath, outputPath, "no-worktrees", {
-              runId,
-              prUrl,
-            });
+            return await park(contextPath, "no-worktrees", { runId, prUrl });
           }
           if (headSha !== "") {
             const head = await deps.runGit(["rev-parse", "HEAD"], worktreePath);
             if (head.code === 0 && head.stdout.trim() === headSha) {
-              return await park(contextPath, outputPath, "no-commit", {
+              return await park(contextPath, "no-commit", {
                 runId,
                 prUrl,
                 branch,
@@ -170,10 +161,7 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
             worktreePath,
           );
           if (push.code !== 0) {
-            return await park(contextPath, outputPath, "push-failed", {
-              runId,
-              branch,
-            });
+            return await park(contextPath, "push-failed", { runId, branch });
           }
           await deps.appendLog(stateDir, ticket.id, {
             event: "branch-pushed",
@@ -212,12 +200,10 @@ export function resolveCIFixAction(deps: ResolveCIFixDeps): TickAction {
           const parsedAttempt = Number.parseInt(attempt, 10);
           const attemptNumber = Number.isNaN(parsedAttempt) ? 1 : parsedAttempt;
           if (attemptNumber >= 2) {
-            return await park(
-              contextPath,
-              outputPath,
-              "infra-rerun-exhausted",
-              { runId, prUrl },
-            );
+            return await park(contextPath, "infra-rerun-exhausted", {
+              runId,
+              prUrl,
+            });
           }
           try {
             await deps.rerunFailedJobs({ repo, runId });

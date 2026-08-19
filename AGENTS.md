@@ -113,6 +113,27 @@ Non-obvious rules:
 - Directory scanners (e.g. `lazyboy status`) identify these by the `.usage.json`
   suffix.
 
+## Phase output extraction
+
+`extractUsageAndText` (`src/run-phase.ts`) builds both the phase output `.md`
+and the usage sidecar from the `agent_end` event's assistant messages. Text and
+usage are derived differently, and the asymmetry is deliberate:
+
+- **Text is the last assistant turn that produced any text** — earlier turns are
+  discarded. Coding agents narrate before each tool call ("Now I have everything
+  I need", "Let me check X"); joining every turn's text puts that narration at
+  the top of the stored output, above the real answer.
+- **Usage aggregates across every assistant turn** (`input`, `output`,
+  `cacheRead`, `cacheWrite`, `tools`, `turns`).
+
+Unwanted narration in a phase output is therefore an extraction-layer bug, not a
+prompt-engineering problem. Prompt instructions ("No preamble", "Begin directly
+with the heading") were added to the intake/enrichment/spec/plan/implementation
+prompts in `73e9237` and did not work — per-turn narration is normal agentic
+behavior and no wording aimed at the final answer suppresses it. If narration
+reappears, look for a new code path that re-joins multi-turn text before
+touching any prompt.
+
 ## Phase prompts
 
 One template per phase in `src/phases/prompts/*.md`, loaded by

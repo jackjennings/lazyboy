@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import type { PhaseUsage } from "./state/types.ts";
+import type { PhaseModelUsage } from "./state/types.ts";
 import { stat, writeTextFile } from "./filesystem.ts";
 
 export interface AnthropicModelPricing {
@@ -180,7 +180,7 @@ export function parseAnthropicPricingPage(
 }
 
 export function calculateAnthropicCost(
-  usage: PhaseUsage,
+  usage: PhaseModelUsage,
   models: AnthropicPricingModels,
 ): number | null {
   let pricing = models[usage.model];

@@ -4,7 +4,7 @@ import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
 import { ClaudeCodeAgent } from "./agents/claude-code.ts";
-import type { PhaseUsage } from "./state/types.ts";
+import type { PhaseModelUsage, PhaseUsage } from "./state/types.ts";
 import {
   type AnthropicPricingCache,
   calculateAnthropicCost,
@@ -219,14 +219,10 @@ export function extractUsageAndText(
   return {
     text: lastText,
     usage: {
-      input,
-      output,
-      cacheRead,
-      cacheWrite,
-      model,
       durationMs,
       turns: assistantMessages.length,
       ...(Object.keys(tools).length > 0 ? { tools } : {}),
+      models: [{ model, input, output, cacheRead, cacheWrite }],
     },
   };
 }
@@ -278,24 +274,50 @@ export function extractClaudeCodeUsageAndText(
     cache_creation_input_tokens?: number;
   } | undefined;
 
-  const modelUsage = result.modelUsage as Record<string, unknown> | undefined;
-  const model = modelUsage
-    ? (Object.keys(modelUsage)[0] ?? "").replace(/\[[^\]]*\]$/, "")
-    : "";
+  const modelUsage = result.modelUsage as
+    | Record<string, { inputTokens?: number; outputTokens?: number }>
+    | undefined;
 
-  return {
-    text: typeof result.result === "string" ? result.result : "",
-    usage: {
+  let models: PhaseModelUsage[];
+  if (!modelUsage || Object.keys(modelUsage).length === 0) {
+    models = [{
+      model: "",
       input: usage?.input_tokens ?? 0,
       output: usage?.output_tokens ?? 0,
       cacheRead: usage?.cache_read_input_tokens ?? 0,
       cacheWrite: usage?.cache_creation_input_tokens ?? 0,
-      model,
+    }];
+  } else {
+    const entries = Object.entries(modelUsage).map(([key, val]) => ({
+      model: key.replace(/\[[^\]]*\]$/, ""),
+      input: val.inputTokens ?? 0,
+      output: val.outputTokens ?? 0,
+    }));
+    const primary = entries.reduce((a, b) =>
+      a.input + a.output >= b.input + b.output ? a : b
+    );
+    models = entries.map((e) => ({
+      model: e.model,
+      input: e.input,
+      output: e.output,
+      cacheRead: e.model === primary.model
+        ? (usage?.cache_read_input_tokens ?? 0)
+        : 0,
+      cacheWrite: e.model === primary.model
+        ? (usage?.cache_creation_input_tokens ?? 0)
+        : 0,
+    }));
+  }
+
+  return {
+    text: typeof result.result === "string" ? result.result : "",
+    usage: {
       durationMs,
       turns: typeof result.num_turns === "number"
         ? result.num_turns
         : undefined,
       ...(Object.keys(tools).length > 0 ? { tools } : {}),
+      models,
     },
   };
 }
@@ -438,21 +460,21 @@ export async function executePhase(
     : extractUsageAndText(result.stdout, durationMs);
 
   if (usage !== null) {
-    let costUsd: number | undefined;
     try {
       const cacheText = await readTextFile(
         join(opts.homeDir, ".lazyboy", "anthropic-pricing.json"),
       );
       const pricingCache = JSON.parse(cacheText) as AnthropicPricingCache;
-      const cost = calculateAnthropicCost(usage, pricingCache.models);
-      if (cost !== null) costUsd = cost;
+      for (const modelEntry of usage.models) {
+        const cost = calculateAnthropicCost(modelEntry, pricingCache.models);
+        if (cost !== null) modelEntry.costUsd = cost;
+      }
     } catch {
       // pricing unavailable
     }
-
     await writeTextFile(
       join(opts.ticketDir, opts.outputFile.replace(/\.md$/, ".usage.json")),
-      JSON.stringify(costUsd !== undefined ? { ...usage, costUsd } : usage),
+      JSON.stringify(usage),
     );
   }
 

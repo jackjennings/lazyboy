@@ -55,6 +55,7 @@ export function spawnCIFixAction(deps: SpawnCIFixDeps): TickAction {
         ticket.prs !== undefined &&
         ticket.prs.some((pr) => !pr.merged) &&
         ticket.status !== "needs-attention" &&
+        ticket.status !== "running" &&
         !deps.isProcessAlive(ticket.id)
       );
     },

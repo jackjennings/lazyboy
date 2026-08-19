@@ -104,6 +104,14 @@ Deno.test("spawnCIFixAction: does not apply when a phase process is alive", () =
   );
 });
 
+Deno.test("spawnCIFixAction: does not apply to a running ticket whose process died", () => {
+  assertFalse(
+    spawnCIFixAction(makeDeps({ isProcessAlive: () => false })).applies(
+      makeTicket({ ...BASE, status: "running" }),
+    ),
+  );
+});
+
 Deno.test("spawnCIFixAction: no CI result returns null", async () => {
   assertEquals(
     await spawnCIFixAction(makeDeps()).run(makeTicket(BASE), "/state"),

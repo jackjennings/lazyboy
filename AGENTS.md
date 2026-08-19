@@ -541,6 +541,19 @@ exports a `*Deps` interface, a factory, and a `*_test.ts` (pattern:
   exception is `resolveCIFixAction`, which is gated on the presence of a context
   file it consumes — see the CI fix section for why the guard is deliberately
   omitted there. Do not add it.
+- An action that touches a worktree or spawns an agent must also exclude
+  `status === "running"`. `isPhaseAlive` alone is not enough: a `running` ticket
+  whose process is dead is a crashed phase awaiting recovery, and the action
+  pass runs **before** the advance pass, so acting on it pre-empts
+  `advancePhase`'s boot-restart resume and missing-output retry. Parking the
+  ticket there is worse than doing nothing — `needs-attention` drops it out of
+  the advance pass entirely, so the recovery never runs on any later tick
+  either. This guard cannot strand a ticket, because `advancePhase` always
+  transitions a `running` ticket out. `checkConflictsAction` and
+  `spawnCIFixAction` carry it; `checkNewCommentsAction` gets it for free from
+  its `status === "waiting"` requirement. `resolveConflictsAction` must **not**
+  have it — `checkConflictsAction` sets `running` when it spawns the resolution
+  agent, so the guard would make the completed run unresolvable.
 - `TicketState.ciHandledRunIds?: string[]` records `${runId}-${attempt}` keys
   `spawnCIFixAction` has already handled (append-only; never removed). Use it
   only for CI-failure dedup.

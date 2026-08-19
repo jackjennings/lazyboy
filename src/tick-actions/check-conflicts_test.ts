@@ -29,7 +29,7 @@ const BASE = {
   id: "gh-7",
   url: "https://github.com/myorg/myrepo/issues/7",
   phase: "implementation" as const,
-  status: "running" as const,
+  status: "waiting" as const,
   worktrees: {
     "myorg/myrepo": { path: "/wt/myorg/myrepo", branch: "gh-7" },
   },
@@ -62,7 +62,7 @@ Deno.test("checkConflictsAction: applies to ticket with worktrees and no live pi
 Deno.test("checkConflictsAction: applies to non-implementation phase with worktrees", () => {
   assert(
     makeAction().applies(
-      makeTicket({ ...BASE, phase: "plan", status: "running" }),
+      makeTicket({ ...BASE, phase: "plan", status: "waiting" }),
     ),
   );
 });
@@ -108,6 +108,14 @@ Deno.test("checkConflictsAction: does not apply when pid is alive", () => {
 Deno.test("checkConflictsAction: applies when no live process", () => {
   assert(
     makeAction({ isProcessAlive: () => false }).applies(makeTicket(BASE)),
+  );
+});
+
+Deno.test("checkConflictsAction: does not apply to a running ticket whose process died", () => {
+  assertFalse(
+    makeAction({ isProcessAlive: () => false }).applies(
+      makeTicket({ ...BASE, status: "running" }),
+    ),
   );
 });
 

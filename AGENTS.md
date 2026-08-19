@@ -322,12 +322,40 @@ defeat that per-test `HOME` isolation.
 
 `~/.lazyboy/tick.ndjson` is NDJSON — one object per line with `ts` (ISO 8601
 UTC) and `event`. Events: `tick-start`, `tick-end`, `tick-already-running`,
-`stale-lock`, `lock-failed`, `tick-failed`. `appendTickLog` (`src/tick.ts`)
-writes it directly; it is not `appendTicketLog` (`src/state/store.ts`).
+`stale-lock`, `lock-failed`, `tick-failed`, `update-skipped`, `update-failed`.
+`appendTickLog` (`src/tick.ts`) writes it directly; it is not `appendTicketLog`
+(`src/state/store.ts`).
 
 The plist from `plistContent()` must **not** include `StandardOutPath` or
 `StandardErrorPath` pointing to `tick.ndjson` — the tick process owns its own
 writes.
+
+## Self-update reporting
+
+`runUpdate` (`src/commands/update.ts`) returns a classified `UpdateOutcome`
+(`pulled` / `current` / `dirty` / `diverged` / `failed`), not an exit code. The
+distinction exists because this repo sets `pull.ff only`: with unpushed local
+commits `git pull` exits **128** by design
+(`fatal: Not possible to
+fast-forward`), which is a refusal to touch the
+checkout, not a broken update. Collapsing it into `update-failed` hid the fact
+that self-update had silently stopped — and a migration then sat unapplied
+across ticks.
+
+- Divergence is measured **after** the failed pull, with
+  `git rev-list --left-right --count @{upstream}...HEAD`. `pull.ff only` fetches
+  before refusing, so the counts are current. Left is `behind`, right is
+  `ahead`; an outcome is `diverged` only when both are non-zero, otherwise it is
+  a genuine `failed`.
+- `performTickUpdate` (`src/commands/tick.ts`) logs `update-skipped` with
+  `reason: "dirty" | "diverged"` (plus `ahead`/`behind`) and reserves
+  `update-failed` for real errors. Both let the tick proceed on local code.
+- Notification dedup lives in `src/update-divergence.ts`. It fires only when the
+  counts change, storing the last notified pair in
+  `{lazyboyDir()}/update-divergence.json`. `current` clears that state so a
+  later divergence re-notifies; `dirty` and `failed` deliberately leave it
+  untouched, since neither establishes whether the checkout has diverged.
+- The notification goes through `makeDesktopNotifier`, like every other one.
 
 ## Per-ticket `log.ndjson` format
 

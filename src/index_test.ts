@@ -512,9 +512,11 @@ Deno.test(
   async () => {
     const { localDir, tmpDir } = await makeRepoWithRemote();
     try {
-      const { runUpdate } = await import("./commands/update.ts");
+      const { runUpdate, outcomeExitCode } = await import(
+        "./commands/update.ts"
+      );
       const result = await runUpdate(localDir);
-      assertEquals(result.code, 0);
+      assertEquals(outcomeExitCode(result), 0);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -522,14 +524,14 @@ Deno.test(
 );
 
 Deno.test(
-  "update: exits 1 when working tree has local modifications",
+  "update: reports dirty when working tree has local modifications",
   async () => {
     const { localDir, tmpDir } = await makeRepoWithRemote();
     try {
       await Deno.writeTextFile(join(localDir, "dirty.txt"), "change");
       const { runUpdate } = await import("./commands/update.ts");
       const result = await runUpdate(localDir);
-      assertEquals(result.code, 1);
+      assertEquals(result, { status: "dirty" });
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -558,6 +560,36 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "update: reports diverged with real counts when fast-forward is refused",
+  async () => {
+    const { localDir, tmpDir } = await makeRepoWithRemote();
+    try {
+      await gitExec(["config", "pull.ff", "only"], localDir);
+      const midDir = join(tmpDir, "mid");
+      for (const n of ["1", "2"]) {
+        await Deno.writeTextFile(join(midDir, `remote-${n}.txt`), n);
+        await gitExec(["add", "."], midDir);
+        await gitExec(["commit", "-m", `remote ${n}`], midDir);
+      }
+      await gitExec(["push"], midDir);
+
+      await Deno.writeTextFile(join(localDir, "local.txt"), "local");
+      await gitExec(["add", "."], localDir);
+      await gitExec(["commit", "-m", "local"], localDir);
+
+      const { runUpdate } = await import("./commands/update.ts");
+      const result = await runUpdate(localDir);
+      assertEquals(result, {
+        status: "diverged",
+        divergence: { ahead: 1, behind: 2 },
+      });
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+);
+
 Deno.test("update: exits non-zero when pull fails", async () => {
   const tmpDir = await Deno.makeTempDir();
   try {
@@ -577,9 +609,11 @@ Deno.test("update: exits non-zero when pull fails", async () => {
       ["config", "branch.main.merge", "refs/heads/main"],
       tmpDir,
     );
-    const { runUpdate } = await import("./commands/update.ts");
+    const { runUpdate, outcomeExitCode } = await import(
+      "./commands/update.ts"
+    );
     const result = await runUpdate(tmpDir);
-    assertNotEquals(result.code, 0);
+    assertNotEquals(outcomeExitCode(result), 0);
   } finally {
     await Deno.remove(tmpDir, { recursive: true });
   }

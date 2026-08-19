@@ -4,58 +4,103 @@ import { runUpdate } from "./update.ts";
 function makeRunGit(
   responses: Array<{ code: number; stdout: string; stderr: string }>,
 ) {
-  let i = 0;
-  return (_args: string[], _cwd: string) => Promise.resolve(responses[i++]);
+  const calls: string[][] = [];
+  const fn = (args: string[], _cwd: string) => {
+    calls.push(args);
+    return Promise.resolve(responses[calls.length - 1]);
+  };
+  return { fn, calls };
 }
 
-Deno.test("runUpdate: dirty tree returns { code: 1, pulled: false }", async () => {
-  const runGitFn = makeRunGit([
+Deno.test("runUpdate: dirty tree reports dirty", async () => {
+  const { fn } = makeRunGit([
     { code: 0, stdout: "M src/foo.ts", stderr: "" },
   ]);
-  assertEquals(await runUpdate("/repo", runGitFn), { code: 1, pulled: false });
+  assertEquals(await runUpdate("/repo", fn), { status: "dirty" });
+});
+
+Deno.test("runUpdate: already up to date reports current", async () => {
+  const sha = "abc123";
+  const { fn } = makeRunGit([
+    { code: 0, stdout: "", stderr: "" },
+    { code: 0, stdout: sha, stderr: "" },
+    { code: 0, stdout: "Already up to date.", stderr: "" },
+    { code: 0, stdout: sha, stderr: "" },
+  ]);
+  assertEquals(await runUpdate("/repo", fn), { status: "current" });
+});
+
+Deno.test("runUpdate: new commits report pulled", async () => {
+  const { fn } = makeRunGit([
+    { code: 0, stdout: "", stderr: "" },
+    { code: 0, stdout: "abc123", stderr: "" },
+    { code: 0, stdout: "Updating abc123..def456", stderr: "" },
+    { code: 0, stdout: "def456", stderr: "" },
+  ]);
+  assertEquals(await runUpdate("/repo", fn), { status: "pulled" });
 });
 
 Deno.test(
-  "runUpdate: already up to date returns { code: 0, pulled: false }",
+  "runUpdate: refused fast-forward reports diverged with ahead/behind counts",
   async () => {
-    const sha = "abc123";
-    const runGitFn = makeRunGit([
+    const { fn, calls } = makeRunGit([
       { code: 0, stdout: "", stderr: "" },
-      { code: 0, stdout: sha, stderr: "" },
-      { code: 0, stdout: "Already up to date.", stderr: "" },
-      { code: 0, stdout: sha, stderr: "" },
+      { code: 0, stdout: "abc123", stderr: "" },
+      {
+        code: 128,
+        stdout: "",
+        stderr: "fatal: Not possible to fast-forward, aborting.",
+      },
+      { code: 0, stdout: "2\t3", stderr: "" },
     ]);
-    assertEquals(await runUpdate("/repo", runGitFn), {
-      code: 0,
-      pulled: false,
+    assertEquals(await runUpdate("/repo", fn), {
+      status: "diverged",
+      divergence: { ahead: 3, behind: 2 },
     });
+    assertEquals(calls[3], [
+      "rev-list",
+      "--left-right",
+      "--count",
+      "@{upstream}...HEAD",
+    ]);
   },
 );
 
 Deno.test(
-  "runUpdate: new commits pulled returns { code: 0, pulled: true }",
+  "runUpdate: pull failure with no divergence reports failed",
   async () => {
-    const runGitFn = makeRunGit([
+    const { fn } = makeRunGit([
       { code: 0, stdout: "", stderr: "" },
       { code: 0, stdout: "abc123", stderr: "" },
-      { code: 0, stdout: "Updating abc123..def456", stderr: "" },
-      { code: 0, stdout: "def456", stderr: "" },
+      { code: 1, stdout: "", stderr: "fatal: could not read from remote" },
+      { code: 0, stdout: "0\t0", stderr: "" },
     ]);
-    assertEquals(await runUpdate("/repo", runGitFn), { code: 0, pulled: true });
+    assertEquals(await runUpdate("/repo", fn), { status: "failed", code: 1 });
   },
 );
 
 Deno.test(
-  "runUpdate: pull failure returns { code: nonzero, pulled: false }",
+  "runUpdate: pull failure with unreadable upstream reports failed",
   async () => {
-    const runGitFn = makeRunGit([
+    const { fn } = makeRunGit([
       { code: 0, stdout: "", stderr: "" },
       { code: 0, stdout: "abc123", stderr: "" },
-      { code: 1, stdout: "", stderr: "fatal: not a git repository" },
+      { code: 128, stdout: "", stderr: "fatal: not a git repository" },
+      { code: 128, stdout: "", stderr: "fatal: no upstream configured" },
     ]);
-    assertEquals(await runUpdate("/repo", runGitFn), {
-      code: 1,
-      pulled: false,
-    });
+    assertEquals(await runUpdate("/repo", fn), { status: "failed", code: 128 });
+  },
+);
+
+Deno.test(
+  "runUpdate: behind-only pull failure reports failed, not diverged",
+  async () => {
+    const { fn } = makeRunGit([
+      { code: 0, stdout: "", stderr: "" },
+      { code: 0, stdout: "abc123", stderr: "" },
+      { code: 1, stdout: "", stderr: "fatal: unrelated" },
+      { code: 0, stdout: "4\t0", stderr: "" },
+    ]);
+    assertEquals(await runUpdate("/repo", fn), { status: "failed", code: 1 });
   },
 );

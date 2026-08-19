@@ -2,7 +2,7 @@ import { join } from "@std/path";
 import { bgGreen, bgRed, green, red, white, yellow } from "@std/fmt/colors";
 import { listTickets, readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
-import { coerceLegacyPhaseUsage, readUsageFiles } from "../usage.ts";
+import { readUsageFiles } from "../usage.ts";
 import { isLaunchdEnabled } from "../launchd.ts";
 import { FULL_PHASE_SEQUENCE } from "../phases/types.ts";
 import type {
@@ -101,7 +101,7 @@ async function readNamedUsageFiles(
         const raw = await readTextFile(join(ticketDir, entry.name));
         files.push({
           name: entry.name,
-          usage: coerceLegacyPhaseUsage(JSON.parse(raw)),
+          usage: JSON.parse(raw) as PhaseUsage,
         });
       } catch {
         return null;

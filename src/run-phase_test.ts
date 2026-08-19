@@ -232,6 +232,34 @@ Deno.test("buildContextFiles: includes prefixed output and feedback files in chr
   }
 });
 
+Deno.test("buildContextFiles: includes merge output and feedback files", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
+    await Deno.writeTextFile(
+      join(tempDir, "20260819T010525-merge.md"),
+      "merge",
+    );
+    await Deno.writeTextFile(
+      join(tempDir, "20260819T011426-merge-feedback.md"),
+      "feedback",
+    );
+    const files = await buildContextFiles({
+      ticketDir: tempDir,
+      stateDir: dirname(tempDir),
+    });
+    const outIdx = files.indexOf(`@${tempDir}/20260819T010525-merge.md`);
+    const fbIdx = files.indexOf(
+      `@${tempDir}/20260819T011426-merge-feedback.md`,
+    );
+    assertNotEquals(outIdx, -1);
+    assertNotEquals(fbIdx, -1);
+    assertLess(outIdx, fbIdx);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 Deno.test("buildContextFiles: does not include files for phases not in context list", async () => {
   const tempDir = await Deno.makeTempDir();
   try {

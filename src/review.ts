@@ -44,7 +44,7 @@ import {
 } from "./state/store.ts";
 import type { ApprovalEntry } from "./state/types.ts";
 import { buildContextFiles } from "./run-phase.ts";
-import { PHASE_SEQUENCE } from "./phases/types.ts";
+import { CONTEXT_PHASE_SEQUENCE } from "./phases/types.ts";
 import { compactTimestamp } from "./timestamp.ts";
 import { diffLines } from "diff";
 import { ScrollPane } from "./ui/scroll-pane.ts";
@@ -115,7 +115,7 @@ export async function findLatestPhaseOutput(
   | { filename: string; phaseName: string; previousFilename: string | null }
   | null
 > {
-  for (const phase of [...PHASE_SEQUENCE, "merge" as const].reverse()) {
+  for (const phase of [...CONTEXT_PHASE_SEQUENCE].reverse()) {
     const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\.md$`);
     const matches: string[] = [];
     try {
@@ -151,7 +151,7 @@ export async function findAllPhaseOutputs(
   const results: Array<
     { filename: string; phaseName: string; previousFilename: string | null }
   > = [];
-  for (const phase of [...PHASE_SEQUENCE, "merge" as const]) {
+  for (const phase of CONTEXT_PHASE_SEQUENCE) {
     const outputPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}\\.md$`);
     const matches: string[] = [];
     try {

@@ -8,6 +8,11 @@ export const PHASE_SEQUENCE = [
   "implementation",
 ] as const;
 
+export const CONTEXT_PHASE_SEQUENCE = [
+  ...PHASE_SEQUENCE,
+  "merge",
+] as const;
+
 export const FULL_PHASE_SEQUENCE = [
   ...PHASE_SEQUENCE,
   "merge",

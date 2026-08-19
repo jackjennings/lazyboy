@@ -1,5 +1,5 @@
 import { parseArgs } from "@std/cli/parse-args";
-import { PHASE_SEQUENCE } from "./phases/types.ts";
+import { CONTEXT_PHASE_SEQUENCE } from "./phases/types.ts";
 import { join } from "@std/path";
 import type { CodeAgent } from "./agents/types.ts";
 import { PiCodeAgent } from "./agents/pi.ts";
@@ -119,7 +119,7 @@ export async function buildContextFiles(
     }
   }
   contextFiles.push(`@${ticketDir}/meta.md`);
-  for (const phase of PHASE_SEQUENCE) {
+  for (const phase of CONTEXT_PHASE_SEQUENCE) {
     const phaseFiles: string[] = [];
     const prefixPattern = new RegExp(`^\\d{8}T\\d{6}-${phase}[.-]`);
     try {

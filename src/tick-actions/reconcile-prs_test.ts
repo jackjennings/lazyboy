@@ -19,7 +19,7 @@ function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: "2026-06-23T00:00:00Z",
     updated: "2026-06-23T00:00:00Z",
     body: "",
-    artifact: "code",
+    artifacts: ["code"],
     ...overrides,
   };
 }
@@ -397,10 +397,20 @@ Deno.test(
 );
 
 Deno.test(
-  "reconcilePRsAction: does not apply when artifact is document",
+  "reconcilePRsAction: applies when artifacts is ['code', 'document'] and prs absent",
   () => {
     assertEquals(
-      makeAction().applies(makeTicket({ artifact: "document" })),
+      makeAction().applies(makeTicket({ artifacts: ["code", "document"] })),
+      true,
+    );
+  },
+);
+
+Deno.test(
+  "reconcilePRsAction: does not apply when artifacts is ['document']",
+  () => {
+    assertEquals(
+      makeAction().applies(makeTicket({ artifacts: ["document"] })),
       false,
     );
   },

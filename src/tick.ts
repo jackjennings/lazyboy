@@ -20,7 +20,6 @@ import type { MigrationFn } from "./migrations/runner.ts";
 import type { InstallResult } from "./packages.ts";
 import {
   type ApprovalEntry,
-  ARTIFACT_DESCRIPTORS,
   isApproved,
   type TicketState,
   type WorktreeInfo,
@@ -162,7 +161,9 @@ export async function advancePhase(
 ): Promise<void> {
   const zonedNow = Temporal.Now.zonedDateTimeISO("UTC");
   const now = zonedNow.toInstant().toString();
-  const descriptor = ARTIFACT_DESCRIPTORS[ticket.artifact];
+  const requiresPRs = ticket.artifacts.includes("code");
+  const requiresWorktrees = ticket.artifacts.includes("code");
+  const mergeStatus: "waiting" | "done" = requiresPRs ? "waiting" : "done";
 
   if (ticket.status === "revising") {
     const isMergeRevision = ticket.phase === "merge";
@@ -181,7 +182,7 @@ export async function advancePhase(
     );
     const revisingArtifactSupplement = await loadArtifactPrompt(
       activePhase,
-      ticket.artifact,
+      ticket.artifacts,
     );
     const revisingStatePrompt = await loadStatePrompt(
       activePhase,
@@ -273,7 +274,7 @@ export async function advancePhase(
     );
     const intakeArtifactSupplement = await loadArtifactPrompt(
       "intake",
-      ticket.artifact,
+      ticket.artifacts,
     );
     const corpusText = await deps.buildRepoCorpusText();
     const intakeStatePrompt = await loadStatePrompt(
@@ -502,8 +503,8 @@ export async function advancePhase(
 
       if (
         ticket.phase === "implementation" &&
-        !descriptor.requiresPRs &&
-        !(ticket[descriptor.completionField]?.length)
+        ticket.artifacts.includes("document") &&
+        !(ticket.documents?.length)
       ) {
         await deps.writeTicket(stateDir, {
           ...waitingTicket,
@@ -511,10 +512,25 @@ export async function advancePhase(
           updated: now,
         });
         await deps.appendLog(stateDir, ticket.id, {
-          event: "phase-transition",
-          from: "implementation",
-          to: "needs-attention",
-          reason: descriptor.missingReason,
+          event: "needs-attention",
+          reason: "no-pages",
+        });
+        return;
+      }
+
+      if (
+        ticket.phase === "implementation" &&
+        ticket.artifacts.includes("work") &&
+        !(ticket.workItems?.length)
+      ) {
+        await deps.writeTicket(stateDir, {
+          ...waitingTicket,
+          status: "needs-attention",
+          updated: now,
+        });
+        await deps.appendLog(stateDir, ticket.id, {
+          event: "needs-attention",
+          reason: "no-work-items",
         });
         return;
       }
@@ -643,7 +659,7 @@ export async function advancePhase(
     ticket.status === "waiting" &&
     isApproved(ticket)
   ) {
-    if (descriptor.requiresPRs) {
+    if (requiresPRs) {
       const unmergedUrls = (ticket.prs ?? [])
         .filter((pr) => !pr.merged)
         .map((pr) => pr.url);
@@ -662,7 +678,7 @@ export async function advancePhase(
     await deps.writeTicket(stateDir, {
       ...ticket,
       phase: "merge",
-      status: descriptor.mergeStatus,
+      status: mergeStatus,
       updated: now,
     });
     await deps.appendLog(stateDir, ticket.id, {
@@ -689,7 +705,7 @@ export async function advancePhase(
       : next;
     if (
       effectiveNext === "implementation" &&
-      descriptor.requiresWorktrees &&
+      requiresWorktrees &&
       Object.keys(ticket.worktrees).length === 0
     ) {
       await deps.writeTicket(stateDir, {
@@ -710,7 +726,7 @@ export async function advancePhase(
     const supplement = await loadProviderPrompt(effectiveNext, ticket.provider);
     const artifactSupplement = await loadArtifactPrompt(
       effectiveNext,
-      ticket.artifact,
+      ticket.artifacts,
     );
     const statePrompt = await loadStatePrompt(
       effectiveNext,
@@ -894,7 +910,7 @@ export class TickService {
           created: Temporal.Now.instant().toString(),
           updated: Temporal.Now.instant().toString(),
           body: item.description,
-          artifact: "code",
+          artifacts: ["code"],
         });
         await deps.tickDeps.appendLog(deps.stateDir, item.id, {
           event: "ticket-captured",

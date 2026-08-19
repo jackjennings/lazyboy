@@ -3,7 +3,6 @@ import { join } from "@std/path";
 import { lazyboyDir } from "../paths.ts";
 import {
   type ApprovalEntry,
-  ARTIFACT_DESCRIPTORS,
   type ArtifactType,
   assertValidPhaseStatus,
   type LearningState,
@@ -136,10 +135,7 @@ export async function readTicket(
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
-    artifact:
-      (data.artifact && data.artifact in ARTIFACT_DESCRIPTORS
-        ? data.artifact
-        : "code") as ArtifactType,
+    artifacts: (data.artifacts as ArtifactType[] | undefined) ?? ["code"],
     documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(
@@ -188,7 +184,7 @@ export async function writeTicket(
     frontmatter.shortTitle = ticket.shortTitle;
   }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
-  if (ticket.artifact !== "code") frontmatter.artifact = ticket.artifact;
+  frontmatter.artifacts = ticket.artifacts;
   if (ticket.documents !== undefined) {
     frontmatter.documents = ticket.documents;
   }

@@ -1,5 +1,6 @@
 import { join } from "@std/path";
 import type { ActivePhase } from "./types.ts";
+import type { ArtifactType } from "../state/types.ts";
 import { PHASE_SEQUENCE } from "./types.ts";
 import { readTextFile } from "../filesystem.ts";
 import { deriveProjectPath } from "./project-path.ts";
@@ -55,17 +56,20 @@ export async function loadProviderPrompt(
 
 export async function loadArtifactPrompt(
   phase: string,
-  artifact: string,
+  artifacts: ArtifactType[],
 ): Promise<string> {
-  try {
-    const content = await readTextFile(
-      join(PROMPT_DIR, `${artifact}-${phase}.md`),
-    );
-    return renderTemplate(content);
-  } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return "";
-    throw e;
+  const parts: string[] = [];
+  for (const artifact of artifacts) {
+    try {
+      const content = await readTextFile(
+        join(PROMPT_DIR, `${artifact}-${phase}.md`),
+      );
+      parts.push(await renderTemplate(content));
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    }
   }
+  return parts.join("\n");
 }
 
 export async function loadRevisionPrompt(phase: string): Promise<string> {

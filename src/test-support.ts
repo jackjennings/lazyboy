@@ -16,7 +16,7 @@ export function makeTicket(overrides: Partial<TicketState> = {}): TicketState {
     created: "2026-01-01T00:00:00Z",
     updated: "2026-01-01T00:00:00Z",
     body: "",
-    artifact: "code",
+    artifacts: ["code"],
     ...overrides,
   };
 }

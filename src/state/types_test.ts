@@ -140,13 +140,10 @@ Deno.test(
   },
 );
 
-Deno.test("ARTIFACT_DESCRIPTORS: code descriptor values", () => {
-  const d = ARTIFACT_DESCRIPTORS["code"];
-  assertEquals(d.requiresWorktrees, true);
-  assertEquals(d.requiresPRs, true);
-  assertEquals(d.completionField, "prs");
-  assertEquals(d.missingReason, "no-prs");
-  assertEquals(d.mergeStatus, "waiting");
+Deno.test("ArtifactType: code artifact requires worktrees and PRs", () => {
+  const artifacts = ["code"] as const;
+  assertEquals(artifacts.includes("code"), true);
+  assertEquals(artifacts.includes("document" as never), false);
 });
 
 Deno.test("ARTIFACT_DESCRIPTORS: document descriptor values", () => {

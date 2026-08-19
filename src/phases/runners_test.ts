@@ -386,28 +386,38 @@ Deno.test(
 );
 
 Deno.test(
-  "loadArtifactPrompt: returns empty string for unknown artifact",
+  "loadArtifactPrompt: returns empty string when no artifact has a prompt file",
   async () => {
-    const result = await loadArtifactPrompt("spec", "unknown-artifact-xyz");
+    const result = await loadArtifactPrompt("spec", ["code"]);
     assertEquals(result.length, 0);
   },
 );
 
 Deno.test("loadArtifactPrompt: document-spec returns non-empty content", async () => {
-  const result = await loadArtifactPrompt("spec", "document");
+  const result = await loadArtifactPrompt("spec", ["document"]);
   assertGreater(result.length, 0);
 });
 
 Deno.test("loadArtifactPrompt: document-plan returns non-empty content", async () => {
-  const result = await loadArtifactPrompt("plan", "document");
+  const result = await loadArtifactPrompt("plan", ["document"]);
   assertGreater(result.length, 0);
 });
 
 Deno.test(
   "loadArtifactPrompt: document-implementation returns non-empty content",
   async () => {
-    const result = await loadArtifactPrompt("implementation", "document");
+    const result = await loadArtifactPrompt("implementation", ["document"]);
     assertGreater(result.length, 0);
+  },
+);
+
+Deno.test(
+  "loadArtifactPrompt: concatenates per-artifact prompts for multi-artifact array",
+  async () => {
+    const single = await loadArtifactPrompt("spec", ["document"]);
+    const multi = await loadArtifactPrompt("spec", ["code", "document"]);
+    assertEquals(multi, single);
+    assertGreater(multi.length, 0);
   },
 );
 

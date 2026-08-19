@@ -13,7 +13,7 @@ const migration: Migration = {
     }
     return {
       ...ticket,
-      artifact: "document" as ArtifactType,
+      artifacts: ["document" as ArtifactType],
       documents: (data.documents ?? data.notionPages) as
         | { url: string; title: string }[]
         | undefined,

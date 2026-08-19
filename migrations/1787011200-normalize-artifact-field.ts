@@ -17,13 +17,11 @@ const migration: Migration = {
     }
 
     const legacyArtifact = data.artifact as string | undefined;
-    if (!legacyArtifact) {
-      return ticket;
-    }
-
-    const mapped = LEGACY_MAP[legacyArtifact] ?? legacyArtifact;
-    const artifacts: ArtifactType[] = mapped in ARTIFACT_DESCRIPTORS
-      ? [mapped as ArtifactType]
+    const rawValue = legacyArtifact
+      ? (LEGACY_MAP[legacyArtifact] ?? legacyArtifact)
+      : "code";
+    const artifacts: ArtifactType[] = rawValue in ARTIFACT_DESCRIPTORS
+      ? [rawValue as ArtifactType]
       : ["code"];
 
     return { ...ticket, artifacts };

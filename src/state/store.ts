@@ -135,9 +135,7 @@ export async function readTicket(
     body: content.trim(),
     phases: data.phases as TicketState["phases"],
     outputRetries: data.outputRetries as number | undefined,
-    artifacts: Array.isArray(data.artifacts)
-      ? (data.artifacts as ArtifactType[])
-      : ["code" as ArtifactType],
+    artifacts: (data.artifacts as ArtifactType[] | undefined) ?? ["code"],
     documents: data.documents as { url: string; title: string }[] | undefined,
     workItems: data.workItems as { url: string; title: string }[] | undefined,
     lastSeenCommentTimestamp: normalizeTimestamp(
@@ -186,9 +184,7 @@ export async function writeTicket(
     frontmatter.shortTitle = ticket.shortTitle;
   }
   if (ticket.phases !== undefined) frontmatter.phases = ticket.phases;
-  const isDefaultArtifacts = ticket.artifacts.length === 1 &&
-    ticket.artifacts[0] === "code";
-  if (!isDefaultArtifacts) frontmatter.artifacts = ticket.artifacts;
+  frontmatter.artifacts = ticket.artifacts;
   if (ticket.documents !== undefined) {
     frontmatter.documents = ticket.documents;
   }

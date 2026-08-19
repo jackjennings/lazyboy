@@ -49,7 +49,7 @@ Deno.test("migration normalize-artifact-field: legacy artifact:notion → artifa
   }
 });
 
-Deno.test("migration normalize-artifact-field: legacy artifact:code → no artifacts field after write", async () => {
+Deno.test("migration normalize-artifact-field: legacy artifact:code → artifacts:[code] after write", async () => {
   const stateDir = await Deno.makeTempDir();
   try {
     await writeLegacyTicket(stateDir, "github/x/y/1", "code");
@@ -59,7 +59,26 @@ Deno.test("migration normalize-artifact-field: legacy artifact:code → no artif
     const raw = await Deno.readTextFile(
       join(stateDir, "github/x/y/1", "meta.md"),
     );
-    assertFalse(raw.includes("artifacts:"));
+    assertStringIncludes(raw, "artifacts:");
+    assertFalse(raw.includes("artifact: code"));
+    const reread = await readTicket(stateDir, "github/x/y/1");
+    assertEquals(reread.artifacts, ["code"]);
+  } finally {
+    await Deno.remove(stateDir, { recursive: true });
+  }
+});
+
+Deno.test("migration normalize-artifact-field: absent artifact field → artifacts:[code] after write", async () => {
+  const stateDir = await Deno.makeTempDir();
+  try {
+    await writeLegacyTicket(stateDir, "github/x/y/1", "");
+    const ticket = await readTicket(stateDir, "github/x/y/1");
+    const migrated = await migration.run(ticket, stateDir);
+    await writeTicket(stateDir, migrated);
+    const raw = await Deno.readTextFile(
+      join(stateDir, "github/x/y/1", "meta.md"),
+    );
+    assertStringIncludes(raw, "artifacts:");
     assertFalse(raw.includes("artifact:"));
     const reread = await readTicket(stateDir, "github/x/y/1");
     assertEquals(reread.artifacts, ["code"]);

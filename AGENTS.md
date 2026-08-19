@@ -190,13 +190,18 @@ Opt-out via `[tick] principles` in `config.toml` (default `true`). When `false`,
 `includePrinciples: false` so `buildContextFiles` skips `@principles.md`.
 
 `{stateDir}/principles.md` is a scratchpad accumulated across tickets.
-`buildContextFiles` (`src/run-phase.ts`) prepends `@principles.md` to every
-phase's context when the file exists. When a phase output contains a
-`## Principles` section, `advancePhase` extracts it, dedupes against the
-existing file, and — if novel — appends and commits `principles.md` alone via
-`commitPrinciples`. The parsing and dedup logic (`extractPrinciples`,
-`dedupePrinciples`) lives in `src/run-phase.ts`; the substance check
-(`judgePrinciples`) lives in `src/judge-principles.ts`.
+`buildContextFiles` (`src/run-phase.ts`) prepends it to every phase's context
+when the file exists. When the global corpus exceeds 20 entries,
+`buildContextFiles` makes a single LLM call (same `FallbackLanguageModel`
+pattern as `judgePrinciples`) to select the 5 most relevant entries against the
+ticket's title and `## Problem` body, writes them to a temp file, and passes
+that instead. The full corpus is used as a fallback on any error; both outcomes
+are logged (`principles-filtered` / `principles-filter-failed`). The relevance
+filter (`filterPrinciples`) lives in `src/judge-principles.ts`. When a phase
+output contains a `## Principles` section, `advancePhase` extracts it, dedupes
+against the existing file, and — if novel — appends and commits `principles.md`
+alone via `commitPrinciples`. The parsing and dedup logic (`extractPrinciples`,
+`dedupePrinciples`) lives in `src/run-phase.ts`.
 
 `judgePrinciples` tries `apfel` first and falls back to the `claude` CLI. Both
 calls constrain the model to the same `{ "verdict": "KEEP" | "SKIP" }` JSON
@@ -365,22 +370,24 @@ the runtime `tick.ndjson` above). Every entry is written by `appendTicketLog`
 `ts` (ISO 8601 UTC), an `event`, and event-specific fields. Reuse an existing
 event rather than coining a synonym:
 
-| `event`                                                                            | Written by / meaning                                          |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `ticket-captured`                                                                  | A new ticket was written for the first time; carries `title`. |
-| `phase-start` / `phase-end`                                                        | A phase subprocess is spawned / completes.                    |
-| `phase-transition`                                                                 | `phase` changes.                                              |
-| `status-transition`                                                                | `status` changes.                                             |
-| `needs-attention`                                                                  | Ticket parked for a human; carries a `reason`.                |
-| `phase-output-invalid`                                                             | Agent produced no/invalid output; carries a `reason`.         |
-| `phase-output-retry`                                                               | Recovery resume attempted after invalid output.               |
-| `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.                |
-| `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                                |
-| `branch-pushed`                                                                    | A worktree branch was successfully force-pushed to origin.    |
-| `ci-fix-resolved`                                                                  | A CI-fix run's verdict was applied.                           |
-| `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).                |
-| `reconciled-prs`                                                                   | `reconcilePRsAction` populated `prs`; carries `count`.        |
-| `error`                                                                            | An action or phase threw; carries the error message.          |
+| `event`                                                                            | Written by / meaning                                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ticket-captured`                                                                  | A new ticket was written for the first time; carries `title`.                                              |
+| `phase-start` / `phase-end`                                                        | A phase subprocess is spawned / completes.                                                                 |
+| `phase-transition`                                                                 | `phase` changes.                                                                                           |
+| `status-transition`                                                                | `status` changes.                                                                                          |
+| `needs-attention`                                                                  | Ticket parked for a human; carries a `reason`.                                                             |
+| `phase-output-invalid`                                                             | Agent produced no/invalid output; carries a `reason`.                                                      |
+| `phase-output-retry`                                                               | Recovery resume attempted after invalid output.                                                            |
+| `self-approved`                                                                    | Self-review appended an agent `ApprovalEntry`.                                                             |
+| `principles-filtered`                                                              | LLM selected a subset of global principles; carries `total` (corpus size) and `included` (selected count). |
+| `principles-filter-failed`                                                         | Relevance filter could not run; carries `reason` (`meta-unreadable` or `llm-failed`). Full corpus used.    |
+| `conflict-resolution-started` / `conflict-resolution-failed` / `conflict-resolved` | Conflict-resolution lifecycle.                                                                             |
+| `branch-pushed`                                                                    | A worktree branch was successfully force-pushed to origin.                                                 |
+| `ci-fix-resolved`                                                                  | A CI-fix run's verdict was applied.                                                                        |
+| `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).                                                             |
+| `reconciled-prs`                                                                   | `reconcilePRsAction` populated `prs`; carries `count`.                                                     |
+| `error`                                                                            | An action or phase threw; carries the error message.                                                       |
 
 A `reason` field, where present, is a lowercase kebab-case label naming the
 cause (`agent-failed`, `non-zero-exit`, `missing`, `output-file-missing`,
@@ -389,11 +396,11 @@ cause (`agent-failed`, `non-zero-exit`, `missing`, `output-file-missing`,
 `push-failed`, `no-verdict-line`, `incomplete`, `pr-fetch-failed`,
 `ci-unfixable`, `rerun-failed`, `infra-rerun-exhausted`, `no-commit`,
 `context-file-unreadable`, `new-marker-on-local-path`, `local-repo-init-failed`,
-`repo-creation-failed`). Reuse an existing label when it fits; add a new one
-only for a genuinely new cause, and never put free prose in `reason` (that
-belongs in a separate field or the `error` message). Work-item identity is the
-ticket directory itself — do not add an `id` or `ticketId` field to per-ticket
-entries.
+`repo-creation-failed`, `meta-unreadable`, `llm-failed`). Reuse an existing
+label when it fits; add a new one only for a genuinely new cause, and never put
+free prose in `reason` (that belongs in a separate field or the `error`
+message). Work-item identity is the ticket directory itself — do not add an `id`
+or `ticketId` field to per-ticket entries.
 
 ## Failure handling
 

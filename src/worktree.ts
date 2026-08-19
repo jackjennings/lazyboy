@@ -1,5 +1,9 @@
 import { join } from "@std/path";
-import type { WorktreeInfo } from "./state/types.ts";
+import {
+  ARTIFACT_DESCRIPTORS,
+  type ArtifactType,
+  type WorktreeInfo,
+} from "./state/types.ts";
 import { mkdir, readDir, stat } from "./filesystem.ts";
 import {
   extractGitHubSlug,
@@ -176,6 +180,30 @@ export function parseIntakeScope(
   }
   return results;
 }
+
+export function parseIntakeArtifacts(content: string): ArtifactType[] {
+  const sectionStart = content.search(/^## Artifact type$/m);
+  if (sectionStart === -1) return [];
+  const afterSection = content.slice(sectionStart);
+  const codeBlockMatch = afterSection.match(/```yaml\n([\s\S]*?)```/);
+  if (!codeBlockMatch) return [];
+  const yaml = codeBlockMatch[1];
+
+  const listMatch = yaml.match(/^artifacts:\s*\[([^\]]*)\]/m);
+  if (listMatch) {
+    const values = listMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+    return values.filter((v) => v in ARTIFACT_DESCRIPTORS) as ArtifactType[];
+  }
+
+  const scalarMatch = yaml.match(/^artifacts:\s*(\S+)/m);
+  if (scalarMatch) {
+    const v = scalarMatch[1].trim();
+    return v in ARTIFACT_DESCRIPTORS ? [v as ArtifactType] : [];
+  }
+
+  return [];
+}
+
 
 export async function cloneRemoteRepo(
   slug: string,

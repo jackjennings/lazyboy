@@ -397,6 +397,8 @@ event rather than coining a synonym:
 | `ci-fix-resolved`                                                                  | A CI-fix run's verdict was applied.                                                                        |
 | `worktree-include-failed`                                                          | `git-worktreeinclude` copy failed (non-fatal).                                                             |
 | `reconciled-prs`                                                                   | `reconcilePRsAction` populated `prs`; carries `count`.                                                     |
+| `artifact-corrected`                                                               | Intake artifact parsed; `artifacts` corrected in `meta.md`; carries `artifacts`.                           |
+| `artifact-defaulted`                                                               | Artifact type absent in intake output; default `["code"]` applied.                                         |
 | `error`                                                                            | An action or phase threw; carries the error message.                                                       |
 
 A `reason` field, where present, is a lowercase kebab-case label naming the

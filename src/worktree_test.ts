@@ -19,6 +19,7 @@ import {
   formatRepoCorpus,
   initLocalRepo,
   listRepoCorpus,
+  parseIntakeArtifacts,
   parseIntakeScope,
   parseRemoteSlug,
   removeWorktree,
@@ -453,6 +454,95 @@ Deno.test("parseIntakeScope: mixes (new) and plain entries", () => {
     { entry: "org/new-repo", isNew: true },
   ]);
 });
+
+// ── parseIntakeArtifacts ──────────────────────────────────────────────────────
+
+Deno.test("parseIntakeArtifacts: returns [] for empty string", () => {
+  assertEquals(parseIntakeArtifacts(""), []);
+});
+
+Deno.test(
+  "parseIntakeArtifacts: returns [] when Artifact type section is absent",
+  () => {
+    assertEquals(
+      parseIntakeArtifacts("## Proposed Scope\n\nSome text.\n"),
+      [],
+    );
+  },
+);
+
+Deno.test(
+  "parseIntakeArtifacts: returns [] when fenced code block is absent",
+  () => {
+    assertEquals(
+      parseIntakeArtifacts("## Artifact type\n\nNo code block here.\n"),
+      [],
+    );
+  },
+);
+
+Deno.test(
+  "parseIntakeArtifacts: returns [] when artifacts key is absent",
+  () => {
+    assertEquals(
+      parseIntakeArtifacts(
+        "## Artifact type\n\n```yaml\nscope:\n  - foo\n```\n",
+      ),
+      [],
+    );
+  },
+);
+
+Deno.test("parseIntakeArtifacts: extracts single valid value", () => {
+  assertEquals(
+    parseIntakeArtifacts(
+      "## Artifact type\n\n```yaml\nartifacts: [document]\n```\n",
+    ),
+    ["document"],
+  );
+});
+
+Deno.test("parseIntakeArtifacts: extracts multiple valid values", () => {
+  assertEquals(
+    parseIntakeArtifacts(
+      "## Artifact type\n\n```yaml\nartifacts: [code, document]\n```\n",
+    ),
+    ["code", "document"],
+  );
+});
+
+Deno.test("parseIntakeArtifacts: drops unknown value notion", () => {
+  assertEquals(
+    parseIntakeArtifacts(
+      "## Artifact type\n\n```yaml\nartifacts: [notion]\n```\n",
+    ),
+    [],
+  );
+});
+
+Deno.test(
+  "parseIntakeArtifacts: returns only valid types from mixed list",
+  () => {
+    assertEquals(
+      parseIntakeArtifacts(
+        "## Artifact type\n\n```yaml\nartifacts: [document, notion]\n```\n",
+      ),
+      ["document"],
+    );
+  },
+);
+
+Deno.test(
+  "parseIntakeArtifacts: treats scalar value as single-element list",
+  () => {
+    assertEquals(
+      parseIntakeArtifacts(
+        "## Artifact type\n\n```yaml\nartifacts: document\n```\n",
+      ),
+      ["document"],
+    );
+  },
+);
 
 // ── resolveGitHubSlug ────────────────────────────────────────────────────────
 

@@ -5,8 +5,10 @@ and why.
 
 Criteria:
 
-1. The output contains exactly two top-level sections: `## Proposed Scope` and
-   `## Reasoning`. No additional `##` sections are present.
+1. The output must contain the two top-level `##` sections: `Proposed Scope`
+   and `Reasoning`.
+2. Optionally, there may be `Artifact type` and `Principles` sections.
+3. No additional `##` sections are present.
 2. The `## Proposed Scope` section contains a fenced code block tagged `yaml`
    with a `scope:` key whose value is a YAML list. An empty list (`scope: []` or
    `scope:` with no items) is acceptable.

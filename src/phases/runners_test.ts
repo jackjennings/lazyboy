@@ -452,3 +452,19 @@ Deno.test(
     }
   },
 );
+
+Deno.test(
+  "implementation prompt: uses per-batch file cap, not unbounded parallel read",
+  async () => {
+    const content = await loadPromptFile("implementation.md");
+    assertFalse(
+      content.includes("all files in one turn"),
+      `implementation.md still contains "all files in one turn"`,
+    );
+    assertStringIncludes(
+      content,
+      "5 files per turn",
+      `implementation.md does not mention per-batch file cap`,
+    );
+  },
+);

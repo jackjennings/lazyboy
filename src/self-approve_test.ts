@@ -6,18 +6,22 @@ import {
 } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 import { join } from "@std/path";
-import { selfReview } from "./self-review.ts";
+import { selfApprove } from "./self-approve.ts";
 import type { CommandRunner } from "./apfel.ts";
 
 function runnerReturning(stdout: string, code = 0): CommandRunner {
   return spy((_args: string[]) => Promise.resolve({ code, stdout }));
 }
 
-Deno.test("selfReview: returns false when no self-review prompt exists for phase", async () => {
+Deno.test("selfApprove: returns false when no self-approve prompt exists for phase", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     const run = runnerReturning("APPROVE");
-    const result = await selfReview({ phase: "spec", ticketDir: tempDir, run });
+    const result = await selfApprove({
+      phase: "spec",
+      ticketDir: tempDir,
+      run,
+    });
     assertEquals(result, { approved: false, reason: null });
     assertSpyCalls(run as ReturnType<typeof spy>, 0);
   } finally {
@@ -25,11 +29,11 @@ Deno.test("selfReview: returns false when no self-review prompt exists for phase
   }
 });
 
-Deno.test("selfReview: returns false when no phase output file is found", async () => {
+Deno.test("selfApprove: returns false when no phase output file is found", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     const run = runnerReturning("APPROVE");
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -41,7 +45,7 @@ Deno.test("selfReview: returns false when no phase output file is found", async 
   }
 });
 
-Deno.test("selfReview: returns approved when claude CLI outputs APPROVE", async () => {
+Deno.test("selfApprove: returns approved when claude CLI outputs APPROVE", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -49,7 +53,7 @@ Deno.test("selfReview: returns approved when claude CLI outputs APPROVE", async 
       "## Proposed Scope\n\n```yaml\nscope:\n  - /Users/jack/code/myorg/repo\n```\n",
     );
     const run = runnerReturning("APPROVE");
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -61,7 +65,7 @@ Deno.test("selfReview: returns approved when claude CLI outputs APPROVE", async 
   }
 });
 
-Deno.test("selfReview: returns not approved when claude CLI outputs REJECT", async () => {
+Deno.test("selfApprove: returns not approved when claude CLI outputs REJECT", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -69,7 +73,7 @@ Deno.test("selfReview: returns not approved when claude CLI outputs REJECT", asy
       "bad output",
     );
     const run = runnerReturning("REJECT");
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -80,7 +84,7 @@ Deno.test("selfReview: returns not approved when claude CLI outputs REJECT", asy
   }
 });
 
-Deno.test("selfReview: returns false when claude CLI exits non-zero", async () => {
+Deno.test("selfApprove: returns false when claude CLI exits non-zero", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -88,7 +92,7 @@ Deno.test("selfReview: returns false when claude CLI exits non-zero", async () =
       "output",
     );
     const run = runnerReturning("", 1);
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -99,7 +103,7 @@ Deno.test("selfReview: returns false when claude CLI exits non-zero", async () =
   }
 });
 
-Deno.test("selfReview: returns false when run throws", async () => {
+Deno.test("selfApprove: returns false when run throws", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -109,7 +113,7 @@ Deno.test("selfReview: returns false when run throws", async () => {
     const run: CommandRunner = spy((_args: string[]) =>
       Promise.reject(new Error("not found"))
     );
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -120,7 +124,7 @@ Deno.test("selfReview: returns false when run throws", async () => {
   }
 });
 
-Deno.test("selfReview: passes output file content after -- to claude", async () => {
+Deno.test("selfApprove: passes output file content after -- to claude", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     const outputContent =
@@ -130,7 +134,7 @@ Deno.test("selfReview: passes output file content after -- to claude", async () 
       outputContent,
     );
     const run = runnerReturning("APPROVE");
-    await selfReview({ phase: "intake", ticketDir: tempDir, run });
+    await selfApprove({ phase: "intake", ticketDir: tempDir, run });
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     assertEquals(args[0], "claude");
     assertEquals(args[args.length - 1], outputContent);
@@ -139,7 +143,7 @@ Deno.test("selfReview: passes output file content after -- to claude", async () 
   }
 });
 
-Deno.test("selfReview: passes --system-prompt containing APPROVE and REJECT to claude", async () => {
+Deno.test("selfApprove: passes --system-prompt containing APPROVE and REJECT to claude", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -147,7 +151,7 @@ Deno.test("selfReview: passes --system-prompt containing APPROVE and REJECT to c
       "output",
     );
     const run = runnerReturning("APPROVE");
-    await selfReview({ phase: "intake", ticketDir: tempDir, run });
+    await selfApprove({ phase: "intake", ticketDir: tempDir, run });
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     const promptIdx = args.indexOf("--system-prompt");
     assertNotEquals(promptIdx, -1);
@@ -158,7 +162,7 @@ Deno.test("selfReview: passes --system-prompt containing APPROVE and REJECT to c
   }
 });
 
-Deno.test("selfReview: passes --model claude-haiku-4-5 to claude", async () => {
+Deno.test("selfApprove: passes --model claude-haiku-4-5 to claude", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -166,7 +170,7 @@ Deno.test("selfReview: passes --model claude-haiku-4-5 to claude", async () => {
       "output",
     );
     const run = runnerReturning("APPROVE");
-    await selfReview({ phase: "intake", ticketDir: tempDir, run });
+    await selfApprove({ phase: "intake", ticketDir: tempDir, run });
     const args = (run as ReturnType<typeof spy>).calls[0].args[0] as string[];
     const modelIdx = args.indexOf("--model");
     assertNotEquals(modelIdx, -1);
@@ -176,14 +180,14 @@ Deno.test("selfReview: passes --model claude-haiku-4-5 to claude", async () => {
   }
 });
 
-Deno.test("selfReview: APPROVE is case-insensitive", async () => {
+Deno.test("selfApprove: APPROVE is case-insensitive", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
       join(tempDir, "20260717T120000-intake.md"),
       "output",
     );
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run: runnerReturning("approve"),
@@ -194,7 +198,7 @@ Deno.test("selfReview: APPROVE is case-insensitive", async () => {
   }
 });
 
-Deno.test("selfReview: returns reason text when claude outputs REJECT with explanation", async () => {
+Deno.test("selfApprove: returns reason text when claude outputs REJECT with explanation", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -204,7 +208,7 @@ Deno.test("selfReview: returns reason text when claude outputs REJECT with expla
     const run = runnerReturning(
       "REJECT\nCriterion 2 was violated because the scope list is missing.",
     );
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,
@@ -219,14 +223,14 @@ Deno.test("selfReview: returns reason text when claude outputs REJECT with expla
   }
 });
 
-Deno.test("selfReview: works for enrichment phase when output file exists", async () => {
+Deno.test("selfApprove: works for enrichment phase when output file exists", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
       join(tempDir, "20260717T120000-enrichment.md"),
       "## Relevant Code\n\nFile: src/main.ts\n",
     );
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "enrichment",
       ticketDir: tempDir,
       run: runnerReturning("APPROVE"),
@@ -238,10 +242,10 @@ Deno.test("selfReview: works for enrichment phase when output file exists", asyn
 });
 
 Deno.test(
-  "intake-self-review.md criterion 3 accepts GitHub slug and URL formats",
+  "intake-self-approve.md criterion 3 accepts GitHub slug and URL formats",
   async () => {
     const promptPath = new URL(
-      "./phases/prompts/intake-self-review.md",
+      "./phases/prompts/intake-self-approve.md",
       import.meta.url,
     ).pathname;
     const content = await Deno.readTextFile(promptPath);
@@ -295,7 +299,7 @@ async function setupGitWorktree(): Promise<
   return { worktreeDir, originDir };
 }
 
-Deno.test("selfReview: appends changed files list to content when worktreePath is provided", async () => {
+Deno.test("selfApprove: appends changed files list to content when worktreePath is provided", async () => {
   const tempDir = await Deno.makeTempDir();
   const { worktreeDir, originDir } = await setupGitWorktree();
   try {
@@ -304,7 +308,7 @@ Deno.test("selfReview: appends changed files list to content when worktreePath i
       "## Changes Made\n\n- new-feature.ts\n\n## Summary of Changes\n\nAdded feature.\n\n## Tests\n\nok | 1 passed\n\n## PR\n\nhttps://github.com/example/repo/pull/1\n",
     );
     const run = runnerReturning("APPROVE");
-    await selfReview({
+    await selfApprove({
       phase: "implementation",
       ticketDir: tempDir,
       run,
@@ -325,7 +329,7 @@ Deno.test("selfReview: appends changed files list to content when worktreePath i
   }
 });
 
-Deno.test("selfReview: continues without diff when worktreePath git command fails", async () => {
+Deno.test("selfApprove: continues without diff when worktreePath git command fails", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(
@@ -333,7 +337,7 @@ Deno.test("selfReview: continues without diff when worktreePath git command fail
       "## Proposed Scope\n\n```yaml\nscope:\n  - jackjennings/lazyboy\n```\n",
     );
     const run = runnerReturning("APPROVE");
-    const result = await selfReview({
+    const result = await selfApprove({
       phase: "intake",
       ticketDir: tempDir,
       run,

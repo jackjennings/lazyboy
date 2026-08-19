@@ -93,6 +93,7 @@ import {
   readDirSync,
   readTextFile,
   remove,
+  rename,
   stat,
   writeTextFile,
 } from "./filesystem.ts";
@@ -531,6 +532,7 @@ export function composeTickDeps(
             }
           },
           remove,
+          rename,
           runGit,
           rerunFailedJobs: async ({ repo, runId }) => {
             const { token } = resolveGitHubAccount(repo.split("/")[0], config);

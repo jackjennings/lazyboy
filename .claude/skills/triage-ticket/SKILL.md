@@ -16,6 +16,9 @@ label alone.
 The output of a triage is a timeline, a root cause at `file:line`, and a
 judgement on whether the incident is a one-off or a defect worth a ticket.
 
+If the tick itself is not running — no recent `tick.ndjson` entries, persistent
+401s, or macOS permission prompts — use `debug-tick` instead.
+
 ## Locate the ticket
 
 The state dir is `[state].dir` in `~/.config/lazyboy/config.toml`. A ticket ID
@@ -98,6 +101,32 @@ identifier, then the `reason` literal within it.
   history yet.
 - **A live phase agent explains "nothing happened."** Actions skip tickets where
   `isPhaseAlive(ticketDir)` is true; check for `run.pid` before hunting a bug.
+
+## Getting the ticket moving again
+
+| Command                                    | What it does                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echo "<feedback>" \| lazyboy review <id>` | Writes `<timestamp>-<phase>-feedback.md` (named after `ticket.phase`), sets `status: "revising"`, commits `review: <id>`. The next tick re-runs the current phase with the feedback in context. This is the only way to re-run a phase.                                                                                                                                                 |
+| `lazyboy retry <id>`                       | Requires `status === "needs-attention"`. Flips status to `waiting` (`new` when `phase === "intake"`). Re-runs nothing — only unparks the ticket so the next tick can advance it.                                                                                                                                                                                                        |
+| `lazyboy rewind <id> <phase>`              | Sends the ticket back to `<phase>`. Refuses a target after the current phase and refuses if the ticket has open PRs. Archives that phase's and all later phases' artifacts (`.md`, `.md.exit`, `.md.session`, `.usage.json`, `-self-review.md`, `-feedback.md`); drops approvals and `phaseSessionIds` for the target phase and later; sets `status` to `waiting` (`new` for `intake`). |
+| `lazyboy approve <id>`                     | Appends a human `ApprovalEntry`.                                                                                                                                                                                                                                                                                                                                                        |
+| `lazyboy decline <id> [reason]`            | Moves the ticket to `wont-do`/`done`; does not close the upstream issue.                                                                                                                                                                                                                                                                                                                |
+
+Caveats:
+
+- Prefer the piped review over hand-editing `meta.md`. `isApproved`
+  (`src/state/types.ts`) compares only the last approval entry's phase against
+  `ticket.phase`, so a stale entry left in place can auto-advance the ticket on
+  the next tick.
+- `lazyboy review` requires that the latest phase output file matches the
+  current phase (`found.phaseName !== ticket.phase` exits with error). If the
+  current phase never produced an output, use `rewind` to return to the last
+  phase that did produce one, then re-advance.
+- To force a fresh agent session instead of a resume, delete
+  `phaseSessionIds[<phase>]` from `meta.md` before piping the review.
+- Nothing to restart after any of these commands. The next tick (every 5
+  minutes, `StartInterval: 300`) picks up the change; the state repo commit each
+  command makes is the audit trail.
 
 ## Reporting
 

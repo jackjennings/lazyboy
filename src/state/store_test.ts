@@ -1003,6 +1003,58 @@ Deno.test("commitPrinciples: stages custom relPath file when provided", async ()
   }
 });
 
+Deno.test("commitTicket: commits with lazyboy bot identity", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await initGitRepo(dir);
+    const run = (cmd: string[]) =>
+      new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+    await Deno.mkdir(join(dir, "gh-50"));
+    await Deno.writeTextFile(
+      join(dir, "gh-50", "meta.md"),
+      "---\nid: gh-50\n---\n",
+    );
+    await run(["git", "add", "-A"]);
+    await run(["git", "commit", "-m", "initial"]);
+    await Deno.writeTextFile(
+      join(dir, "gh-50", "meta.md"),
+      "---\nid: gh-50\napproved: true\n---\n",
+    );
+    await commitTicket(dir, "gh-50", "approve: gh-50");
+    const author = await run(["git", "log", "--format=%an <%ae>", "-1"]);
+    assertEquals(
+      new TextDecoder().decode(author.stdout).trim(),
+      "lazyboy <lazyboy@localhost>",
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("commitPrinciples: commits with lazyboy bot identity", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await initGitRepo(dir);
+    const run = (cmd: string[]) =>
+      new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: dir }).output();
+    await Deno.writeTextFile(join(dir, "principles.md"), "- learn A");
+    await run(["git", "add", "-A"]);
+    await run(["git", "commit", "-m", "init"]);
+    await Deno.writeTextFile(
+      join(dir, "principles.md"),
+      "- learn A\n- learn B",
+    );
+    await commitPrinciples(dir, "principles: identity test");
+    const author = await run(["git", "log", "--format=%an <%ae>", "-1"]);
+    assertEquals(
+      new TextDecoder().decode(author.stdout).trim(),
+      "lazyboy <lazyboy@localhost>",
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
 function makeLearning(overrides: Partial<LearningState> = {}): LearningState {
   return {
     id: "20260729T050000",

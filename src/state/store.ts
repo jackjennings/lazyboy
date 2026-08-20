@@ -296,14 +296,26 @@ export async function appendTicketLog(
   }
 }
 
-export async function commitState(
+async function stateCommit(
   stateDir: string,
+  addArgs: string[],
   message: string,
 ): Promise<void> {
   const run = (cmd: string[]) =>
     new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
-  await run(["git", "add", "-A"]);
-  const result = await run(["git", "commit", "-m", message]);
+  await run(["git", "add", ...addArgs]);
+  const result = await run([
+    "git",
+    "-c",
+    "user.name=lazyboy",
+    "-c",
+    "user.email=lazyboy@localhost",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-m",
+    message,
+  ]);
   if (result.code !== 0) {
     const stderr = new TextDecoder().decode(result.stderr);
     const stdout = new TextDecoder().decode(result.stdout);
@@ -314,6 +326,13 @@ export async function commitState(
       throw new Error(`git commit failed: ${stderr}`);
     }
   }
+}
+
+export async function commitState(
+  stateDir: string,
+  message: string,
+): Promise<void> {
+  await stateCommit(stateDir, ["-A"], message);
 }
 
 export async function commitTicket(
@@ -321,20 +340,7 @@ export async function commitTicket(
   ticketId: string,
   message: string,
 ): Promise<void> {
-  const run = (cmd: string[]) =>
-    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
-  await run(["git", "add", "--", ticketId]);
-  const result = await run(["git", "commit", "-m", message]);
-  if (result.code !== 0) {
-    const stderr = new TextDecoder().decode(result.stderr);
-    const stdout = new TextDecoder().decode(result.stdout);
-    if (
-      !stderr.includes("nothing to commit") &&
-      !stdout.includes("nothing to commit")
-    ) {
-      throw new Error(`git commit failed: ${stderr}`);
-    }
-  }
+  await stateCommit(stateDir, ["--", ticketId], message);
 }
 
 export async function commitPrinciples(
@@ -342,20 +348,7 @@ export async function commitPrinciples(
   message: string,
   relPath = "principles.md",
 ): Promise<void> {
-  const run = (cmd: string[]) =>
-    new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir }).output();
-  await run(["git", "add", "--", relPath]);
-  const result = await run(["git", "commit", "-m", message]);
-  if (result.code !== 0) {
-    const stderr = new TextDecoder().decode(result.stderr);
-    const stdout = new TextDecoder().decode(result.stdout);
-    if (
-      !stderr.includes("nothing to commit") &&
-      !stdout.includes("nothing to commit")
-    ) {
-      throw new Error(`git commit failed: ${stderr}`);
-    }
-  }
+  await stateCommit(stateDir, ["--", relPath], message);
 }
 
 export async function writeLearning(

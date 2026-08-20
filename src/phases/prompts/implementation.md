@@ -18,10 +18,13 @@ counts in revision runs. Start with source file reads, not git commands.
 Implement the plan task by task. For each task:
 
 1. Identify the source files named in that task's section of plan.md
-2. Read them in a single parallel batch — do not read one file per response. Do
-   not open with a text-only turn that announces what you plan to read and then
-   issue the reads in a subsequent response — combine the intent with the tool
-   calls in one response.
+2. Read them in batches of up to 5 files per turn — never more than 5 Read calls
+   in a single response. Enumerate all files the task requires first, read the
+   first batch of up to 5, then read the next batch after seeing those results,
+   continuing until all required files have been read. Do not open with a
+   text-only turn announcing what you plan to read — combine the intent with the
+   first batch of Read calls in one response. Where multiple files remain
+   unread, each batch must contain more than one Read call.
 3. Write failing tests first (TDD)
 4. Implement the task
 5. Confirm tests pass
@@ -33,7 +36,8 @@ After all tasks complete: run the formatter/linter, push, and open the PR.
 If the plan uses neither, treat the entire plan as one task.
 
 **Fallback**: if the plan does not name files per task (all files listed at the
-top level), read all plan-listed files before starting the first task.
+top level), enumerate all plan-listed files and read them before starting the
+first task, in batches of up to 5 files per turn.
 
 Before writing the first line of implementation, trace the critical test inputs
 through the plan's implementation logic. For regex patterns: manually match each

@@ -11,7 +11,7 @@ These must be present on the host; they are not managed by Deno.
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `git`                         | Worktree management, rebase/push, state repo commits                                                                                                             |
 | `pi`                          | Runs phase prompts; checks/installs agent packages                                                                                                               |
-| `launchctl`                   | Loads and unloads the tick LaunchAgent (`com.jackjennings.lazyboy`)                                                                                              |
+| `launchctl`                   | Loads and unloads the tick LaunchAgent (`com.jackjennings.urras`)                                                                                                |
 | GitHub API (`api.github.com`) | Fetches assigned issues; checks PR merge status                                                                                                                  |
 | `apfel`                       | Runs local LLM server for approval classification in review mode; also generates short titles at ticket ingestion (optional; skipped when absent or unavailable) |
 | `git-worktreeinclude`         | Copies declared files from main checkout into new worktrees                                                                                                      |
@@ -20,7 +20,7 @@ Runtime env vars (tick only): `ANTHROPIC_API_KEY`, plus either
 `GITHUB_TOKEN`/`GITHUB_LOGIN` (single-account) or the `token_env` vars named in
 `[github.accounts.*]` (multi-account — see `resolveGitHubAccount` in
 `src/compose.ts`). `JIRA_EMAIL`/`JIRA_API_TOKEN` are read directly from the env.
-Config is read from `~/.config/lazyboy/config.toml`.
+Config is read from `~/.config/urras/config.toml`.
 
 ## Commands
 
@@ -37,14 +37,14 @@ notion create <parent-url> <title>  # create a child Notion page (prints new URL
 notion append <page-url>            # append Markdown from stdin to a Notion page
 ```
 
-Every new subcommand must have a 3-character zsh alias (`l` + first two unique
-letters of the subcommand name) in `plugin/lazyboy.plugin.zsh` and a matching
-row in the `README.md` alias table. Add a `compdef <alias>=lazyboy` line only if
-the subcommand takes a ticket ID argument.
+Every new subcommand must have a 3-character zsh alias (`u` + first two unique
+letters of the subcommand name) in `plugin/urras.plugin.zsh` and a matching row
+in the `README.md` alias table. Add a `compdef <alias>=ur` line only if the
+subcommand takes a ticket ID argument.
 
 ## Architecture
 
-lazyboy is a LaunchAgent-driven pipeline. `TickService` (`src/tick.ts`) owns the
+urras is a LaunchAgent-driven pipeline. `TickService` (`src/tick.ts`) owns the
 tick workflow: acquire lock → install packages → fetch work → migrate → action
 pass → advance pass → commit.
 
@@ -110,7 +110,7 @@ Non-obvious rules:
   written as `null` or `{}`; `reasoning` tokens are excluded.
 - The file is written only when the agent exits with a complete `agent_end`
   event.
-- Directory scanners (e.g. `lazyboy status`) identify these by the `.usage.json`
+- Directory scanners (e.g. `ur status`) identify these by the `.usage.json`
   suffix.
 
 ## Phase output extraction
@@ -214,7 +214,7 @@ with `-`, which either CLI otherwise rejects as an unknown option.
 ## Ceremonies
 
 Ceremony source lives in `{extensionsDir}/ceremonies/<name>/` (from
-`[extensions] dir` in `config.toml`, defaulting to `~/.lazyboy/extensions`).
+`[extensions] dir` in `config.toml`, defaulting to `~/.urras/extensions`).
 Ceremony output is written to `{stateDir}/ceremonies/<name>/output/` — always
 the state dir, never the extensions dir.
 
@@ -239,14 +239,14 @@ binary); every other directory that resolves to a `PromptCeremony` or
 registry, not from matching the directory name against a string constant —
 `BUILT_IN_CEREMONY_NAMES` (`src/ceremonies/types.ts`) has two consumers:
 `performApproveCeremony` (`src/commands/approve.ts`) rejects
-`lazyboy approve ceremony/standup`, and `listCeremonyIds`
-(`src/commands/ids.ts`) filters built-ins out of `lazyboy _ids` so they never
-appear in shell completion. Both call sites depend on the constant staying in
-sync with the ceremonies array `composeTickDeps` actually registers.
+`ur approve ceremony/standup`, and `listCeremonyIds` (`src/commands/ids.ts`)
+filters built-ins out of `ur _ids` so they never appear in shell completion.
+Both call sites depend on the constant staying in sync with the ceremonies array
+`composeTickDeps` actually registers.
 
 `readApprovals`/`writeApprovals` (`src/ceremonies/approvals.ts`) resolve
-`~/.lazyboy/ceremony-approvals.json` through `lazyboyDir()`, never
-`join(HOME, ".lazyboy", …)` inline — same rule as the runtime dir below.
+`~/.urras/ceremony-approvals.json` through `urrasDir()`, never
+`join(HOME, ".urras", …)` inline — same rule as the runtime dir below.
 
 `ceremony-warning` (an existing `tick.ndjson` event) gains five `reason` values:
 `not-approved` (gate rejection), `ceremony-failed` (import failure, a
@@ -303,30 +303,30 @@ depends on. Treat widening it as a compatibility commitment: add members
 deliberately, and never expose `TickDeps`, `runGit`, or a raw `CommandRunner`
 through it — state-dir code is agent-authored and untrusted until approved.
 
-## Runtime dir (`lazyboyDir`)
+## Runtime dir (`urrasDir`)
 
 Anything that writes under the runtime dir — the combined `log.ndjson`,
-`tick.ndjson`, and future logging — must resolve its base path via
-`lazyboyDir()` (`src/paths.ts`), never `join(HOME, ".lazyboy", …)` inline. It
-returns `$LAZYBOY_DIR` when set, else `$HOME/.lazyboy`. This is the single seam
-that keeps tests from writing to the operator's real `~/.lazyboy`:
-`deno task
-test` sets `LAZYBOY_DIR=$(mktemp -d)`, so any code routed through
-`lazyboyDir()` is isolated automatically with no per-test setup. Single-file
-runs go through `deno task test:file <path>`, which sets it the same way — do
-not invoke `deno test` directly (see Commands). A test that inspects the
-combined/tick log directly uses `withLazyboyDir()` (`src/test-support.ts`) for
-its own scratch dir.
+`tick.ndjson`, and future logging — must resolve its base path via `urrasDir()`
+(`src/paths.ts`), never `join(HOME, ".urras", …)` inline. It returns
+`$URRAS_DIR` when set, else `$HOME/.urras` (with filesystem fallback to
+`$HOME/.lazyboy`). This is the single seam that keeps tests from writing to the
+operator's real `~/.urras`: `deno task
+test` sets `URRAS_DIR=$(mktemp -d)`, so
+any code routed through `urrasDir()` is isolated automatically with no per-test
+setup. Single-file runs go through `deno task test:file <path>`, which sets it
+the same way — do not invoke `deno test` directly (see Commands). A test that
+inspects the combined/tick log directly uses `withLazyboyDir()`
+(`src/test-support.ts`) for its own scratch dir.
 
 Non-log paths (`worktrees/`, `pi/`, `claude-code/`, `anthropic-pricing.json`,
 `tick.pid`, `last-worked.json`) still read `HOME`/`opts.homeDir` directly; their
-tests isolate via `HOME`. Do not route them through `lazyboyDir()` — it would
+tests isolate via `HOME`. Do not route them through `urrasDir()` — it would
 defeat that per-test `HOME` isolation.
 
 ## `tick.ndjson` format
 
-`~/.lazyboy/tick.ndjson` is NDJSON — one object per line with `ts` (ISO 8601
-UTC) and `event`. Events: `tick-start`, `tick-end`, `tick-already-running`,
+`~/.urras/tick.ndjson` is NDJSON — one object per line with `ts` (ISO 8601 UTC)
+and `event`. Events: `tick-start`, `tick-end`, `tick-already-running`,
 `stale-lock`, `lock-failed`, `tick-failed`, `update-skipped`, `update-failed`,
 `repo-renamed`, `repo-identity-collision`, `repo-identity-reconcile-failed`,
 `repo-identity-unavailable`, `repo-org-unmapped`. `appendTickLog`
@@ -367,9 +367,9 @@ across ticks.
   `update-failed` for real errors. Both let the tick proceed on local code.
 - Notification dedup lives in `src/update-divergence.ts`. It fires only when the
   counts change, storing the last notified pair in
-  `{lazyboyDir()}/update-divergence.json`. `current` clears that state so a
-  later divergence re-notifies; `dirty` and `failed` deliberately leave it
-  untouched, since neither establishes whether the checkout has diverged.
+  `{urrasDir()}/update-divergence.json`. `current` clears that state so a later
+  divergence re-notifies; `dirty` and `failed` deliberately leave it untouched,
+  since neither establishes whether the checkout has diverged.
 - The notification goes through `makeDesktopNotifier`, like every other one.
 
 ## Per-ticket `log.ndjson` format
@@ -510,11 +510,11 @@ non-LLM availability checks used by `src/compose.ts` and `src/review.ts`.
 ### Bedrock support
 
 `[pi] provider = "bedrock"` runs every phase through `pi --provider bedrock`.
-Two things are the user's responsibility, not lazyboy's: model IDs in
-`config.toml` must already carry the Bedrock `anthropic.` prefix (lazyboy does
-not rewrite model strings), and `AWS_REGION` plus AWS credentials must be
-present in the environment (`executePhase` spreads `Deno.env.toObject()` into
-the subprocess). `PHASE_MODEL_DEFAULTS` is unprefixed, so Bedrock users must
+Two things are the user's responsibility, not urras's: model IDs in
+`config.toml` must already carry the Bedrock `anthropic.` prefix (urras does not
+rewrite model strings), and `AWS_REGION` plus AWS credentials must be present in
+the environment (`executePhase` spreads `Deno.env.toObject()` into the
+subprocess). `PHASE_MODEL_DEFAULTS` is unprefixed, so Bedrock users must
 override every phase in `[phases.defaults]`, including `"conflict-resolution"`.
 
 ## Per-phase model configuration
@@ -733,11 +733,11 @@ table I/O and the `canonicalSlugFor`/`currentSlugFor`/`aliasesFor` lookups.
 ## Shell completion
 
 `src/completion.zsh` is a static, generic dispatcher — it does **not** hardcode
-command names, flags, or IDs. It reads `lazyboy _completions` (name,
-description, and `completesWith` per command) and `lazyboy _ids` at runtime. So
-a new command or flag becomes completable by declaring its metadata on the
-`Command` (set `completesWith: "_ids"` for a command that takes a ticket ID, or
-a comma-separated literal list for fixed choices) — **do not edit
+command names, flags, or IDs. It reads `ur _completions` (name, description, and
+`completesWith` per command) and `ur _ids` at runtime. So a new command or flag
+becomes completable by declaring its metadata on the `Command` (set
+`completesWith: "_ids"` for a command that takes a ticket ID, or a
+comma-separated literal list for fixed choices) — **do not edit
 `completion.zsh`** for a new command, flag, status value, or phase.
 
 ## `codebase.roots` semantics
@@ -750,10 +750,10 @@ Entries must be base code directories (e.g. `~/code`), not org-scoped
 
 When a scope entry is a GitHub slug/URL with no local checkout,
 `cloneRemoteRepo` (`src/worktree.ts`) clones to
-`~/.lazyboy/repositories/<org>/<repo>`, delegating the `gh repo clone`
-subprocess to `GitHubProvider.clone`, which forwards only `PATH`, `HOME`, and
-`GH_TOKEN`. Existing clones are reused — no `git fetch` or `git pull` is ever
-run on them (they are persistent snapshots). `createWorktreeAction` fires at
+`~/.urras/repositories/<org>/<repo>`, delegating the `gh repo clone` subprocess
+to `GitHubProvider.clone`, which forwards only `PATH`, `HOME`, and `GH_TOKEN`.
+Existing clones are reused — no `git fetch` or `git pull` is ever run on them
+(they are persistent snapshots). `createWorktreeAction` fires at
 `phase === "intake" && status === "waiting" && isApproved(ticket)`.
 
 ## Imports
@@ -820,16 +820,16 @@ Do not manually adjust indentation or spacing — let the formatter handle it.
 
 ## Commits
 
-All commits to the lazyboy source repo must use
+All commits to the urras source repo must use
 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format:
 `<type>[(<scope>)][!]: <description>`
 
 Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
 `build`, `ci`, `chore`, `revert`
 
-`chore` is for changes that produce no functional change to the lazyboy
-executable (e.g. updating `.gitignore`); when any more specific type applies,
-use it instead.
+`chore` is for changes that produce no functional change to the urras executable
+(e.g. updating `.gitignore`); when any more specific type applies, use it
+instead.
 
 Description rules: imperative mood, lowercase after the colon, no trailing
 period, ≤72 characters on the subject line.
@@ -964,9 +964,9 @@ Terminal phase (alongside `merge/done`) that permanently excludes a ticket from
 the tick queue; its only valid status is `"done"`.
 
 - Not in `PHASE_SEQUENCE` or `ActivePhase` — never run as an agent phase.
-- In `FULL_PHASE_SEQUENCE` (after `merge`) so it sorts last in `lazyboy status`.
+- In `FULL_PHASE_SEQUENCE` (after `merge`) so it sorts last in `ur status`.
 - The advance pass filters `t.phase !== "wont-do"` so status expansions cannot
   re-admit it.
-- `lazyboy decline <id> [reason]` sets `wont-do/done` and appends
+- `ur decline <id> [reason]` sets `wont-do/done` and appends
   `\n\n---\nDeclined: <reason>` to the body; the upstream provider ticket is
   **not** closed.

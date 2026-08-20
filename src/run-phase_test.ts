@@ -2,12 +2,14 @@ import {
   assert,
   assertArrayIncludes,
   assertEquals,
+  assertExists,
   assertFalse,
   assertLess,
   assertNotEquals,
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
 import { dirname, join } from "@std/path";
 import {
   appendPhaseLog,
@@ -25,6 +27,7 @@ import {
 } from "./run-phase.ts";
 import type { CodeAgent } from "./agents/types.ts";
 import type { AnthropicPricingCache } from "./anthropic-pricing.ts";
+import type { CommandRunner } from "./apfel.ts";
 
 // ── getPiEnvironmentVariables ────────────────────────────────────────────────
 
@@ -170,7 +173,7 @@ Deno.test("buildContextFiles: always includes meta.md", async () => {
   const tempDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(join(tempDir, "meta.md"), "---\n---\n");
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -192,7 +195,7 @@ Deno.test("buildContextFiles: includes prefix-timestamped phase output files", a
       join(tempDir, "20260629T154506-spec.md"),
       "spec",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -216,7 +219,7 @@ Deno.test("buildContextFiles: includes prefixed output and feedback files in chr
       join(tempDir, "20260629T160000-intake-feedback.md"),
       "feedback",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -244,7 +247,7 @@ Deno.test("buildContextFiles: includes merge output and feedback files", async (
       join(tempDir, "20260819T011426-merge-feedback.md"),
       "feedback",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -268,7 +271,7 @@ Deno.test("buildContextFiles: does not include files for phases not in context l
       join(tempDir, "20260629T154506-diff.md"),
       "diff",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -286,7 +289,7 @@ Deno.test("buildContextFiles: includes implementation output files", async () =>
       join(tempDir, "20260630T100000-implementation.md"),
       "output",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -310,7 +313,7 @@ Deno.test("buildContextFiles: includes implementation feedback files after imple
       join(tempDir, "20260630T120000-implementation-feedback.md"),
       "feedback",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -340,7 +343,7 @@ Deno.test("buildContextFiles: implementation files appear after plan files", asy
       join(tempDir, "20260630T100000-implementation.md"),
       "implementation output",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -381,7 +384,7 @@ Deno.test("buildContextFiles: prunes superseded drafts, keeping only the latest 
       "draft 3",
     );
 
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -417,7 +420,7 @@ Deno.test("buildContextFiles: keeps latest doc and pending feedback when a revis
       "feedback 2 (latest, revision pending)",
     );
 
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir: tempDir,
       stateDir: dirname(tempDir),
     });
@@ -439,7 +442,10 @@ Deno.test("buildContextFiles: prepends principles.md when it exists in stateDir"
   try {
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
     await Deno.writeTextFile(join(stateDir, "principles.md"), "- learn A");
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     assertEquals(files[0], `@${stateDir}/principles.md`);
     assertEquals(files[1], `@${ticketDir}/meta.md`);
   } finally {
@@ -454,7 +460,7 @@ Deno.test("buildContextFiles: omits principles.md when includePrinciples is fals
   try {
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
     await Deno.writeTextFile(join(stateDir, "principles.md"), "- learn A");
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir,
       stateDir,
       includePrinciples: false,
@@ -472,7 +478,10 @@ Deno.test("buildContextFiles: omits principles.md when it does not exist in stat
   const ticketDir = await Deno.makeTempDir();
   try {
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     assertEquals(files[0], `@${ticketDir}/meta.md`);
     assertFalse(files.some((f) => f.includes("principles.md")));
   } finally {
@@ -494,7 +503,10 @@ Deno.test("buildContextFiles: injects local principles for github ticket when fi
       join(stateDir, "principles", "github", "acme", "repo.md"),
       "- local principle",
     );
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     assertArrayIncludes(files, [
       `@${stateDir}/principles/github/acme/repo.md`,
     ]);
@@ -517,7 +529,10 @@ Deno.test("buildContextFiles: injects global then local principles when both exi
       join(stateDir, "principles", "github", "acme", "repo.md"),
       "- local",
     );
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     const globalIdx = files.indexOf(`@${stateDir}/principles.md`);
     const localIdx = files.indexOf(
       `@${stateDir}/principles/github/acme/repo.md`,
@@ -536,7 +551,10 @@ Deno.test("buildContextFiles: does not inject local principles when file is abse
     const ticketDir = join(stateDir, "github", "acme", "repo", "42");
     await Deno.mkdir(ticketDir, { recursive: true });
     await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     assertFalse(files.some((f) => f.includes("principles/github")));
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -556,7 +574,10 @@ Deno.test("buildContextFiles: injects local principles for jira ticket when file
       join(stateDir, "principles", "jira", "PROJ.md"),
       "- jira principle",
     );
-    const files = await buildContextFiles({ ticketDir, stateDir });
+    const { contextFiles: files } = await buildContextFiles({
+      ticketDir,
+      stateDir,
+    });
     assertArrayIncludes(files, [
       `@${stateDir}/principles/jira/PROJ.md`,
     ]);
@@ -578,7 +599,7 @@ Deno.test("buildContextFiles: omits local principles when includePrinciples is f
       join(stateDir, "principles", "github", "acme", "repo.md"),
       "- local principle",
     );
-    const files = await buildContextFiles({
+    const { contextFiles: files } = await buildContextFiles({
       ticketDir,
       stateDir,
       includePrinciples: false,
@@ -588,6 +609,379 @@ Deno.test("buildContextFiles: omits local principles when includePrinciples is f
     await Deno.remove(stateDir, { recursive: true });
   }
 });
+
+Deno.test(
+  "buildContextFiles: includes full global corpus unchanged when corpus has <= 20 entries",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      const entries = Array.from({ length: 20 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = spy(() =>
+        Promise.resolve({ code: 0, stdout: JSON.stringify({ indices: [0] }) })
+      );
+      const { contextFiles, tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      });
+      assertEquals(contextFiles[0], `@${stateDir}/principles.md`);
+      assertEquals(tempPrinciplesFile, undefined);
+      assertSpyCalls(run as ReturnType<typeof spy>, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(ticketDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: returns temp file path instead of global principles path when corpus has > 20 entries",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: My Task\n---\n## Problem\nA problem.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = spy(() =>
+        Promise.resolve({
+          code: 0,
+          stdout: JSON.stringify({ indices: [0, 2] }),
+        })
+      );
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      const { contextFiles } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run: () =>
+          Promise.resolve({
+            code: 0,
+            stdout: JSON.stringify({ indices: [0, 2] }),
+          }),
+      });
+      assertNotEquals(tempPrinciplesFile, undefined);
+      assertFalse(contextFiles.includes(`@${stateDir}/principles.md`));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: temp file contains only the selected principle entries in original order",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const principles = Array.from(
+        { length: 21 },
+        (_, i) => `- entry ${i}`,
+      );
+      await Deno.writeTextFile(
+        join(stateDir, "principles.md"),
+        principles.join("\n"),
+      );
+      const run: CommandRunner = () =>
+        Promise.resolve({
+          code: 0,
+          stdout: JSON.stringify({ indices: [5, 1] }),
+        });
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      const content = await Deno.readTextFile(tempPrinciplesFile!);
+      assertStringIncludes(content, "- entry 1");
+      assertStringIncludes(content, "- entry 5");
+      assert(content.indexOf("- entry 1") < content.indexOf("- entry 5"));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: falls back to full corpus when no run is provided, even when corpus exceeds threshold",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const ticketDir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const { contextFiles, tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+      });
+      assertEquals(contextFiles[0], `@${stateDir}/principles.md`);
+      assertEquals(tempPrinciplesFile, undefined);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(ticketDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: falls back to full corpus and logs principles-filter-failed when filterPrinciples returns null",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = () => Promise.resolve({ code: 1, stdout: "" });
+      const { contextFiles, tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      });
+      assertEquals(contextFiles[0], `@${stateDir}/principles.md`);
+      assertEquals(tempPrinciplesFile, undefined);
+      const log = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+      const logEntries = log.trim().split("\n").map((l) => JSON.parse(l));
+      const failed = logEntries.find((e) =>
+        e.event === "principles-filter-failed"
+      );
+      assertExists(failed);
+      assertEquals(typeof failed.reason, "string");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: falls back to full corpus and logs principles-filter-failed when meta.md is unreadable",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = () =>
+        Promise.resolve({ code: 0, stdout: JSON.stringify({ indices: [0] }) });
+      const { contextFiles } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      });
+      assertEquals(contextFiles[0], `@${stateDir}/principles.md`);
+      const log = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+      const logEntries = log.trim().split("\n").map((l) => JSON.parse(l));
+      assertExists(
+        logEntries.find((e) => e.event === "principles-filter-failed"),
+      );
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: logs principles-filtered with correct total and included counts",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = () =>
+        Promise.resolve({
+          code: 0,
+          stdout: JSON.stringify({ indices: [0, 3] }),
+        });
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      const log = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+      const logEntries = log.trim().split("\n").map((l) => JSON.parse(l));
+      const filtered = logEntries.find((e) =>
+        e.event === "principles-filtered"
+      );
+      assertExists(filtered);
+      assertEquals(filtered.total, 21);
+      assertEquals(filtered.included, 2);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: writes empty temp file when filter returns no relevant entries",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = () =>
+        Promise.resolve({ code: 0, stdout: JSON.stringify({ indices: [] }) });
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      assertExists(tempPrinciplesFile);
+      const content = await Deno.readTextFile(tempPrinciplesFile!);
+      assertEquals(content, "");
+      const log = await Deno.readTextFile(join(ticketDir, "log.ndjson"));
+      const logEntries = log.trim().split("\n").map((l) => JSON.parse(l));
+      const filtered = logEntries.find((e) =>
+        e.event === "principles-filtered"
+      );
+      assertEquals(filtered?.included, 0);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: uses ticket title and ## Problem section as filter context",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    let capturedPrompt = "";
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: Improve caching\n---\n## Problem\nCache misses are too frequent.\n\n## Other\nIgnore this.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = (args) => {
+        capturedPrompt = args[args.length - 1];
+        return Promise.resolve({
+          code: 0,
+          stdout: JSON.stringify({ indices: [] }),
+        });
+      };
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      assertStringIncludes(capturedPrompt, "Improve caching");
+      assertStringIncludes(capturedPrompt, "Cache misses are too frequent.");
+      assertFalse(capturedPrompt.includes("Ignore this."));
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
+
+Deno.test(
+  "buildContextFiles: falls back to full body when meta.md has no ## Problem section",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    let tempPrinciplesFile: string | undefined;
+    let capturedPrompt = "";
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: Fix bug\n---\nAll the context lives here.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+      const run: CommandRunner = (args) => {
+        capturedPrompt = args[args.length - 1];
+        return Promise.resolve({
+          code: 0,
+          stdout: JSON.stringify({ indices: [] }),
+        });
+      };
+      ({ tempPrinciplesFile } = await buildContextFiles({
+        ticketDir,
+        stateDir,
+        run,
+      }));
+      assertStringIncludes(capturedPrompt, "All the context lives here.");
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      if (tempPrinciplesFile) {
+        await Deno.remove(tempPrinciplesFile).catch(() => {});
+      }
+    }
+  },
+);
 
 // ── extractPrinciples ────────────────────────────────────────────────────────
 
@@ -2504,6 +2898,121 @@ Deno.test(
       assertEquals(capturedResume, true);
     } finally {
       await Deno.remove(ticketDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+// ── executePhase: filtered principles file lifecycle ─────────────────────────
+
+Deno.test(
+  "executePhase: persists filtered principles file in ticket directory after agent completes",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+
+      const agent: CodeAgent = {
+        runPhase() {
+          return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+        },
+      };
+      const run: CommandRunner = () =>
+        Promise.resolve({ code: 0, stdout: JSON.stringify({ indices: [0] }) });
+
+      await executePhase(
+        {
+          ticketDir,
+          stateDir,
+          outputFile: "out.md",
+          phase: "plan",
+          scopeDirs: [],
+          prompt: "p",
+          worktrees: {},
+          homeDir,
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          thinking: "off",
+          agentType: "pi",
+          run,
+        },
+        agent,
+      );
+
+      const filteredFile = join(ticketDir, "principles-filtered.md");
+      const info = await Deno.stat(filteredFile);
+      assert(info.isFile);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+      await Deno.remove(homeDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "executePhase: persists filtered principles file in ticket directory even when agent throws",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    const homeDir = await Deno.makeTempDir();
+    try {
+      const ticketDir = join(stateDir, "github", "acme", "repo", "1");
+      await Deno.mkdir(ticketDir, { recursive: true });
+      await Deno.writeTextFile(
+        join(ticketDir, "meta.md"),
+        "---\ntitle: T\n---\n## Problem\nP.",
+      );
+      const entries = Array.from({ length: 21 }, (_, i) => `- p${i}`).join(
+        "\n",
+      );
+      await Deno.writeTextFile(join(stateDir, "principles.md"), entries);
+
+      const agent: CodeAgent = {
+        runPhase() {
+          throw new Error("agent crashed");
+        },
+      };
+      const run: CommandRunner = () =>
+        Promise.resolve({ code: 0, stdout: JSON.stringify({ indices: [0] }) });
+
+      await assertRejects(
+        () =>
+          executePhase(
+            {
+              ticketDir,
+              stateDir,
+              outputFile: "out.md",
+              phase: "plan",
+              scopeDirs: [],
+              prompt: "p",
+              worktrees: {},
+              homeDir,
+              provider: "anthropic",
+              model: "claude-sonnet-4-6",
+              thinking: "off",
+              agentType: "pi",
+              run,
+            },
+            agent,
+          ),
+        Error,
+        "agent crashed",
+      );
+
+      const filteredFile = join(ticketDir, "principles-filtered.md");
+      const info = await Deno.stat(filteredFile);
+      assert(info.isFile);
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
       await Deno.remove(homeDir, { recursive: true });
     }
   },

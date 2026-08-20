@@ -720,7 +720,7 @@ export async function review(
     }
   }
 
-  const contextFiles = await buildContextFiles({ ticketDir, stateDir });
+  const { contextFiles } = await buildContextFiles({ ticketDir, stateDir });
   const systemPrompt = await buildQuestionSystemPrompt(contextFiles);
   const overlay = new QuestionOverlay(systemPrompt, fetch, tui);
   const overlayHandle = tui.showOverlay(overlay, {

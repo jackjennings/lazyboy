@@ -37,3 +37,47 @@ export async function judgePrinciples(
   if (result?.verdict === "KEEP_GLOBAL") return "global";
   return null;
 }
+
+const FILTER_SYSTEM_PROMPT =
+  "You are selecting the most relevant engineering principles for a coding task. Given a numbered list of principles and a task description, return the indices of the principles most relevant to this task. Return fewer than the requested count if fewer are genuinely relevant.";
+
+const FILTER_SCHEMA = {
+  type: "object",
+  properties: {
+    indices: { type: "array", items: { type: "integer" } },
+  },
+  required: ["indices"],
+  additionalProperties: false,
+};
+
+export async function filterPrinciples(
+  entries: string[],
+  context: string,
+  topK: number,
+  run: CommandRunner,
+): Promise<number[] | null> {
+  const model = new FallbackLanguageModel([
+    new ApfelLanguageModel(run),
+    new ClaudeLanguageModel(run, { model: "claude-haiku-4-5" }),
+  ]);
+  const numbered = entries.map((e, i) => `${i}: ${e}`).join("\n\n");
+  const result = await model.generateObject<{ indices: number[] }>({
+    systemPrompt: FILTER_SYSTEM_PROMPT,
+    prompt:
+      `${context}\n\n${numbered}\n\nReturn the indices of the top ${topK} most relevant principles.`,
+    schema: FILTER_SCHEMA,
+    maxTokens: 128,
+  });
+  if (!result || !Array.isArray(result.indices)) return null;
+  return [
+    ...new Set(
+      result.indices.filter(
+        (i) =>
+          typeof i === "number" &&
+          Number.isInteger(i) &&
+          i >= 0 &&
+          i < entries.length,
+      ),
+    ),
+  ].slice(0, topK);
+}

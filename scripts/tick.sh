@@ -11,10 +11,10 @@ LAZYBOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # cron runs with no keychain access, so gh auth token yields nothing; load
 # credentials from the env file the same way bin/lazyboy does.
-if [ -f "$HOME/.config/lazyboy/env" ]; then
+if [ -f "$HOME/.config/urras/env" ]; then
   set -a
   # shellcheck source=/dev/null
-  source "$HOME/.config/lazyboy/env"
+  source "$HOME/.config/urras/env"
   set +a
 fi
 

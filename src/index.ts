@@ -4,7 +4,7 @@ import { readTextFile } from "./filesystem.ts";
 
 try {
   const content = await readTextFile(
-    `${Deno.env.get("HOME")}/.config/lazyboy/env`,
+    `${Deno.env.get("HOME")}/.config/urras/env`,
   );
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
@@ -37,7 +37,7 @@ const command = commands.find((c) => c.name === name);
 
 if (!command) {
   const usage = publicCommands.map((c) => c.name).join("|");
-  console.error(`Usage: lazyboy <${usage}>`);
+  console.error(`Usage: ur <${usage}>`);
   Deno.exit(1);
 }
 

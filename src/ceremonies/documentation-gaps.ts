@@ -193,7 +193,7 @@ export class DocumentationGapsCeremony implements Ceremony {
     await this.#deps.commitState();
 
     try {
-      await this.#deps.notify?.("lazyboy", "Documentation gaps ready");
+      await this.#deps.notify?.("urras", "Documentation gaps ready");
     } catch {
       // notification failures must not abort the ceremony run
     }

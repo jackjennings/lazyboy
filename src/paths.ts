@@ -1,9 +1,24 @@
 import { join } from "@std/path";
 
-export function lazyboyDir(): string {
-  const override = Deno.env.get("LAZYBOY_DIR");
+export function urrasDir(): string {
+  const override = Deno.env.get("URRAS_DIR");
   if (override) return override;
-  return join(Deno.env.get("HOME")!, ".lazyboy");
+  const home = Deno.env.get("HOME")!;
+  const urras = join(home, ".urras");
+  try {
+    Deno.statSync(urras);
+    return urras;
+  } catch {
+    // fall back to legacy directory if it exists
+  }
+  const lazyboy = join(home, ".lazyboy");
+  try {
+    Deno.statSync(lazyboy);
+    return lazyboy;
+  } catch {
+    // neither exists; return the new default
+  }
+  return urras;
 }
 
 export function bootId(): string {

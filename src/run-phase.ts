@@ -26,15 +26,15 @@ export function getPiEnvironmentVariables(
   home: string,
 ): Record<string, string> {
   return {
-    PI_CODING_AGENT_DIR: join(home, ".lazyboy", "pi"),
-    PI_CODING_AGENT_SESSION_DIR: join(home, ".lazyboy", "pi", "sessions"),
+    PI_CODING_AGENT_DIR: join(home, ".urras", "pi"),
+    PI_CODING_AGENT_SESSION_DIR: join(home, ".urras", "pi", "sessions"),
   };
 }
 
 export async function setupPiDirectories(home: string): Promise<void> {
-  const sessionsDir = join(home, ".lazyboy", "pi", "sessions");
+  const sessionsDir = join(home, ".urras", "pi", "sessions");
   await mkdir(sessionsDir, { recursive: true });
-  const extensionsDir = join(home, ".lazyboy", "pi", "extensions");
+  const extensionsDir = join(home, ".urras", "pi", "extensions");
   await mkdir(extensionsDir, { recursive: true });
   const extensionsSourceDir = new URL(
     "./pi-extensions/",
@@ -52,7 +52,7 @@ export async function setupPiDirectories(home: string): Promise<void> {
 }
 
 export async function setupClaudeCodeDirectories(home: string): Promise<void> {
-  const claudeCodeDir = join(home, ".lazyboy", "claude-code");
+  const claudeCodeDir = join(home, ".urras", "claude-code");
   await mkdir(claudeCodeDir, { recursive: true });
   const settingsPath = join(claudeCodeDir, "settings.json");
   try {
@@ -540,7 +540,7 @@ export async function executePhase(
   if (usage !== null) {
     try {
       const cacheText = await readTextFile(
-        join(opts.homeDir, ".lazyboy", "anthropic-pricing.json"),
+        join(opts.homeDir, ".urras", "anthropic-pricing.json"),
       );
       const pricingCache = JSON.parse(cacheText) as AnthropicPricingCache;
       for (const modelEntry of usage.models) {
@@ -684,7 +684,7 @@ if (import.meta.main) {
     },
     agentType === "claude-code"
       ? new ClaudeCodeAgent(
-        join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+        join(homeDir, ".urras", "claude-code", "settings.json"),
       )
       : new PiCodeAgent(),
   );

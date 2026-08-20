@@ -1,8 +1,8 @@
 {
   "tasks": {
     "start": "deno run --allow-all src/index.ts",
-    "test": "LAZYBOY_DIR=$(mktemp -d) deno test --allow-all src/ migrations/ bin/",
-    "test:file": "LAZYBOY_DIR=$(mktemp -d) deno test --allow-all"
+    "test": "URRAS_DIR=$(mktemp -d) deno test --allow-all src/ migrations/ bin/",
+    "test:file": "URRAS_DIR=$(mktemp -d) deno test --allow-all"
   },
   "imports": {
     "@std/fs": "jsr:@std/fs@^1.0.24",

@@ -357,7 +357,7 @@ Deno.test("createWorktree: creates branch and worktree directory", async () => {
       }).output();
     }
     await Deno.remove(
-      join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", ticketId),
+      join(Deno.env.get("HOME")!, ".urras", "worktrees", ticketId),
       { recursive: true },
     );
     await Deno.remove(repoDir, { recursive: true });
@@ -532,7 +532,7 @@ Deno.test(
   "cloneRemoteRepo: returns existing path without calling clone",
   async () => {
     const home = await Deno.makeTempDir();
-    const orgDir = join(home, ".lazyboy", "repositories", "org");
+    const orgDir = join(home, ".urras", "repositories", "org");
     const repoDir = join(orgDir, "repo");
     await Deno.mkdir(repoDir, { recursive: true });
 
@@ -570,7 +570,7 @@ Deno.test("cloneRemoteRepo: calls clone when repo does not exist", async () => {
     assertEquals(cloneCalls[0].destDir, "repo");
     assertEquals(
       result,
-      join(home, ".lazyboy", "repositories", "org", "repo"),
+      join(home, ".urras", "repositories", "org", "repo"),
     );
   } finally {
     Deno.env.set("HOME", originalHome);
@@ -697,7 +697,7 @@ Deno.test(
         }).output();
       }
       await Deno.remove(
-        join(Deno.env.get("HOME")!, ".lazyboy", "worktrees", ticketId),
+        join(Deno.env.get("HOME")!, ".urras", "worktrees", ticketId),
         { recursive: true },
       );
       await Deno.remove(repoDir, { recursive: true });
@@ -715,7 +715,7 @@ Deno.test("initLocalRepo: creates repo with main branch and empty commit", async
     const repoDir = await initLocalRepo("myorg/my-new-repo");
     assertEquals(
       repoDir,
-      join(home, ".lazyboy", "repositories", "myorg", "my-new-repo"),
+      join(home, ".urras", "repositories", "myorg", "my-new-repo"),
     );
     const stat = await Deno.stat(repoDir);
     assert(stat.isDirectory);
@@ -833,7 +833,7 @@ Deno.test("cloneRemoteRepo: reuses existing cache directory for any alias", asyn
   try {
     const existingDir = join(
       home,
-      ".lazyboy",
+      ".urras",
       "repositories",
       "org",
       "old-name",

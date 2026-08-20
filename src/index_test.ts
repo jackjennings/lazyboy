@@ -31,20 +31,20 @@ const zshFile = new URL("./completion.zsh", import.meta.url).pathname;
 
 Deno.test("completion zsh: output begins with #compdef lazyboy", async () => {
   const content = await Deno.readTextFile(zshFile);
-  assert(content.startsWith("#compdef lazyboy"));
+  assert(content.startsWith("#compdef ur"));
 });
 
 Deno.test("completion zsh: defines and registers _lazyboy", async () => {
   const content = await Deno.readTextFile(zshFile);
-  assertStringIncludes(content, "_lazyboy()");
-  assertStringIncludes(content, "compdef _lazyboy lazyboy");
+  assertStringIncludes(content, "_ur()");
+  assertStringIncludes(content, "compdef _ur ur");
 });
 
 Deno.test(
   "completion zsh: derives the command list from lazyboy _completions",
   async () => {
     const content = await Deno.readTextFile(zshFile);
-    assertStringIncludes(content, "lazyboy _completions 2>/dev/null");
+    assertStringIncludes(content, "ur _completions 2>/dev/null");
   },
 );
 
@@ -52,7 +52,7 @@ Deno.test(
   "completion zsh: args state falls back to lazyboy _ids for id-based commands",
   async () => {
     const content = await Deno.readTextFile(zshFile);
-    assertStringIncludes(content, "lazyboy _ids 2>/dev/null");
+    assertStringIncludes(content, "ur _ids 2>/dev/null");
   },
 );
 
@@ -123,7 +123,7 @@ Deno.test("completion alone: exits 1 with usage on stderr", async () => {
   assertEquals(result.code, 1);
   assertStringIncludes(
     new TextDecoder().decode(result.stderr),
-    "Usage: lazyboy completion <zsh>",
+    "Usage: ur completion <zsh>",
   );
 });
 
@@ -141,7 +141,7 @@ Deno.test(
 
 async function makeFakeHome(stateDir: string): Promise<string> {
   const home = await Deno.makeTempDir();
-  const configDir = join(home, ".config", "lazyboy");
+  const configDir = join(home, ".config", "urras");
   await Deno.mkdir(configDir, { recursive: true });
   await Deno.writeTextFile(
     join(configDir, "config.toml"),
@@ -212,7 +212,7 @@ Deno.test("review: exits 1 with usage message when id is missing", async () => {
   assertEquals(result.code, 1);
   assertStringIncludes(
     new TextDecoder().decode(result.stderr),
-    "Usage: lazyboy review <ticket-id>",
+    "Usage: ur review <ticket-id>",
   );
 });
 
@@ -337,7 +337,7 @@ Deno.test("shell: exits 1 with usage when id is missing", async () => {
   assertEquals(result.code, 1);
   assertStringIncludes(
     new TextDecoder().decode(result.stderr),
-    "Usage: lazyboy shell <ticket-id>",
+    "Usage: ur shell <ticket-id>",
   );
 });
 
@@ -629,7 +629,7 @@ Deno.test("approve --help: prints usage line to stdout", () => {
   const cmd = commands.find((c) => c.name === "approve")!;
   assertStringIncludes(
     formatCommandHelp(cmd),
-    "Usage: lazyboy approve <ticket-id|ceremony/<name>>",
+    "Usage: ur approve <ticket-id|ceremony/<name>>",
   );
 });
 
@@ -645,14 +645,14 @@ Deno.test("approve --help: blank line separates usage and description", () => {
   const cmd = commands.find((c) => c.name === "approve")!;
   assertStringIncludes(
     formatCommandHelp(cmd),
-    "Usage: lazyboy approve <ticket-id|ceremony/<name>>\n\napprove the current phase gate",
+    "Usage: ur approve <ticket-id|ceremony/<name>>\n\napprove the current phase gate",
   );
 });
 
 Deno.test("tail --help: prints usage and description", () => {
   const cmd = commands.find((c) => c.name === "tail")!;
   const output = formatCommandHelp(cmd);
-  assertStringIncludes(output, "Usage: lazyboy tail [ticket-id]");
+  assertStringIncludes(output, "Usage: ur tail [ticket-id]");
   assertStringIncludes(output, "stream the tick log or a ticket's event log");
 });
 
@@ -676,7 +676,7 @@ Deno.test("--help at position 2 does not trigger help", async () => {
 });
 
 Deno.test("--help: usage line lists sorted public commands", () => {
-  assertStringIncludes(formatGlobalHelp(commands), "Usage: lazyboy <approve|");
+  assertStringIncludes(formatGlobalHelp(commands), "Usage: ur <approve|");
 });
 
 Deno.test("--help: includes Commands: section header", () => {
@@ -719,7 +719,7 @@ Deno.test("--help: commands are sorted alphabetically", () => {
 Deno.test("env file: var from file is visible to running command", async () => {
   const stateDir = await Deno.makeTempDir();
   const home = await Deno.makeTempDir();
-  const configDir = join(home, ".config", "lazyboy");
+  const configDir = join(home, ".config", "urras");
   await Deno.mkdir(configDir, { recursive: true });
   await Deno.writeTextFile(
     join(configDir, "config.toml"),
@@ -741,7 +741,7 @@ Deno.test("env file: var from file is visible to running command", async () => {
 Deno.test("env file: shell env var takes precedence over file", async () => {
   const stateDir = await Deno.makeTempDir();
   const home = await Deno.makeTempDir();
-  const configDir = join(home, ".config", "lazyboy");
+  const configDir = join(home, ".config", "urras");
   await Deno.mkdir(configDir, { recursive: true });
   await Deno.writeTextFile(
     join(configDir, "config.toml"),
@@ -759,7 +759,7 @@ Deno.test("env file: shell env var takes precedence over file", async () => {
 
 Deno.test("env file: absent env file does not cause an error", async () => {
   const home = await Deno.makeTempDir();
-  const configDir = join(home, ".config", "lazyboy");
+  const configDir = join(home, ".config", "urras");
   await Deno.mkdir(configDir, { recursive: true });
   try {
     const result = await runIndex(["--help"], { HOME: home });
@@ -774,7 +774,7 @@ Deno.test(
   async () => {
     const stateDir = await Deno.makeTempDir();
     const home = await Deno.makeTempDir();
-    const configDir = join(home, ".config", "lazyboy");
+    const configDir = join(home, ".config", "urras");
     await Deno.mkdir(configDir, { recursive: true });
     await Deno.writeTextFile(
       join(configDir, "config.toml"),

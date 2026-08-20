@@ -201,7 +201,7 @@ export async function refreshAnthropicPricingIfStale(
   homeDir: string,
   fetcher: typeof fetch,
 ): Promise<void> {
-  const cachePath = join(homeDir, ".lazyboy", "anthropic-pricing.json");
+  const cachePath = join(homeDir, ".urras", "anthropic-pricing.json");
 
   try {
     const fileInfo = await stat(cachePath);

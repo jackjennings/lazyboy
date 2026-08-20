@@ -186,7 +186,7 @@ export async function cloneRemoteRepo(
 
   for (const alias of aliasesForSlug(slug)) {
     const [aOrg, aRepo] = alias.split("/");
-    const aliasDir = join(home, ".lazyboy", "repositories", aOrg, aRepo);
+    const aliasDir = join(home, ".urras", "repositories", aOrg, aRepo);
     try {
       await stat(aliasDir);
       return aliasDir;
@@ -196,7 +196,7 @@ export async function cloneRemoteRepo(
   }
 
   const [org, repo] = slug.split("/");
-  const orgDir = join(home, ".lazyboy", "repositories", org);
+  const orgDir = join(home, ".urras", "repositories", org);
   const repoDir = join(orgDir, repo);
   await mkdir(orgDir, { recursive: true });
   await clone(slug, repo, orgDir);
@@ -210,8 +210,8 @@ export async function createWorktree(
 ): Promise<WorktreeInfo> {
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
-  const worktreePath = join(home, ".lazyboy", "worktrees", ticketId, org, repo);
-  await mkdir(join(home, ".lazyboy", "worktrees", ticketId, org), {
+  const worktreePath = join(home, ".urras", "worktrees", ticketId, org, repo);
+  await mkdir(join(home, ".urras", "worktrees", ticketId, org), {
     recursive: true,
   });
 
@@ -236,7 +236,7 @@ export async function createWorktree(
 export async function initLocalRepo(slug: string): Promise<string> {
   const home = Deno.env.get("HOME")!;
   const [org, repo] = slug.split("/");
-  const orgDir = join(home, ".lazyboy", "repositories", org);
+  const orgDir = join(home, ".urras", "repositories", org);
   const repoDir = join(orgDir, repo);
   await mkdir(orgDir, { recursive: true });
   try {
@@ -253,9 +253,9 @@ export async function initLocalRepo(slug: string): Promise<string> {
   const { code: commitCode, stderr: commitErr } = await runGit(
     [
       "-c",
-      "user.name=lazyboy",
+      "user.name=urras",
       "-c",
-      "user.email=lazyboy@localhost",
+      "user.email=urras@localhost",
       "-c",
       "commit.gpgsign=false",
       "commit",

@@ -4,12 +4,12 @@ import { readTextFile } from "../filesystem.ts";
 export const completion: Command = {
   name: "completion",
   description: "print shell completion script",
-  usage: "lazyboy completion <zsh>",
+  usage: "ur completion <zsh>",
   completesWith: ["zsh"],
   async run(args) {
     const shell = args[0];
     if (!shell) {
-      console.error("Usage: lazyboy completion <zsh>");
+      console.error("Usage: ur completion <zsh>");
       Deno.exit(1);
     }
     if (shell !== "zsh") {

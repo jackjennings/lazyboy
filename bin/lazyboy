@@ -1,11 +1,4 @@
 #!/bin/bash
 
-# Load secrets from env file if present
-if [ -f "$HOME/.config/lazyboy/env" ]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$HOME/.config/lazyboy/env"
-  set +a
-fi
-
-exec deno run --allow-all "$(dirname "$0")/../src/index.ts" "$@"
+echo "warning: lazyboy is deprecated; use ur instead" >&2
+exec "$(dirname "$0")/ur" "$@"

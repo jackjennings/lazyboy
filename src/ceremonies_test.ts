@@ -15,7 +15,7 @@ import {
   readApprovals,
   writeApprovals,
 } from "./ceremonies/approvals.ts";
-import { lazyboyDir } from "./paths.ts";
+import { urrasDir } from "./paths.ts";
 import { withLazyboyDir } from "./test-support.ts";
 import type { TicketState } from "./state/types.ts";
 import type { Ceremony } from "./ceremonies/types.ts";
@@ -716,7 +716,7 @@ Deno.test("DocumentationGapsCeremony: notify receives lazyboy title and Document
       },
     });
     await ceremony.run(TEST_NOW, outputDir);
-    assertEquals(notifyCalls, [["lazyboy", "Documentation gaps ready"]]);
+    assertEquals(notifyCalls, [["urras", "Documentation gaps ready"]]);
   } finally {
     await Deno.remove(stateDir, { recursive: true });
     await Deno.remove(outputDir, { recursive: true });
@@ -840,7 +840,7 @@ Deno.test("CeremonyRunner: warns and notifies once per due window", async () => 
     assertSpyCalls(notify, 1);
     assertStringIncludes(
       notify.calls[0].args[1],
-      "lazyboy approve ceremony/digest",
+      "ur approve ceremony/digest",
     );
   } finally {
     await Deno.remove(stateDir, { recursive: true });
@@ -1078,8 +1078,8 @@ Deno.test("CeremonyRunner: a corrupt approvals file does not destroy stored appr
   const stateDir = await Deno.makeTempDir();
   try {
     await writePromptCeremony(stateDir, "digest");
-    await Deno.mkdir(lazyboyDir(), { recursive: true });
-    const approvalsFile = join(lazyboyDir(), "ceremony-approvals.json");
+    await Deno.mkdir(urrasDir(), { recursive: true });
+    const approvalsFile = join(urrasDir(), "ceremony-approvals.json");
     await Deno.writeTextFile(approvalsFile, "{ not json");
     const appendTickLog = spy((_entry: object) => Promise.resolve());
     const notify = spy((_title: string, _message: string) => Promise.resolve());

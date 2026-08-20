@@ -1321,7 +1321,7 @@ async function withReviewConfig(
   fn: () => Promise<void>,
 ): Promise<void> {
   const homeDir = await Deno.makeTempDir();
-  const configDir = join(homeDir, ".config", "lazyboy");
+  const configDir = join(homeDir, ".config", "urras");
   await Deno.mkdir(configDir, { recursive: true });
   await Deno.writeTextFile(
     join(configDir, "config.toml"),

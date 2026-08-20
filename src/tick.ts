@@ -1,6 +1,6 @@
 import { join } from "@std/path";
 import { estimateTokenCount } from "tokenx";
-import { lazyboyDir } from "./paths.ts";
+import { urrasDir } from "./paths.ts";
 import { adjudicatePhaseModel } from "./pre-phase-adjudication.ts";
 import { deleteRunPid } from "./executor.ts";
 import { extractPrinciples } from "./run-phase.ts";
@@ -798,7 +798,7 @@ export async function advancePhase(
 }
 
 export async function appendTickLog(entry: object): Promise<void> {
-  const lazyDir = lazyboyDir();
+  const lazyDir = urrasDir();
   const ts = Temporal.Now.instant().toString();
   await mkdir(lazyDir, { recursive: true });
   await writeTextFile(

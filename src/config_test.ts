@@ -1075,8 +1075,8 @@ check_new_comments = "yes"
 Deno.test("loadConfig: defaults extensions.dir to lazyboyDir()/extensions when [extensions] absent", async () => {
   const dir = await Deno.makeTempDir();
   const lazyboyDir = await Deno.makeTempDir();
-  const originalLazyboyDir = Deno.env.get("LAZYBOY_DIR");
-  Deno.env.set("LAZYBOY_DIR", lazyboyDir);
+  const originalLazyboyDir = Deno.env.get("URRAS_DIR");
+  Deno.env.set("URRAS_DIR", lazyboyDir);
   await Deno.writeTextFile(
     join(dir, "config.toml"),
     `
@@ -1095,9 +1095,9 @@ concurrency = 1
     assertEquals(cfg.extensions.dir, join(lazyboyDir, "extensions"));
   } finally {
     if (originalLazyboyDir !== undefined) {
-      Deno.env.set("LAZYBOY_DIR", originalLazyboyDir);
+      Deno.env.set("URRAS_DIR", originalLazyboyDir);
     } else {
-      Deno.env.delete("LAZYBOY_DIR");
+      Deno.env.delete("URRAS_DIR");
     }
     await Deno.remove(dir, { recursive: true });
     await Deno.remove(lazyboyDir, { recursive: true });

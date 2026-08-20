@@ -68,7 +68,7 @@ export class PromptCeremony implements Ceremony {
       String(d.day).padStart(2, "0")
     }`;
     const prompt =
-      `You are a lazyboy ceremony runner. Today is ${isoDate}.\n\n${promptContent}`;
+      `You are an urras ceremony runner. Today is ${isoDate}.\n\n${promptContent}`;
 
     const args = [
       prompt,

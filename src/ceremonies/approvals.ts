@@ -1,5 +1,5 @@
 import { isAbsolute, join, relative } from "@std/path";
-import { lazyboyDir } from "../paths.ts";
+import { urrasDir } from "../paths.ts";
 import {
   mkdir,
   readDir,
@@ -29,7 +29,7 @@ export class CeremonyManifestLimitError extends Error {}
 export class CorruptApprovalsError extends Error {}
 
 function approvalsPath(): string {
-  return join(lazyboyDir(), "ceremony-approvals.json");
+  return join(urrasDir(), "ceremony-approvals.json");
 }
 
 async function sha256Bytes(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
@@ -205,7 +205,7 @@ export async function readApprovals(): Promise<ApprovalRecord> {
 }
 
 export async function writeApprovals(record: ApprovalRecord): Promise<void> {
-  await mkdir(lazyboyDir(), { recursive: true });
+  await mkdir(urrasDir(), { recursive: true });
   const path = approvalsPath();
   const temporaryPath = `${path}.${crypto.randomUUID()}.tmp`;
   try {

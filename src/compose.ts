@@ -28,7 +28,7 @@ import {
 } from "./run-phase.ts";
 import { judgePrinciples } from "./judge-principles.ts";
 import { expandHome } from "./config.ts";
-import { lazyboyDir } from "./paths.ts";
+import { urrasDir } from "./paths.ts";
 import { GitHubProvider } from "./providers/github.ts";
 import { JiraProvider } from "./providers/jira.ts";
 import { TodoTxtProvider } from "./providers/todo-txt.ts";
@@ -890,7 +890,7 @@ export function composeTickDeps(
   ];
 
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
-  const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
+  const lastWorkedPath = join(home, ".urras", "last-worked.json");
 
   const ceremonies = new CeremonyRunner(
     {
@@ -1220,7 +1220,7 @@ export function composeTickDeps(
       await commitState(stateDir, `tick: ${Temporal.Now.instant().toString()}`);
       await pushState({ stateDir, runGit, log: appendTickLog });
     },
-    lock: new PidFileLock(join(home, ".lazyboy", "tick.pid"), {
+    lock: new PidFileLock(join(home, ".urras", "tick.pid"), {
       log: appendTickLog,
     }),
     refreshAnthropicPricing: () => refreshAnthropicPricingIfStale(home, fetch),
@@ -1355,7 +1355,7 @@ export function composeTickDeps(
       : [],
     agentsMdMaxTokens: config.tick.agentsMdMaxTokens,
     writeTickProgress: async (label: string | null) => {
-      const path = join(lazyboyDir(), "tick-progress.json");
+      const path = join(urrasDir(), "tick-progress.json");
       if (label === null) {
         try {
           await remove(path);

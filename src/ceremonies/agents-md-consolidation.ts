@@ -191,7 +191,7 @@ export class AgentsMdConsolidationCeremony implements Ceremony {
 
       try {
         await this.#deps.notify?.(
-          "lazyboy",
+          "urras",
           "AGENTS.md consolidation PR opened",
         );
       } catch {

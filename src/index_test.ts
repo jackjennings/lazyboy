@@ -2,6 +2,7 @@ import {
   assert,
   assertArrayIncludes,
   assertEquals,
+  assertExists,
   assertFalse,
   assertNotEquals,
   assertStringIncludes,
@@ -63,6 +64,12 @@ Deno.test(
     assertStringIncludes(content, "${(s.,.)completesWith}");
   },
 );
+
+Deno.test("doctor command: registered with correct metadata", () => {
+  const cmd = commands.find((c) => c.name === "doctor");
+  assertExists(cmd);
+  assertEquals(cmd!.description, "Run health checks and report status");
+});
 
 Deno.test("_completions: lists all public subcommands with descriptions", () => {
   const output = formatCompletions(commands);

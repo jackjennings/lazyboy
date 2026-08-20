@@ -113,6 +113,19 @@ import {
 import { PHASE_SEQUENCE } from "./phases/types.ts";
 import { HttpClient } from "./http-client.ts";
 import { ClaudeLanguageModel } from "./models/claude.ts";
+import { unappliedMigrationsCheck } from "./doctor/checks/unapplied-migrations.ts";
+import { launchagentHealthCheck } from "./doctor/checks/launchagent-health.ts";
+import { tickFreshnessCheck } from "./doctor/checks/tick-freshness.ts";
+import { powerManagementCheck } from "./doctor/checks/power-management.ts";
+import { selfUpdateHealthCheck } from "./doctor/checks/self-update-health.ts";
+import { stateRepoCheck } from "./doctor/checks/state-repo.ts";
+import { usageSidecarShapeCheck } from "./doctor/checks/usage-sidecar-shape.ts";
+import { hostDependenciesCheck } from "./doctor/checks/host-dependencies.ts";
+import { requiredEnvVarsCheck } from "./doctor/checks/required-env-vars.ts";
+import { staleHudProcessCheck } from "./doctor/checks/stale-hud-process.ts";
+import { launchdSpawnSuppressionCheck } from "./doctor/checks/launchd-spawn-suppression.ts";
+import type { Check } from "./doctor/checks/types.ts";
+import { plistPath } from "./launchd.ts";
 
 export async function ensureStatePrompts(
   stateDir: string,
@@ -1367,4 +1380,79 @@ export function composeTickDeps(
       }
     },
   };
+}
+
+export function composeDoctorChecks(config: Config): Check[] {
+  const stateDir = expandHome(config.state.dir);
+  const uid = Deno.uid() ?? 0;
+  const repoPath = new URL("../", import.meta.url).pathname;
+  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
+  const installedPlistPath = plistPath();
+  const urrasDirPath = urrasDir();
+  const now = (): number =>
+    Math.floor(Temporal.Now.instant().epochMilliseconds / 1000);
+
+  const runCommand = async (
+    args: string[],
+    timeoutMs?: number,
+  ): Promise<{ code: number; stdout: string }> => {
+    const ac = timeoutMs !== undefined ? new AbortController() : undefined;
+    const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : undefined;
+    try {
+      const result = await new Deno.Command(args[0], {
+        args: args.slice(1),
+        stdout: "piped",
+        stderr: "null",
+        signal: ac?.signal,
+      }).output();
+      return {
+        code: result.code,
+        stdout: new TextDecoder().decode(result.stdout),
+      };
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        return { code: 1, stdout: "" };
+      }
+      throw e;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
+
+  return [
+    unappliedMigrationsCheck({
+      readDir,
+      readTextFile,
+      stateDir,
+      migrationsDir,
+    }),
+    launchagentHealthCheck({
+      runCommand,
+      uid,
+      readTextFile,
+      plistPath: installedPlistPath,
+    }),
+    tickFreshnessCheck({ readTextFile, urrasDir: urrasDirPath, now }),
+    powerManagementCheck({ runCommand }),
+    selfUpdateHealthCheck({
+      runCommand,
+      repoPath,
+      readTextFile,
+      urrasDir: urrasDirPath,
+      now,
+    }),
+    stateRepoCheck({ runCommand, stateDir }),
+    usageSidecarShapeCheck({ readDir, readTextFile, stateDir }),
+    hostDependenciesCheck({ runCommand }),
+    requiredEnvVarsCheck({ getEnv: (name) => Deno.env.get(name), config }),
+    staleHudProcessCheck({ runCommand, repoPath }),
+    launchdSpawnSuppressionCheck({
+      readTextFile,
+      urrasDir: urrasDirPath,
+      runCommand,
+      uid,
+      plistPath: installedPlistPath,
+      now,
+    }),
+  ];
 }

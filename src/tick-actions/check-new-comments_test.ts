@@ -332,6 +332,105 @@ Deno.test(
 );
 
 Deno.test(
+  "checkNewCommentsAction: comment at exactly the cursor is not re-applied",
+  async () => {
+    const writeTicketSpy = spy(() => Promise.resolve());
+    const writeContextSpy = spy(() => Promise.resolve());
+    const result = await checkNewCommentsAction(
+      makeDeps({
+        fetchGitHubComments: () =>
+          Promise.resolve([
+            {
+              author: "alice",
+              body: "Please add retry logic",
+              timestamp: "2026-02-01T10:00:00Z",
+            },
+          ]),
+        writeTicket: writeTicketSpy,
+        writeContextFile: writeContextSpy,
+      }),
+    ).run(
+      makeTicket({
+        ...BASE_GITHUB,
+        lastSeenCommentTimestamp: "2026-02-01T10:00:00Z",
+      }),
+      "/state",
+    );
+    assertEquals(result, null);
+    assertSpyCalls(writeContextSpy, 0);
+    assertSpyCalls(writeTicketSpy, 0);
+  },
+);
+
+Deno.test(
+  "checkNewCommentsAction: a comment older than the cursor never rewinds it",
+  async () => {
+    const written: { lastSeenCommentTimestamp?: string }[] = [];
+    const result = await checkNewCommentsAction(
+      makeDeps({
+        fetchGitHubComments: () =>
+          Promise.resolve([
+            {
+              author: "alice",
+              body: "Edited an old comment",
+              timestamp: "2026-01-05T10:00:00Z",
+            },
+            {
+              author: "bob",
+              body: "Please add retry logic",
+              timestamp: "2026-02-10T10:00:00Z",
+            },
+          ]),
+        writeTicket: (_sd, t) => {
+          written.push(t);
+          return Promise.resolve();
+        },
+      }),
+    ).run(
+      makeTicket({
+        ...BASE_GITHUB,
+        lastSeenCommentTimestamp: "2026-02-01T10:00:00Z",
+      }),
+      "/state",
+    );
+    assertEquals(
+      (result as { lastSeenCommentTimestamp?: string } | null)
+        ?.lastSeenCommentTimestamp,
+      "2026-02-10T10:00:00Z",
+    );
+    assertEquals(written[0].lastSeenCommentTimestamp, "2026-02-10T10:00:00Z");
+  },
+);
+
+Deno.test(
+  "checkNewCommentsAction: sub-second cursor precision does not resurface a comment",
+  async () => {
+    const writeContextSpy = spy(() => Promise.resolve());
+    const result = await checkNewCommentsAction(
+      makeDeps({
+        fetchGitHubComments: () =>
+          Promise.resolve([
+            {
+              author: "alice",
+              body: "Please add retry logic",
+              timestamp: "2026-02-01T10:00:00Z",
+            },
+          ]),
+        writeContextFile: writeContextSpy,
+      }),
+    ).run(
+      makeTicket({
+        ...BASE_GITHUB,
+        lastSeenCommentTimestamp: "2026-02-01T10:00:00.500Z",
+      }),
+      "/state",
+    );
+    assertEquals(result, null);
+    assertSpyCalls(writeContextSpy, 0);
+  },
+);
+
+Deno.test(
   "checkNewCommentsAction: multiple KEEP comments separated by --- in context file",
   async () => {
     const written: string[] = [];

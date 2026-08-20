@@ -28,6 +28,17 @@ export interface CheckNewCommentsDeps {
 
 const MONITORED_PHASES = new Set(["spec", "plan", "implementation", "merge"]);
 
+function isAfter(timestamp: string, since: string): boolean {
+  try {
+    return Temporal.Instant.compare(
+      Temporal.Instant.from(timestamp),
+      Temporal.Instant.from(since),
+    ) > 0;
+  } catch {
+    return timestamp > since;
+  }
+}
+
 export function checkNewCommentsAction(deps: CheckNewCommentsDeps): TickAction {
   return {
     label: "Checking comments",
@@ -48,25 +59,28 @@ export function checkNewCommentsAction(deps: CheckNewCommentsDeps): TickAction {
       const ticketDir = join(stateDir, ticket.id);
       const since = ticket.lastSeenCommentTimestamp ?? ticket.created;
 
-      let comments: RawComment[];
+      let fetched: RawComment[];
       try {
         if (ticket.provider === "github") {
-          comments = await deps.fetchGitHubComments(ticket.id, since);
+          fetched = await deps.fetchGitHubComments(ticket.id, since);
         } else {
           const issueKey = ticket.id.split("/")[1];
-          comments = await deps.fetchJiraComments(issueKey, since);
+          fetched = await deps.fetchJiraComments(issueKey, since);
         }
       } catch {
         return null;
       }
 
+      const comments = fetched.filter((c) => isAfter(c.timestamp, since));
       if (comments.length === 0) return null;
 
       const keptComments: RawComment[] = [];
       let latestTimestamp = "";
 
       for (const comment of comments) {
-        if (comment.timestamp > latestTimestamp) {
+        if (
+          latestTimestamp === "" || isAfter(comment.timestamp, latestTimestamp)
+        ) {
           latestTimestamp = comment.timestamp;
         }
         if (deps.isBot(comment.author)) continue;
@@ -93,7 +107,8 @@ export function checkNewCommentsAction(deps: CheckNewCommentsDeps): TickAction {
       await deps.appendLog(stateDir, ticket.id, {
         action: "check-new-comments",
         since,
-        fetched: comments.length,
+        fetched: fetched.length,
+        stale: fetched.length - comments.length,
         kept: keptComments.length,
         latestTimestamp,
       });

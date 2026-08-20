@@ -1,7 +1,7 @@
 import { CeremonyRunner } from "./ceremonies.ts";
 import { DocumentationGapsCeremony } from "./ceremonies/documentation-gaps.ts";
 import { AgentsMdConsolidationCeremony } from "./ceremonies/agents-md-consolidation.ts";
-import { dirname, join } from "@std/path";
+import { dirname, join, relative } from "@std/path";
 import {
   detectImplementationOutlier,
   detectPlanOutlier,
@@ -37,6 +37,19 @@ import { jiraPickupAction } from "./tick-actions/jira-pickup.ts";
 import { jiraDoneAction } from "./tick-actions/jira-done.ts";
 import { isPhaseAlive, spawnPhase } from "./executor.ts";
 import { bootId } from "./paths.ts";
+import {
+  aliasesFor,
+  canonicalSlugFor,
+  currentSlugFor,
+  makeTableIO,
+  type RepoIdentityTable,
+} from "./providers/github/repo-identity.ts";
+import {
+  parsePrUrl,
+  parseTicketId,
+  slugOf,
+} from "./providers/github/identity.ts";
+import { reconcileRepoIdentities as runReconcile } from "./providers/github/reconcile-identities.ts";
 import {
   cloneRemoteRepo,
   createWorktree,
@@ -253,9 +266,11 @@ export async function preflightGitHubCredentials(
 }
 
 export function resolveGitHubAccount(
-  org: string,
+  slug: string,
   config: Config,
+  currentSlug?: string,
 ): { token: string; login: string } {
+  const org = (currentSlug ?? slug).split("/")[0];
   if (!config.github.accounts) {
     return {
       token: Deno.env.get("GITHUB_TOKEN") ?? "",
@@ -322,9 +337,39 @@ export function composeTickDeps(
 
   const http = new HttpClient();
 
+  let persistedTable: RepoIdentityTable = {};
+  let confirmedCurrentSlugs: Map<string, string> = new Map();
+
+  const tableIO = makeTableIO(join(stateDir, "repos.json"));
+
+  function resolveAccount(slug: string): { token: string; login: string } {
+    const canonical = canonicalSlugFor(persistedTable, slug);
+    const confirmedCurrent = confirmedCurrentSlugs.get(canonical);
+    return resolveGitHubAccount(slug, config, confirmedCurrent);
+  }
+
+  function resolveRepo(
+    slug: string,
+  ): { canonical: string; current: string } | null {
+    const canonical = canonicalSlugFor(persistedTable, slug);
+    const entry = persistedTable[canonical];
+    if (entry?.blockedBy !== null && entry?.blockedBy !== undefined) {
+      return null;
+    }
+    return {
+      canonical,
+      current: currentSlugFor(persistedTable, slug),
+    };
+  }
+
+  const desktopNotifier = makeDesktopNotifier({
+    runCommand: defaultCommandRunner(),
+  });
+
   const githubProvider = new GitHubProvider({
     repos: config.github.repos,
-    accountResolver: (org) => resolveGitHubAccount(org, config),
+    accountResolver: resolveAccount,
+    resolveRepo,
     http,
   });
 
@@ -351,7 +396,12 @@ export function composeTickDeps(
   const tickActions = [
     createWorktreeAction({
       roots: config.codebase.roots.map(expandHome),
-      findLocalRepo,
+      findLocalRepo: (roots, slug) =>
+        findLocalRepo(
+          roots,
+          slug,
+          (s) => aliasesFor(persistedTable, s),
+        ),
       createWorktree,
       writeTicket,
       readIntakeOutput: async (ticketDir: string) => {
@@ -373,7 +423,12 @@ export function composeTickDeps(
         return readTextFile(join(ticketDir, files[files.length - 1]));
       },
       cloneRemoteRepo: (slug: string) =>
-        cloneRemoteRepo(slug, (s, d, cwd) => githubProvider.clone(s, d, cwd)),
+        cloneRemoteRepo(
+          slug,
+          (s, d, cwd) =>
+            githubProvider.clone(currentSlugFor(persistedTable, s), d, cwd),
+          (s) => aliasesFor(persistedTable, s),
+        ),
       initLocalRepo,
       stat: exists,
       appendLog: appendTicketLog,
@@ -423,6 +478,7 @@ export function composeTickDeps(
       getPRInfo: (url: string) => githubProvider.prMetadata(url),
       writeTicket,
       appendLog: appendTicketLog,
+      aliasesForSlug: (slug) => aliasesFor(persistedTable, slug),
     }),
     checkMergedPRAction({
       isPRMerged: (url) => githubProvider.isPRMerged(url),
@@ -479,16 +535,17 @@ export function composeTickDeps(
           `Examine the conflicted files listed in the context, resolve all merge conflicts, ` +
           `then run \`git rebase --continue\` until the rebase completes. ` +
           `After a successful rebase, run \`git push --force-with-lease origin ${opts.branch}\`.`;
+        const branchParsed = parseTicketId(opts.branch);
+        const branchSlug = branchParsed
+          ? `${branchParsed.org}/${branchParsed.repo}`
+          : opts.branch.split("/")[1] ?? "";
         return spawnPhase({
           ticketDir: opts.ticketDir,
           stateDir,
           prompt,
           scopeDirs: [],
           outputFile: `${timestamp}-conflict-resolution.md`,
-          githubToken: resolveGitHubAccount(
-            opts.branch.split("/")[1],
-            config,
-          ).token,
+          githubToken: resolveAccount(branchSlug).token,
           anthropicApiKey,
           worktrees: {
             [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
@@ -533,9 +590,10 @@ export function composeTickDeps(
           remove,
           runGit,
           rerunFailedJobs: async ({ repo, runId }) => {
-            const { token } = resolveGitHubAccount(repo.split("/")[0], config);
+            const { token } = resolveAccount(repo);
+            const currentRepo = currentSlugFor(persistedTable, repo);
             const res = await http.post(
-              `https://api.github.com/repos/${repo}/actions/runs/${runId}/rerun-failed-jobs`,
+              `https://api.github.com/repos/${currentRepo}/actions/runs/${runId}/rerun-failed-jobs`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -560,13 +618,11 @@ export function composeTickDeps(
         }),
         spawnCIFixAction({
           getPRChecks: async (prUrl) => {
-            const m = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-            if (!m) return null;
-            const [, repoSlug, prNumber] = m;
-            const { token } = resolveGitHubAccount(
-              repoSlug.split("/")[0],
-              config,
-            );
+            const parsed = parsePrUrl(prUrl);
+            if (!parsed) return null;
+            const repoSlug = slugOf(parsed);
+            const prNumber = String(parsed.number);
+            const { token } = resolveAccount(repoSlug);
             const headers = {
               Authorization: `Bearer ${token}`,
               Accept: "application/vnd.github+json",
@@ -690,8 +746,7 @@ export function composeTickDeps(
               scopeDirs: [],
               outputFile:
                 `${timestamp}-ci-fix-${opts.runId}-${opts.attempt}.md`,
-              githubToken:
-                resolveGitHubAccount(opts.repo.split("/")[0], config).token,
+              githubToken: resolveAccount(opts.repo).token,
               anthropicApiKey,
               worktrees: {
                 [opts.branch]: { path: opts.worktreePath, branch: opts.branch },
@@ -740,7 +795,8 @@ export function composeTickDeps(
         const org = parts[1];
         const repo = parts[2];
         const number = parts[3];
-        const { token } = resolveGitHubAccount(org, config);
+        const slug = `${org}/${repo}`;
+        const { token } = resolveAccount(slug);
         const url =
           `https://api.github.com/repos/${org}/${repo}/issues/${number}/comments` +
           (since ? `?since=${encodeURIComponent(since)}` : "");
@@ -834,10 +890,6 @@ export function composeTickDeps(
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
   const lastWorkedPath = join(home, ".lazyboy", "last-worked.json");
 
-  const desktopNotifier = makeDesktopNotifier({
-    runCommand: defaultCommandRunner(),
-  });
-
   const ceremonies = new CeremonyRunner(
     {
       stateDir,
@@ -892,8 +944,10 @@ export function composeTickDeps(
     providers,
     tickActions,
     tickDeps: {
-      spawn: (opts) =>
-        spawnPhase({
+      spawn: (opts) => {
+        const parsed = parseTicketId(relative(stateDir, opts.ticketDir));
+        const ticketSlug = parsed ? `${parsed.org}/${parsed.repo}` : "";
+        return spawnPhase({
           ticketDir: opts.ticketDir,
           stateDir,
           prompt: opts.prompt,
@@ -901,10 +955,7 @@ export function composeTickDeps(
             .filter((s) => s.startsWith("/") || s.startsWith("~/"))
             .map(expandHome),
           outputFile: opts.outputFile,
-          githubToken: resolveGitHubAccount(
-            deriveOrgFromTicketDir(opts.ticketDir, stateDir),
-            config,
-          ).token,
+          githubToken: resolveAccount(ticketSlug).token,
           anthropicApiKey,
           worktrees: opts.worktrees,
           provider: piProvider,
@@ -915,7 +966,8 @@ export function composeTickDeps(
           resume: opts.resume,
           includePrinciples: config.tick.principles,
           maxTurns: config.tick.maxTurns,
-        }),
+        });
+      },
       isProcessAlive: (ticketId: string) =>
         isPhaseAlive(join(stateDir, ticketId)),
       writeTicket,
@@ -1009,12 +1061,12 @@ export function composeTickDeps(
       },
       markPRsReady: async (prUrls: string[]) => {
         for (const url of prUrls) {
-          const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-          if (!match) throw new Error(`Cannot parse PR URL: ${url}`);
-          const [, slug, number] = match;
-          const { token } = resolveGitHubAccount(slug.split("/")[0], config);
+          const parsed = parsePrUrl(url);
+          if (!parsed) throw new Error(`Cannot parse PR URL: ${url}`);
+          const slug = slugOf(parsed);
+          const { token } = resolveAccount(slug);
           const restRes = await http.get(
-            `https://api.github.com/repos/${slug}/pulls/${number}`,
+            `https://api.github.com/repos/${slug}/pulls/${parsed.number}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -1094,7 +1146,7 @@ export function composeTickDeps(
             `${prompt}\n\nTicket ID: ${ticketId}\nTicket directory: ${ticketDir}\nState directory: ${stateDir}`,
           scopeDirs: [],
           outputFile,
-          githubToken: resolveGitHubAccount("jackjennings", config).token,
+          githubToken: resolveAccount("jackjennings/lazyboy").token,
           anthropicApiKey,
           worktrees: {
             "jackjennings/lazyboy": { path: lazboyWorktreePath, branch: "" },
@@ -1263,6 +1315,25 @@ export function composeTickDeps(
         },
         fetch,
       }),
+    reconcileRepoIdentities: async () => {
+      persistedTable = await tableIO.readTable();
+      const { confirmed } = await runReconcile({
+        http,
+        accountResolver: resolveAccount,
+        readTable: () => Promise.resolve(persistedTable),
+        writeTable: async (t) => {
+          persistedTable = t;
+          await tableIO.writeTable(t);
+        },
+        log: (event, data) =>
+          appendTickLog({ event, ...(data as Record<string, unknown>) }),
+        notify: (title, body) => desktopNotifier(title, body),
+        repos: config.github.repos,
+      });
+      confirmedCurrentSlugs = new Map(
+        [...confirmed.entries()].map(([k, v]) => [k, v.currentSlug]),
+      );
+    },
     notifyTickFailure: (error: string) =>
       desktopNotifier("Tick failed", error.slice(0, 200)),
     scaffoldStatePrompts: () =>

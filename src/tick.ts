@@ -26,6 +26,7 @@ import {
 } from "./state/types.ts";
 import { type ActivePhase, PHASE_SEQUENCE } from "./phases/types.ts";
 import { mkdir, readDir, readTextFile, writeTextFile } from "./filesystem.ts";
+import { CorruptRepoIdentitiesError } from "./providers/github/repo-identity.ts";
 
 const DEFAULT_MAX_PROMPT_TOKENS = 5_000;
 const TICK_DEADLINE_MS = 4 * 60 * 60 * 1000;
@@ -126,6 +127,7 @@ export interface TickServiceDeps {
   ): Promise<string | null>;
   notifyTickFailure(error: string): Promise<void>;
   preflightGitHubCredentials(): Promise<void>;
+  reconcileRepoIdentities(): Promise<void>;
   writeTickProgress: (label: string | null) => Promise<void>;
   deadlineMs?: number;
 }
@@ -889,35 +891,51 @@ export class TickService {
   async #runWorkflow(deps: TickServiceDeps): Promise<void> {
     await deps.preflightGitHubCredentials();
     await deps.processLearnings();
-    const existingIds = new Set(await deps.listTickets());
-    for (const provider of deps.providers) {
-      const newItems = await provider.fetchNew(existingIds);
-      for (const item of newItems) {
-        const shortTitle =
-          (await deps.generateShortTitle(item.title, item.description)) ??
-            undefined;
-        await deps.writeTicket({
-          id: item.id,
-          provider: item.provider,
-          title: item.title,
-          shortTitle,
-          url: item.url,
-          phase: "intake",
-          status: "new",
-          approvals: [],
-          scope: [],
-          worktrees: {},
-          created: Temporal.Now.instant().toString(),
-          updated: Temporal.Now.instant().toString(),
-          body: item.description,
-          artifacts: ["code"],
+    let captureEnabled = true;
+    try {
+      await deps.reconcileRepoIdentities();
+    } catch (e) {
+      if (e instanceof CorruptRepoIdentitiesError) {
+        await deps.appendTickLog({
+          event: "repo-identity-unavailable",
+          error: e instanceof Error ? e.message : String(e),
         });
-        await deps.tickDeps.appendLog(deps.stateDir, item.id, {
-          event: "ticket-captured",
-          title: item.title,
-        });
+        captureEnabled = false;
+      } else {
+        throw e;
       }
     }
+    if (captureEnabled) {
+      const existingIds = new Set(await deps.listTickets());
+      for (const provider of deps.providers) {
+        const newItems = await provider.fetchNew(existingIds);
+        for (const item of newItems) {
+          const shortTitle =
+            (await deps.generateShortTitle(item.title, item.description)) ??
+              undefined;
+          await deps.writeTicket({
+            id: item.id,
+            provider: item.provider,
+            title: item.title,
+            shortTitle,
+            url: item.url,
+            phase: "intake",
+            status: "new",
+            approvals: [],
+            scope: [],
+            worktrees: {},
+            created: Temporal.Now.instant().toString(),
+            updated: Temporal.Now.instant().toString(),
+            body: item.description,
+            artifacts: ["code"],
+          });
+          await deps.tickDeps.appendLog(deps.stateDir, item.id, {
+            event: "ticket-captured",
+            title: item.title,
+          });
+        }
+      }
+    } // end if (captureEnabled)
 
     const ids = (await deps.listTickets()).sort();
     const settled = await Promise.allSettled(

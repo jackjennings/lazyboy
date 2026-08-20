@@ -327,9 +327,19 @@ defeat that per-test `HOME` isolation.
 
 `~/.lazyboy/tick.ndjson` is NDJSON — one object per line with `ts` (ISO 8601
 UTC) and `event`. Events: `tick-start`, `tick-end`, `tick-already-running`,
-`stale-lock`, `lock-failed`, `tick-failed`, `update-skipped`, `update-failed`.
-`appendTickLog` (`src/tick.ts`) writes it directly; it is not `appendTicketLog`
+`stale-lock`, `lock-failed`, `tick-failed`, `update-skipped`, `update-failed`,
+`repo-renamed`, `repo-identity-collision`, `repo-identity-reconcile-failed`,
+`repo-identity-unavailable`, `repo-org-unmapped`. `appendTickLog`
+(`src/tick.ts`) writes it directly; it is not `appendTicketLog`
 (`src/state/store.ts`).
+
+| Event                            | Trigger                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| `repo-renamed`                   | `currentSlug` changed for a confirmed repo identity entry       |
+| `repo-identity-collision`        | A canonical slug's freed name was re-registered by another repo |
+| `repo-identity-reconcile-failed` | Network error, 5xx, or timeout on a reconciler API call         |
+| `repo-identity-unavailable`      | `repos.json` could not be parsed; capture skipped for this tick |
+| `repo-org-unmapped`              | Org after a transfer is absent from `[github.orgs]`             |
 
 The plist from `plistContent()` must **not** include `StandardOutPath` or
 `StandardErrorPath` pointing to `tick.ndjson` — the tick process owns its own
@@ -659,17 +669,29 @@ assert file contents exist at the new path, not merely that the old directory is
 gone (a prior migration destroyed history because its test only checked the
 latter).
 
+## GitHub identity module
+
+`src/providers/github/identity.ts` is the single seam for all GitHub identity
+string parsing and formatting. Use its exports (`parsePrUrl`, `parseIssueUrl`,
+`parseTicketId`, `ticketIdFor`, `slugOf`, `extractGitHubSlug`,
+`parseRemoteSlug`, `resolveGitHubSlug`) rather than inline regex patterns. Do
+not add new GitHub identity regexes at call sites.
+
 ## Per-org GitHub credentials
 
-`resolveGitHubAccount(org, config)` (`src/compose.ts`) is the single mapping
-from org slug to `{ token, login }`:
+`resolveGitHubAccount(slug, config, currentSlug?)` (`src/compose.ts`) is the
+single mapping from org slug to `{ token, login }`. The first parameter is a
+full `org/repo` slug (bare org strings also work); `currentSlug` is the
+reconciler-confirmed current slug used to resolve the org after a transfer.
+`composeTickDeps` wraps it as `resolveAccount(slug)` which passes the confirmed
+current slug automatically.
 
 - `config.github.accounts` absent → `GITHUB_TOKEN`/`GITHUB_LOGIN` from the env.
 - present and org in `config.github.orgs` → token from `account.tokenEnv` plus
   the configured `login`.
 - present but org unmapped → falls back to `GITHUB_TOKEN`/`GITHUB_LOGIN`.
 
-`GitHubProvider` takes `accountResolver: (org) => { token, login }`, not a
+`GitHubProvider` takes `accountResolver: (slug) => { token, login }`, not a
 single token/login. `spawnPhase` sets both `GITHUB_TOKEN` and `GH_TOKEN` so the
 `gh` CLI (which prefers `GH_TOKEN`) uses the right account. `loadConfig`
 validates at startup that every `token_env` is set and every `[github.orgs]`
@@ -701,6 +723,12 @@ slashes create the namespaced directory structure under `stateDir`.
 
 Do not introduce ID formats that omit the provider prefix or use a flat
 single-segment string.
+
+Ticket ids are pinned to the **canonical slug** — the name in use at first
+capture — and never rewritten on rename. `{stateDir}/repos.json` maps canonical
+slugs to current names; `fetchNew` uses the canonical slug for the id and the
+current slug for API requests. `src/providers/github/repo-identity.ts` owns the
+table I/O and the `canonicalSlugFor`/`currentSlugFor`/`aliasesFor` lookups.
 
 ## Shell completion
 

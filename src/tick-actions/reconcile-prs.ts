@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import type { TickAction } from "./types.ts";
 import { type PrEntry, type TicketState } from "../state/types.ts";
+import { parsePrUrl, slugOf } from "../providers/github/identity.ts";
 
 export interface ReconcilePRsDeps {
   readImplementationOutput: (ticketDir: string) => Promise<string | null>;
@@ -14,6 +15,7 @@ export interface ReconcilePRsDeps {
   }>;
   writeTicket: (stateDir: string, t: TicketState) => Promise<void>;
   appendLog: (stateDir: string, id: string, entry: object) => Promise<void>;
+  aliasesForSlug?: (slug: string) => string[];
 }
 
 const PR_URL_RE = /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/g;
@@ -56,6 +58,7 @@ function topoSort(
 }
 
 export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
+  const aliasesForSlug = deps.aliasesForSlug ?? ((s: string) => [s]);
   return {
     label: "Reconciling PRs",
     applies(ticket: TicketState): boolean {
@@ -123,12 +126,14 @@ export function reconcilePRsAction(deps: ReconcilePRsDeps): TickAction {
       const headToUrl = new Map(sorted.map((p) => [p.headRefName, p.url]));
 
       const prs: PrEntry[] = sorted.map((p) => {
-        const slug = p.url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//)?.[1];
-        const worktreeKey = slug && ticket.worktrees[slug]
-          ? slug
-          : Object.entries(ticket.worktrees).find(
+        const parsed = parsePrUrl(p.url);
+        const prSlug = parsed ? slugOf(parsed) : null;
+        const aliases = prSlug ? aliasesForSlug(prSlug) : [];
+        const worktreeKey = aliases.find((a) => ticket.worktrees[a]) ??
+          Object.entries(ticket.worktrees).find(
             ([, wt]) => wt.branch === p.headRefName,
-          )?.[0] ?? Object.keys(ticket.worktrees)[0];
+          )?.[0] ??
+          Object.keys(ticket.worktrees)[0];
         return {
           url: p.url,
           title: p.title,

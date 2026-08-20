@@ -1,7 +1,13 @@
 import type { Provider, WorkItem } from "./types.ts";
 import { HttpClient } from "../http-client.ts";
+import {
+  parseIssueUrl,
+  parsePrUrl,
+  slugOf,
+  ticketIdFor,
+} from "./github/identity.ts";
 
-type AccountResolver = (org: string) => { token: string; login: string };
+type AccountResolver = (slug: string) => { token: string; login: string };
 
 export interface PrMetadata {
   url: string;
@@ -67,6 +73,9 @@ export class GitHubProvider implements Provider {
   private accountResolver: AccountResolver;
   private http: HttpClient;
   private _clone: CloneFn;
+  private resolveRepo: (
+    slug: string,
+  ) => { canonical: string; current: string } | null;
 
   constructor(
     opts: {
@@ -74,12 +83,17 @@ export class GitHubProvider implements Provider {
       accountResolver: AccountResolver;
       http: HttpClient;
       _clone?: CloneFn;
+      resolveRepo?: (
+        slug: string,
+      ) => { canonical: string; current: string } | null;
     },
   ) {
     this.repos = opts.repos;
     this.accountResolver = opts.accountResolver;
     this.http = opts.http;
     this._clone = opts._clone ?? this.defaultClone.bind(this);
+    this.resolveRepo = opts.resolveRepo ??
+      ((s) => ({ canonical: s, current: s }));
   }
 
   private async defaultClone(
@@ -115,17 +129,17 @@ export class GitHubProvider implements Provider {
   }
 
   async clone(slug: string, destDir: string, cwd: string): Promise<void> {
-    const org = slug.split("/")[0];
-    const { token } = this.accountResolver(org);
+    const { token } = this.accountResolver(slug);
     await this._clone(slug, destDir, cwd, token);
   }
 
   async isPRMerged(prUrl: string): Promise<boolean> {
-    const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-    if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-    const [, slug, number] = match;
-    const { token } = this.accountResolver(slug.split("/")[0]);
-    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}/merge`;
+    const parsed = parsePrUrl(prUrl);
+    if (!parsed) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+    const slug = slugOf(parsed);
+    const { token } = this.accountResolver(slug);
+    const apiUrl =
+      `https://api.github.com/repos/${slug}/pulls/${parsed.number}/merge`;
     const res = await this.http.get(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -138,11 +152,12 @@ export class GitHubProvider implements Provider {
   }
 
   async prState(prUrl: string): Promise<"merged" | "closed" | "open"> {
-    const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-    if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-    const [, slug, number] = match;
-    const { token } = this.accountResolver(slug.split("/")[0]);
-    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}`;
+    const parsed = parsePrUrl(prUrl);
+    if (!parsed) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+    const slug = slugOf(parsed);
+    const { token } = this.accountResolver(slug);
+    const apiUrl =
+      `https://api.github.com/repos/${slug}/pulls/${parsed.number}`;
     const res = await this.http.get(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -165,11 +180,12 @@ export class GitHubProvider implements Provider {
   }
 
   async prMetadata(prUrl: string): Promise<PrMetadata> {
-    const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-    if (!match) throw new Error(`Cannot parse PR URL: ${prUrl}`);
-    const [, slug, number] = match;
-    const { token } = this.accountResolver(slug.split("/")[0]);
-    const apiUrl = `https://api.github.com/repos/${slug}/pulls/${number}`;
+    const parsed = parsePrUrl(prUrl);
+    if (!parsed) throw new Error(`Cannot parse PR URL: ${prUrl}`);
+    const slug = slugOf(parsed);
+    const { token } = this.accountResolver(slug);
+    const apiUrl =
+      `https://api.github.com/repos/${slug}/pulls/${parsed.number}`;
     const res = await this.http.get(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -195,14 +211,16 @@ export class GitHubProvider implements Provider {
   }
 
   async close(url: string): Promise<void> {
-    const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
-    if (!match) {
+    const parsed = parseIssueUrl(url);
+    if (!parsed) {
       throw new Error(`Cannot parse GitHub issue URL: ${url}`);
     }
-    const [, owner, repo, number] = match;
-    const { token } = this.accountResolver(owner);
+    const slug = slugOf(parsed);
+    const resolved = this.resolveRepo(slug) ??
+      { canonical: slug, current: slug };
+    const { token } = this.accountResolver(resolved.canonical);
     const apiUrl =
-      `https://api.github.com/repos/${owner}/${repo}/issues/${number}`;
+      `https://api.github.com/repos/${resolved.current}/issues/${parsed.number}`;
     const res = await this.http.patch(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -223,8 +241,7 @@ export class GitHubProvider implements Provider {
   }
 
   async createRepo(slug: string): Promise<string> {
-    const org = slug.split("/")[0];
-    const { token } = this.accountResolver(org);
+    const { token } = this.accountResolver(slug);
     const env: Record<string, string> = {};
     const path = Deno.env.get("PATH");
     const home = Deno.env.get("HOME");
@@ -245,10 +262,16 @@ export class GitHubProvider implements Provider {
   async fetchNew(knownIds: Set<string>): Promise<WorkItem[]> {
     const items: WorkItem[] = [];
     for (const repo of this.repos) {
-      const org = repo.split("/")[0];
-      const { token, login } = this.accountResolver(org);
+      const resolved = this.resolveRepo(repo);
+      if (resolved === null) {
+        console.log(
+          `GitHubProvider.fetchNew: ${repo} is collision-blocked, skipping`,
+        );
+        continue;
+      }
+      const { token, login } = this.accountResolver(resolved.canonical);
       const url =
-        `https://api.github.com/repos/${repo}/issues?assignee=${login}&state=open&per_page=50`;
+        `https://api.github.com/repos/${resolved.current}/issues?assignee=${login}&state=open&per_page=50`;
       const res = await this.http.get(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -265,8 +288,13 @@ export class GitHubProvider implements Provider {
         );
       }
       const issues = (await res.json()) as GitHubIssue[];
+      const [canonicalOrg, canonicalRepo] = resolved.canonical.split("/");
       for (const issue of issues) {
-        const id = `github/${repo}/${issue.number}`;
+        const id = ticketIdFor({
+          org: canonicalOrg,
+          repo: canonicalRepo,
+          number: issue.number,
+        });
         const legacyId = `gh-${issue.number}`;
         if (knownIds.has(legacyId)) {
           console.log(

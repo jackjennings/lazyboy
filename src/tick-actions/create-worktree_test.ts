@@ -22,6 +22,7 @@ function makeAction(
 ) {
   return createWorktreeAction({
     roots: ["/code"],
+    run: () => Promise.resolve({ code: 1, stdout: "" }),
     findLocalRepo: () => Promise.resolve("/code/myorg/myrepo"),
     createWorktree: (_repo, _id, slug) =>
       Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),

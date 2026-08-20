@@ -1,16 +1,18 @@
 import { join } from "@std/path";
+import type { CommandRunner } from "../apfel.ts";
 import type { TickAction } from "./types.ts";
 import { isApproved } from "../state/types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
 import {
   extractGitHubSlug,
-  parseIntakeArtifacts,
+  extractIntakeArtifacts,
   parseIntakeScope,
   resolveGitHubSlug,
 } from "../worktree.ts";
 
 export interface CreateWorktreeDeps {
   roots: string[];
+  run: CommandRunner;
   findLocalRepo: (roots: string[], slug: string) => Promise<string | null>;
   createWorktree: (
     repoPath: string,
@@ -55,7 +57,10 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
 
       let correctedTicket = ticket;
       if (intakeContent !== null) {
-        const parsedArtifacts = parseIntakeArtifacts(intakeContent);
+        const parsedArtifacts = await extractIntakeArtifacts(
+          intakeContent,
+          deps.run,
+        );
         if (parsedArtifacts.length > 0) {
           const differs = parsedArtifacts.length !== ticket.artifacts.length ||
             parsedArtifacts.some((a) => !ticket.artifacts.includes(a));

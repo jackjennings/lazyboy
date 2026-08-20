@@ -410,6 +410,7 @@ export function composeTickDeps(
   const tickActions = [
     createWorktreeAction({
       roots: config.codebase.roots.map(expandHome),
+      run: captureCommandRunner(),
       findLocalRepo: (roots, slug) =>
         findLocalRepo(
           roots,

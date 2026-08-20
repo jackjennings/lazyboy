@@ -313,6 +313,7 @@ export function extractClaudeCodeSessionId(ndjson: string): string | null {
 export function extractClaudeCodeUsageAndText(
   ndjson: string,
   durationMs: number,
+  requestedModel: string,
 ): { text: string; usage: PhaseUsage | null } {
   const lines = ndjson.split("\n").filter(Boolean);
   const events = lines.map((l) => JSON.parse(l));
@@ -365,17 +366,18 @@ export function extractClaudeCodeUsageAndText(
       input: val.inputTokens ?? 0,
       output: val.outputTokens ?? 0,
     }));
-    const primary = entries.reduce((a, b) =>
-      a.input + a.output >= b.input + b.output ? a : b
-    );
+    const cacheTarget = entries.find((e) => e.model === requestedModel) ??
+      entries.reduce((a, b) =>
+        a.input + a.output >= b.input + b.output ? a : b
+      );
     models = entries.map((e) => ({
       model: e.model,
       input: e.input,
       output: e.output,
-      cacheRead: e.model === primary.model
+      cacheRead: e.model === cacheTarget.model
         ? (usage?.cache_read_input_tokens ?? 0)
         : 0,
-      cacheWrite: e.model === primary.model
+      cacheWrite: e.model === cacheTarget.model
         ? (usage?.cache_creation_input_tokens ?? 0)
         : 0,
     }));
@@ -532,7 +534,7 @@ export async function executePhase(
   const durationMs = Temporal.Now.instant().epochMilliseconds - startMs;
 
   const { usage } = opts.agentType === "claude-code"
-    ? extractClaudeCodeUsageAndText(result.stdout, durationMs)
+    ? extractClaudeCodeUsageAndText(result.stdout, durationMs, opts.model)
     : extractUsageAndText(result.stdout, durationMs);
 
   if (usage !== null) {

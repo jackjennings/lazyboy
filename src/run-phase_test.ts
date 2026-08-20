@@ -1873,7 +1873,11 @@ const claudeCodeResultNdjson = [
 Deno.test(
   "extractClaudeCodeUsageAndText: returns result text, mapped usage fields, and durationMs override",
   () => {
-    const result = extractClaudeCodeUsageAndText(claudeCodeResultNdjson, 999);
+    const result = extractClaudeCodeUsageAndText(
+      claudeCodeResultNdjson,
+      999,
+      "claude-sonnet-4-6",
+    );
     assertEquals(result.text, "final assistant text");
     assertEquals(result.usage?.models.length, 1);
     assertEquals(result.usage?.models[0].input, 100);
@@ -1895,7 +1899,7 @@ Deno.test(
       result: "text",
       modelUsage: { "claude-opus-4-8[1m]": { inputTokens: 1 } },
     });
-    const result = extractClaudeCodeUsageAndText(ndjson, 100);
+    const result = extractClaudeCodeUsageAndText(ndjson, 100, "");
     assertEquals(result.usage?.models[0].model, "claude-opus-4-8");
   },
 );
@@ -1919,7 +1923,11 @@ Deno.test(
         "claude-sonnet-4-6": { inputTokens: 167, outputTokens: 7746 },
       },
     });
-    const result = extractClaudeCodeUsageAndText(ndjson, 244618);
+    const result = extractClaudeCodeUsageAndText(
+      ndjson,
+      244618,
+      "claude-sonnet-4-6",
+    );
     assertEquals(result.usage?.models.length, 2);
     const sonnet = result.usage!.models.find(
       (m) => m.model === "claude-sonnet-4-6",
@@ -1941,13 +1949,49 @@ Deno.test(
 );
 
 Deno.test(
+  "extractClaudeCodeUsageAndText: requestedModel wins cache attribution even when another model has more direct tokens",
+  () => {
+    const ndjson = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: "text",
+      usage: {
+        input_tokens: 600,
+        output_tokens: 600,
+        cache_read_input_tokens: 999,
+        cache_creation_input_tokens: 111,
+      },
+      modelUsage: {
+        "claude-haiku-4-5-20251001": { inputTokens: 500, outputTokens: 500 },
+        "claude-sonnet-4-6": { inputTokens: 100, outputTokens: 100 },
+      },
+    });
+    const result = extractClaudeCodeUsageAndText(
+      ndjson,
+      0,
+      "claude-sonnet-4-6",
+    );
+    const sonnet = result.usage!.models.find(
+      (m) => m.model === "claude-sonnet-4-6",
+    )!;
+    const haiku = result.usage!.models.find(
+      (m) => m.model === "claude-haiku-4-5-20251001",
+    )!;
+    assertEquals(sonnet.cacheRead, 999);
+    assertEquals(sonnet.cacheWrite, 111);
+    assertEquals(haiku.cacheRead, 0);
+    assertEquals(haiku.cacheWrite, 0);
+  },
+);
+
+Deno.test(
   "extractClaudeCodeUsageAndText: no result event returns empty text and null usage",
   () => {
     const ndjson = [
       JSON.stringify({ type: "system", subtype: "init", session_id: "x" }),
       JSON.stringify({ type: "assistant", message: { content: [] } }),
     ].join("\n");
-    const result = extractClaudeCodeUsageAndText(ndjson, 100);
+    const result = extractClaudeCodeUsageAndText(ndjson, 100, "");
     assertEquals(result.text, "");
     assertEquals(result.usage, null);
   },
@@ -2649,7 +2693,7 @@ Deno.test("extractClaudeCodeUsageAndText: tool_use items from assistant events a
       },
     }),
   ].join("\n");
-  const result = extractClaudeCodeUsageAndText(ndjson, 100);
+  const result = extractClaudeCodeUsageAndText(ndjson, 100, "");
   assertEquals(result.usage?.tools, { read: 1 });
 });
 
@@ -2682,12 +2726,16 @@ Deno.test("extractClaudeCodeUsageAndText: tool_use items across multiple assista
       },
     }),
   ].join("\n");
-  const result = extractClaudeCodeUsageAndText(ndjson, 100);
+  const result = extractClaudeCodeUsageAndText(ndjson, 100, "");
   assertEquals(result.usage?.tools, { read: 2, bash: 1 });
 });
 
 Deno.test("extractClaudeCodeUsageAndText: no tool_use content leaves usage.tools undefined", () => {
-  const result = extractClaudeCodeUsageAndText(claudeCodeResultNdjson, 100);
+  const result = extractClaudeCodeUsageAndText(
+    claudeCodeResultNdjson,
+    100,
+    "claude-sonnet-4-6",
+  );
   assertEquals(result.usage?.tools, undefined);
 });
 

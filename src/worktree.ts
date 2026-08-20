@@ -204,7 +204,6 @@ export function parseIntakeArtifacts(content: string): ArtifactType[] {
   return [];
 }
 
-
 export async function cloneRemoteRepo(
   slug: string,
   clone: (slug: string, destDir: string, cwd: string) => Promise<void>,

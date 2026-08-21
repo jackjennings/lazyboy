@@ -140,13 +140,13 @@ export async function performRewind(
 export const rewind: Command = {
   name: "rewind",
   description: "send a ticket back to an earlier phase",
-  usage: "lazyboy rewind <ticket-id> <target-phase>",
+  usage: "ur rewind <ticket-id> <target-phase>",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];
     const targetPhaseArg = args[1];
     if (!id || !targetPhaseArg) {
-      console.error("Usage: lazyboy rewind <ticket-id> <target-phase>");
+      console.error("Usage: ur rewind <ticket-id> <target-phase>");
       Deno.exit(1);
     }
     if (!(PHASE_SEQUENCE as ReadonlyArray<string>).includes(targetPhaseArg)) {

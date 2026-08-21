@@ -1003,7 +1003,7 @@ Deno.test("commitPrinciples: stages custom relPath file when provided", async ()
   }
 });
 
-Deno.test("commitTicket: commits with lazyboy bot identity", async () => {
+Deno.test("commitTicket: commits with urras bot identity", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await initGitRepo(dir);
@@ -1024,14 +1024,14 @@ Deno.test("commitTicket: commits with lazyboy bot identity", async () => {
     const author = await run(["git", "log", "--format=%an <%ae>", "-1"]);
     assertEquals(
       new TextDecoder().decode(author.stdout).trim(),
-      "lazyboy <lazyboy@localhost>",
+      "urras <urras@localhost>",
     );
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
 });
 
-Deno.test("commitPrinciples: commits with lazyboy bot identity", async () => {
+Deno.test("commitPrinciples: commits with urras bot identity", async () => {
   const dir = await Deno.makeTempDir();
   try {
     await initGitRepo(dir);
@@ -1048,7 +1048,7 @@ Deno.test("commitPrinciples: commits with lazyboy bot identity", async () => {
     const author = await run(["git", "log", "--format=%an <%ae>", "-1"]);
     assertEquals(
       new TextDecoder().decode(author.stdout).trim(),
-      "lazyboy <lazyboy@localhost>",
+      "urras <urras@localhost>",
     );
   } finally {
     await Deno.remove(dir, { recursive: true });

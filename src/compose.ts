@@ -745,7 +745,7 @@ export function composeTickDeps(
               `a conforming message.\n\n` +
               `Commit your work, but do not push — the tick loop force-pushes the branch for you. ` +
               `Do not create pull requests and do not create issues.\n\n` +
-              `lazyboy reads only the output file below — nothing you say in your final reply is ` +
+              `urras reads only the output file below — nothing you say in your final reply is ` +
               `seen. The last line written to that file, via the Write or Edit tool, must be ` +
               `exactly one of: \`VERDICT: FIXED\`, \`VERDICT: INFRA\`, or \`VERDICT: UNFIXABLE\`, ` +
               `with no markdown formatting (no bold, no heading, no bullet). Use INFRA only for an ` +

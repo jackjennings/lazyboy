@@ -534,7 +534,10 @@ export async function review(
   }
 
   const found = await findLatestPhaseOutput(ticketDir);
-  if (!found || found.phaseName !== ticket.phase) {
+  const expectedPhaseNames: string[] = ticket.phase === "merge"
+    ? ["merge", "implementation"]
+    : [ticket.phase];
+  if (!found || !expectedPhaseNames.includes(found.phaseName)) {
     console.error(`No output for phase "${ticket.phase}" on ticket ${id}`);
     Deno.exit(1);
   }

@@ -1769,6 +1769,63 @@ Deno.test(
 );
 
 Deno.test(
+  "review: piped path accepts feedback on a merge-phase ticket with only an implementation output",
+  async () => {
+    const stateDir = await Deno.makeTempDir();
+    try {
+      const ticketId = "github/test/repo/52";
+      await initGitRepo(stateDir);
+      const run = (cmd: string[]) =>
+        new Deno.Command(cmd[0], { args: cmd.slice(1), cwd: stateDir })
+          .output();
+      await writeTicket(
+        stateDir,
+        makeTicket({
+          id: ticketId,
+          phase: "merge",
+          status: "waiting",
+        }),
+      );
+      await Deno.writeTextFile(
+        join(stateDir, ticketId, "20260101T000000-implementation.md"),
+        "implementation output",
+      );
+      await run(["git", "add", "-A"]);
+      await run(["git", "commit", "-m", "initial"]);
+      await withReviewConfig(stateDir, async () => {
+        const exitStub = stub(Deno, "exit", (_code?: number) => {
+          throw new Error(`exit:${_code}`);
+        });
+        const errorStub = stub(console, "error");
+        try {
+          await review(ticketId, {
+            isTerminal: () => false,
+            readStdin: () => Promise.resolve("feedback text"),
+          });
+        } catch {
+          // expected: exitStub throws
+        } finally {
+          exitStub.restore();
+          errorStub.restore();
+        }
+        assertSpyCalls(errorStub, 0);
+        assertSpyCalls(exitStub, 1);
+        assertEquals(exitStub.calls[0].args[0], 0);
+        const entries: string[] = [];
+        for await (const entry of Deno.readDir(join(stateDir, ticketId))) {
+          entries.push(entry.name);
+        }
+        assert(entries.some((e) => e.endsWith("-merge-feedback.md")));
+        const updated = await readTicket(stateDir, ticketId);
+        assertEquals(updated.status, "revising");
+      });
+    } finally {
+      await Deno.remove(stateDir, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
   "review: exits with code 1 and prints error when ticket is done",
   async () => {
     const stateDir = await Deno.makeTempDir();

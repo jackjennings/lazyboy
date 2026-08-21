@@ -78,7 +78,7 @@ export function makeDivergenceNotifier(
     await deps.writeLast(divergence);
     try {
       await deps.notify(
-        "lazyboy self-update paused",
+        "urras self-update paused",
         formatDivergenceMessage(divergence),
       );
     } catch {

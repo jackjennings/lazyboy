@@ -333,6 +333,7 @@ completion setup is needed when using the plugin.
 | `ust` | `ur status`     |
 | `uen` | `ur enable`     |
 | `udi` | `ur disable`    |
+| `udo` | `ur doctor`     |
 | `uco` | `ur completion` |
 | `urt` | `ur retry`      |
 | `udc` | `ur decline`    |

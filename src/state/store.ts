@@ -307,9 +307,9 @@ async function stateCommit(
   const result = await run([
     "git",
     "-c",
-    "user.name=lazyboy",
+    "user.name=urras",
     "-c",
-    "user.email=lazyboy@localhost",
+    "user.email=urras@localhost",
     "-c",
     "commit.gpgsign=false",
     "commit",

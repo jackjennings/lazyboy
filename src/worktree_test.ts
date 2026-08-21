@@ -671,9 +671,9 @@ Deno.test(
       await new Deno.Command("git", {
         args: [
           "-c",
-          "user.name=lazyboy",
+          "user.name=urras",
           "-c",
-          "user.email=lazyboy@localhost",
+          "user.email=urras@localhost",
           "-c",
           "commit.gpgsign=false",
           "commit",

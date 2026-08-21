@@ -3,9 +3,9 @@ import type { CommandRunner } from "../apfel.ts";
 import type { TickAction } from "./types.ts";
 import { isApproved } from "../state/types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
+import { extractIntakeArtifacts } from "../extract-artifacts.ts";
 import {
   extractGitHubSlug,
-  extractIntakeArtifacts,
   parseIntakeScope,
   resolveGitHubSlug,
 } from "../worktree.ts";

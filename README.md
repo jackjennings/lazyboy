@@ -1,16 +1,16 @@
-# lazyboy
+# urras
 
 Automates software development so human time is spent only on tasks requiring
 specialized judgement. Polls for assigned work, runs each ticket through a phase
 pipeline via an AI agent, and pauses at each phase boundary that requires human
 approval.
 
-The goal of `lazyboy` is aim an engineer's focus at tasks that require expertise
+The goal of `urras` is aim an engineer's focus at tasks that require expertise
 or taste, and allow the coding agent to handle all rote tasks in between.
 
 > [!NOTE]
 > This software is under active development, and should be considered an alpha
-> release at best. lazyboy is currently dogfooding itself, which means the code
+> release at best. urras is currently dogfooding itself, which means the code
 > quality is limited by the small number of controls currently built into the
 > tool. As the ability for the harness to self-improve itself improves, expect
 > the quality of the code, prompts, documentation, etc. to be fixed.
@@ -33,21 +33,21 @@ Each phase runs the configured agent (either [pi](https://pi.dev) or
 `cwd` set to the worktree(s) under development, and the relevant context files
 passed in as `@/path` arguments.
 
-`lazyboy` runs `tick` every 5 minutes as a background job. Tickets advance
-automatically until they hit a gate, then wait for `lazyboy approve <id>`.
-Phases can self-approve or be skipped under certain circumstances, depending on
-the work being performed; this is dictated by a default prompt for each phase,
-each of which can be extended by the user.
+`urras` runs `tick` every 5 minutes as a background job. Tickets advance
+automatically until they hit a gate, then wait for `ur approve <id>`. Phases can
+self-approve or be skipped under certain circumstances, depending on the work
+being performed; this is dictated by a default prompt for each phase, each of
+which can be extended by the user.
 
 `scripts/tick.sh` handles GitHub token capture and env setup. To override env
-vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/lazyboy/env`.
+vars (e.g. `ANTHROPIC_API_KEY`), add them to `~/.config/urras/env`.
 
-`lazyboy` tracks state in a git repository, storing a log of each ticket and all
-related outputs. This same git repository stores user-manintained prompts that
-extend the default set bundled with `lazyboy`.
+`urras` tracks state in a git repository, storing a log of each ticket and all
+related outputs. This same git repository stores user-maintained prompts that
+extend the default set bundled with `urras`.
 
-As work moves through phases, `lazyboy` will self-reflect on tasks that were
-more difficult than expected, or required user intervention to get right. This
+As work moves through phases, `urras` will self-reflect on tasks that were more
+difficult than expected, or required user intervention to get right. This
 self-reflection results automated updates to prompts in the state repository
 (scoped either to a specific repository, organization, or globally), as well as
 proposals to update the documentation or AGENT.md instructions of projects under
@@ -64,32 +64,32 @@ scope:
   - jackjennings/lazyboy-extensions (new)
 ```
 
-`lazyboy` initializes the repository locally at intake (no GitHub action yet),
-so the ticket runs through enrichment → spec → plan normally. Plan approval is
-the human gate before any remote is created. Once the plan is approved,
-`lazyboy` creates the GitHub repository, adds the remote, and pushes `main`
-before implementation begins.
+`urras` initializes the repository locally at intake (no GitHub action yet), so
+the ticket runs through enrichment → spec → plan normally. Plan approval is the
+human gate before any remote is created. Once the plan is approved, `urras`
+creates the GitHub repository, adds the remote, and pushes `main` before
+implementation begins.
 
 ## Usage
 
 ```bash
-lazyboy tick               # advance all active tickets (run automatically)
-lazyboy approve <id>       # approve the current phase gate
-lazyboy status [id]        # show all active tickets or the status of a single ticket
-lazyboy hud                # live status display
-lazyboy retry <id>         # reset a needs-attention ticket
-lazyboy decline <id> [why] # permanently exclude a ticket from the queue
-lazyboy review <id>        # review the latest phase output
-lazyboy shell <id>         # open a shell in the ticket's worktree
-lazyboy tail [id]          # stream the tick log or a ticket's event log
-lazyboy enable             # start the scheduler
-lazyboy disable            # stop the scheduler
-lazyboy update             # pull latest lazyboy source
+ur tick               # advance all active tickets (run automatically)
+ur approve <id>       # approve the current phase gate
+ur status [id]        # show all active tickets or the status of a single ticket
+ur hud                # live status display
+ur retry <id>         # reset a needs-attention ticket
+ur decline <id> [why] # permanently exclude a ticket from the queue
+ur review <id>        # review the latest phase output
+ur shell <id>         # open a shell in the ticket's worktree
+ur tail [id]          # stream the tick log or a ticket's event log
+ur enable             # start the scheduler
+ur disable            # stop the scheduler
+ur update             # pull latest urras source
 ```
 
 ## Config
 
-`~/.config/lazyboy/config.toml`:
+`~/.config/urras/config.toml`:
 
 ```toml
 [github]
@@ -117,14 +117,14 @@ type = "pi"
 
 [pi]
 # Selects which backend `pi` talks to for every phase — `"anthropic"` (default)
-# for the direct Console API, or `"bedrock"` for Amazon Bedrock. When using 
+# for the direct Console API, or `"bedrock"` for Amazon Bedrock. When using
 # `"bedrock"`, model IDs configured under `[phases.defaults]` must already carry
 # Bedrock's `anthropic.` prefix (e.g. `anthropic.claude-opus-4-8`, not
 # `claude-opus-4-8`), and `AWS_REGION` plus AWS credentials must be available in
-# lazyboy's own environment (env vars, a shared profile, or an instance role) — 
-# lazyboy does not manage AWS auth itself. Every phase must be explicitly
+# urras's own environment (env vars, a shared profile, or an instance role) —
+# urras does not manage AWS auth itself. Every phase must be explicitly
 # configured under `[phases.defaults]` when using Bedrock — any phase left
-# unconfigured falls back to lazyboy's built-in default model IDs, which are
+# unconfigured falls back to urras's built-in default model IDs, which are
 # unprefixed and will fail against Bedrock. This includes the conflict-resolution
 # phase (triggered by rebase conflicts), configurable under
 # `[phases.defaults."conflict-resolution"]` like any other phase.
@@ -167,20 +167,19 @@ Each account's `token_env` names the environment variable holding the token;
 `login` is the GitHub username. `[github.orgs]` maps org slugs to account names.
 Any org not listed falls back to `GITHUB_TOKEN`/`GITHUB_LOGIN`.
 
-**Startup validation:** lazyboy validates at startup that every `token_env`
-named in `[github.accounts.*]` is set in the environment, and that every account
-name referenced in `[github.orgs]` is defined. A misconfiguration causes an
-immediate startup error rather than a per-ticket failure.
+**Startup validation:** urras validates at startup that every `token_env` named
+in `[github.accounts.*]` is set in the environment, and that every account name
+referenced in `[github.orgs]` is defined. A misconfiguration causes an immediate
+startup error rather than a per-ticket failure.
 
-**`gh` CLI compatibility:** lazyboy injects `GH_TOKEN` (and `GITHUB_TOKEN`) as
+**`gh` CLI compatibility:** urras injects `GH_TOKEN` (and `GITHUB_TOKEN`) as
 environment variables before each phase subprocess. `gh auth login` state is
 ignored — do not rely on it.
 
 **Cron and LaunchAgent contexts:** Environment variables are not available from
 the keychain in cron. Set `GITHUB_TOKEN`, `GITHUB_LOGIN`, and any per-account
 token variables (e.g. `GITHUB_TOKEN_PERSONAL`, `GITHUB_TOKEN_WORK`) in
-`~/.config/lazyboy/env`; `scripts/tick.sh` sources this file before the tick
-loop.
+`~/.config/urras/env`; `scripts/tick.sh` sources this file before the tick loop.
 
 ## Artifacts
 
@@ -248,24 +247,24 @@ export default async function (context) {
 Ceremonies defined in the state dir do not run until an operator approves them:
 
 ```bash
-lazyboy approve ceremony/digest
+ur approve ceremony/digest
 ```
 
 Approval records a hash of the ceremony directory in
-`~/.lazyboy/ceremony-approvals.json` — a recursive walk of every file, except
-the ceremony's own top-level `output/`. Any later edit to `config.toml`,
+`~/.urras/ceremony-approvals.json` — a recursive walk of every file, except the
+ceremony's own top-level `output/`. Any later edit to `config.toml`,
 `prompt.md`, or `index.ts` revokes the approval; the ceremony stops running,
 logs `ceremony-warning` with `reason: not-approved`, and fires a desktop
-notification naming the `lazyboy approve` command to run, both throttled to once
-per scheduled occurrence rather than once per tick, until it is approved again.
-`lazyboy approve ceremony/<name>` prints the recorded hash and every path it
-hashed, so you can see exactly what you vouched for. Built-in ceremonies
+notification naming the `ur approve` command to run, both throttled to once per
+scheduled occurrence rather than once per tick, until it is approved again.
+`ur approve ceremony/<name>` prints the recorded hash and every path it hashed,
+so you can see exactly what you vouched for. Built-in ceremonies
 (`documentation-gaps`) need no approval.
 
 Upgrading from a version without the gate: an existing working `prompt.md`
 ceremony stops running on the first tick after this lands, and keeps warning
-once per scheduled occurrence, until you run `lazyboy approve ceremony/<name>`
-for it.
+once per scheduled occurrence, until you run `ur approve ceremony/<name>` for
+it.
 
 The hash is the only control — ceremony code runs with the tick process's full
 permissions and live credentials, and there is no sandbox. Two consequences to
@@ -297,8 +296,8 @@ curation.
 ### Prior art
 
 - [Devin](https://devin.ai) — commercial autonomous coding agent; assigns via
-  Linear/Slack/API and ships a PR. One human gate (PR review). lazyboy differs
-  in having five deliberate phase gates and owned infrastructure.
+  Linear/Slack/API and ships a PR. One human gate (PR review). urras differs in
+  having five deliberate phase gates and owned infrastructure.
 - [OpenHands](https://openhands.dev) — open source autonomous coding SDK and
   platform with GitHub/Jira/Linear integrations. Similar execution model to
   Devin; self-hostable.
@@ -308,42 +307,42 @@ curation.
 
 ## Zsh plugin
 
-The `plugin/lazyboy.plugin.zsh` file defines three-character aliases and sources
+The `plugin/urras.plugin.zsh` file defines three-character aliases and sources
 tab completions automatically. To install:
 
 **Oh My Zsh:**
 
 ```zsh
 git clone https://github.com/jackjennings/lazyboy \
-  ~/.oh-my-zsh/custom/plugins/lazyboy
+  ~/.oh-my-zsh/custom/plugins/urras
 ```
 
-Then add `lazyboy` to the `plugins` array in `~/.zshrc`:
+Then add `urras` to the `plugins` array in `~/.zshrc`:
 
 ```zsh
-plugins=(... lazyboy)
+plugins=(... urras)
 ```
 
-The plugin sources `lazyboy completion zsh` at shell startup, so no separate
+The plugin sources `ur completion zsh` at shell startup, so no separate
 completion setup is needed when using the plugin.
 
-| Alias | Command              |
-| ----- | -------------------- |
-| `ltk` | `lazyboy tick`       |
-| `lap` | `lazyboy approve`    |
-| `lst` | `lazyboy status`     |
-| `len` | `lazyboy enable`     |
-| `ldi` | `lazyboy disable`    |
-| `lco` | `lazyboy completion` |
-| `lrt` | `lazyboy retry`      |
-| `ldc` | `lazyboy decline`    |
-| `lrw` | `lazyboy rewind`     |
-| `lrv` | `lazyboy review`     |
-| `lsh` | `lazyboy shell`      |
-| `lta` | `lazyboy tail`       |
-| `lup` | `lazyboy update`     |
-| `lhd` | `lazyboy hud`        |
-| `lus` | `lazyboy usage`      |
+| Alias | Command         |
+| ----- | --------------- |
+| `utk` | `ur tick`       |
+| `uap` | `ur approve`    |
+| `ust` | `ur status`     |
+| `uen` | `ur enable`     |
+| `udi` | `ur disable`    |
+| `uco` | `ur completion` |
+| `urt` | `ur retry`      |
+| `udc` | `ur decline`    |
+| `urw` | `ur rewind`     |
+| `urv` | `ur review`     |
+| `ush` | `ur shell`      |
+| `uta` | `ur tail`       |
+| `uup` | `ur update`     |
+| `uhd` | `ur hud`        |
+| `uus` | `ur usage`      |
 
 ---
 
@@ -372,7 +371,7 @@ Ideas worth exploring but not yet scheduled:
   latency for those steps entirely. Pairs with the per-phase model config
   already planned for sub-project 5. Pi supports any OpenAI-compatible provider
   via `models.json`, and apfel exposes an OpenAI-compatible interface — so this
-  is a supported pi configuration path with no lazyboy code changes required.
+  is a supported pi configuration path with no urras code changes required.
 
 - **Self-hosted models for low-reasoning phases:** intake and enrichment don't
   require frontier models — they read text and follow instructions. A
@@ -390,16 +389,16 @@ Ideas worth exploring but not yet scheduled:
   on a future tick. This is the primary mechanism for keeping individual tickets
   focused and avoiding scope creep.
 
-- **`lazyboy ps` and real-time monitoring:** `ps` would scan all `meta.md` files
-  for `phase: running-*` tickets and print the active agent processes with their
+- **`ur ps` and real-time monitoring:** `ps` would scan all `meta.md` files for
+  `phase: running-*` tickets and print the active agent processes with their
   PID, phase, and ticket title. A `top`-style TUI would extend this with live
   refresh, showing ticket progression, phase durations, and concurrency
   utilisation in real-time.
 
-- **Dynamic credentials:** `~/.config/lazyboy/env` is a static file, but some
+- **Dynamic credentials:** `~/.config/urras/env` is a static file, but some
   credentials have short lifespans and need refreshing on a cadence (e.g. AWS
   CodeArtifact tokens, short-lived OAuth tokens). A future extension could allow
-  env entries to specify a refresh command alongside the value — lazyboy would
+  env entries to specify a refresh command alongside the value — urras would
   re-run the command before each tick and inject the fresh value. Format could
   follow the pattern of shell credential helpers (similar to `credential.helper`
   in git config).

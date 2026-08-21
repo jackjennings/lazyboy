@@ -57,7 +57,7 @@ export function outcomeExitCode(outcome: UpdateOutcome): number {
 
 export const update: Command = {
   name: "update",
-  description: "pull latest lazyboy source",
+  description: "pull latest urras source",
   async run(_args) {
     Deno.exit(outcomeExitCode(await runUpdate(lazboyDir)));
   },

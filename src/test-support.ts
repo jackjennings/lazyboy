@@ -82,15 +82,15 @@ export function makeTickServiceDeps(
 
 export function withLazyboyDir(): Disposable & { path: string } {
   const path = Deno.makeTempDirSync();
-  const original = Deno.env.get("LAZYBOY_DIR");
-  Deno.env.set("LAZYBOY_DIR", path);
+  const original = Deno.env.get("URRAS_DIR");
+  Deno.env.set("URRAS_DIR", path);
   return {
     path,
     [Symbol.dispose]() {
       if (original !== undefined) {
-        Deno.env.set("LAZYBOY_DIR", original);
+        Deno.env.set("URRAS_DIR", original);
       } else {
-        Deno.env.delete("LAZYBOY_DIR");
+        Deno.env.delete("URRAS_DIR");
       }
       try {
         removeSync(path, { recursive: true });

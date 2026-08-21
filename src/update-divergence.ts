@@ -1,12 +1,12 @@
 import { join } from "@std/path";
-import { lazyboyDir } from "./paths.ts";
+import { urrasDir } from "./paths.ts";
 import { mkdir, readTextFile, remove, writeTextFile } from "./filesystem.ts";
 import type { Divergence } from "./commands/update.ts";
 
 const STATE_FILE = "update-divergence.json";
 
 function statePath(): string {
-  return join(lazyboyDir(), STATE_FILE);
+  return join(urrasDir(), STATE_FILE);
 }
 
 function commits(n: number): string {
@@ -50,7 +50,7 @@ export async function writeLastDivergence(
     }
     return;
   }
-  await mkdir(lazyboyDir(), { recursive: true });
+  await mkdir(urrasDir(), { recursive: true });
   await writeTextFile(statePath(), JSON.stringify(divergence));
 }
 

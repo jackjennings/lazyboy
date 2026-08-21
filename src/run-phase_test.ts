@@ -35,10 +35,10 @@ Deno.test("getPiEnvironmentVariables: returns pi directory variables with expand
   const home = "/home/testuser";
   const result = getPiEnvironmentVariables(home);
 
-  assertEquals(result.PI_CODING_AGENT_DIR, "/home/testuser/.lazyboy/pi");
+  assertEquals(result.PI_CODING_AGENT_DIR, "/home/testuser/.urras/pi");
   assertEquals(
     result.PI_CODING_AGENT_SESSION_DIR,
-    "/home/testuser/.lazyboy/pi/sessions",
+    "/home/testuser/.urras/pi/sessions",
   );
 });
 
@@ -46,10 +46,10 @@ Deno.test("getPiEnvironmentVariables: constructs paths correctly with different 
   const home = "/Users/jack";
   const result = getPiEnvironmentVariables(home);
 
-  assertEquals(result.PI_CODING_AGENT_DIR, "/Users/jack/.lazyboy/pi");
+  assertEquals(result.PI_CODING_AGENT_DIR, "/Users/jack/.urras/pi");
   assertEquals(
     result.PI_CODING_AGENT_SESSION_DIR,
-    "/Users/jack/.lazyboy/pi/sessions",
+    "/Users/jack/.urras/pi/sessions",
   );
 });
 
@@ -62,9 +62,9 @@ Deno.test("setupPiDirectories: creates pi directories in temp home", async () =>
     await setupPiDirectories(tempHome);
 
     // Verify both directories were created
-    const piDir = await Deno.stat(join(tempHome, ".lazyboy", "pi"));
+    const piDir = await Deno.stat(join(tempHome, ".urras", "pi"));
     const sessionsDir = await Deno.stat(
-      join(tempHome, ".lazyboy", "pi", "sessions"),
+      join(tempHome, ".urras", "pi", "sessions"),
     );
 
     assert(piDir.isDirectory);
@@ -84,7 +84,7 @@ Deno.test("setupPiDirectories: succeeds when directories already exist", async (
     // Call again - should not throw
     await setupPiDirectories(tempHome);
 
-    const piDir = await Deno.stat(join(tempHome, ".lazyboy", "pi"));
+    const piDir = await Deno.stat(join(tempHome, ".urras", "pi"));
     assert(piDir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
@@ -97,7 +97,7 @@ Deno.test("setupPiDirectories: symlinks turn-limit extension that is no-op when 
     await setupPiDirectories(tempHome);
     const extensionPath = join(
       tempHome,
-      ".lazyboy",
+      ".urras",
       "pi",
       "extensions",
       "turn-limit.ts",
@@ -118,7 +118,7 @@ Deno.test("setupClaudeCodeDirectories: creates claude-code directory in temp hom
   const tempHome = await Deno.makeTempDir();
   try {
     await setupClaudeCodeDirectories(tempHome);
-    const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
+    const dir = await Deno.stat(join(tempHome, ".urras", "claude-code"));
     assert(dir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
@@ -130,7 +130,7 @@ Deno.test("setupClaudeCodeDirectories: writes default settings.json when absent"
   try {
     await setupClaudeCodeDirectories(tempHome);
     const raw = await Deno.readTextFile(
-      join(tempHome, ".lazyboy", "claude-code", "settings.json"),
+      join(tempHome, ".urras", "claude-code", "settings.json"),
     );
     const settings = JSON.parse(raw);
     assertEquals(settings.attribution.commit, "");
@@ -143,7 +143,7 @@ Deno.test("setupClaudeCodeDirectories: writes default settings.json when absent"
 Deno.test("setupClaudeCodeDirectories: does not overwrite existing settings.json", async () => {
   const tempHome = await Deno.makeTempDir();
   try {
-    const dir = join(tempHome, ".lazyboy", "claude-code");
+    const dir = join(tempHome, ".urras", "claude-code");
     await Deno.mkdir(dir, { recursive: true });
     const settingsPath = join(dir, "settings.json");
     await Deno.writeTextFile(settingsPath, '{"custom":true}');
@@ -160,7 +160,7 @@ Deno.test("setupClaudeCodeDirectories: succeeds when directory already exists", 
   try {
     await setupClaudeCodeDirectories(tempHome);
     await setupClaudeCodeDirectories(tempHome);
-    const dir = await Deno.stat(join(tempHome, ".lazyboy", "claude-code"));
+    const dir = await Deno.stat(join(tempHome, ".urras", "claude-code"));
     assert(dir.isDirectory);
   } finally {
     await Deno.remove(tempHome, { recursive: true });
@@ -2194,7 +2194,7 @@ Deno.test(
     const homeDir = await Deno.makeTempDir();
     try {
       await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
-      await Deno.mkdir(join(homeDir, ".lazyboy"));
+      await Deno.mkdir(join(homeDir, ".urras"));
 
       const pricingCache: AnthropicPricingCache = {
         fetchedAt: Temporal.Now.instant().toString(),
@@ -2208,7 +2208,7 @@ Deno.test(
         },
       };
       await Deno.writeTextFile(
-        join(homeDir, ".lazyboy", "anthropic-pricing.json"),
+        join(homeDir, ".urras", "anthropic-pricing.json"),
         JSON.stringify(pricingCache),
       );
 
@@ -2361,13 +2361,13 @@ Deno.test(
       );
 
       const claudeCodeDir = await Deno.stat(
-        join(homeDir, ".lazyboy", "claude-code"),
+        join(homeDir, ".urras", "claude-code"),
       );
       assert(claudeCodeDir.isDirectory);
 
       const settings = JSON.parse(
         await Deno.readTextFile(
-          join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+          join(homeDir, ".urras", "claude-code", "settings.json"),
         ),
       );
       assertEquals(settings.attribution.commit, "");
@@ -2375,7 +2375,7 @@ Deno.test(
 
       let piDirExists = false;
       try {
-        await Deno.stat(join(homeDir, ".lazyboy", "pi"));
+        await Deno.stat(join(homeDir, ".urras", "pi"));
         piDirExists = true;
       } catch { /* expected */ }
       assertFalse(piDirExists);
@@ -2422,12 +2422,12 @@ Deno.test(
 
       assertEquals(
         capturedEnv.PI_CODING_AGENT_DIR,
-        join(homeDir, ".lazyboy", "pi"),
+        join(homeDir, ".urras", "pi"),
       );
 
       let claudeCodeDirExists = false;
       try {
-        await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
+        await Deno.stat(join(homeDir, ".urras", "claude-code"));
         claudeCodeDirExists = true;
       } catch { /* expected */ }
       assertFalse(claudeCodeDirExists);
@@ -2445,9 +2445,9 @@ Deno.test(
     const homeDir = await Deno.makeTempDir();
     try {
       await Deno.writeTextFile(join(ticketDir, "meta.md"), "---\n---\n");
-      await Deno.mkdir(join(homeDir, ".lazyboy"));
+      await Deno.mkdir(join(homeDir, ".urras"));
       await Deno.writeTextFile(
-        join(homeDir, ".lazyboy", "anthropic-pricing.json"),
+        join(homeDir, ".urras", "anthropic-pricing.json"),
         JSON.stringify({
           fetchedAt: Temporal.Now.instant().toString(),
           models: {
@@ -2544,13 +2544,13 @@ Deno.test(
       );
 
       const claudeCodeDir = await Deno.stat(
-        join(homeDir, ".lazyboy", "claude-code"),
+        join(homeDir, ".urras", "claude-code"),
       );
       assert(claudeCodeDir.isDirectory);
 
       const settings = JSON.parse(
         await Deno.readTextFile(
-          join(homeDir, ".lazyboy", "claude-code", "settings.json"),
+          join(homeDir, ".urras", "claude-code", "settings.json"),
         ),
       );
       assertEquals(settings.attribution.commit, "");
@@ -2558,7 +2558,7 @@ Deno.test(
 
       let piDirExists = false;
       try {
-        await Deno.stat(join(homeDir, ".lazyboy", "pi"));
+        await Deno.stat(join(homeDir, ".urras", "pi"));
         piDirExists = true;
       } catch { /* expected */ }
       assertFalse(piDirExists);
@@ -2605,12 +2605,12 @@ Deno.test(
 
       assertEquals(
         capturedEnv.PI_CODING_AGENT_DIR,
-        join(homeDir, ".lazyboy", "pi"),
+        join(homeDir, ".urras", "pi"),
       );
 
       let claudeCodeDirExists = false;
       try {
-        await Deno.stat(join(homeDir, ".lazyboy", "claude-code"));
+        await Deno.stat(join(homeDir, ".urras", "claude-code"));
         claudeCodeDirExists = true;
       } catch { /* expected */ }
       assertFalse(claudeCodeDirExists);

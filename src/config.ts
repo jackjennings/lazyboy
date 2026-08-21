@@ -2,11 +2,11 @@ import { parse } from "@std/toml";
 import { join } from "@std/path";
 import type { Config, PhaseModelConfig } from "./state/types.ts";
 import { readTextFile } from "./filesystem.ts";
-import { lazyboyDir } from "./paths.ts";
+import { urrasDir } from "./paths.ts";
 
 export async function loadConfig(path?: string): Promise<Config> {
   const configPath = path ??
-    join(Deno.env.get("HOME")!, ".config", "lazyboy", "config.toml");
+    join(Deno.env.get("HOME")!, ".config", "urras", "config.toml");
   const raw = await readTextFile(configPath);
   const parsed = parse(raw) as Record<string, unknown>;
   const codebaseRaw = parsed.codebase as Record<string, unknown> | undefined;
@@ -168,7 +168,7 @@ export async function loadConfig(path?: string): Promise<Config> {
     | undefined;
   const extensionsDir = typeof extensionsRaw?.dir === "string"
     ? expandHome(extensionsRaw.dir)
-    : join(lazyboyDir(), "extensions");
+    : join(urrasDir(), "extensions");
 
   return {
     github: {

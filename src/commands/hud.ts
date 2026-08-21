@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import { lazyboyDir } from "../paths.ts";
+import { urrasDir } from "../paths.ts";
 import { bgGreen, bgRed, black, dim, inverse } from "@std/fmt/colors";
 import {
   type AutocompleteItem,
@@ -151,7 +151,7 @@ async function readState(
   let progress: string | undefined;
   try {
     const raw = await readTextFile(
-      join(lazyboyDir(), "tick-progress.json"),
+      join(urrasDir(), "tick-progress.json"),
     );
     const data = JSON.parse(raw) as { label?: string };
     if (data.label) progress = data.label;
@@ -292,7 +292,7 @@ export const hud: Command = {
     const { commands } = await import("./registry.ts");
     const config = await loadConfig();
     const stateDir = expandHome(config.state.dir);
-    const parentDir = lazyboyDir();
+    const parentDir = urrasDir();
     const tickLogPath = join(parentDir, "log.ndjson");
 
     const terminal = new ProcessTerminal();

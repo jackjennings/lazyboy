@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import { lazyboyDir } from "../paths.ts";
+import { urrasDir } from "../paths.ts";
 import { readTicket } from "../state/store.ts";
 import { expandHome, loadConfig } from "../config.ts";
 import type { Command } from "./types.ts";
@@ -32,12 +32,12 @@ export async function resolveTicketLogPath(
 export const tail: Command = {
   name: "tail",
   description: "stream the tick log or a ticket's event log",
-  usage: "lazyboy tail [ticket-id]",
+  usage: "ur tail [ticket-id]",
   async run(args) {
     const id = args[0];
     let logPath: string;
     if (!id) {
-      logPath = join(lazyboyDir(), "log.ndjson");
+      logPath = join(urrasDir(), "log.ndjson");
     } else {
       const config = await loadConfig();
       const stateDir = expandHome(config.state.dir);

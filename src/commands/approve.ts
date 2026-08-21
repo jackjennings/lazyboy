@@ -100,12 +100,12 @@ export async function performApproveCeremony(
 export const approve: Command = {
   name: "approve",
   description: "approve the current phase gate",
-  usage: "lazyboy approve <ticket-id|ceremony/<name>>",
+  usage: "ur approve <ticket-id|ceremony/<name>>",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];
     if (!id) {
-      console.error("Usage: lazyboy approve <ticket-id|ceremony/<name>>");
+      console.error("Usage: ur approve <ticket-id|ceremony/<name>>");
       Deno.exit(1);
     }
     const config = await loadConfig();

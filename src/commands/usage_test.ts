@@ -552,7 +552,7 @@ Deno.test("usage command reads usage files from all ticket directories", async (
     const originalEnv = Deno.env.get("HOME");
     const fakeHome = await Deno.makeTempDir();
     Deno.env.set("HOME", fakeHome);
-    const configDir = join(fakeHome, ".config", "lazyboy");
+    const configDir = join(fakeHome, ".config", "urras");
     await Deno.mkdir(configDir, { recursive: true });
     await Deno.writeTextFile(
       join(configDir, "config.toml"),

@@ -1,6 +1,6 @@
 import matter from "gray-matter";
 import { join } from "@std/path";
-import { lazyboyDir } from "../paths.ts";
+import { urrasDir } from "../paths.ts";
 import {
   type ApprovalEntry,
   type ArtifactType,
@@ -283,7 +283,7 @@ export async function appendTicketLog(
     JSON.stringify({ ts, ...entry }) + "\n",
     { append: true },
   );
-  const lazyDir = lazyboyDir();
+  const lazyDir = urrasDir();
   await mkdir(lazyDir, { recursive: true });
   try {
     await writeTextFile(

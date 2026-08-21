@@ -1,10 +1,10 @@
-#compdef lazyboy
+#compdef ur
 
-_lazyboy() {
+_ur() {
   local state
   _arguments '1: :->cmd' '*: :->args'
   local -a lines
-  lines=(${(f)"$(lazyboy _completions 2>/dev/null)"})
+  lines=(${(f)"$(ur _completions 2>/dev/null)"})
   case $state in
     cmd)
       local line name desc
@@ -25,7 +25,7 @@ _lazyboy() {
         fi
         completesWith=${line##*$'\t'}
         if [[ "$completesWith" == "_ids" ]]; then
-          compadd -- ${(f)"$(lazyboy _ids 2>/dev/null)"}
+          compadd -- ${(f)"$(ur _ids 2>/dev/null)"}
         elif [[ -n "$completesWith" ]]; then
           compadd -- ${(s.,.)completesWith}
         fi
@@ -34,4 +34,4 @@ _lazyboy() {
   esac
 }
 
-compdef _lazyboy lazyboy
+compdef _ur ur

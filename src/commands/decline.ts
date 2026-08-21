@@ -76,12 +76,12 @@ export async function performDecline(
 export const decline: Command = {
   name: "decline",
   description: "permanently exclude a ticket from the queue",
-  usage: "lazyboy decline <ticket-id> [reason]",
+  usage: "ur decline <ticket-id> [reason]",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];
     if (!id) {
-      console.error("Usage: lazyboy decline <ticket-id> [reason]");
+      console.error("Usage: ur decline <ticket-id> [reason]");
       Deno.exit(1);
     }
     const config = await loadConfig();

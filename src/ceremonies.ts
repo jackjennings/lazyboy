@@ -283,8 +283,8 @@ export class CeremonyRunner {
     });
     try {
       await this.#deps.notify?.(
-        "lazyboy",
-        `Ceremony ${name} needs approval: run lazyboy approve ceremony/${name}`,
+        "urras",
+        `Ceremony ${name} needs approval: run ur approve ceremony/${name}`,
       );
     } catch {
       // notification failures must not abort the run

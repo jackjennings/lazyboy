@@ -9,7 +9,7 @@ export function formatGlobalHelp(commands: Command[]): string {
   const rows = publicCommands
     .map((c) => `  ${c.name.padEnd(maxLen)}  ${c.description ?? ""}`.trimEnd())
     .join("\n");
-  return `Usage: lazyboy <${usage}>\n\nCommands:\n${rows}`;
+  return `Usage: ur <${usage}>\n\nCommands:\n${rows}`;
 }
 
 export function formatCommandHelp(command: Command): string {

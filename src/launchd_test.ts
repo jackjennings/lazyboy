@@ -5,7 +5,7 @@ import type { LaunchctlRunner } from "./launchd.ts";
 Deno.test("plistContent: includes the label", () => {
   assertStringIncludes(
     plistContent("/home/user/.lazyboy"),
-    "com.jackjennings.lazyboy",
+    "com.jackjennings.urras",
   );
 });
 

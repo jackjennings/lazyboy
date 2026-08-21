@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Load secrets from env file if present
+if [ -f "$HOME/.config/urras/env" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$HOME/.config/urras/env"
+  set +a
+fi
+
+exec deno run --allow-all "$(dirname "$0")/../src/index.ts" "$@"

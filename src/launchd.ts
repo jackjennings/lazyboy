@@ -1,7 +1,7 @@
 import { join } from "@std/path";
 import { writeTextFile } from "./filesystem.ts";
 
-const LABEL = "com.jackjennings.lazyboy";
+const LABEL = "com.jackjennings.urras";
 
 export function plistPath(): string {
   return join(

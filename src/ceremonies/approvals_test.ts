@@ -18,7 +18,7 @@ import {
   readApprovals,
   writeApprovals,
 } from "./approvals.ts";
-import { lazyboyDir } from "../paths.ts";
+import { urrasDir } from "../paths.ts";
 import { withLazyboyDir } from "../test-support.ts";
 
 async function makeCeremonyDir(
@@ -317,7 +317,7 @@ Deno.test("readApprovals: unparseable file throws instead of reading as empty", 
   using _lazyboy = withLazyboyDir();
   await writeApprovals({ digest: { hash: "sha256:abc" } });
   await Deno.writeTextFile(
-    join(lazyboyDir(), "ceremony-approvals.json"),
+    join(urrasDir(), "ceremony-approvals.json"),
     "{ not json",
   );
   await assertRejects(() => readApprovals(), CorruptApprovalsError);
@@ -325,9 +325,9 @@ Deno.test("readApprovals: unparseable file throws instead of reading as empty", 
 
 Deno.test("readApprovals: a JSON array is rejected as corrupt", async () => {
   using _lazyboy = withLazyboyDir();
-  await Deno.mkdir(lazyboyDir(), { recursive: true });
+  await Deno.mkdir(urrasDir(), { recursive: true });
   await Deno.writeTextFile(
-    join(lazyboyDir(), "ceremony-approvals.json"),
+    join(urrasDir(), "ceremony-approvals.json"),
     "[]",
   );
   await assertRejects(() => readApprovals(), CorruptApprovalsError);
@@ -337,9 +337,9 @@ Deno.test("isCeremonyApproved: a corrupt approvals file denies approval", async 
   using _lazyboy = withLazyboyDir();
   const dir = await makeCeremonyDir({ "prompt.md": "x\n" });
   try {
-    await Deno.mkdir(lazyboyDir(), { recursive: true });
+    await Deno.mkdir(urrasDir(), { recursive: true });
     await Deno.writeTextFile(
-      join(lazyboyDir(), "ceremony-approvals.json"),
+      join(urrasDir(), "ceremony-approvals.json"),
       "{ not json",
     );
     assertFalse(await isCeremonyApproved("digest", dir));
@@ -352,7 +352,7 @@ Deno.test("writeApprovals: leaves no temporary files behind", async () => {
   using _lazyboy = withLazyboyDir();
   await writeApprovals({ digest: { hash: "sha256:abc" } });
   const names: string[] = [];
-  for await (const entry of Deno.readDir(lazyboyDir())) names.push(entry.name);
+  for await (const entry of Deno.readDir(urrasDir())) names.push(entry.name);
   assertEquals(names, ["ceremony-approvals.json"]);
 });
 

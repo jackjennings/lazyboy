@@ -46,12 +46,12 @@ export async function performRetry(
 export const retry: Command = {
   name: "retry",
   description: "reset a needs-attention ticket",
-  usage: "lazyboy retry <ticket-id>",
+  usage: "ur retry <ticket-id>",
   completesWith: "_ids",
   async run(args) {
     const id = args[0];
     if (!id) {
-      console.error("Usage: lazyboy retry <ticket-id>");
+      console.error("Usage: ur retry <ticket-id>");
       Deno.exit(1);
     }
     const config = await loadConfig();

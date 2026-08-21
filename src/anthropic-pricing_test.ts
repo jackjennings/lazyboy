@@ -274,7 +274,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      const lazyboyDir = join(tempHome, ".lazyboy");
+      const lazyboyDir = join(tempHome, ".urras");
       await Deno.mkdir(lazyboyDir);
       await Deno.writeTextFile(
         join(lazyboyDir, "anthropic-pricing.json"),
@@ -302,7 +302,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      await Deno.mkdir(join(tempHome, ".lazyboy"));
+      await Deno.mkdir(join(tempHome, ".urras"));
       const fetcherSpy = spy((_url: string) =>
         Promise.resolve(new Response(MINIMAL_PRICING_MARKDOWN, { status: 200 }))
       );
@@ -312,7 +312,7 @@ Deno.test(
       );
       assertSpyCalls(fetcherSpy, 1);
       const raw = await Deno.readTextFile(
-        join(tempHome, ".lazyboy", "anthropic-pricing.json"),
+        join(tempHome, ".urras", "anthropic-pricing.json"),
       );
       const cache = JSON.parse(raw);
       assertEquals(typeof cache.fetchedAt, "string");
@@ -328,7 +328,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      const lazyboyDir = join(tempHome, ".lazyboy");
+      const lazyboyDir = join(tempHome, ".urras");
       await Deno.mkdir(lazyboyDir);
       const cachePath = join(lazyboyDir, "anthropic-pricing.json");
       await Deno.writeTextFile(
@@ -361,7 +361,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      await Deno.mkdir(join(tempHome, ".lazyboy"));
+      await Deno.mkdir(join(tempHome, ".urras"));
       const errorStub = stub(console, "error", () => {});
       try {
         const fetcher = (_url: string) =>
@@ -373,7 +373,7 @@ Deno.test(
       }
       let exists = false;
       try {
-        await Deno.stat(join(tempHome, ".lazyboy", "anthropic-pricing.json"));
+        await Deno.stat(join(tempHome, ".urras", "anthropic-pricing.json"));
         exists = true;
       } catch { /* not found */ }
       assertFalse(exists);
@@ -388,7 +388,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      await Deno.mkdir(join(tempHome, ".lazyboy"));
+      await Deno.mkdir(join(tempHome, ".urras"));
       const errorStub = stub(console, "error", () => {});
       try {
         const fetcher = (_url: string) =>
@@ -409,7 +409,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      const lazyboyDir = join(tempHome, ".lazyboy");
+      const lazyboyDir = join(tempHome, ".urras");
       await Deno.mkdir(lazyboyDir);
       const cachePath = join(lazyboyDir, "anthropic-pricing.json");
       const staleContent = JSON.stringify({
@@ -442,7 +442,7 @@ Deno.test(
   async () => {
     const tempHome = await Deno.makeTempDir();
     try {
-      await Deno.mkdir(join(tempHome, ".lazyboy"));
+      await Deno.mkdir(join(tempHome, ".urras"));
       let capturedUrl = "";
       const fetcher = (url: string) => {
         capturedUrl = url;

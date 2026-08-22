@@ -1419,7 +1419,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: feedback immediately preceding output suppresses self-review",
+  "advancePhase: feedback immediately preceding output suppresses self-approve",
   async () => {
     const stateDir = Deno.makeTempDirSync();
     try {
@@ -1434,7 +1434,7 @@ Deno.test(
         join(ticketDir, "20260101T100001-spec.md"),
         "content",
       );
-      const selfReviewSpy = spy(() =>
+      const selfApproveSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
       await advancePhase(
@@ -1442,10 +1442,10 @@ Deno.test(
         stateDir,
         makeTickDeps({
           ...makeTickDeps(),
-          selfReview: selfReviewSpy,
+          selfApprove: selfApproveSpy,
         }),
       );
-      assertSpyCalls(selfReviewSpy, 0);
+      assertSpyCalls(selfApproveSpy, 0);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -1453,7 +1453,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: no feedback before output calls self-review normally",
+  "advancePhase: no feedback before output calls self-approve normally",
   async () => {
     const stateDir = Deno.makeTempDirSync();
     try {
@@ -1464,7 +1464,7 @@ Deno.test(
         join(ticketDir, "20260101T100001-spec.md"),
         "content",
       );
-      const selfReviewSpy = spy(() =>
+      const selfApproveSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
       await advancePhase(
@@ -1472,10 +1472,10 @@ Deno.test(
         stateDir,
         makeTickDeps({
           ...makeTickDeps(),
-          selfReview: selfReviewSpy,
+          selfApprove: selfApproveSpy,
         }),
       );
-      assertSpyCalls(selfReviewSpy, 1);
+      assertSpyCalls(selfApproveSpy, 1);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -1483,7 +1483,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: feedback not immediately preceding output calls self-review normally",
+  "advancePhase: feedback not immediately preceding output calls self-approve normally",
   async () => {
     const stateDir = Deno.makeTempDirSync();
     try {
@@ -1502,7 +1502,7 @@ Deno.test(
         join(ticketDir, "20260101T100002-spec.md"),
         "second output",
       );
-      const selfReviewSpy = spy(() =>
+      const selfApproveSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
       await advancePhase(
@@ -1510,11 +1510,11 @@ Deno.test(
         stateDir,
         makeTickDeps({
           ...makeTickDeps(),
-          selfReview: selfReviewSpy,
+          selfApprove: selfApproveSpy,
           readPhaseOutput: () => Promise.resolve("second output"),
         }),
       );
-      assertSpyCalls(selfReviewSpy, 1);
+      assertSpyCalls(selfApproveSpy, 1);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -1522,7 +1522,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: plan phase with non-empty newRepos skips self-review",
+  "advancePhase: plan phase with non-empty newRepos skips self-approve",
   async () => {
     const stateDir = Deno.makeTempDirSync();
     try {
@@ -1537,7 +1537,7 @@ Deno.test(
         join(ticketDir, "20260101T100001-plan.md"),
         "content",
       );
-      const selfReviewSpy = spy(() =>
+      const selfApproveSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
       await advancePhase(
@@ -1545,10 +1545,10 @@ Deno.test(
         stateDir,
         makeTickDeps({
           ...makeTickDeps(),
-          selfReview: selfReviewSpy,
+          selfApprove: selfApproveSpy,
         }),
       );
-      assertSpyCalls(selfReviewSpy, 0);
+      assertSpyCalls(selfApproveSpy, 0);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -1556,7 +1556,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: plan phase without newRepos calls self-review normally",
+  "advancePhase: plan phase without newRepos calls self-approve normally",
   async () => {
     const stateDir = Deno.makeTempDirSync();
     try {
@@ -1567,7 +1567,7 @@ Deno.test(
         join(ticketDir, "20260101T100001-plan.md"),
         "content",
       );
-      const selfReviewSpy = spy(() =>
+      const selfApproveSpy = spy(() =>
         Promise.resolve({ approved: false, reason: null })
       );
       await advancePhase(
@@ -1575,10 +1575,10 @@ Deno.test(
         stateDir,
         makeTickDeps({
           ...makeTickDeps(),
-          selfReview: selfReviewSpy,
+          selfApprove: selfApproveSpy,
         }),
       );
-      assertSpyCalls(selfReviewSpy, 1);
+      assertSpyCalls(selfApproveSpy, 1);
     } finally {
       await Deno.remove(stateDir, { recursive: true });
     }
@@ -2590,7 +2590,7 @@ Deno.test("advancePhase: non-implementation revising uses empty worktrees", asyn
 });
 
 Deno.test(
-  "advancePhase: running ticket with dead PID and selfReview true sets approved and logs self-approved",
+  "advancePhase: running ticket with dead PID and selfApprove true sets approved and logs self-approved",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
@@ -2612,7 +2612,7 @@ Deno.test(
         writeTicket: writeTicketSpy,
         appendLog: appendLogSpy,
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.resolve({ approved: true, reason: null }),
+        selfApprove: () => Promise.resolve({ approved: true, reason: null }),
       }),
     );
     assertSpyCalls(writeTicketSpy, 2);
@@ -2634,7 +2634,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: running ticket with dead PID and selfReview false leaves approved false",
+  "advancePhase: running ticket with dead PID and selfApprove false leaves approved false",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
@@ -2671,7 +2671,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview throwing is treated as false",
+  "advancePhase: selfApprove throwing is treated as false",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writeTicketSpy = spy((_dir: string, _t: TicketState) =>
@@ -2687,7 +2687,7 @@ Deno.test(
         writeTicket: writeTicketSpy,
         appendLog: appendLogSpy,
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () => Promise.reject(new Error("review exploded")),
+        selfApprove: () => Promise.reject(new Error("review exploded")),
       }),
     );
     assertSpyCalls(writeTicketSpy, 1);
@@ -2696,7 +2696,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview returning false leaves ticket waiting with no approvals",
+  "advancePhase: selfApprove returning false leaves ticket waiting with no approvals",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writtenTickets: TicketState[] = [];
@@ -2718,7 +2718,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview returning reason writes self-review output file",
+  "advancePhase: selfApprove returning reason writes self-approve output file",
   async () => {
     const ticket = makeTicket({
       id: "gh-1",
@@ -2738,7 +2738,7 @@ Deno.test(
       makeTickDeps({
         writePhaseOutput: writePhaseOutputSpy,
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: () =>
+        selfApprove: () =>
           Promise.resolve({
             approved: false,
             reason: "REJECT\nCriterion 1 violated.",
@@ -2749,7 +2749,7 @@ Deno.test(
     assertEquals(writePhaseOutputCalls[0][0], "/state");
     assertEquals(writePhaseOutputCalls[0][1], "gh-1");
     assert(
-      /^\d{8}T\d{6}-intake-self-review\.md$/.test(
+      /^\d{8}T\d{6}-intake-self-approve\.md$/.test(
         writePhaseOutputCalls[0][2],
       ),
     );
@@ -2758,7 +2758,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview returning null reason does not write output file",
+  "advancePhase: selfApprove returning null reason does not write output file",
   async () => {
     const ticket = makeTicket({ phase: "intake", status: "running" });
     const writePhaseOutputSpy = spy(() => Promise.resolve());
@@ -2775,7 +2775,7 @@ Deno.test(
 );
 
 Deno.test(
-  "advancePhase: selfReview is called with the ticket phase and ticketDir",
+  "advancePhase: selfApprove is called with the ticket phase and ticketDir",
   async () => {
     const ticket = makeTicket({
       id: "github/jackjennings/lazyboy/104",
@@ -2784,7 +2784,7 @@ Deno.test(
     });
     let capturedPhase = "";
     let capturedTicketDir = "";
-    const selfReviewSpy = spy((phase: string, ticketDir: string) => {
+    const selfApproveSpy = spy((phase: string, ticketDir: string) => {
       capturedPhase = phase;
       capturedTicketDir = ticketDir;
       return Promise.resolve({ approved: false, reason: null });
@@ -2794,7 +2794,7 @@ Deno.test(
       "/state",
       makeTickDeps({
         resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-        selfReview: selfReviewSpy,
+        selfApprove: selfApproveSpy,
       }),
     );
     assertEquals(capturedPhase, "intake");
@@ -3584,7 +3584,7 @@ Deno.test(
           stateDir,
           makeTickDeps({
             resolveModelConfig: () => ({ model: "m", thinking: "off" }),
-            selfReview: () =>
+            selfApprove: () =>
               Promise.resolve({ approved: false, reason: null }),
           }),
         )
@@ -5246,5 +5246,37 @@ Deno.test(
     assert(migratesCalled);
     const log = await Deno.readTextFile(join(lb.path, "tick.ndjson"));
     assertStringIncludes(log, '"repo-identity-unavailable"');
+  },
+);
+
+Deno.test(
+  "advancePhase: spawn receives critiqueModel and critiqueThinking resolved via resolveModelConfig",
+  async () => {
+    const ticket = makeTicket({
+      phase: "intake",
+      status: "waiting",
+      approvals: [
+        {
+          timestamp: "2026-01-01T00:00:00Z",
+          actor: "human" as const,
+          phase: "intake",
+        },
+      ],
+    });
+    const captured: { opts: SpawnOpts | null } = { opts: null };
+    const deps = makeTickDeps({
+      spawn: (opts) => {
+        captured.opts = opts;
+        return Promise.resolve();
+      },
+      resolveModelConfig: () => ({
+        model: "claude-haiku-4-5",
+        thinking: "minimal",
+      }),
+    });
+    await advancePhase(ticket, "/state", deps);
+    assertExists(captured.opts);
+    assertEquals(captured.opts.critiqueModel, "claude-haiku-4-5");
+    assertEquals(captured.opts.critiqueThinking, "minimal");
   },
 );

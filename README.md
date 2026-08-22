@@ -60,8 +60,8 @@ with a `(new)` suffix in `## Proposed Scope`:
 
 ```yaml
 scope:
-  - jackjennings/lazyboy
-  - jackjennings/lazyboy-extensions (new)
+  - jackjennings/urras
+  - jackjennings/urras-extensions (new)
 ```
 
 `urras` initializes the repository locally at intake (no GitHub action yet), so
@@ -93,7 +93,7 @@ ur update             # pull latest urras source
 
 ```toml
 [github]
-repos = ["jackjennings/lazyboy"]
+repos = ["jackjennings/urras"]
 
 [state]
 dir = "~/code/jackjennings/projects"
@@ -313,7 +313,7 @@ tab completions automatically. To install:
 **Oh My Zsh:**
 
 ```zsh
-git clone https://github.com/jackjennings/lazyboy \
+git clone https://github.com/jackjennings/urras \
   ~/.oh-my-zsh/custom/plugins/urras
 ```
 

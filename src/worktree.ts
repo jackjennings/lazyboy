@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import type { WorktreeInfo } from "./state/types.ts";
+import { type WorktreeInfo } from "./state/types.ts";
 import { mkdir, readDir, stat } from "./filesystem.ts";
 import {
   extractGitHubSlug,

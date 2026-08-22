@@ -1,7 +1,9 @@
 import { join } from "@std/path";
+import type { CommandRunner } from "../apfel.ts";
 import type { TickAction } from "./types.ts";
 import { isApproved } from "../state/types.ts";
 import type { TicketState, WorktreeInfo } from "../state/types.ts";
+import { extractIntakeArtifacts } from "../extract-artifacts.ts";
 import {
   extractGitHubSlug,
   parseIntakeScope,
@@ -10,6 +12,7 @@ import {
 
 export interface CreateWorktreeDeps {
   roots: string[];
+  run: CommandRunner;
   findLocalRepo: (roots: string[], slug: string) => Promise<string | null>;
   createWorktree: (
     repoPath: string,
@@ -52,17 +55,50 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         ? parseIntakeScope(intakeContent)
         : [];
 
+      let correctedTicket = ticket;
+      if (intakeContent !== null) {
+        const parsedArtifacts = await extractIntakeArtifacts(
+          intakeContent,
+          deps.run,
+        );
+        if (parsedArtifacts.length > 0) {
+          const differs = parsedArtifacts.length !== ticket.artifacts.length ||
+            parsedArtifacts.some((a) => !ticket.artifacts.includes(a));
+          if (differs) {
+            correctedTicket = {
+              ...ticket,
+              artifacts: parsedArtifacts,
+              updated: now,
+            };
+            await deps.writeTicket(stateDir, correctedTicket);
+            await deps.appendLog(stateDir, ticket.id, {
+              event: "artifact-corrected",
+              artifacts: parsedArtifacts,
+            });
+          }
+        } else {
+          await deps.appendLog(stateDir, ticket.id, {
+            event: "artifact-defaulted",
+            artifacts: ["code"],
+          });
+        }
+      }
+
+      if (!correctedTicket.artifacts.includes("code")) {
+        return correctedTicket;
+      }
+
       const resolvedLocalPaths: string[] = [];
       const resolvedScopeSlugs: string[] = [];
       const githubSlugs = new Set<string>();
       const newRepoSlugs: string[] = [];
 
-      if (ticket.provider === "github") {
+      if (correctedTicket.provider === "github") {
         try {
-          githubSlugs.add(extractGitHubSlug(ticket.url));
+          githubSlugs.add(extractGitHubSlug(correctedTicket.url));
         } catch {
           const updated = {
-            ...ticket,
+            ...correctedTicket,
             status: "needs-attention" as const,
             updated: now,
           };
@@ -79,7 +115,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         if (entry.startsWith("/") || entry.startsWith("~/")) {
           if (isNew) {
             const updated = {
-              ...ticket,
+              ...correctedTicket,
               status: "needs-attention" as const,
               updated: now,
             };
@@ -104,9 +140,9 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         }
       }
 
-      if (ticket.provider !== "github" && githubSlugs.size === 0) {
+      if (correctedTicket.provider !== "github" && githubSlugs.size === 0) {
         const updated = {
-          ...ticket,
+          ...correctedTicket,
           status: "needs-attention" as const,
           updated: now,
         };
@@ -126,7 +162,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
             resolvedRepos.push({ slug, repoPath: initedPath });
           } catch (e) {
             const updated = {
-              ...ticket,
+              ...correctedTicket,
               status: "needs-attention" as const,
               updated: now,
             };
@@ -149,7 +185,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
               resolvedRepos.push({ slug, repoPath: clonedPath });
             } catch (e) {
               const updated = {
-                ...ticket,
+                ...correctedTicket,
                 status: "needs-attention" as const,
                 updated: now,
               };
@@ -186,7 +222,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
         }
       } catch {
         const updated = {
-          ...ticket,
+          ...correctedTicket,
           status: "needs-attention" as const,
           updated: now,
         };
@@ -199,7 +235,7 @@ export function createWorktreeAction(deps: CreateWorktreeDeps): TickAction {
       }
 
       const updated = {
-        ...ticket,
+        ...correctedTicket,
         scope: [...resolvedLocalPaths, ...resolvedScopeSlugs],
         worktrees,
         ...(newRepoSlugs.length > 0 ? { newRepos: newRepoSlugs } : {}),

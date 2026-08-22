@@ -22,6 +22,7 @@ function makeAction(
 ) {
   return createWorktreeAction({
     roots: ["/code"],
+    run: () => Promise.resolve({ code: 1, stdout: "" }),
     findLocalRepo: () => Promise.resolve("/code/myorg/myrepo"),
     createWorktree: (_repo, _id, slug) =>
       Promise.resolve({ path: `/wt/${slug}`, branch: "gh-1" }),
@@ -579,7 +580,7 @@ Deno.test(
 
     assertEquals(result?.status, "needs-attention");
     assertEquals(
-      (logged[0] as Record<string, unknown>).reason,
+      (logged[1] as Record<string, unknown>).reason,
       "new-marker-on-local-path",
     );
   },
@@ -634,11 +635,11 @@ Deno.test(
 
     assertEquals(result?.status, "needs-attention");
     assertEquals(
-      (logged[0] as Record<string, unknown>).reason,
+      (logged[1] as Record<string, unknown>).reason,
       "local-repo-init-failed",
     );
     assertEquals(
-      (logged[0] as Record<string, unknown>).slug,
+      (logged[1] as Record<string, unknown>).slug,
       "other/new-repo",
     );
   },

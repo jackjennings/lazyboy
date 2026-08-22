@@ -60,17 +60,33 @@ One short paragraph explaining why you chose these directories.
 
 Identify which artifact configurations apply to this ticket:
 
-- **`code` only** (default): code changes delivered via a pull request. Omit
-  `artifacts` from the frontmatter — the default is `["code"]`.
-- **`notion` only**: a document written to Notion (RFC, proposal, or similar);
-  no code changes, no pull requests. Write `artifacts: [notion]` to `meta.md`.
-- **`code` + `notion`**: code changes delivered via a pull request _and_ a
+- **`code` only** (default): code changes delivered via a pull request. Omit the
+  `## Artifact type` section from your output entirely — absence is the default.
+- **`document` only**: a document written to Notion (RFC, proposal, or similar);
+  no code changes, no pull requests.
+- **`code` + `document`**: code changes delivered via a pull request _and_ a
   companion Notion document (e.g. an architecture document alongside a proof of
-  concept implementation). Write `artifacts: [code, notion]` to `meta.md`.
+  concept implementation).
+- **`work`**: decomposition or analysis tickets whose output is one or more new
+  issues or tasks.
 
-Use `notion`-only when the ticket body clearly describes a document to write and
-no code changes are expected. Use `code + notion` when both a PR and a Notion
-document are expected. Use `work` for decomposition or analysis tickets whose
-output is one or more new issues; write `artifacts: [work]` to `meta.md`.
+Use `document`-only when the ticket body clearly describes a document to write
+and no code changes are expected. Use `code + document` when both a PR and a
+Notion document are expected.
+
+When the artifact type is not `code`-only, include it in your output file body
+as a fenced YAML block under `## Artifact type`, using the same format as
+`## Proposed Scope`. Do not use the Edit tool to write to `meta.md`. Do not
+include `artifacts` in the frontmatter.
+
+```yaml
+artifacts: [document]
+```
+
+For multiple artifact types:
+
+```yaml
+artifacts: [code, document]
+```
 
 {{principles}}
